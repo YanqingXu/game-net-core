@@ -46,5 +46,18 @@ src/               Implementation
 tests/             Unit, contract, and integration tests
 examples/          Minimal runnable examples
 docs/              Architecture and scope notes
+intents/           Intent-driven module and architecture contracts
 rules/             Engineering rules for core behavior
 ```
+
+## Development Workflow
+
+game-net-core preserves the original intent-driven workflow:
+
+```text
+intent -> invariants -> threading -> ownership -> contracts -> tests -> implementation
+```
+
+Before changing a core module, read the matching file in `intents/` and the
+relevant rules in `rules/`. Deferred intents are preserved for future phases,
+but they do not expand the current implementation scope by themselves.
