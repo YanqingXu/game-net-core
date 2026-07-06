@@ -1,0 +1,23 @@
+function(gamenet_configure_sanitizers target_name)
+    if(GAMENET_ENABLE_ASAN_UBSAN AND GAMENET_ENABLE_TSAN)
+        message(FATAL_ERROR "ASan/UBSan and TSan cannot be enabled together.")
+    endif()
+
+    if(MSVC)
+        if(GAMENET_ENABLE_ASAN_UBSAN)
+            target_compile_options(${target_name} INTERFACE /fsanitize=address)
+            target_link_options(${target_name} INTERFACE /fsanitize=address)
+        endif()
+        return()
+    endif()
+
+    if(GAMENET_ENABLE_ASAN_UBSAN)
+        target_compile_options(${target_name} INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(${target_name} INTERFACE -fsanitize=address,undefined)
+    endif()
+
+    if(GAMENET_ENABLE_TSAN)
+        target_compile_options(${target_name} INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
+        target_link_options(${target_name} INTERFACE -fsanitize=thread)
+    endif()
+endfunction()

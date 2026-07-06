@@ -1,0 +1,15 @@
+build/
+cmake-build-*/
+out/
+
+*.user
+*.suo
+*.swp
+*.tmp
+
+.vs/
+.vscode/
+.idea/
+
+CTestTestfile.cmake
+Testing/
