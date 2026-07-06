@@ -8,9 +8,12 @@ The `ci` workflow validates:
 
 - CMake configure with C++23 and testing enabled.
 - Scope boundary guard for deferred modules and legacy `mini_trantor` symbols.
+- Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
+  core target itself as well as dependent tests/examples.
 - Core library build.
 - Minimal examples build.
 - Unit, contract, and integration tests through CTest.
+- ASan/UBSan Debug build and CTest suite on Linux.
 
 It keeps deferred modules disabled:
 
@@ -26,6 +29,7 @@ The scope guard runs before CMake configure:
 ```bash
 python3 tests/scope/test_scope_guard.py
 python3 tools/check_scope_boundaries.py
+python3 tests/cmake/test_sanitizer_flags.py
 ```
 
 It fails the workflow if `mini/` includes, `mini::` namespaces, inactive
@@ -33,6 +37,14 @@ It fails the workflow if `mini/` includes, `mini::` namespaces, inactive
 `gamenet::experimental` paths, or deferred high-level module names appear in
 the active implementation and test surface. Promoting a Phase 4 component must
 update the active scope and migration status in the same change.
+
+The ASan/UBSan job uses:
+
+```bash
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
+cmake --build build-asan --parallel
+ctest --test-dir build-asan --output-on-failure
+```
 
 ## Current Platform Gate
 
@@ -60,6 +72,7 @@ Microsoft Store `python.exe` alias is inactive, use `py -3` instead:
 ```powershell
 py -3 tests\scope\test_scope_guard.py
 py -3 tools\check_scope_boundaries.py
+py -3 tests\cmake\test_sanitizer_flags.py
 ```
 
 The local command and CI workflow should stay aligned so test results remain

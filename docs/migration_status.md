@@ -32,6 +32,8 @@ test set.
   integration test.
 - Scope guard: local self-test and repository scan pass; CI now runs both before
   CMake configure.
+- Sanitizers: CI includes an ASan/UBSan Debug build and CTest job for the
+  Reactor / TCP foundation.
 
 Local build and CTest verification still could not be run in this environment
 because no local CMake or C++ compiler was found in PATH or common Windows
