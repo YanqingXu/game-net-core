@@ -6,9 +6,9 @@ Platform runtime boundary isolates operating-system differences required by the
 reactor core while keeping `EventLoop`, `Channel`, `TcpConnection`, and protocol
 layers backend-neutral.
 
-Linux and Windows may use different socket handles, wakeup primitives, and
-poller backends, but they must expose the same owner-loop scheduling semantics
-to upper layers.
+Linux and Windows may use different socket handles, wakeup primitives, and I/O
+backends, but they must expose the same owner-loop scheduling semantics to
+upper layers.
 
 This module is not a scheduler.
 This module is not a connection lifecycle owner.
@@ -54,7 +54,7 @@ This module is not business logic.
 - `EventLoop` calls `platform::createWakeupFds()`, `writeWakeup()`, and `drainWakeup()`.
 - `Socket`, `Acceptor`, `Connector`, `TcpConnection`, UDP, and DNS paths call
   `sockets::*` through the stable public header.
-- `PollerFactory` chooses `SelectPoller` on Windows and `EPollPoller` on Linux.
+- `PollerFactory` chooses an IOCP-backed Windows backend and `EPollPoller` on Linux.
 - CMake selects exactly one socket implementation, one wakeup implementation, and
   one concrete poller backend for the target platform.
 
@@ -75,7 +75,8 @@ This module is not business logic.
 
 - `EventLoop` owns wakeup descriptors.
 - `Socket` owns `SocketFd` unless `releaseFd()` explicitly transfers it.
-- `Poller` owns only its backend kernel object, not `Channel`.
+- `Poller` or an equivalent platform backend owns only its backend kernel
+  object, not `Channel`.
 - `SocketsOps` functions observe descriptors passed by callers unless the function
   name explicitly creates or closes one.
 - Windows WinSock process initialization is owned by the platform socket runtime.
@@ -100,7 +101,7 @@ This module is not business logic.
   registration behavior when enabled on the platform.
 - TCP client/server/connection contract tests verify socket operation behavior
   through the public path.
-- Windows VS2026 workflow verifies the Windows source selection and SelectPoller path.
+- Windows workflow verifies the Windows source selection and IOCP completion path.
 - Linux CI/builds verify the Linux source selection and EPollPoller path.
 
 ---

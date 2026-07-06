@@ -39,6 +39,8 @@ test set.
   so contract checks remain active with `NDEBUG`.
 - Install/package: CI installs the core target and builds an external consumer
   fixture through `find_package(GameNetCore)` and `GameNet::core`.
+- Windows: validation is deferred until the Windows backend is migrated to IOCP.
+  A select-based Windows CI job must not be promoted as the performance target.
 
 Local build and CTest verification still could not be run in this environment
 because no local CMake or C++ compiler was found in PATH or common Windows

@@ -41,7 +41,7 @@ Poller is not channel owner.
 ## 5. Collaboration
 - EventLoop owns Poller and calls poll/update/remove
 - Channel provides fd and event masks
-- concrete backend implementation (e.g. epoll/select under `src/core/net/poller/`) performs actual OS interaction
+- concrete backend implementation (e.g. epoll/IOCP under `src/core/net/poller/`) performs actual OS interaction
 
 ---
 
@@ -64,11 +64,16 @@ Concrete backend implementations may extend internal helpers but should preserve
 ---
 
 ## 8. Backend Abstraction Intent
-v1 backend targets are Linux epoll and Windows WinSock select.
+v1 backend targets are Linux epoll and Windows IOCP.
 Poller abstraction should preserve the possibility of:
 - kqueue backend
 - io_uring-related future experiment
 without forcing upper layers to change semantic assumptions.
+
+Windows WinSock `select()` is not an acceptable performance target for the
+current migration. It may remain only as deleted legacy context or local
+experimentation outside the active target; CI must validate the IOCP path before
+Windows support is promoted.
 
 ---
 

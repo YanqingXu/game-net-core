@@ -36,6 +36,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
 
@@ -80,6 +81,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
 
@@ -117,6 +119,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
 

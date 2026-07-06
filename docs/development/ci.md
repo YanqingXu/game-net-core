@@ -33,6 +33,7 @@ python3 tests/scope/test_scope_guard.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
 python3 tests/cmake/test_install_package_contract.py
+python3 tests/cmake/test_platform_backend_contract.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 ```
@@ -82,13 +83,11 @@ Reactor/TCP foundation target.
 
 ## Current Platform Gate
 
-The first gate runs on `ubuntu-24.04`.
+The active CI gate runs on `ubuntu-24.04`.
 
-Windows build validation is intentionally deferred until the core Linux gate is
-green and the Windows socket/runtime path is reviewed under the same
-intent-driven rules. Adding Windows CI should be its own focused migration step,
-with failures treated as platform contract gaps rather than an expansion of the
-module scope.
+Windows CI is intentionally deferred until the Windows network backend is IOCP,
+not WinSock `select()`. Adding a Windows job must validate the IOCP completion
+path and must not freeze the old select-based backend as an accepted target.
 
 ## Required Local Equivalent
 
@@ -112,6 +111,7 @@ py -3 tests\scope\test_scope_guard.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
 py -3 tests\cmake\test_install_package_contract.py
+py -3 tests\cmake\test_platform_backend_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 ```

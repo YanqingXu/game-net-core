@@ -19,6 +19,7 @@ def main() -> None:
     require(workflow, "Linux Release build")
     require(workflow, "cancel-in-progress: true")
     require(workflow, "python3 tests/cmake/test_install_package_contract.py")
+    require(workflow, "python3 tests/cmake/test_platform_backend_contract.py")
     require(workflow, "python3 tests/cmake/test_release_safe_tests.py")
     require(workflow, "-DCMAKE_BUILD_TYPE=Release")
     require(workflow, "-DGAMENET_BUILD_TESTING=ON")
