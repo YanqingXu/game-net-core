@@ -1,10 +1,15 @@
 set(GAMENET_CORE_SOURCES
+    net/Acceptor.cc
+    net/Buffer.cc
     base/Logger.cc
     net/Channel.cc
+    net/Connector.cc
     net/EventLoop.cc
     net/EventLoopThread.cc
     net/EventLoopThreadPool.cc
+    net/InetAddress.cc
     net/Poller.cc
+    net/Socket.cc
     net/TimerQueue.cc
     net/poller/PollerFactory.cc
 )

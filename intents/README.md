@@ -31,6 +31,9 @@ Core-module change gate:
 These intents apply to the current migrated core:
 
 - `intents/modules/channel.intent.md`
+- `intents/modules/buffer.intent.md`
+- `intents/modules/acceptor.intent.md`
+- `intents/modules/connector.intent.md`
 - `intents/modules/event_loop.intent.md`
 - `intents/modules/event_loop_thread.intent.md`
 - `intents/modules/event_loop_thread_pool.intent.md`
@@ -42,7 +45,7 @@ These intents apply to the current migrated core:
 ## Deferred Intents
 
 The remaining intents are preserved as design assets for later phases. They do
-not authorize expanding the current scope by themselves. HTTP, WebSocket, RPC,
-TLS, UDP, KCP, DNS, coroutine, game-session, broadcast, and metrics work should
-stay deferred until the roadmap explicitly promotes that module into the active
-migration scope.
+not authorize expanding the current scope by themselves. `TcpConnection`,
+`TcpServer`, `TcpClient`, HTTP, WebSocket, RPC, TLS, UDP, KCP, DNS, coroutine,
+game-session, broadcast, and metrics work should stay deferred until the roadmap
+explicitly promotes that module into the active migration scope.

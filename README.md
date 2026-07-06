@@ -14,13 +14,17 @@ Stable / Core:
 - Poller
 - TimerQueue
 - Buffer
-- TcpConnection
-- TcpServer
-- TcpClient
+- InetAddress
+- Socket
+- Acceptor
+- Connector
 - EventLoopThreadPool
 
 Planned Modules:
 
+- TcpConnection
+- TcpServer
+- TcpClient
 - protocol framing
 - transport abstraction
 - session foundation
