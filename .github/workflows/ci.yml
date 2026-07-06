@@ -26,6 +26,11 @@ jobs:
           cmake --version
           c++ --version
 
+      - name: Check scope boundaries
+        run: |
+          python3 tests/scope/test_scope_guard.py
+          python3 tools/check_scope_boundaries.py
+
       - name: Configure
         run: >
           cmake -S . -B build

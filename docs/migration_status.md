@@ -17,7 +17,7 @@ until the current core has stable targets, tests, and examples.
 | --- | --- | --- |
 | 1 | Initialize the `game-net-core` project skeleton | Present: top-level CMake, README, AGENTS, docs, intents, rules, include/src/tests/examples layout |
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
-| 3 | Split CMake targets and test structure | Present: `gamenet_core`, echo examples, unit/contract/integration test directories, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/EventLoopThread/EventLoopThreadPool contract tests |
+| 3 | Split CMake targets and test structure | Present: `gamenet_core`, echo examples, unit/contract/integration test directories, scope boundary guard, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Deferred: intent files are preserved as design assets only |
 
 ## Verification State
@@ -30,6 +30,8 @@ test set.
 - Test: `ctest --test-dir build --output-on-failure`
 - Result: 21/21 tests passed, including 6 unit tests, 14 contract tests, and 1
   integration test.
+- Scope guard: local self-test and repository scan pass; CI now runs both before
+  CMake configure.
 
 Local build and CTest verification still could not be run in this environment
 because no local CMake or C++ compiler was found in PATH or common Windows

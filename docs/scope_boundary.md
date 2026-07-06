@@ -33,3 +33,7 @@ project is split by component boundaries.
 
 Deferred modules should be introduced only after the core target builds and has
 focused tests.
+
+Do not keep empty source or public-header placeholders for deferred modules.
+Their directories should appear when the module is intentionally promoted with
+matching intent, tests, CMake targets, and migration-status updates.

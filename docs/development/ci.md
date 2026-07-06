@@ -7,6 +7,7 @@ The first CI gate keeps the migration focused on the Reactor/TCP foundation.
 The `ci` workflow validates:
 
 - CMake configure with C++23 and testing enabled.
+- Scope boundary guard for deferred modules and legacy `mini_trantor` symbols.
 - Core library build.
 - Minimal examples build.
 - Unit, contract, and integration tests through CTest.
@@ -19,6 +20,19 @@ It keeps deferred modules disabled:
 
 Those deferred intents remain design assets until the core target has stable
 builds, tests, and examples.
+
+The scope guard runs before CMake configure:
+
+```bash
+python3 tests/scope/test_scope_guard.py
+python3 tools/check_scope_boundaries.py
+```
+
+It fails the workflow if `mini/` includes, `mini::` namespaces, inactive
+`gamenet::protocol` / `gamenet::transport` / `gamenet::game` /
+`gamenet::experimental` paths, or deferred high-level module names appear in
+the active implementation and test surface. Promoting a Phase 4 component must
+update the active scope and migration status in the same change.
 
 ## Current Platform Gate
 
@@ -38,6 +52,14 @@ When a CMake toolchain is available locally, use:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
+```
+
+Run the scope guard before the CMake commands. On Windows hosts where the
+Microsoft Store `python.exe` alias is inactive, use `py -3` instead:
+
+```powershell
+py -3 tests\scope\test_scope_guard.py
+py -3 tools\check_scope_boundaries.py
 ```
 
 The local command and CI workflow should stay aligned so test results remain

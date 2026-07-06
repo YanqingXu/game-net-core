@@ -6,10 +6,12 @@ out/
 *.suo
 *.swp
 *.tmp
+*.py[cod]
 
 .vs/
 .vscode/
 .idea/
+__pycache__/
 
 CTestTestfile.cmake
 Testing/
