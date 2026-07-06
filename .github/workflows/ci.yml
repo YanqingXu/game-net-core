@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux-cmake:
     name: Linux CMake build and tests
@@ -83,7 +87,7 @@ jobs:
         run: ctest --test-dir build-asan --output-on-failure
 
   linux-release:
-    name: Linux Release build and tests
+    name: Linux Release build
     runs-on: ubuntu-24.04
 
     steps:
@@ -112,6 +116,3 @@ jobs:
 
       - name: Build
         run: cmake --build build-release --parallel
-
-      - name: Test
-        run: ctest --test-dir build-release --output-on-failure

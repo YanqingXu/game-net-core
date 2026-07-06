@@ -14,7 +14,7 @@ The `ci` workflow validates:
 - Minimal examples build.
 - Unit, contract, and integration tests through CTest.
 - ASan/UBSan Debug build and CTest suite on Linux.
-- Release build and CTest suite on Linux.
+- Release compile gate on Linux.
 
 It keeps deferred modules disabled:
 
@@ -53,8 +53,12 @@ The Release job uses:
 ```bash
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
 cmake --build build-release --parallel
-ctest --test-dir build-release --output-on-failure
 ```
+
+Release still builds the test executables, but it does not run CTest because the
+current C++ tests use `assert` for contract checks and Release builds define
+`NDEBUG`. Debug and ASan/UBSan jobs remain the authoritative test-execution
+gates until the tests are migrated to a Release-safe assertion helper.
 
 ## Current Platform Gate
 

@@ -34,8 +34,8 @@ test set.
   CMake configure.
 - Sanitizers: CI includes an ASan/UBSan Debug build and CTest job for the
   Reactor / TCP foundation.
-- Release: CI includes a Release build and CTest job for the same Reactor / TCP
-  foundation test set.
+- Release: CI includes a Release compile gate for the Reactor / TCP foundation.
+  CTest remains on Debug and ASan/UBSan jobs while tests still use `assert`.
 
 Local build and CTest verification still could not be run in this environment
 because no local CMake or C++ compiler was found in PATH or common Windows
