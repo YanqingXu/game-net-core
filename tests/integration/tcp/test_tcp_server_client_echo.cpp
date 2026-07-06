@@ -4,6 +4,7 @@
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
+#include "gamenet/core/net/TcpConnection.h"
 
 #include <cassert>
 #include <chrono>
