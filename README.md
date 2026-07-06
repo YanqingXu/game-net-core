@@ -54,6 +54,10 @@ intents/           Intent-driven module and architecture contracts
 rules/             Engineering rules for core behavior
 ```
 
+## Examples
+
+- `echo_server`: minimal raw TCP echo server built on `TcpServer` and `TcpConnection`.
+
 ## Development Workflow
 
 game-net-core preserves the original intent-driven workflow:
