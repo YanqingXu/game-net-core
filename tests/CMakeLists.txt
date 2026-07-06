@@ -1,1 +1,16 @@
-# Tests are added as core modules migrate.
+function(add_gamenet_test layer module source)
+    get_filename_component(test_name "${source}" NAME_WE)
+    string(REPLACE "/" "_" module_id "${module}")
+    set(target "${layer}_${module_id}_${test_name}")
+    set(test_id "${layer}.${module}.${test_name}")
+    set(test_labels ${layer} ${module} ${ARGN})
+
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE GameNet::core)
+    add_test(NAME "${test_id}" COMMAND ${target})
+    set_tests_properties("${test_id}" PROPERTIES LABELS "${test_labels}")
+endfunction()
+
+add_gamenet_test(unit channel ${CMAKE_CURRENT_SOURCE_DIR}/unit/channel/test_channel.cpp)
+add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop.cpp threading lifecycle)
+add_gamenet_test(contract timer_queue ${CMAKE_CURRENT_SOURCE_DIR}/contract/timer_queue/test_timer_queue.cpp)

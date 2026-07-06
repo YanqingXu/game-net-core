@@ -1,20 +1,45 @@
-add_library(gamenet_core INTERFACE)
+set(GAMENET_CORE_SOURCES
+    base/Logger.cc
+    net/Channel.cc
+    net/EventLoop.cc
+    net/EventLoopThread.cc
+    net/EventLoopThreadPool.cc
+    net/Poller.cc
+    net/TimerQueue.cc
+    net/poller/PollerFactory.cc
+)
+
+if(WIN32)
+    list(APPEND GAMENET_CORE_SOURCES
+        net/platform/SocketsOps_win.cc
+        net/platform/Wakeup_win.cc
+        net/poller/SelectPoller.cc
+    )
+else()
+    list(APPEND GAMENET_CORE_SOURCES
+        net/platform/SocketsOps_linux.cc
+        net/platform/Wakeup_linux.cc
+        net/poller/EPollPoller.cc
+    )
+endif()
+
+add_library(gamenet_core ${GAMENET_CORE_SOURCES})
 add_library(GameNet::core ALIAS gamenet_core)
 
 target_include_directories(gamenet_core
-    INTERFACE
+    PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_features(gamenet_core INTERFACE cxx_std_23)
+target_compile_features(gamenet_core PUBLIC cxx_std_23)
 
 find_package(Threads REQUIRED)
-target_link_libraries(gamenet_core INTERFACE Threads::Threads)
+target_link_libraries(gamenet_core PUBLIC Threads::Threads)
 
 if(WIN32)
-    target_compile_definitions(gamenet_core INTERFACE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
-    target_link_libraries(gamenet_core INTERFACE ws2_32)
+    target_compile_definitions(gamenet_core PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+    target_link_libraries(gamenet_core PUBLIC ws2_32)
 endif()
 
 gamenet_configure_sanitizers(gamenet_core)
