@@ -1,6 +1,8 @@
 # Scope Boundary
 
-game-net-core starts as a compact networking foundation for game servers.
+game-net-core starts as the Reactor/TCP extraction target from `mini_trantor`.
+It should stay a compact networking foundation for game servers while the larger
+project is split by component boundaries.
 
 ## In Scope First
 
@@ -14,6 +16,8 @@ game-net-core starts as a compact networking foundation for game servers.
 
 ## Deferred
 
+- Protocol framing
+- Transport abstraction
 - HTTP
 - WebSocket
 - RPC

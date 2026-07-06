@@ -5,6 +5,25 @@ game-net-core is a modern C++23 networking foundation for game servers.
 It is built around a Reactor-style EventLoop and aims to provide a small,
 testable, and extensible base for game-server networking.
 
+The repository is a component-by-component split and migration of the larger
+`mini_trantor` project. The goal is to extract the networking foundation first,
+stabilize it with clear ownership/threading contracts, and then promote higher
+layers only after the core is proven.
+
+## Migration Goal
+
+The overall migration is staged:
+
+1. Initialize the `game-net-core` project skeleton.
+2. Migrate the Reactor / TCP core.
+3. Split CMake targets and test structure.
+4. Gradually migrate protocol, transport, game foundation, and experimental
+   modules.
+
+The current active target remains the Reactor / TCP foundation.
+See `docs/migration_status.md` for the current phase status and verification
+state.
+
 ## Current Scope
 
 Stable / Core:

@@ -1,12 +1,21 @@
 # System Intent: game-net-core Overview
 
 ## 1. Intent
-game-net-core is a small reactor-style C++ network library inspired by trantor.
-Its purpose is to provide a minimal but structurally correct networking foundation
-for learning, extension, coroutine integration, and AI-assisted engineering.
+game-net-core is a component-split migration target extracted from the larger
+`mini_trantor` project. It is a small reactor-style C++ network library inspired
+by trantor, and its purpose is to provide a minimal but structurally correct
+networking foundation for learning, extension, coroutine integration, and
+AI-assisted engineering.
 
 This project is not intended to be a feature-complete production framework in v1.
 Its primary value is architectural correctness and evolvability.
+
+The migration is staged:
+1. initialize the `game-net-core` project skeleton
+2. migrate Reactor / TCP core
+3. split CMake targets and test structure
+4. gradually migrate protocol, transport, game foundation, and experimental
+   modules
 
 ---
 

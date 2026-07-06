@@ -1,5 +1,10 @@
 # Roadmap
 
+game-net-core is the component-split migration target for `mini_trantor`.
+The roadmap keeps that migration staged so the networking core becomes stable
+before protocol, transport, game-foundation, or experimental modules are added.
+See `migration_status.md` for the current checked state of these phases.
+
 ## Phase 1: Project Skeleton
 
 - Initialize CMake, README, repository rules, and documentation structure.
@@ -20,5 +25,5 @@
 
 - Add protocol framing.
 - Add transport abstraction.
-- Add session, logic-loop, and broadcast foundations.
+- Add game foundation pieces such as session, logic-loop, and broadcast support.
 - Keep UDP/KCP work under experimental until the stable core is proven.

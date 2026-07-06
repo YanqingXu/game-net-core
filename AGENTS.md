@@ -3,6 +3,8 @@
 ## Project Identity
 
 game-net-core is an intent-driven C++23 networking foundation for game servers.
+It is the component-split migration target for the larger `mini_trantor`
+project.
 It is not only a codebase:
 
 - intent is first-class
@@ -36,7 +38,8 @@ Core module changes must answer:
 
 ## Scope
 
-Keep the first migration focused on the Reactor/TCP foundation:
+Keep the first migration focused on the Reactor/TCP foundation extracted from
+`mini_trantor`:
 
 - Logger, Timestamp, noncopyable
 - InetAddress, Buffer, SocketTypes, SocketsOps, Socket
@@ -51,6 +54,14 @@ modules until the core target has stable tests and examples.
 
 Preserved intent files for deferred modules are design assets only. They do not
 expand current implementation scope by themselves.
+
+Overall migration stages:
+
+1. Initialize the `game-net-core` project skeleton.
+2. Migrate the Reactor / TCP core.
+3. Split CMake targets and test structure.
+4. Gradually migrate protocol, transport, game foundation, and experimental
+   modules.
 
 ## Layout
 

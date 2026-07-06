@@ -18,6 +18,8 @@ add_gamenet_test(unit socket ${CMAKE_CURRENT_SOURCE_DIR}/unit/socket/test_socket
 add_gamenet_test(unit acceptor ${CMAKE_CURRENT_SOURCE_DIR}/unit/acceptor/test_acceptor_stop.cpp)
 add_gamenet_test(unit connector ${CMAKE_CURRENT_SOURCE_DIR}/unit/connector/test_connector.cpp)
 add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop.cpp threading lifecycle)
+add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)
+add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp threading lifecycle)
 add_gamenet_test(contract timer_queue ${CMAKE_CURRENT_SOURCE_DIR}/contract/timer_queue/test_timer_queue.cpp)
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_lifecycle.cpp lifecycle)
 add_gamenet_test(integration tcp ${CMAKE_CURRENT_SOURCE_DIR}/integration/tcp/test_tcp_server_client_echo.cpp lifecycle)

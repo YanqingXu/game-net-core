@@ -1,7 +1,9 @@
 # Intent Index
 
 This directory preserves the intent-driven development workflow inherited from
-the original repository and adapts it for `game-net-core`.
+the original `mini_trantor` repository and adapts it for `game-net-core`.
+The repository exists to split and migrate that larger project by component
+boundary, starting with the Reactor / TCP foundation.
 
 Intent files are design contracts. They describe why a module exists, which
 invariants it must preserve, what it must not do, and which tests prove the
