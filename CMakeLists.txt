@@ -14,7 +14,14 @@ option(GAMENET_ENABLE_EXPERIMENTAL "Build experimental modules" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 include(Sanitizers)
+
+set(GAMENET_INSTALL_CMAKEDIR
+    "${CMAKE_INSTALL_LIBDIR}/cmake/GameNetCore"
+    CACHE STRING "Install destination for GameNetCore CMake package files"
+)
 
 add_subdirectory(src/core)
 add_subdirectory(examples)
@@ -23,3 +30,31 @@ if(GAMENET_BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+install(DIRECTORY include/gamenet
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+configure_package_config_file(
+    cmake/GameNetCoreConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/GameNetCoreConfig.cmake"
+    INSTALL_DESTINATION ${GAMENET_INSTALL_CMAKEDIR}
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/GameNetCoreConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(
+    FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/GameNetCoreConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/GameNetCoreConfigVersion.cmake"
+    DESTINATION ${GAMENET_INSTALL_CMAKEDIR}
+)
+
+install(EXPORT GameNetCoreTargets
+    NAMESPACE GameNet::
+    DESTINATION ${GAMENET_INSTALL_CMAKEDIR}
+)

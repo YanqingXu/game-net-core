@@ -35,6 +35,7 @@ jobs:
           python3 tests/scope/test_scope_guard.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/cmake/test_install_package_contract.py
           python3 tests/ci/test_workflow_jobs.py
 
       - name: Configure
@@ -50,6 +51,14 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Install and verify package consumer
+        run: |
+          cmake --install build --prefix "$PWD/build/_install"
+          cmake -S tests/cmake/install_consumer -B build-install-consumer \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH="$PWD/build/_install"
+          cmake --build build-install-consumer --parallel
 
   linux-asan-ubsan:
     name: Linux ASan/UBSan build and tests
@@ -69,6 +78,7 @@ jobs:
           python3 tests/scope/test_scope_guard.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/cmake/test_install_package_contract.py
           python3 tests/ci/test_workflow_jobs.py
 
       - name: Configure
@@ -104,6 +114,7 @@ jobs:
           python3 tests/scope/test_scope_guard.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/cmake/test_install_package_contract.py
           python3 tests/ci/test_workflow_jobs.py
 
       - name: Configure

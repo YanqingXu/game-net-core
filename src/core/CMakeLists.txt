@@ -34,6 +34,8 @@ endif()
 add_library(gamenet_core ${GAMENET_CORE_SOURCES})
 add_library(GameNet::core ALIAS gamenet_core)
 
+set_target_properties(gamenet_core PROPERTIES EXPORT_NAME core)
+
 target_include_directories(gamenet_core
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -51,3 +53,11 @@ if(WIN32)
 endif()
 
 gamenet_configure_sanitizers(gamenet_core)
+
+install(TARGETS gamenet_core
+    EXPORT GameNetCoreTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)

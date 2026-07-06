@@ -13,6 +13,7 @@ The `ci` workflow validates:
 - Core library build.
 - Minimal examples build.
 - Unit, contract, and integration tests through CTest.
+- Install and `find_package(GameNetCore)` consumer verification.
 - ASan/UBSan Debug build and CTest suite on Linux.
 - Release compile gate on Linux.
 
@@ -31,6 +32,7 @@ The scope guard runs before CMake configure:
 python3 tests/scope/test_scope_guard.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
+python3 tests/cmake/test_install_package_contract.py
 python3 tests/ci/test_workflow_jobs.py
 ```
 
@@ -60,6 +62,23 @@ current C++ tests use `assert` for contract checks and Release builds define
 `NDEBUG`. Debug and ASan/UBSan jobs remain the authoritative test-execution
 gates until the tests are migrated to a Release-safe assertion helper.
 
+## Install Package Gate
+
+The Linux Debug job also verifies that the split core target is consumable from
+outside the source tree:
+
+```bash
+cmake --install build --prefix "$PWD/build/_install"
+cmake -S tests/cmake/install_consumer -B build-install-consumer \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_PREFIX_PATH="$PWD/build/_install"
+cmake --build build-install-consumer --parallel
+```
+
+The consumer fixture must use `find_package(GameNetCore REQUIRED)` and link only
+against `GameNet::core`. This keeps the package contract focused on the current
+Reactor/TCP foundation target.
+
 ## Current Platform Gate
 
 The first gate runs on `ubuntu-24.04`.
@@ -87,6 +106,7 @@ Microsoft Store `python.exe` alias is inactive, use `py -3` instead:
 py -3 tests\scope\test_scope_guard.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
+py -3 tests\cmake\test_install_package_contract.py
 py -3 tests\ci\test_workflow_jobs.py
 ```
 

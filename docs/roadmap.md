@@ -20,6 +20,8 @@ See `migration_status.md` for the current checked state of these phases.
 
 - Split unit, contract, and integration tests.
 - Add minimal echo-server coverage for the TCP path.
+- Export and install `GameNet::core` so downstream components can consume the
+  split package through `find_package(GameNetCore)`.
 
 ## Phase 4: Higher-level Modules
 
