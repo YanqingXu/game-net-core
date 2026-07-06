@@ -22,12 +22,18 @@ until the current core has stable targets, tests, and examples.
 
 ## Verification State
 
-Static documentation checks passed for the migration-goal wording. Phase 3 now
-also registers focused Acceptor, Buffer, Channel, Connector, InetAddress,
-Poller, Socket, TcpClient, TcpServer, EventLoopThread, and EventLoopThreadPool
-contract tests. Build and CTest verification could not be run in this
-environment because no local CMake or C++ compiler was found in PATH or common
-Windows installation locations.
+The remote Linux CI gate passed on `main` at commit
+`4dff24f9c848d7b6b29921a87df13bd6d6d665f5`.
 
-Before promoting Phase 4 work, run the local equivalent of the CI gate and keep
-the Reactor / TCP tests green.
+- Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
+- Build: `cmake --build build --parallel`
+- Test: `ctest --test-dir build --output-on-failure`
+- Result: 21/21 tests passed, including 6 unit tests, 14 contract tests, and 1
+  integration test.
+
+Local build and CTest verification still could not be run in this environment
+because no local CMake or C++ compiler was found in PATH or common Windows
+installation locations.
+
+Before promoting Phase 4 work, keep this CI gate green and add any missing local
+or platform-specific verification as its own focused migration step.
