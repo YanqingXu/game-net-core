@@ -31,6 +31,7 @@ jobs:
           python3 tests/scope/test_scope_guard.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/ci/test_workflow_jobs.py
 
       - name: Configure
         run: >
@@ -64,6 +65,7 @@ jobs:
           python3 tests/scope/test_scope_guard.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/ci/test_workflow_jobs.py
 
       - name: Configure
         run: >
@@ -79,3 +81,37 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build-asan --output-on-failure
+
+  linux-release:
+    name: Linux Release build and tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          cmake --version
+          c++ --version
+
+      - name: Check repository guards
+        run: |
+          python3 tests/scope/test_scope_guard.py
+          python3 tools/check_scope_boundaries.py
+          python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/ci/test_workflow_jobs.py
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-release
+          -DCMAKE_BUILD_TYPE=Release
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build
+        run: cmake --build build-release --parallel
+
+      - name: Test
+        run: ctest --test-dir build-release --output-on-failure

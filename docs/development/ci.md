@@ -14,6 +14,7 @@ The `ci` workflow validates:
 - Minimal examples build.
 - Unit, contract, and integration tests through CTest.
 - ASan/UBSan Debug build and CTest suite on Linux.
+- Release build and CTest suite on Linux.
 
 It keeps deferred modules disabled:
 
@@ -30,6 +31,7 @@ The scope guard runs before CMake configure:
 python3 tests/scope/test_scope_guard.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
+python3 tests/ci/test_workflow_jobs.py
 ```
 
 It fails the workflow if `mini/` includes, `mini::` namespaces, inactive
@@ -44,6 +46,14 @@ The ASan/UBSan job uses:
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
 cmake --build build-asan --parallel
 ctest --test-dir build-asan --output-on-failure
+```
+
+The Release job uses:
+
+```bash
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
+cmake --build build-release --parallel
+ctest --test-dir build-release --output-on-failure
 ```
 
 ## Current Platform Gate
@@ -73,6 +83,7 @@ Microsoft Store `python.exe` alias is inactive, use `py -3` instead:
 py -3 tests\scope\test_scope_guard.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
+py -3 tests\ci\test_workflow_jobs.py
 ```
 
 The local command and CI workflow should stay aligned so test results remain
