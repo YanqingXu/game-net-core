@@ -2,7 +2,7 @@
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <memory>
 
 int main() {
@@ -15,7 +15,7 @@ int main() {
     channel.setReadCallback([&](gamenet::base::Timestamp) { readCalled = true; });
     channel.setRevents(gamenet::net::Channel::kReadEvent);
     channel.handleEvent(gamenet::base::now());
-    assert(readCalled);
+    GAMENET_TEST_ASSERT(readCalled);
 
     readCalled = false;
     auto owner = std::make_shared<int>(42);
@@ -23,7 +23,7 @@ int main() {
     owner.reset();
     channel.setRevents(gamenet::net::Channel::kReadEvent);
     channel.handleEvent(gamenet::base::now());
-    assert(!readCalled);
+    GAMENET_TEST_ASSERT(!readCalled);
 
     return 0;
 }

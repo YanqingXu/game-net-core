@@ -3,7 +3,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <memory>
 #include <stdexcept>
 
@@ -29,7 +29,7 @@ struct ReadablePair {
         writeFd = fds[1];
 #else
         int fds[2];
-        assert(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+        GAMENET_TEST_ASSERT(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
         readFd = fds[0];
         writeFd = fds[1];
 #endif
@@ -49,16 +49,16 @@ int main() {
         ReadablePair pair;
         gamenet::net::Channel channel(&loop, pair.readFd);
 
-        assert(!loop.hasChannel(&channel));
+        GAMENET_TEST_ASSERT(!loop.hasChannel(&channel));
 
         channel.enableReading();
-        assert(loop.hasChannel(&channel));
-        assert(channel.isReading());
-        assert(!channel.isWriting());
+        GAMENET_TEST_ASSERT(loop.hasChannel(&channel));
+        GAMENET_TEST_ASSERT(channel.isReading());
+        GAMENET_TEST_ASSERT(!channel.isWriting());
 
         channel.enableWriting();
-        assert(channel.isReading());
-        assert(channel.isWriting());
+        GAMENET_TEST_ASSERT(channel.isReading());
+        GAMENET_TEST_ASSERT(channel.isWriting());
 
         bool removeRejected = false;
         try {
@@ -66,13 +66,13 @@ int main() {
         } catch (const std::runtime_error&) {
             removeRejected = true;
         }
-        assert(removeRejected);
-        assert(loop.hasChannel(&channel));
+        GAMENET_TEST_ASSERT(removeRejected);
+        GAMENET_TEST_ASSERT(loop.hasChannel(&channel));
 
         channel.disableAll();
-        assert(channel.isNoneEvent());
+        GAMENET_TEST_ASSERT(channel.isNoneEvent());
         channel.remove();
-        assert(!loop.hasChannel(&channel));
+        GAMENET_TEST_ASSERT(!loop.hasChannel(&channel));
     }
 
     {
@@ -92,22 +92,22 @@ int main() {
 
         channel.setRevents(gamenet::net::Channel::kReadEvent);
         channel.handleEvent(gamenet::base::now());
-        assert(readFired);
-        assert(!writeFired);
-        assert(!errorFired);
-        assert(!closeFired);
+        GAMENET_TEST_ASSERT(readFired);
+        GAMENET_TEST_ASSERT(!writeFired);
+        GAMENET_TEST_ASSERT(!errorFired);
+        GAMENET_TEST_ASSERT(!closeFired);
 
         channel.setRevents(gamenet::net::Channel::kWriteEvent);
         channel.handleEvent(gamenet::base::now());
-        assert(writeFired);
+        GAMENET_TEST_ASSERT(writeFired);
 
         channel.setRevents(gamenet::net::Channel::kErrorEvent);
         channel.handleEvent(gamenet::base::now());
-        assert(errorFired);
+        GAMENET_TEST_ASSERT(errorFired);
 
         channel.setRevents(gamenet::net::Channel::kCloseEvent);
         channel.handleEvent(gamenet::base::now());
-        assert(closeFired);
+        GAMENET_TEST_ASSERT(closeFired);
     }
 
     {
@@ -122,13 +122,13 @@ int main() {
             channel.tie(owner);
             channel.setRevents(gamenet::net::Channel::kReadEvent);
             channel.handleEvent(gamenet::base::now());
-            assert(readFired);
+            GAMENET_TEST_ASSERT(readFired);
         }
 
         readFired = false;
         channel.setRevents(gamenet::net::Channel::kReadEvent);
         channel.handleEvent(gamenet::base::now());
-        assert(!readFired);
+        GAMENET_TEST_ASSERT(!readFired);
     }
 
     return 0;

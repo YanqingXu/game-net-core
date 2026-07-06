@@ -1,6 +1,6 @@
 #include "gamenet/core/net/InetAddress.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <cstring>
 #include <stdexcept>
 
@@ -11,18 +11,18 @@
 int main() {
     {
         gamenet::net::InetAddress addr("2001:db8::2", 3000);
-        assert(addr.isIpv6());
-        assert(addr.getSockAddr()->sa_family == AF_INET6);
-        assert(addr.getSockAddrLen() == static_cast<socklen_t>(sizeof(sockaddr_in6)));
+        GAMENET_TEST_ASSERT(addr.isIpv6());
+        GAMENET_TEST_ASSERT(addr.getSockAddr()->sa_family == AF_INET6);
+        GAMENET_TEST_ASSERT(addr.getSockAddrLen() == static_cast<socklen_t>(sizeof(sockaddr_in6)));
 
         sockaddr_storage storage{};
         std::memcpy(&storage, addr.getSockAddr(), addr.getSockAddrLen());
 
         gamenet::net::InetAddress roundTrip(storage);
-        assert(roundTrip.isIpv6());
-        assert(roundTrip.toIp() == "2001:db8::2");
-        assert(roundTrip.toIpPort() == "[2001:db8::2]:3000");
-        assert(roundTrip.port() == 3000);
+        GAMENET_TEST_ASSERT(roundTrip.isIpv6());
+        GAMENET_TEST_ASSERT(roundTrip.toIp() == "2001:db8::2");
+        GAMENET_TEST_ASSERT(roundTrip.toIpPort() == "[2001:db8::2]:3000");
+        GAMENET_TEST_ASSERT(roundTrip.port() == 3000);
     }
 
     {
@@ -30,16 +30,16 @@ int main() {
         raw.sin6_family = AF_INET6;
         raw.sin6_port = htons(7000);
         const int converted = ::inet_pton(AF_INET6, "::1", &raw.sin6_addr);
-        assert(converted == 1);
+        GAMENET_TEST_ASSERT(converted == 1);
 
         gamenet::net::InetAddress addr(0, false);
-        assert(addr.isIpv4());
+        GAMENET_TEST_ASSERT(addr.isIpv4());
 
         addr.setSockAddrInet6(raw);
-        assert(addr.isIpv6());
-        assert(addr.family() == AF_INET6);
-        assert(addr.toIp() == "::1");
-        assert(addr.toIpPort() == "[::1]:7000");
+        GAMENET_TEST_ASSERT(addr.isIpv6());
+        GAMENET_TEST_ASSERT(addr.family() == AF_INET6);
+        GAMENET_TEST_ASSERT(addr.toIp() == "::1");
+        GAMENET_TEST_ASSERT(addr.toIpPort() == "[::1]:7000");
     }
 
     {
@@ -49,7 +49,7 @@ int main() {
         } catch (const std::runtime_error&) {
             threw = true;
         }
-        assert(threw);
+        GAMENET_TEST_ASSERT(threw);
     }
 
     return 0;

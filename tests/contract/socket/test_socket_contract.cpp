@@ -2,7 +2,7 @@
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <thread>
 
@@ -15,7 +15,7 @@ gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
     const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
     if (rc < 0) {
         const int error = gamenet::net::sockets::lastError();
-        assert(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
     }
     return fd;
 }
@@ -28,10 +28,10 @@ gamenet::net::SocketFd acceptEventually(gamenet::net::Socket& listener, gamenet:
         }
 
         const int error = gamenet::net::sockets::lastError();
-        assert(gamenet::net::sockets::isWouldBlock(error) || gamenet::net::sockets::isInterrupted(error));
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isWouldBlock(error) || gamenet::net::sockets::isInterrupted(error));
         std::this_thread::sleep_for(10ms);
     }
-    assert(false && "timed out waiting for socket accept");
+    GAMENET_TEST_ASSERT(false && "timed out waiting for socket accept");
     return gamenet::net::kInvalidSocket;
 }
 
@@ -44,18 +44,18 @@ int main() {
     listener.listen();
 
     const gamenet::net::InetAddress listenAddr(gamenet::net::sockets::getLocalAddr(listener.fd()));
-    assert(listenAddr.isIpv4());
-    assert(listenAddr.port() != 0);
+    GAMENET_TEST_ASSERT(listenAddr.isIpv4());
+    GAMENET_TEST_ASSERT(listenAddr.port() != 0);
 
     gamenet::net::SocketFd client = connectTo(listenAddr);
 
     gamenet::net::InetAddress peerAddr;
     gamenet::net::SocketFd accepted = acceptEventually(listener, &peerAddr);
 
-    assert(gamenet::net::sockets::isValid(accepted));
-    assert(peerAddr.isIpv4());
-    assert(peerAddr.toIp() == "127.0.0.1");
-    assert(peerAddr.port() != 0);
+    GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(accepted));
+    GAMENET_TEST_ASSERT(peerAddr.isIpv4());
+    GAMENET_TEST_ASSERT(peerAddr.toIp() == "127.0.0.1");
+    GAMENET_TEST_ASSERT(peerAddr.port() != 0);
 
     gamenet::net::sockets::close(accepted);
     gamenet::net::sockets::close(client);

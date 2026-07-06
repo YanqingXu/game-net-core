@@ -1,7 +1,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThreadPool.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <future>
 #include <stdexcept>
@@ -14,15 +14,15 @@ int main() {
         bool callbackRan = false;
         pool.start([&](gamenet::net::EventLoop* loop) {
             callbackRan = true;
-            assert(loop == &baseLoop);
-            assert(loop->isInLoopThread());
+            GAMENET_TEST_ASSERT(loop == &baseLoop);
+            GAMENET_TEST_ASSERT(loop->isInLoopThread());
         });
 
-        assert(pool.getNextLoop() == &baseLoop);
+        GAMENET_TEST_ASSERT(pool.getNextLoop() == &baseLoop);
         const auto loops = pool.getAllLoops();
-        assert(loops.size() == 1);
-        assert(loops.front() == &baseLoop);
-        assert(callbackRan);
+        GAMENET_TEST_ASSERT(loops.size() == 1);
+        GAMENET_TEST_ASSERT(loops.front() == &baseLoop);
+        GAMENET_TEST_ASSERT(callbackRan);
     }
 
     {
@@ -32,20 +32,20 @@ int main() {
         pool.start();
 
         const auto loops = pool.getAllLoops();
-        assert(loops.size() == 2);
-        assert(loops[0] != nullptr);
-        assert(loops[1] != nullptr);
-        assert(loops[0] != loops[1]);
+        GAMENET_TEST_ASSERT(loops.size() == 2);
+        GAMENET_TEST_ASSERT(loops[0] != nullptr);
+        GAMENET_TEST_ASSERT(loops[1] != nullptr);
+        GAMENET_TEST_ASSERT(loops[0] != loops[1]);
 
-        assert(pool.getNextLoop() == loops[0]);
-        assert(pool.getNextLoop() == loops[1]);
-        assert(pool.getNextLoop() == loops[0]);
+        GAMENET_TEST_ASSERT(pool.getNextLoop() == loops[0]);
+        GAMENET_TEST_ASSERT(pool.getNextLoop() == loops[1]);
+        GAMENET_TEST_ASSERT(pool.getNextLoop() == loops[0]);
 
         pool.stop();
         const auto stoppedLoops = pool.getAllLoops();
-        assert(stoppedLoops.size() == 1);
-        assert(stoppedLoops.front() == &baseLoop);
-        assert(pool.getNextLoop() == &baseLoop);
+        GAMENET_TEST_ASSERT(stoppedLoops.size() == 1);
+        GAMENET_TEST_ASSERT(stoppedLoops.front() == &baseLoop);
+        GAMENET_TEST_ASSERT(pool.getNextLoop() == &baseLoop);
     }
 
     {
@@ -57,14 +57,14 @@ int main() {
         std::thread worker([&] {
             try {
                 pool.start();
-                assert(false);
+                GAMENET_TEST_ASSERT(false);
             } catch (const std::runtime_error&) {
                 observed.set_value();
             }
         });
 
         const auto status = observedFuture.wait_for(std::chrono::seconds(1));
-        assert(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
         worker.join();
     }
 
@@ -79,14 +79,14 @@ int main() {
         std::thread worker([&] {
             try {
                 (void)pool.getNextLoop();
-                assert(false);
+                GAMENET_TEST_ASSERT(false);
             } catch (const std::runtime_error&) {
                 observed.set_value();
             }
         });
 
         const auto status = observedFuture.wait_for(std::chrono::seconds(1));
-        assert(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
         worker.join();
         pool.stop();
     }

@@ -4,7 +4,7 @@
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
 
@@ -27,8 +27,8 @@ int main() {
     bool connected = false;
 
     acceptor.setNewConnectionCallback([&](gamenet::net::SocketFd sockfd, const gamenet::net::InetAddress&) {
-        assert(loop.isInLoopThread());
-        assert(gamenet::net::sockets::isValid(sockfd));
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(sockfd));
 
         accepted = true;
         gamenet::net::sockets::close(sockfd);
@@ -36,8 +36,8 @@ int main() {
     });
 
     connector->setNewConnectionCallback([&](gamenet::net::SocketFd sockfd) {
-        assert(loop.isInLoopThread());
-        assert(gamenet::net::sockets::isValid(sockfd));
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(sockfd));
 
         connected = true;
         gamenet::net::sockets::close(sockfd);
@@ -48,14 +48,14 @@ int main() {
     connector->start();
 
     loop.runAfter(std::chrono::seconds(1), [&] {
-        assert(false && "timed out waiting for connector success");
+        GAMENET_TEST_ASSERT(false && "timed out waiting for connector success");
         loop.quit();
     });
     loop.loop();
 
-    assert(accepted);
-    assert(connected);
-    assert(connector->state() == gamenet::net::Connector::kConnected);
+    GAMENET_TEST_ASSERT(accepted);
+    GAMENET_TEST_ASSERT(connected);
+    GAMENET_TEST_ASSERT(connector->state() == gamenet::net::Connector::kConnected);
 
     return 0;
 }

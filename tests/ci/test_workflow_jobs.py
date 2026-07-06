@@ -19,6 +19,7 @@ def main() -> None:
     require(workflow, "Linux Release build")
     require(workflow, "cancel-in-progress: true")
     require(workflow, "python3 tests/cmake/test_install_package_contract.py")
+    require(workflow, "python3 tests/cmake/test_release_safe_tests.py")
     require(workflow, "-DCMAKE_BUILD_TYPE=Release")
     require(workflow, "-DGAMENET_BUILD_TESTING=ON")
     require(workflow, "-DGAMENET_ENABLE_TLS=OFF")
@@ -26,7 +27,7 @@ def main() -> None:
     require(workflow, "cmake --install build --prefix \"$PWD/build/_install\"")
     require(workflow, "cmake -S tests/cmake/install_consumer")
     require(workflow, "-DCMAKE_PREFIX_PATH=\"$PWD/build/_install\"")
-    assert "ctest --test-dir build-release" not in workflow
+    require(workflow, "ctest --test-dir build-release --output-on-failure")
 
 
 if __name__ == "__main__":

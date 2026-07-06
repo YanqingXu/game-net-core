@@ -1,7 +1,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <future>
 #include <thread>
@@ -15,9 +15,9 @@ int main() {
         bool ran = false;
         loop.runInLoop([&] {
             ran = true;
-            assert(loop.isInLoopThread());
+            GAMENET_TEST_ASSERT(loop.isInLoopThread());
         });
-        assert(ran);
+        GAMENET_TEST_ASSERT(ran);
     }
 
     {
@@ -35,8 +35,8 @@ int main() {
         });
 
         const auto status = future.wait_for(2s);
-        assert(status == std::future_status::ready);
-        assert(future.get() != callerThread);
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT(future.get() != callerThread);
     }
 
     {
@@ -51,7 +51,7 @@ int main() {
             order.push_back(1);
             loop->queueInLoop([&] {
                 order.push_back(3);
-                assert(loop->isInLoopThread());
+                GAMENET_TEST_ASSERT(loop->isInLoopThread());
                 completed.set_value();
                 loop->quit();
             });
@@ -59,8 +59,8 @@ int main() {
         });
 
         const auto status = future.wait_for(1s);
-        assert(status == std::future_status::ready);
-        assert((order == std::vector<int>{1, 2, 3}));
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT((order == std::vector<int>{1, 2, 3}));
     }
 
     {
@@ -72,13 +72,13 @@ int main() {
 
         std::this_thread::sleep_for(50ms);
         loop->queueInLoop([&] {
-            assert(loop->isInLoopThread());
+            GAMENET_TEST_ASSERT(loop->isInLoopThread());
             completed.set_value();
             loop->quit();
         });
 
         const auto status = future.wait_for(1s);
-        assert(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
     }
 
     {
@@ -99,7 +99,7 @@ int main() {
         loop->quit();
 
         const auto status = exitedFuture.wait_for(1s);
-        assert(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
         loopOwner.join();
     }
 
@@ -116,7 +116,7 @@ int main() {
         });
 
         const auto status = nestedFuture.wait_for(1s);
-        assert(status == std::future_status::ready);
+        GAMENET_TEST_ASSERT(status == std::future_status::ready);
     }
 
     return 0;

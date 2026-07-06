@@ -1,7 +1,7 @@
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <cerrno>
 #include <string>
 
@@ -28,7 +28,7 @@ struct TestPipe {
         writeFd = fds[1];
 #else
         int fds[2];
-        assert(::pipe(fds) == 0);
+        GAMENET_TEST_ASSERT(::pipe(fds) == 0);
         readFd = fds[0];
         writeFd = fds[1];
 #endif
@@ -46,25 +46,25 @@ int main() {
     {
         gamenet::net::Buffer buffer;
         buffer.append("hello", 5);
-        assert(buffer.readableBytes() == 5);
-        assert(buffer.retrieveAsString(2) == "he");
-        assert(buffer.readableBytes() == 3);
-        assert(buffer.retrieveAllAsString() == "llo");
-        assert(buffer.readableBytes() == 0);
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == 5);
+        GAMENET_TEST_ASSERT(buffer.retrieveAsString(2) == "he");
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == 3);
+        GAMENET_TEST_ASSERT(buffer.retrieveAllAsString() == "llo");
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == 0);
     }
 
     {
         TestPipe pipe;
         const std::string payload(gamenet::net::Buffer::kInitialSize + 512, 'x');
         const ssize_t written = gamenet::net::sockets::write(pipe.writeFd, payload.data(), payload.size());
-        assert(written == static_cast<ssize_t>(payload.size()));
+        GAMENET_TEST_ASSERT(written == static_cast<ssize_t>(payload.size()));
 
         gamenet::net::Buffer buffer;
         int savedErrno = 0;
         const ssize_t n = buffer.readFd(pipe.readFd, &savedErrno);
-        assert(n == static_cast<ssize_t>(payload.size()));
-        assert(buffer.readableBytes() == payload.size());
-        assert(buffer.retrieveAllAsString() == payload);
+        GAMENET_TEST_ASSERT(n == static_cast<ssize_t>(payload.size()));
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == payload.size());
+        GAMENET_TEST_ASSERT(buffer.retrieveAllAsString() == payload);
     }
 
     {
@@ -75,19 +75,19 @@ int main() {
 
         int savedErrno = 0;
         const ssize_t n = buffer.writeFd(pipe.writeFd, &savedErrno);
-        assert(n == static_cast<ssize_t>(payload.size()));
+        GAMENET_TEST_ASSERT(n == static_cast<ssize_t>(payload.size()));
 
         char readBuf[64] = {};
         const ssize_t r = gamenet::net::sockets::read(pipe.readFd, readBuf, sizeof(readBuf));
-        assert(r == static_cast<ssize_t>(payload.size()));
-        assert(std::string(readBuf, static_cast<std::size_t>(r)) == payload);
+        GAMENET_TEST_ASSERT(r == static_cast<ssize_t>(payload.size()));
+        GAMENET_TEST_ASSERT(std::string(readBuf, static_cast<std::size_t>(r)) == payload);
     }
 
     {
         gamenet::net::Buffer buffer;
         int savedErrno = 0;
-        assert(buffer.writeFd(gamenet::net::kInvalidSocket, &savedErrno) == -1);
-        assert(savedErrno != 0);
+        GAMENET_TEST_ASSERT(buffer.writeFd(gamenet::net::kInvalidSocket, &savedErrno) == -1);
+        GAMENET_TEST_ASSERT(savedErrno != 0);
     }
 
     return 0;

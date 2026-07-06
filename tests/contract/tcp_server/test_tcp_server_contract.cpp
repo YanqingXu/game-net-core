@@ -4,7 +4,7 @@
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 
 namespace {
@@ -14,7 +14,7 @@ gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
     const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
     if (rc < 0) {
         const int error = gamenet::net::sockets::lastError();
-        assert(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
     }
     return fd;
 }
@@ -29,18 +29,18 @@ int main() {
     bool disconnected = false;
 
     server.setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
-        assert(loop.isInLoopThread());
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
 
         if (conn->connected()) {
             connected = true;
-            assert(server.connectionCount() == 1);
+            GAMENET_TEST_ASSERT(server.connectionCount() == 1);
             conn->forceClose();
             return;
         }
 
         disconnected = true;
         loop.queueInLoop([&] {
-            assert(server.connectionCount() == 0);
+            GAMENET_TEST_ASSERT(server.connectionCount() == 0);
             server.stop();
             loop.quit();
         });
@@ -50,16 +50,16 @@ int main() {
     gamenet::net::SocketFd clientFd = connectTo(server.listenAddress());
 
     loop.runAfter(std::chrono::seconds(1), [&] {
-        assert(false && "timed out waiting for tcp server lifecycle");
+        GAMENET_TEST_ASSERT(false && "timed out waiting for tcp server lifecycle");
         loop.quit();
     });
     loop.loop();
 
     gamenet::net::sockets::close(clientFd);
 
-    assert(connected);
-    assert(disconnected);
-    assert(server.connectionCount() == 0);
+    GAMENET_TEST_ASSERT(connected);
+    GAMENET_TEST_ASSERT(disconnected);
+    GAMENET_TEST_ASSERT(server.connectionCount() == 0);
 
     return 0;
 }

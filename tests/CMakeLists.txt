@@ -6,6 +6,7 @@ function(add_gamenet_test layer module source)
     set(test_labels ${layer} ${module} ${ARGN})
 
     add_executable(${target} ${source})
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(${target} PRIVATE GameNet::core)
     add_test(NAME "${test_id}" COMMAND ${target})
     set_tests_properties("${test_id}" PROPERTIES LABELS "${test_labels}")

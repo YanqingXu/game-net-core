@@ -15,7 +15,7 @@ The `ci` workflow validates:
 - Unit, contract, and integration tests through CTest.
 - Install and `find_package(GameNetCore)` consumer verification.
 - ASan/UBSan Debug build and CTest suite on Linux.
-- Release compile gate on Linux.
+- Release build and CTest suite on Linux.
 
 It keeps deferred modules disabled:
 
@@ -33,6 +33,7 @@ python3 tests/scope/test_scope_guard.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
 python3 tests/cmake/test_install_package_contract.py
+python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 ```
 
@@ -55,12 +56,12 @@ The Release job uses:
 ```bash
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
 cmake --build build-release --parallel
+ctest --test-dir build-release --output-on-failure
 ```
 
-Release still builds the test executables, but it does not run CTest because the
-current C++ tests use `assert` for contract checks and Release builds define
-`NDEBUG`. Debug and ASan/UBSan jobs remain the authoritative test-execution
-gates until the tests are migrated to a Release-safe assertion helper.
+The C++ tests use the `tests/support/TestAssert.h` helper instead of standard
+`assert`, so contract checks remain active when Release builds define `NDEBUG`.
+Debug, ASan/UBSan, and Release jobs are all test-execution gates.
 
 ## Install Package Gate
 
@@ -97,6 +98,10 @@ When a CMake toolchain is available locally, use:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
+
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
+cmake --build build-release --parallel
+ctest --test-dir build-release --output-on-failure
 ```
 
 Run the scope guard before the CMake commands. On Windows hosts where the
@@ -107,6 +112,7 @@ py -3 tests\scope\test_scope_guard.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
 py -3 tests\cmake\test_install_package_contract.py
+py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 ```
 

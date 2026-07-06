@@ -97,7 +97,7 @@ but they do not expand the current implementation scope by themselves.
 
 ## Continuous Integration
 
-The initial CI gate builds the current Reactor/TCP foundation, examples, CTest
-suite, and install/package consumer path on Linux with deferred modules
-disabled. See
+The initial CI gate builds and tests the current Reactor/TCP foundation,
+examples, Release configuration, and install/package consumer path on Linux
+with deferred modules disabled. See
 `docs/development/ci.md` for the workflow scope and local equivalent commands.

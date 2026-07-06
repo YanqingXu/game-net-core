@@ -2,13 +2,13 @@
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 
 int main() {
     {
         gamenet::net::Socket socket(
             gamenet::net::sockets::createNonblockingOrDie(AF_INET));
-        assert(gamenet::net::sockets::isValid(socket.fd()));
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(socket.fd()));
 
         socket.setReuseAddr(true);
         socket.setReusePort(true);
@@ -16,8 +16,8 @@ int main() {
         socket.setTcpNoDelay(true);
 
         const gamenet::net::SocketFd released = socket.releaseFd();
-        assert(gamenet::net::sockets::isValid(released));
-        assert(socket.fd() == gamenet::net::kInvalidSocket);
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(released));
+        GAMENET_TEST_ASSERT(socket.fd() == gamenet::net::kInvalidSocket);
         gamenet::net::sockets::close(released);
     }
 

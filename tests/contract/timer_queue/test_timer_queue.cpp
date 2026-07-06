@@ -2,7 +2,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -24,8 +24,8 @@ int main() {
             loop->quit();
         });
 
-        assert(firedFuture.wait_for(1s) == std::future_status::ready);
-        assert(firedFuture.get() != callerThread);
+        GAMENET_TEST_ASSERT(firedFuture.wait_for(1s) == std::future_status::ready);
+        GAMENET_TEST_ASSERT(firedFuture.get() != callerThread);
     }
 
     {
@@ -43,7 +43,7 @@ int main() {
 
         std::this_thread::sleep_for(120ms);
         canceller.join();
-        assert(!fired.load());
+        GAMENET_TEST_ASSERT(!fired.load());
     }
 
     {
@@ -66,8 +66,8 @@ int main() {
             }
         });
 
-        assert(firedCountFuture.wait_for(1s) == std::future_status::ready);
-        assert(firedCountFuture.get() == 3);
+        GAMENET_TEST_ASSERT(firedCountFuture.wait_for(1s) == std::future_status::ready);
+        GAMENET_TEST_ASSERT(firedCountFuture.get() == 3);
     }
 
     {
@@ -86,8 +86,8 @@ int main() {
             });
         });
 
-        assert(firedFuture.wait_for(1s) == std::future_status::ready);
-        assert(firedFuture.get() != callerThread);
+        GAMENET_TEST_ASSERT(firedFuture.wait_for(1s) == std::future_status::ready);
+        GAMENET_TEST_ASSERT(firedFuture.get() != callerThread);
         scheduler.join();
     }
 

@@ -3,7 +3,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -13,7 +13,7 @@ using namespace std::chrono_literals;
 int main() {
     {
         gamenet::net::ConnectorOptions options;
-        assert(options.enableRetry == false);
+        GAMENET_TEST_ASSERT(options.enableRetry == false);
         options.validate();
 
         options.initRetryDelay = 0ms;
@@ -23,7 +23,7 @@ int main() {
         } catch (const std::invalid_argument&) {
             threw = true;
         }
-        assert(threw);
+        GAMENET_TEST_ASSERT(threw);
     }
 
     {
@@ -32,9 +32,9 @@ int main() {
             &loop,
             gamenet::net::InetAddress("127.0.0.1", 19999));
 
-        assert(connector->state() == gamenet::net::Connector::kDisconnected);
-        assert(connector->serverAddress().toIp() == "127.0.0.1");
-        assert(connector->serverAddress().port() == 19999);
+        GAMENET_TEST_ASSERT(connector->state() == gamenet::net::Connector::kDisconnected);
+        GAMENET_TEST_ASSERT(connector->serverAddress().toIp() == "127.0.0.1");
+        GAMENET_TEST_ASSERT(connector->serverAddress().port() == 19999);
     }
 
     {
@@ -44,7 +44,7 @@ int main() {
             gamenet::net::InetAddress("127.0.0.1", 19999));
 
         connector->setRetryDelay(100ms, 5s);
-        assert(connector->state() == gamenet::net::Connector::kDisconnected);
+        GAMENET_TEST_ASSERT(connector->state() == gamenet::net::Connector::kDisconnected);
     }
 
     {
@@ -55,8 +55,8 @@ int main() {
 
         bool called = false;
         connector->setNewConnectionCallback([&](gamenet::net::SocketFd) { called = true; });
-        assert(!called);
-        assert(connector->state() == gamenet::net::Connector::kDisconnected);
+        GAMENET_TEST_ASSERT(!called);
+        GAMENET_TEST_ASSERT(connector->state() == gamenet::net::Connector::kDisconnected);
     }
 
     return 0;

@@ -4,7 +4,7 @@
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <memory>
 #include <string>
 
@@ -32,7 +32,7 @@ struct ConnectedPair {
         peerFd = fds[1];
 #else
         int fds[2];
-        assert(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+        GAMENET_TEST_ASSERT(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
         connectionFd = fds[0];
         peerFd = fds[1];
 #endif
@@ -71,7 +71,7 @@ int main() {
     });
     connection->setMessageCallback([&](const gamenet::net::TcpConnectionPtr& conn, gamenet::net::Buffer* buffer) {
         messageCallback = true;
-        assert(buffer->retrieveAllAsString() == "ping");
+        GAMENET_TEST_ASSERT(buffer->retrieveAllAsString() == "ping");
         conn->send("pong");
     });
     connection->setWriteCompleteCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
@@ -86,25 +86,25 @@ int main() {
 
     loop.runAfter(std::chrono::milliseconds(0), [&] {
         connection->connectEstablished();
-        assert(connection->connected());
+        GAMENET_TEST_ASSERT(connection->connected());
 
         const std::string payload = "ping";
         const auto written = gamenet::net::sockets::write(pair.peerFd, payload.data(), payload.size());
-        assert(written == static_cast<ssize_t>(payload.size()));
+        GAMENET_TEST_ASSERT(written == static_cast<ssize_t>(payload.size()));
     });
 
     loop.loop();
 
-    assert(connectedCallback);
-    assert(messageCallback);
-    assert(writeCompleteCallback);
-    assert(closeCallback);
-    assert(connection->disconnected());
+    GAMENET_TEST_ASSERT(connectedCallback);
+    GAMENET_TEST_ASSERT(messageCallback);
+    GAMENET_TEST_ASSERT(writeCompleteCallback);
+    GAMENET_TEST_ASSERT(closeCallback);
+    GAMENET_TEST_ASSERT(connection->disconnected());
 
     char response[16] = {};
     const auto readBytes = gamenet::net::sockets::read(pair.peerFd, response, sizeof(response));
-    assert(readBytes == 4);
-    assert(std::string(response, 4) == "pong");
+    GAMENET_TEST_ASSERT(readBytes == 4);
+    GAMENET_TEST_ASSERT(std::string(response, 4) == "pong");
 
     return 0;
 }

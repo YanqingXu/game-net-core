@@ -2,7 +2,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <string_view>
 
@@ -30,7 +30,7 @@ struct ReadablePair {
         writeFd = fds[1];
 #else
         int fds[2];
-        assert(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+        GAMENET_TEST_ASSERT(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
         readFd = fds[0];
         writeFd = fds[1];
 #endif
@@ -44,7 +44,7 @@ struct ReadablePair {
 
 void writePayload(gamenet::net::SocketFd fd, std::string_view payload) {
     const ssize_t written = gamenet::net::sockets::write(fd, payload.data(), payload.size());
-    assert(written == static_cast<ssize_t>(payload.size()));
+    GAMENET_TEST_ASSERT(written == static_cast<ssize_t>(payload.size()));
 }
 
 }  // namespace
@@ -62,26 +62,26 @@ int main() {
 
         char buffer[16] = {};
         const ssize_t n = gamenet::net::sockets::read(pair.readFd, buffer, sizeof(buffer));
-        assert(n == 4);
-        assert(std::string_view(buffer, static_cast<std::size_t>(n)) == "ping");
+        GAMENET_TEST_ASSERT(n == 4);
+        GAMENET_TEST_ASSERT(std::string_view(buffer, static_cast<std::size_t>(n)) == "ping");
 
         channel.disableAll();
         channel.remove();
-        assert(!loop.hasChannel(&channel));
+        GAMENET_TEST_ASSERT(!loop.hasChannel(&channel));
         removed = true;
         writePayload(pair.writeFd, "pong");
         loop.runAfter(20ms, [&] { loop.quit(); });
     });
 
     channel.enableReading();
-    assert(loop.hasChannel(&channel));
+    GAMENET_TEST_ASSERT(loop.hasChannel(&channel));
 
     writePayload(pair.writeFd, "ping");
     loop.loop();
 
-    assert(readCount == 1);
-    assert(removed);
-    assert(!loop.hasChannel(&channel));
+    GAMENET_TEST_ASSERT(readCount == 1);
+    GAMENET_TEST_ASSERT(removed);
+    GAMENET_TEST_ASSERT(!loop.hasChannel(&channel));
 
     return 0;
 }

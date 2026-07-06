@@ -5,7 +5,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
 
@@ -22,18 +22,18 @@ int main() {
     server.start();
 
     client.setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
-        assert(loop.isInLoopThread());
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
 
         if (conn->connected()) {
             connected = true;
-            assert(client.connection() == conn);
+            GAMENET_TEST_ASSERT(client.connection() == conn);
             conn->forceClose();
             return;
         }
 
         disconnected = true;
         loop.queueInLoop([&] {
-            assert(client.connection() == nullptr);
+            GAMENET_TEST_ASSERT(client.connection() == nullptr);
             client.stop();
             server.stop();
             loop.quit();
@@ -42,13 +42,13 @@ int main() {
 
     client.connect();
     loop.runAfter(2s, [&] {
-        assert(false && "timed out waiting for tcp client lifecycle");
+        GAMENET_TEST_ASSERT(false && "timed out waiting for tcp client lifecycle");
         loop.quit();
     });
     loop.loop();
 
-    assert(connected);
-    assert(disconnected);
+    GAMENET_TEST_ASSERT(connected);
+    GAMENET_TEST_ASSERT(disconnected);
 
     return 0;
 }

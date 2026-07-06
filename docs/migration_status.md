@@ -34,8 +34,9 @@ test set.
   CMake configure.
 - Sanitizers: CI includes an ASan/UBSan Debug build and CTest job for the
   Reactor / TCP foundation.
-- Release: CI includes a Release compile gate for the Reactor / TCP foundation.
-  CTest remains on Debug and ASan/UBSan jobs while tests still use `assert`.
+- Release: CI includes a Release build and CTest gate for the Reactor / TCP
+  foundation. C++ tests use a Release-safe helper instead of standard `assert`
+  so contract checks remain active with `NDEBUG`.
 - Install/package: CI installs the core target and builds an external consumer
   fixture through `find_package(GameNetCore)` and `GameNet::core`.
 

@@ -4,7 +4,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include <array>
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <thread>
 
@@ -17,7 +17,7 @@ gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
     const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
     if (rc < 0) {
         const int error = gamenet::net::sockets::lastError();
-        assert(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
     }
     return fd;
 }
@@ -32,9 +32,9 @@ int main() {
     std::size_t accepted = 0;
 
     acceptor.setNewConnectionCallback([&](gamenet::net::SocketFd sockfd, const gamenet::net::InetAddress& peerAddr) {
-        assert(loop.isInLoopThread());
-        assert(gamenet::net::sockets::isValid(sockfd));
-        assert(!peerAddr.toIp().empty());
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(sockfd));
+        GAMENET_TEST_ASSERT(!peerAddr.toIp().empty());
 
         ++accepted;
         gamenet::net::sockets::close(sockfd);
@@ -45,9 +45,9 @@ int main() {
         }
     });
 
-    assert(!acceptor.listening());
+    GAMENET_TEST_ASSERT(!acceptor.listening());
     acceptor.listen();
-    assert(acceptor.listening());
+    GAMENET_TEST_ASSERT(acceptor.listening());
 
     const gamenet::net::InetAddress listenAddr = acceptor.listenAddress();
     std::thread clients([listenAddr] {
@@ -63,14 +63,14 @@ int main() {
     });
 
     loop.runAfter(1s, [&] {
-        assert(false && "timed out waiting for accepted connections");
+        GAMENET_TEST_ASSERT(false && "timed out waiting for accepted connections");
         loop.quit();
     });
     loop.loop();
     clients.join();
 
-    assert(accepted == kClientCount);
-    assert(!acceptor.listening());
+    GAMENET_TEST_ASSERT(accepted == kClientCount);
+    GAMENET_TEST_ASSERT(!acceptor.listening());
 
     return 0;
 }

@@ -6,7 +6,7 @@
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/TcpConnection.h"
 
-#include <cassert>
+#include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
 #include <string>
@@ -41,7 +41,7 @@ int main() {
     });
     client->setMessageCallback([&](const gamenet::net::TcpConnectionPtr& conn, gamenet::net::Buffer* buffer) {
         echoed = true;
-        assert(buffer->retrieveAllAsString() == "hello");
+        GAMENET_TEST_ASSERT(buffer->retrieveAllAsString() == "hello");
         conn->shutdown();
         client->stop();
         server.stop();
@@ -50,14 +50,14 @@ int main() {
 
     client->connect();
     loop.runAfter(5s, [&] {
-        assert(false && "timed out waiting for tcp echo");
+        GAMENET_TEST_ASSERT(false && "timed out waiting for tcp echo");
         loop.quit();
     });
     loop.loop();
 
-    assert(serverSawConnection);
-    assert(clientSawConnection);
-    assert(echoed);
+    GAMENET_TEST_ASSERT(serverSawConnection);
+    GAMENET_TEST_ASSERT(clientSawConnection);
+    GAMENET_TEST_ASSERT(echoed);
 
     return 0;
 }
