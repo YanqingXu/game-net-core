@@ -22,8 +22,8 @@ until the current core has stable targets, tests, and examples.
 
 ## Verification State
 
-The remote Linux CI gate passed on `main` at commit
-`4dff24f9c848d7b6b29921a87df13bd6d6d665f5`.
+The remote Linux CI gate has passed for the current Reactor / TCP foundation
+test set.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
