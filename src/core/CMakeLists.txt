@@ -21,7 +21,7 @@ if(WIN32)
     list(APPEND GAMENET_CORE_SOURCES
         net/platform/SocketsOps_win.cc
         net/platform/Wakeup_win.cc
-        net/poller/SelectPoller.cc
+        net/poller/IocpPoller.cc
     )
 else()
     list(APPEND GAMENET_CORE_SOURCES

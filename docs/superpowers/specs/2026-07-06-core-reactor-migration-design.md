@@ -14,7 +14,7 @@ This migration includes:
 - socket type and socket operation helpers
 - platform wakeup helpers
 - `Channel`
-- `Poller`, `SelectPoller`, `EPollPoller`, and `PollerFactory`
+- `Poller`, `EPollPoller`, `IocpPoller`, and `PollerFactory`
 - `TimerId` and `TimerQueue`
 - `EventLoop`
 - `EventLoopThread`

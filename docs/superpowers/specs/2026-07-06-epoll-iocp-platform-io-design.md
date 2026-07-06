@@ -9,8 +9,8 @@ promote WinSock `select()` as an accepted backend.
 ## Current State
 
 - Linux already builds `EPollPoller` through `PollerFactory`.
-- Windows currently selects `SelectPoller`, and `platform_runtime.intent.md`
-  still documented select as the Windows backend before this spec.
+- Windows previously selected `SelectPoller`, and `platform_runtime.intent.md`
+  documented select as the Windows backend before this spec.
 - The existing `Poller` API is readiness-oriented. IOCP is completion-oriented,
   so a real Windows implementation needs overlapped socket operations, not only
   a renamed poller class.
@@ -86,5 +86,5 @@ Use a staged IOCP migration:
 - If the compatibility surface becomes too contorted, introduce a narrow
   platform completion adapter under the EventLoop without exposing it to upper
   layers.
-- Select-based files should be removed from the active Windows build once IOCP
-  is introduced.
+- Select-based files are removed from the active Windows build once IOCP is
+  introduced; they must not return as the promoted Windows backend.

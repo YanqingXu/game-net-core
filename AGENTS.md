@@ -43,7 +43,7 @@ Keep the first migration focused on the Reactor/TCP foundation extracted from
 
 - Logger, Timestamp, noncopyable
 - InetAddress, Buffer, SocketTypes, SocketsOps, Socket
-- Channel, Poller, EPollPoller, SelectPoller, PollerFactory
+- Channel, Poller, EPollPoller, IocpPoller, PollerFactory
 - Wakeup, TimerQueue, EventLoop
 - Acceptor, Connector
 - EventLoopThread, EventLoopThreadPool
