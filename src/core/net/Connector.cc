@@ -91,6 +91,14 @@ void Connector::setRetryDelay(Duration initial, Duration max) {
     maxRetryDelayMs_ = max;
 }
 
+void Connector::setRetryEnabled(bool enabled) noexcept {
+    retryEnabled_ = enabled;
+}
+
+bool Connector::retryEnabled() const noexcept {
+    return retryEnabled_;
+}
+
 void Connector::startInLoop() {
     loop_->assertInLoopThread();
     if (!connect_) {

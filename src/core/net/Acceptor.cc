@@ -23,6 +23,7 @@ Acceptor::Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reusePor
         acceptSocket_.setIpv6Only(false);
     }
     acceptSocket_.bindAddress(listenAddr);
+    listenAddr_ = InetAddress(sockets::getLocalAddr(acceptSocket_.fd()));
     acceptChannel_.setReadCallback([this](gamenet::base::Timestamp receiveTime) { handleRead(receiveTime); });
 }
 
@@ -42,6 +43,10 @@ void Acceptor::setNewConnectionCallback(NewConnectionCallback cb) {
 
 bool Acceptor::listening() const noexcept {
     return listening_;
+}
+
+const InetAddress& Acceptor::listenAddress() const noexcept {
+    return listenAddr_;
 }
 
 void Acceptor::listen() {

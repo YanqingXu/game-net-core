@@ -61,6 +61,8 @@ public:
 
     /// Configure retry backoff parameters. Must be set before start().
     void setRetryDelay(Duration initial, Duration max);
+    void setRetryEnabled(bool enabled) noexcept;
+    bool retryEnabled() const noexcept;
 
 private:
     void startInLoop();

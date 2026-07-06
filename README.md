@@ -18,13 +18,13 @@ Stable / Core:
 - Socket
 - Acceptor
 - Connector
+- TcpConnection
+- TcpServer
+- TcpClient
 - EventLoopThreadPool
 
 Planned Modules:
 
-- TcpConnection
-- TcpServer
-- TcpClient
 - protocol framing
 - transport abstraction
 - session foundation

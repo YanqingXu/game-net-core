@@ -10,6 +10,9 @@ set(GAMENET_CORE_SOURCES
     net/InetAddress.cc
     net/Poller.cc
     net/Socket.cc
+    net/TcpClient.cc
+    net/TcpConnection.cc
+    net/TcpServer.cc
     net/TimerQueue.cc
     net/poller/PollerFactory.cc
 )

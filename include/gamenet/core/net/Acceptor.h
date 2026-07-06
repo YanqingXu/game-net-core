@@ -24,6 +24,7 @@ public:
 
     void setNewConnectionCallback(NewConnectionCallback cb);
     bool listening() const noexcept;
+    const InetAddress& listenAddress() const noexcept;
     void listen();
     void stop();
 
@@ -33,6 +34,7 @@ private:
     EventLoop* loop_;
     Socket acceptSocket_;
     Channel acceptChannel_;
+    InetAddress listenAddr_;
     NewConnectionCallback newConnectionCallback_;
     bool listening_;
 };
