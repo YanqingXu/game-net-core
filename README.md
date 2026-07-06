@@ -57,6 +57,12 @@ rules/             Engineering rules for core behavior
 ## Examples
 
 - `echo_server`: minimal raw TCP echo server built on `TcpServer` and `TcpConnection`.
+- `echo_client`: minimal raw TCP echo client built on `TcpClient`.
+
+```bash
+echo_server 7000
+echo_client 127.0.0.1 7000 hello
+```
 
 ## Development Workflow
 
