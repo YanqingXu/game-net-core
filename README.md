@@ -75,3 +75,9 @@ intent -> invariants -> threading -> ownership -> contracts -> tests -> implemen
 Before changing a core module, read the matching file in `intents/` and the
 relevant rules in `rules/`. Deferred intents are preserved for future phases,
 but they do not expand the current implementation scope by themselves.
+
+## Continuous Integration
+
+The initial CI gate builds the current Reactor/TCP foundation, examples, and
+CTest suite on Linux with deferred modules disabled. See
+`docs/development/ci.md` for the workflow scope and local equivalent commands.
