@@ -10,13 +10,21 @@
 
 ---
 
+## Implementation status
+
+This plan has been executed through the current Reactor / TCP IOCP data path.
+The local VS2026 Debug gate configures, builds, and passes 29/29 configured
+CTest tests; the Windows install/package consumer gate also passes through
+`find_package(GameNetCore)` and `GameNet::core`; and the `windows-msvc` workflow job now represents the Windows CI gate.
+The remote green status is established by pull request or manual workflow execution.
+
 ## File Structure
 
 - Create `tests/cmake/test_windows_iocp_data_path_contract.py`: static guard for the new IOCP operation layer and documentation links.
 - Modify `.github/workflows/ci.yml`: run the new static guard with the existing repository guards.
 - Modify `docs/development/ci.md`: document the new guard.
 - Modify `docs/development/windows_iocp_milestone.md`: link this plan and the design spec.
-- Modify `docs/migration_status.md`: record that the IOCP data-path design exists and remains deferred until runtime contracts pass.
+- Modify `docs/migration_status.md`: record the IOCP data-path status, local runtime contract evidence, Windows package gate evidence, and remote workflow green boundary.
 - Create `include/gamenet/core/net/platform/IocpOperation.h`: Windows-only internal operation record definitions.
 - Modify `include/gamenet/core/net/poller/IocpPoller.h`: keep wakeup API and add completion translation support without owning operations.
 - Modify `src/core/net/poller/IocpPoller.cc`: recover operation records from `OVERLAPPED`, store completion metadata, and set Channel revents by operation kind.

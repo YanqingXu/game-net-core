@@ -220,8 +220,13 @@ green Windows runtime contracts in this order:
 6. TcpServer/TcpClient lifecycle.
 7. TCP echo integration.
 
-The Windows support label remains deferred until the full gate described in
-`docs/development/windows_iocp_milestone.md` passes.
+## Implementation status
+
+The IOCP data path has been implemented for the current Reactor / TCP
+foundation and is represented by the `windows-msvc` workflow job. Local VS2026
+Debug verification has reached 29/29 configured CTest tests and the Windows
+install/package consumer gate also passes through `find_package(GameNetCore)`
+and `GameNet::core`. The remote green status is established by pull request or manual workflow execution.
 
 ## Compatibility
 
@@ -236,7 +241,8 @@ for the current core target and do not expose higher protocol concepts.
 - Windows IOCP wakeup remains green.
 - Windows accept/connect/read/write use posted overlapped operations.
 - Existing lifecycle and callback ordering contracts pass on Windows.
-- Full Windows CTest reaches 29/29 for the current test set before Windows CI is
-  promoted.
-- Documentation continues to state that Windows support is deferred until the
-  IOCP gates are green.
+- Full Windows CTest reaches 29/29 for the current test set before the Windows
+  workflow gate is treated as green.
+- Documentation states that Windows support is represented by the
+  `windows-msvc` workflow job, with remote green status established by pull
+  request or manual workflow execution.

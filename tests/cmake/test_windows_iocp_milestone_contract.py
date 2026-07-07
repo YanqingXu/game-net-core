@@ -67,6 +67,12 @@ def main() -> None:
     require(spec_text, "WSASend", data_path_spec)
     require(spec_text, "WinSock `select()`", data_path_spec)
     require(spec_text, "accepted promoted backend", data_path_spec)
+    require(spec_text, "Implementation status", data_path_spec)
+    require(spec_text, "`windows-msvc` workflow job", data_path_spec)
+    require(spec_text, "remote green status is established by pull request or manual workflow execution", data_path_spec)
+    assert "Documentation continues to state that Windows support is deferred until the" not in spec_text, (
+        "Windows IOCP design must not preserve stale deferred-support wording after the workflow gate exists"
+    )
 
     plan_text = data_path_plan.read_text(encoding="utf-8")
     require(plan_text, "Windows IOCP Data Path Implementation Plan", data_path_plan)
@@ -74,6 +80,9 @@ def main() -> None:
     require(plan_text, "IocpTcpTransport", data_path_plan)
     require(plan_text, "contract.acceptor.test_acceptor_contract", data_path_plan)
     require(plan_text, "integration.tcp.test_tcp_server_client_echo", data_path_plan)
+    require(plan_text, "Implementation status", data_path_plan)
+    require(plan_text, "`windows-msvc` workflow job", data_path_plan)
+    require(plan_text, "remote green status is established by pull request or manual workflow execution", data_path_plan)
 
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, "test_windows_iocp_milestone_contract.py", ci_docs)
