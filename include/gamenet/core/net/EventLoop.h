@@ -47,6 +47,8 @@ public:
     void wakeup();
     void updateChannel(Channel* channel);
     void removeChannel(Channel* channel);
+    // Used when a connected socket fd moves from Connector to TcpConnection.
+    void preserveSocketAssociation(SocketFd sockfd);
     bool hasChannel(Channel* channel);
 
     bool isInLoopThread() const noexcept;

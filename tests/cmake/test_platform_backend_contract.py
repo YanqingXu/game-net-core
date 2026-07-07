@@ -29,8 +29,10 @@ def main() -> None:
     assert "SelectPoller path" not in platform_text
 
     docs_text = ci_docs.read_text(encoding="utf-8")
-    require(docs_text, "Windows CI is intentionally deferred until the Windows network backend is IOCP", ci_docs)
-    require(docs_text, "must not freeze the old select-based backend", ci_docs)
+    require(docs_text, "The active CI gate runs on `ubuntu-24.04` and `windows-latest`.", ci_docs)
+    require(docs_text, "The Windows job validates the IOCP completion path", ci_docs)
+    require(docs_text, "Windows MSVC Debug build", ci_docs)
+    require(docs_text, "select-based", ci_docs)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     cmake_text = core_cmake.read_text(encoding="utf-8")
@@ -44,7 +46,7 @@ def main() -> None:
     assert not legacy_select_header.exists(), "legacy SelectPoller public header must not be present"
     assert not legacy_select_source.exists(), "legacy SelectPoller source must not be present"
 
-    if "windows-cmake:" in workflow_text:
+    if "windows-msvc:" in workflow_text:
         require(cmake_text, "Iocp", core_cmake)
 
 

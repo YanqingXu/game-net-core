@@ -84,6 +84,10 @@ private:
     NewConnectionCallback newConnectionCallback_;
     ConnectorEventCallback connectorEventCallback_;
     std::unique_ptr<Channel> channel_;
+#ifdef _WIN32
+    struct IocpConnectState;
+    std::unique_ptr<IocpConnectState> iocpConnect_;
+#endif
     Duration retryDelayMs_;
     Duration maxRetryDelayMs_;
     Duration connectTimeout_;

@@ -6,6 +6,11 @@
 
 #include "gamenet/core/base/Logger.h"
 
+#ifdef _WIN32
+#include "gamenet/core/net/platform/IocpOperation.h"
+#include "gamenet/core/net/platform/IocpSocketOps.h"
+#endif
+
 #include <cassert>
 #include <algorithm>
 #include <cstring>
@@ -13,6 +18,20 @@
 #include <utility>
 
 namespace gamenet::net {
+
+#ifdef _WIN32
+
+struct Connector::IocpConnectState {
+    IocpOperation operation{};
+    LPFN_CONNECTEX connectEx{nullptr};
+    bool pending{false};
+
+    IocpConnectState() {
+        operation.kind = IocpOperationKind::Connect;
+    }
+};
+
+#endif
 
 Connector::Connector(EventLoop* loop, const InetAddress& serverAddr)
     : Connector(loop, serverAddr, ConnectorOptions{}) {
@@ -132,6 +151,32 @@ void Connector::connect() {
         connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectAttempt);
     }
 
+#ifdef _WIN32
+    const SocketFd sockfd = platform::createOverlappedTcpOrDie(serverAddr_.family());
+    platform::bindUnspecifiedOrDie(sockfd, serverAddr_.family());
+    connecting(sockfd);
+
+    iocpConnect_ = std::make_unique<IocpConnectState>();
+    iocpConnect_->operation.channel = channel_.get();
+    iocpConnect_->connectEx = platform::loadConnectEx(sockfd);
+
+    DWORD bytes = 0;
+    iocpConnect_->pending = true;
+    const BOOL ok = iocpConnect_->connectEx(
+        sockfd,
+        serverAddr_.getSockAddr(),
+        serverAddr_.getSockAddrLen(),
+        nullptr,
+        0,
+        &bytes,
+        &iocpConnect_->operation.overlapped);
+    if (!ok && sockets::lastError() != ERROR_IO_PENDING) {
+        iocpConnect_->pending = false;
+        iocpConnect_->operation.error = static_cast<DWORD>(sockets::lastError());
+        handleError();
+    }
+    return;
+#else
     const SocketFd sockfd = sockets::createNonblockingOrDie(serverAddr_.family());
     const int ret = sockets::connect(sockfd, serverAddr_.getSockAddr(), serverAddr_.getSockAddrLen());
     const int savedError = (ret == 0) ? 0 : sockets::lastError();
@@ -154,6 +199,7 @@ void Connector::connect() {
         connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectFailed);
     }
     sockets::close(sockfd);
+#endif
 }
 
 void Connector::connecting(SocketFd sockfd) {
@@ -185,6 +231,17 @@ void Connector::handleWrite() {
     if (state_ != kConnecting) {
         return;
     }
+
+#ifdef _WIN32
+    if (iocpConnect_) {
+        iocpConnect_->pending = false;
+        if (iocpConnect_->operation.error != 0) {
+            handleError();
+            return;
+        }
+        platform::updateConnectContextOrDie(channel_->fd());
+    }
+#endif
 
     // Cancel connect timeout timer on success path.
     if (connectTimeoutTimerId_.valid()) {
@@ -238,6 +295,9 @@ void Connector::handleWrite() {
         connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectSuccess);
     }
     if (connect_ && newConnectionCallback_) {
+#ifdef _WIN32
+        loop_->preserveSocketAssociation(sockfd);
+#endif
         newConnectionCallback_(sockfd);
     } else {
         sockets::close(sockfd);
@@ -248,6 +308,12 @@ void Connector::handleError() {
     if (state_ != kConnecting) {
         return;
     }
+
+#ifdef _WIN32
+    if (iocpConnect_) {
+        iocpConnect_->pending = false;
+    }
+#endif
 
     // Cancel connect timeout timer.
     if (connectTimeoutTimerId_.valid()) {

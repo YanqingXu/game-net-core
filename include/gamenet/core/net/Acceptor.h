@@ -10,6 +10,7 @@
 #include "gamenet/core/net/SocketTypes.h"
 
 #include <functional>
+#include <memory>
 
 namespace gamenet::net {
 
@@ -30,12 +31,20 @@ public:
 
 private:
     void handleRead(gamenet::base::Timestamp receiveTime);
+#ifdef _WIN32
+    void postAccept();
+    void closePendingAccept() noexcept;
+#endif
 
     EventLoop* loop_;
     Socket acceptSocket_;
     Channel acceptChannel_;
     InetAddress listenAddr_;
     NewConnectionCallback newConnectionCallback_;
+#ifdef _WIN32
+    struct IocpAcceptState;
+    std::unique_ptr<IocpAcceptState> iocpAccept_;
+#endif
     bool listening_;
 };
 

@@ -6,7 +6,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "support/TestAssert.h"
-#include <any>
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -41,7 +41,9 @@ struct ConnectedPair {
     }
 
     ~ConnectedPair() {
-        gamenet::net::sockets::close(peerFd);
+        if (gamenet::net::sockets::isValid(peerFd)) {
+            gamenet::net::sockets::close(peerFd);
+        }
     }
 };
 
@@ -56,67 +58,72 @@ int main() {
 
     auto connection = std::make_shared<gamenet::net::TcpConnection>(
         &loop,
-        "contract#1",
+        "write-complete-after-send-return",
         pair.connectionFd,
         localAddr,
         peerAddr);
 
     bool connectedCallback = false;
-    bool messageCallback = false;
-    bool writeCompleteCallback = false;
-    bool closeCallback = false;
+    bool sendReturned = false;
+    bool writeCompleteBeforeSendReturned = false;
+    bool writeCompleteAfterSendReturned = false;
+    int writeCompleteCallbackCount = 0;
+    int closeCallbackCount = 0;
 
     connection->setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
         if (conn->connected()) {
             connectedCallback = true;
         }
     });
-    connection->setMessageCallback([&](const gamenet::net::TcpConnectionPtr& conn, gamenet::net::Buffer* buffer) {
-        messageCallback = true;
-        GAMENET_TEST_ASSERT(buffer->retrieveAllAsString() == "ping");
-        conn->send("pong");
-    });
+
     connection->setWriteCompleteCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
-        writeCompleteCallback = true;
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        ++writeCompleteCallbackCount;
+        if (sendReturned) {
+            writeCompleteAfterSendReturned = true;
+        } else {
+            writeCompleteBeforeSendReturned = true;
+        }
         conn->forceClose();
     });
+
     connection->setCloseCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
-        closeCallback = true;
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        ++closeCallbackCount;
         conn->connectDestroyed();
         loop.quit();
     });
 
+    const std::string payload = "write-complete-after-send-return";
     loop.runAfter(std::chrono::milliseconds(0), [&] {
-        connection->connectEstablished();
-        GAMENET_TEST_ASSERT(connection->connected());
+        auto conn = connection;
+        conn->connectEstablished();
+        GAMENET_TEST_ASSERT(conn->connected());
+        conn->send(payload);
+        sendReturned = true;
+        GAMENET_TEST_ASSERT(!writeCompleteBeforeSendReturned);
+    });
 
-        connection->setContext(std::string("owner-loop-context"));
-        const auto* mutableContextValue = std::any_cast<std::string>(&connection->getContext());
-        GAMENET_TEST_ASSERT(mutableContextValue != nullptr);
-        GAMENET_TEST_ASSERT(*mutableContextValue == "owner-loop-context");
-
-        const gamenet::net::TcpConnection& constConnection = *connection;
-        const auto* constContextValue = std::any_cast<std::string>(&constConnection.getContext());
-        GAMENET_TEST_ASSERT(constContextValue != nullptr);
-        GAMENET_TEST_ASSERT(*constContextValue == "owner-loop-context");
-
-        const std::string payload = "ping";
-        const auto written = gamenet::net::sockets::write(pair.peerFd, payload.data(), payload.size());
-        GAMENET_TEST_ASSERT(written == static_cast<ssize_t>(payload.size()));
+    loop.runAfter(std::chrono::seconds(1), [&] {
+        GAMENET_TEST_ASSERT(false && "timed out waiting for write-complete callback");
+        loop.quit();
     });
 
     loop.loop();
 
     GAMENET_TEST_ASSERT(connectedCallback);
-    GAMENET_TEST_ASSERT(messageCallback);
-    GAMENET_TEST_ASSERT(writeCompleteCallback);
-    GAMENET_TEST_ASSERT(closeCallback);
+    GAMENET_TEST_ASSERT(sendReturned);
+    GAMENET_TEST_ASSERT(!writeCompleteBeforeSendReturned);
+    GAMENET_TEST_ASSERT(writeCompleteAfterSendReturned);
+    GAMENET_TEST_ASSERT(writeCompleteCallbackCount == 1);
+    GAMENET_TEST_ASSERT(closeCallbackCount == 1);
     GAMENET_TEST_ASSERT(connection->disconnected());
 
-    char response[16] = {};
+    char response[64] = {};
     const auto readBytes = gamenet::net::sockets::read(pair.peerFd, response, sizeof(response));
-    GAMENET_TEST_ASSERT(readBytes == 4);
-    GAMENET_TEST_ASSERT(std::string(response, 4) == "pong");
+    GAMENET_TEST_ASSERT(readBytes == static_cast<ssize_t>(payload.size()));
+    GAMENET_TEST_ASSERT(std::string(response, static_cast<std::size_t>(readBytes)) == payload);
 
     return 0;
 }

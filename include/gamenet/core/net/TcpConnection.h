@@ -20,6 +20,9 @@ namespace gamenet::net {
 
 class Channel;
 class EventLoop;
+#ifdef _WIN32
+class IocpTcpTransport;
+#endif
 class Socket;
 
 class TcpConnection : public std::enable_shared_from_this<TcpConnection>, private gamenet::base::noncopyable {
@@ -47,9 +50,11 @@ public:
     void forceClose();
     void setTcpNoDelay(bool on);
 
+    // Connection context is loop-owned mutable state. Call setContext(), getContext()
+    // only from this connection's owner EventLoop thread.
     void setContext(std::any context);
-    const std::any& getContext() const noexcept;
-    std::any& getContext() noexcept;
+    const std::any& getContext() const;
+    std::any& getContext();
 
     void setConnectionCallback(ConnectionCallback cb);
     void setMessageCallback(MessageCallback cb);
@@ -78,6 +83,9 @@ private:
     StateE state_;
     std::unique_ptr<Socket> socket_;
     std::unique_ptr<Channel> channel_;
+#ifdef _WIN32
+    std::unique_ptr<IocpTcpTransport> iocpTransport_;
+#endif
     InetAddress localAddr_;
     InetAddress peerAddr_;
     Buffer inputBuffer_;

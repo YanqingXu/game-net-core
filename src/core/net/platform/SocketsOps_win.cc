@@ -1,6 +1,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "gamenet/core/base/Logger.h"
+#include "gamenet/core/net/platform/IocpSocketOps.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -47,11 +48,7 @@ void ensureInitialized() {
 }
 
 SocketFd createNonblockingOrDie(sa_family_t family) {
-    ensureInitialized();
-    const SocketFd sockfd = ::socket(family, SOCK_STREAM, IPPROTO_TCP);
-    if (!isValid(sockfd)) {
-        die("socket");
-    }
+    const SocketFd sockfd = platform::createOverlappedTcpOrDie(family);
     setNonBlockingOrDie(sockfd);
     return sockfd;
 }

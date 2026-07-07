@@ -31,8 +31,8 @@ if(GAMENET_BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-install(DIRECTORY include/gamenet
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+install(DIRECTORY include/gamenet/core
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
 )
 
 configure_package_config_file(

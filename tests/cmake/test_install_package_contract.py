@@ -25,7 +25,11 @@ def main() -> None:
     require(root_text, "GAMENET_INSTALL_CMAKEDIR", root_cmake)
     require(root_text, "configure_package_config_file(", root_cmake)
     require(root_text, "write_basic_package_version_file(", root_cmake)
-    require(root_text, "install(DIRECTORY include/gamenet", root_cmake)
+    require(root_text, "install(DIRECTORY include/gamenet/core", root_cmake)
+    require(root_text, "DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet", root_cmake)
+    assert "install(DIRECTORY include/gamenet\n" not in root_text, (
+        "install package must not copy deferred include/gamenet namespace directories"
+    )
     require(root_text, "install(EXPORT GameNetCoreTargets", root_cmake)
 
     require(core_text, "install(TARGETS gamenet_core", core_cmake)

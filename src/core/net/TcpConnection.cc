@@ -7,6 +7,10 @@
 
 #include "gamenet/core/base/Logger.h"
 
+#ifdef _WIN32
+#include "platform/IocpTcpTransport.h"
+#endif
+
 #include <utility>
 
 namespace gamenet::net {
@@ -24,6 +28,9 @@ TcpConnection::TcpConnection(
       channel_(std::make_unique<Channel>(loop, sockfd)),
       localAddr_(localAddr),
       peerAddr_(peerAddr) {
+#ifdef _WIN32
+    iocpTransport_ = std::make_unique<IocpTcpTransport>(channel_.get());
+#endif
     channel_->setReadCallback([this](gamenet::base::Timestamp receiveTime) { handleRead(receiveTime); });
     channel_->setWriteCallback([this] { handleWrite(); });
     channel_->setCloseCallback([this] { handleClose(); });
@@ -101,14 +108,17 @@ void TcpConnection::setTcpNoDelay(bool on) {
 }
 
 void TcpConnection::setContext(std::any context) {
+    loop_->assertInLoopThread();
     context_ = std::move(context);
 }
 
-const std::any& TcpConnection::getContext() const noexcept {
+const std::any& TcpConnection::getContext() const {
+    loop_->assertInLoopThread();
     return context_;
 }
 
-std::any& TcpConnection::getContext() noexcept {
+std::any& TcpConnection::getContext() {
+    loop_->assertInLoopThread();
     return context_;
 }
 
@@ -142,6 +152,9 @@ void TcpConnection::connectEstablished() {
     channel_->tie(shared_from_this());
     channel_->enableReading();
     channelAdded_ = true;
+#ifdef _WIN32
+    iocpTransport_->startRead();
+#endif
 
     if (connectionCallback_) {
         connectionCallback_(shared_from_this());
@@ -176,11 +189,20 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
     loop_->assertInLoopThread();
 
     int savedErrno = 0;
+#ifdef _WIN32
+    const ssize_t n = iocpTransport_->completeRead(&inputBuffer_, &savedErrno);
+#else
     const ssize_t n = inputBuffer_.readFd(channel_->fd(), &savedErrno);
+#endif
     if (n > 0) {
         if (messageCallback_) {
             messageCallback_(shared_from_this(), &inputBuffer_);
         }
+#ifdef _WIN32
+        if (state_ == kConnected) {
+            iocpTransport_->startRead();
+        }
+#endif
         return;
     }
     if (n == 0) {
@@ -200,7 +222,11 @@ void TcpConnection::handleWrite() {
     }
 
     int savedErrno = 0;
+#ifdef _WIN32
+    const ssize_t n = iocpTransport_->completeWrite(&savedErrno);
+#else
     const ssize_t n = outputBuffer_.writeFd(channel_->fd(), &savedErrno);
+#endif
     if (n > 0) {
         outputBuffer_.retrieve(static_cast<std::size_t>(n));
         if (outputBuffer_.readableBytes() == 0) {
@@ -210,6 +236,11 @@ void TcpConnection::handleWrite() {
                 shutdownInLoop();
             }
         }
+#ifdef _WIN32
+        else {
+            iocpTransport_->startWrite(outputBuffer_.peek(), outputBuffer_.readableBytes());
+        }
+#endif
         return;
     }
     if (n < 0 && !sockets::isWouldBlock(savedErrno) && !sockets::isInterrupted(savedErrno)) {
@@ -247,6 +278,20 @@ void TcpConnection::sendInLoop(const char* data, std::size_t len) {
     if (state_ == kDisconnected) {
         return;
     }
+
+#ifdef _WIN32
+    const std::size_t oldLen = outputBuffer_.readableBytes();
+    outputBuffer_.append(data, len);
+    const std::size_t newLen = outputBuffer_.readableBytes();
+    maybeQueueHighWaterMark(oldLen, newLen);
+    if (!iocpTransport_->writePending()) {
+        iocpTransport_->startWrite(outputBuffer_.peek(), outputBuffer_.readableBytes());
+        if (!channel_->isWriting()) {
+            channel_->enableWriting();
+        }
+    }
+    return;
+#endif
 
     std::size_t remaining = len;
     std::size_t written = 0;

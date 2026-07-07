@@ -21,6 +21,8 @@ if(WIN32)
     list(APPEND GAMENET_CORE_SOURCES
         net/platform/SocketsOps_win.cc
         net/platform/Wakeup_win.cc
+        net/platform/IocpSocketOps_win.cc
+        net/platform/IocpTcpTransport_win.cc
         net/poller/IocpPoller.cc
     )
 else()
@@ -43,6 +45,12 @@ target_include_directories(gamenet_core
 )
 
 target_compile_features(gamenet_core PUBLIC cxx_std_23)
+target_compile_options(gamenet_core
+    PUBLIC
+        $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
+    PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/FS>
+)
 
 find_package(Threads REQUIRED)
 target_link_libraries(gamenet_core PUBLIC Threads::Threads)
