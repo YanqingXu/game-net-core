@@ -39,7 +39,7 @@ def main() -> None:
     require(workflow, "cmake -S tests/cmake/install_consumer")
     require(workflow, "-DCMAKE_PREFIX_PATH=\"$PWD/build/_install\"")
     require(workflow, "ctest --test-dir build-release --output-on-failure")
-    require(workflow, "-G \"Visual Studio 17 2022\"")
+    require(workflow, "-G \"Visual Studio 18 2026\"")
     require(workflow, "-A x64")
     require(workflow, "cmake --build build-windows --config Debug --parallel")
     require(workflow, "ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10")

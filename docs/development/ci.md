@@ -131,11 +131,11 @@ ctest --test-dir build-release --output-on-failure
 On Windows with Visual Studio installed, the local equivalent is:
 
 ```powershell
-cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 cmake --build build-windows --config Debug --parallel
 ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10
 cmake --install build-windows --config Debug --prefix "$pwd/build-windows/_install"
-cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
+cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
 cmake --build build-windows-install-consumer --config Debug --parallel
 ```
 

@@ -194,7 +194,7 @@ jobs:
         shell: pwsh
         run: >
           cmake -S . -B build-windows
-          -G "Visual Studio 17 2022"
+          -G "Visual Studio 18 2026"
           -A x64
           -DGAMENET_BUILD_TESTING=ON
           -DGAMENET_ENABLE_TLS=OFF
@@ -213,7 +213,7 @@ jobs:
         run: |
           cmake --install build-windows --config Debug --prefix "$pwd/build-windows/_install"
           cmake -S tests/cmake/install_consumer -B build-windows-install-consumer `
-            -G "Visual Studio 17 2022" `
+            -G "Visual Studio 18 2026" `
             -A x64 `
             -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
           cmake --build build-windows-install-consumer --config Debug --parallel
