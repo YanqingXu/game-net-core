@@ -6,6 +6,7 @@
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/SocketsOps.h"
+#include "gamenet/core/net/platform/IocpOperation.h"
 
 #include <cstdlib>
 
@@ -27,12 +28,19 @@ HANDLE createCompletionPortOrDie() {
     return iocp;
 }
 
-uint32_t completionEvents(Channel* channel, bool succeeded) noexcept {
-    if (!succeeded) {
+uint32_t completionEvents(const IocpOperation& operation) noexcept {
+    if (operation.error != 0) {
         return Channel::kErrorEvent | Channel::kCloseEvent;
     }
-    const uint32_t events = channel->events();
-    return events == Channel::kNoneEvent ? Channel::kReadEvent : events;
+    switch (operation.kind) {
+    case IocpOperationKind::Accept:
+    case IocpOperationKind::Read:
+        return Channel::kReadEvent;
+    case IocpOperationKind::Connect:
+    case IocpOperationKind::Write:
+        return Channel::kWriteEvent;
+    }
+    return Channel::kErrorEvent;
 }
 
 DWORD toTimeout(int timeoutMs) noexcept {
@@ -73,11 +81,23 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         return now;
     }
 
-    const auto fd = static_cast<SocketFd>(completionKey);
-    const auto it = channels_.find(fd);
-    if (it != channels_.end() && it->second->index() == kAdded) {
-        it->second->setRevents(completionEvents(it->second, ok != FALSE));
-        activeChannels->push_back(it->second);
+    if (completionKey == kWakeupCompletionKey) {
+        return now;
+    }
+
+    auto* operation = reinterpret_cast<IocpOperation*>(overlapped);
+    if (operation == nullptr || operation->channel == nullptr) {
+        return now;
+    }
+
+    operation->bytesTransferred = bytesTransferred;
+    operation->error = ok ? 0 : ::GetLastError();
+
+    Channel* channel = operation->channel;
+    const auto it = channels_.find(channel->fd());
+    if (it != channels_.end() && it->second == channel && channel->index() == kAdded) {
+        channel->setRevents(completionEvents(*operation));
+        activeChannels->push_back(channel);
     }
     return now;
 }
@@ -87,9 +107,11 @@ void IocpPoller::updateChannel(Channel* channel) {
     const SocketFd fd = channel->fd();
 
     if (index == kNew || index == kDeleted) {
-        if (index == kNew) {
-            channels_[fd] = channel;
+        const bool alreadyAssociated = associatedFds_.contains(fd);
+        channels_[fd] = channel;
+        if (!alreadyAssociated) {
             associateChannel(channel);
+            associatedFds_.insert(fd);
         }
         channel->setIndex(channel->isNoneEvent() ? kDeleted : kAdded);
         return;
@@ -103,8 +125,21 @@ void IocpPoller::updateChannel(Channel* channel) {
 }
 
 void IocpPoller::removeChannel(Channel* channel) {
-    channels_.erase(channel->fd());
+    const SocketFd fd = channel->fd();
+    channels_.erase(fd);
+    associatedFds_.erase(fd);
     channel->setIndex(kNew);
+}
+
+void IocpPoller::preserveSocketAssociation(SocketFd sockfd) {
+    associatedFds_.insert(sockfd);
+}
+
+bool IocpPoller::wakeup() {
+    if (::PostQueuedCompletionStatus(iocp_, 0, kWakeupCompletionKey, nullptr) == FALSE) {
+        iocpDie("PostQueuedCompletionStatus(wakeup)");
+    }
+    return true;
 }
 
 void IocpPoller::associateChannel(Channel* channel) {

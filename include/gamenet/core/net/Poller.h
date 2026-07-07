@@ -26,6 +26,9 @@ public:
     virtual gamenet::base::Timestamp poll(int timeoutMs, ChannelList* activeChannels) = 0;
     virtual void updateChannel(Channel* channel) = 0;
     virtual void removeChannel(Channel* channel) = 0;
+    // Preserve backend socket-handle association across fd ownership transfer.
+    virtual void preserveSocketAssociation(SocketFd sockfd);
+    virtual bool wakeup();
 
     bool hasChannel(Channel* channel) const;
     static std::unique_ptr<Poller> newDefaultPoller(EventLoop* loop);

@@ -8,6 +8,15 @@ The `ci` workflow validates:
 
 - CMake configure with C++23 and testing enabled.
 - Scope boundary guard for deferred modules and legacy `mini_trantor` symbols.
+- Intent consistency guard for active module paths and support intents.
+- MSVC `/utf-8` compile-option guard so Windows builds parse UTF-8 source and
+  header comments consistently.
+- Windows IOCP milestone guard for
+  `docs/development/windows_iocp_milestone.md`, keeping Windows support
+  explicitly deferred until the Windows install/package consumer gate is
+  verified.
+- Windows IOCP data-path guard for the planned overlapped operation layer,
+  socket extension helpers, and completion metadata translation.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core library build.
@@ -30,15 +39,23 @@ The scope guard runs before CMake configure:
 
 ```bash
 python3 tests/scope/test_scope_guard.py
+python3 tests/scope/test_intent_consistency.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
 python3 tests/cmake/test_install_package_contract.py
+python3 tests/cmake/test_migration_status_contract.py
+python3 tests/cmake/test_msvc_utf8_contract.py
 python3 tests/cmake/test_platform_backend_contract.py
+python3 tests/cmake/test_tcp_lifecycle_contracts.py
+python3 tests/cmake/test_tcp_connection_context_contract.py
+python3 tests/cmake/test_windows_iocp_milestone_contract.py
+python3 tests/cmake/test_windows_iocp_data_path_contract.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 ```
 
-It fails the workflow if `mini/` includes, `mini::` namespaces, inactive
+It fails the workflow if active intents use legacy `mini/net` paths, or if
+`mini/` includes, `mini::` namespaces, inactive
 `gamenet::protocol` / `gamenet::transport` / `gamenet::game` /
 `gamenet::experimental` paths, or deferred high-level module names appear in
 the active implementation and test surface. Promoting a Phase 4 component must
@@ -85,9 +102,10 @@ Reactor/TCP foundation target.
 
 The active CI gate runs on `ubuntu-24.04`.
 
-Windows CI is intentionally deferred until the Windows network backend is IOCP,
-not WinSock `select()`. Adding a Windows job must validate the IOCP completion
-path and must not freeze the old select-based backend as an accepted target.
+Windows CI is intentionally deferred until the local IOCP runtime evidence is
+paired with a Windows install/package consumer verification. Adding a Windows
+job must validate the IOCP completion path and must not freeze a select-based
+backend as an accepted target.
 
 ## Required Local Equivalent
 
@@ -108,10 +126,17 @@ Microsoft Store `python.exe` alias is inactive, use `py -3` instead:
 
 ```powershell
 py -3 tests\scope\test_scope_guard.py
+py -3 tests\scope\test_intent_consistency.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
 py -3 tests\cmake\test_install_package_contract.py
+py -3 tests\cmake\test_migration_status_contract.py
+py -3 tests\cmake\test_msvc_utf8_contract.py
 py -3 tests\cmake\test_platform_backend_contract.py
+py -3 tests\cmake\test_tcp_lifecycle_contracts.py
+py -3 tests\cmake\test_tcp_connection_context_contract.py
+py -3 tests\cmake\test_windows_iocp_milestone_contract.py
+py -3 tests\cmake\test_windows_iocp_data_path_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 ```

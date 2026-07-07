@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def require(text: str, needle: str, source: Path) -> None:
+    assert needle in text, f"missing Windows IOCP milestone fragment in {source}: {needle}"
+
+
+def main() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    milestone = repo_root / "docs" / "development" / "windows_iocp_milestone.md"
+    ci_docs = repo_root / "docs" / "development" / "ci.md"
+    migration_status = repo_root / "docs" / "migration_status.md"
+    data_path_spec = repo_root / "docs" / "superpowers" / "specs" / "2026-07-07-windows-iocp-data-path-design.md"
+    data_path_plan = repo_root / "docs" / "superpowers" / "plans" / "2026-07-07-windows-iocp-data-path.md"
+    platform_intent = repo_root / "intents" / "modules" / "platform_runtime.intent.md"
+    poller_intent = repo_root / "intents" / "modules" / "poller.intent.md"
+    poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "Poller.h"
+    event_loop_source = repo_root / "src" / "core" / "net" / "EventLoop.cc"
+    iocp_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
+    iocp_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
+    workflow = repo_root / ".github" / "workflows" / "ci.yml"
+    ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
+
+    assert milestone.exists(), f"missing Windows IOCP milestone document: {milestone}"
+    assert data_path_spec.exists(), f"missing Windows IOCP data-path design: {data_path_spec}"
+    assert data_path_plan.exists(), f"missing Windows IOCP data-path plan: {data_path_plan}"
+    milestone_text = milestone.read_text(encoding="utf-8")
+    require(milestone_text, "Windows IOCP Milestone", milestone)
+    require(milestone_text, "Windows support is not promoted", milestone)
+    require(milestone_text, "WinSock `select()` is not an accepted fallback", milestone)
+    require(milestone_text, "IocpPoller owns the completion port", milestone)
+    require(milestone_text, "EventLoop wakeup must complete through IOCP", milestone)
+    require(milestone_text, "overlapped read/write state", milestone)
+    require(milestone_text, "cancel/close ordering", milestone)
+    require(milestone_text, "PostQueuedCompletionStatus", milestone)
+    require(milestone_text, "passes 29/29 tests", milestone)
+    require(milestone_text, "0 failing tests", milestone)
+    require(milestone_text, "AcceptEx", milestone)
+    require(milestone_text, "ConnectEx", milestone)
+    require(milestone_text, "WSARecv", milestone)
+    require(milestone_text, "WSASend", milestone)
+    require(milestone_text, "contract.event_loop.test_event_loop", milestone)
+    require(milestone_text, "contract.timer_queue.test_timer_queue", milestone)
+    require(milestone_text, "contract.acceptor.test_acceptor_contract", milestone)
+    require(milestone_text, "contract.connector.test_connector_contract", milestone)
+    require(milestone_text, "contract.poller.test_poller_contract", milestone)
+    require(milestone_text, "contract.tcp_client.test_tcp_client_contract", milestone)
+    require(milestone_text, "contract.tcp_server.test_tcp_server_contract", milestone)
+    require(milestone_text, "integration.tcp.test_tcp_server_client_echo", milestone)
+    require(milestone_text, "not by a select-style fallback", milestone)
+    require(milestone_text, "2026-07-07-windows-iocp-data-path-design.md", milestone)
+    require(milestone_text, "2026-07-07-windows-iocp-data-path.md", milestone)
+    require(milestone_text, "Windows CI may be added only after", milestone)
+
+    spec_text = data_path_spec.read_text(encoding="utf-8")
+    require(spec_text, "loop-owned Windows IOCP operation layer", data_path_spec)
+    require(spec_text, "owns only the completion port", data_path_spec)
+    require(spec_text, "AcceptEx", data_path_spec)
+    require(spec_text, "ConnectEx", data_path_spec)
+    require(spec_text, "WSARecv", data_path_spec)
+    require(spec_text, "WSASend", data_path_spec)
+    require(spec_text, "WinSock `select()`", data_path_spec)
+    require(spec_text, "accepted promoted backend", data_path_spec)
+
+    plan_text = data_path_plan.read_text(encoding="utf-8")
+    require(plan_text, "Windows IOCP Data Path Implementation Plan", data_path_plan)
+    require(plan_text, "IocpOperation", data_path_plan)
+    require(plan_text, "IocpTcpTransport", data_path_plan)
+    require(plan_text, "contract.acceptor.test_acceptor_contract", data_path_plan)
+    require(plan_text, "integration.tcp.test_tcp_server_client_echo", data_path_plan)
+
+    ci_docs_text = ci_docs.read_text(encoding="utf-8")
+    require(ci_docs_text, "test_windows_iocp_milestone_contract.py", ci_docs)
+    require(ci_docs_text, "windows_iocp_milestone.md", ci_docs)
+
+    migration_text = migration_status.read_text(encoding="utf-8")
+    require(migration_text, "Windows IOCP milestone contract guard", migration_status)
+    require(migration_text, "Windows support is not promoted", migration_status)
+    require(migration_text, "PostQueuedCompletionStatus", migration_status)
+    require(migration_text, "29/29", migration_status)
+    require(migration_text, "0 failing tests", migration_status)
+    require(migration_text, "AcceptEx", migration_status)
+    require(migration_text, "ConnectEx", migration_status)
+    require(migration_text, "WSARecv", migration_status)
+    require(migration_text, "WSASend", migration_status)
+    require(migration_text, "contract.event_loop.test_event_loop", migration_status)
+    require(migration_text, "contract.timer_queue.test_timer_queue", migration_status)
+    require(migration_text, "contract.acceptor.test_acceptor_contract", migration_status)
+    require(migration_text, "contract.tcp_server.test_tcp_server_contract", migration_status)
+    require(migration_text, "contract.connector.test_connector_contract", migration_status)
+    require(migration_text, "integration.tcp.test_tcp_server_client_echo", migration_status)
+    require(migration_text, "2026-07-07-windows-iocp-data-path-design.md", migration_status)
+    require(migration_text, "2026-07-07-windows-iocp-data-path.md", migration_status)
+
+    platform_text = platform_intent.read_text(encoding="utf-8")
+    require(platform_text, "docs/development/windows_iocp_milestone.md", platform_intent)
+
+    poller_text = poller_intent.read_text(encoding="utf-8")
+    require(poller_text, "docs/development/windows_iocp_milestone.md", poller_intent)
+
+    poller_header_text = poller_header.read_text(encoding="utf-8")
+    require(poller_header_text, "virtual bool wakeup();", poller_header)
+    require(poller_header_text, "preserveSocketAssociation", poller_header)
+
+    event_loop_text = event_loop_source.read_text(encoding="utf-8")
+    require(event_loop_text, "poller_->wakeup()", event_loop_source)
+    require(event_loop_text, "platform::writeWakeup", event_loop_source)
+
+    iocp_header_text = iocp_header.read_text(encoding="utf-8")
+    require(iocp_header_text, "bool wakeup() override", iocp_header)
+
+    iocp_source_text = iocp_source.read_text(encoding="utf-8")
+    require(iocp_source_text, "PostQueuedCompletionStatus", iocp_source)
+    require(iocp_source_text, "kWakeupCompletionKey", iocp_source)
+    require(iocp_source_text, "associatedFds_", iocp_source)
+
+    workflow_text = workflow.read_text(encoding="utf-8")
+    require(workflow_text, "python3 tests/cmake/test_windows_iocp_milestone_contract.py", workflow)
+
+    ci_contract_text = ci_contract.read_text(encoding="utf-8")
+    require(ci_contract_text, "python3 tests/cmake/test_windows_iocp_milestone_contract.py", ci_contract)
+
+
+if __name__ == "__main__":
+    main()

@@ -3,7 +3,7 @@
 ## Intent
 
 Platform runtime boundary isolates operating-system differences required by the
-reactor core while keeping `EventLoop`, `Channel`, `TcpConnection`, and protocol
+reactor core while keeping `EventLoop`, `Channel`, `TcpConnection`, and upper
 layers backend-neutral.
 
 Linux and Windows may use different socket handles, wakeup primitives, and I/O
@@ -18,10 +18,10 @@ This module is not business logic.
 
 ## Responsibilities
 
-- Define platform socket handle aliases through `mini/net/platform/SocketTypes.h`.
-- Implement `SocketsOps` behind the stable public `mini/net/SocketsOps.h` entry.
+- Define platform socket handle aliases through `gamenet/core/net/platform/SocketTypes.h`.
+- Implement `SocketsOps` behind the stable public `gamenet/core/net/SocketsOps.h` entry.
 - Create, write, drain, and close EventLoop wakeup descriptors per platform.
-- Host concrete poller backends under `mini/net/poller/`.
+- Host concrete poller backends under `gamenet/core/net/poller/`.
 - Select the default poller backend at build time through `Poller::newDefaultPoller()`.
 - Keep unsupported platform capabilities explicit.
 
@@ -52,8 +52,8 @@ This module is not business logic.
 ## Collaboration
 
 - `EventLoop` calls `platform::createWakeupFds()`, `writeWakeup()`, and `drainWakeup()`.
-- `Socket`, `Acceptor`, `Connector`, `TcpConnection`, UDP, and DNS paths call
-  `sockets::*` through the stable public header.
+- `Socket`, `Acceptor`, `Connector`, `TcpConnection`, and future promoted
+  platform users call `sockets::*` through the stable public header.
 - `PollerFactory` chooses an IOCP-backed Windows backend and `EPollPoller` on Linux.
 - CMake selects exactly one socket implementation, one wakeup implementation, and
   one concrete poller backend for the target platform.
@@ -101,14 +101,17 @@ This module is not business logic.
   registration behavior when enabled on the platform.
 - TCP client/server/connection contract tests verify socket operation behavior
   through the public path.
-- Windows workflow verifies the Windows source selection and IOCP completion path.
+- Future Windows workflow verifies the Windows source selection and IOCP completion path.
+- `docs/development/windows_iocp_milestone.md` defines the Windows promotion
+  gates for IOCP wakeup, overlapped read/write ownership, and cancel/close ordering.
 - Linux CI/builds verify the Linux source selection and EPollPoller path.
 
 ---
 
 ## Review Checklist
 
-- Does the change keep platform code under `mini/net/platform/` or `mini/net/poller/`?
+- Does the change keep platform code under `gamenet/core/net/platform/` or
+  `gamenet/core/net/poller/`?
 - Does the public include path remain stable when practical?
 - Which loop/thread owns the affected descriptors?
 - Who owns and releases each descriptor/backend handle?

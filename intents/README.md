@@ -42,6 +42,7 @@ These intents apply to the current migrated core:
 - `intents/modules/event_loop.intent.md`
 - `intents/modules/event_loop_thread.intent.md`
 - `intents/modules/event_loop_thread_pool.intent.md`
+- `intents/modules/platform_runtime.intent.md`
 - `intents/modules/poller.intent.md`
 - `intents/modules/timer_queue.intent.md`
 - `intents/architecture/lifetime_rules.intent.md`

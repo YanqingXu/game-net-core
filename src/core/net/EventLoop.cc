@@ -157,6 +157,10 @@ void EventLoop::cancel(TimerId timerId) {
 
 void EventLoop::wakeup() {
     wakeupCount_.fetch_add(1, std::memory_order_relaxed);
+    if (poller_->wakeup()) {
+        return;
+    }
+
     const ssize_t written = platform::writeWakeup(wakeupFds_.writeFd);
     if (written < 0 && !sockets::isWouldBlock(sockets::lastError())) {
         LOG_SYSERR << "EventLoop::wakeup: " << sockets::errorMessage(sockets::lastError());
@@ -171,6 +175,11 @@ void EventLoop::updateChannel(Channel* channel) {
 void EventLoop::removeChannel(Channel* channel) {
     assertInLoopThread();
     poller_->removeChannel(channel);
+}
+
+void EventLoop::preserveSocketAssociation(SocketFd sockfd) {
+    assertInLoopThread();
+    poller_->preserveSocketAssociation(sockfd);
 }
 
 bool EventLoop::hasChannel(Channel* channel) {

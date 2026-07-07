@@ -8,6 +8,8 @@
 
 #ifdef _WIN32
 
+#include <unordered_set>
+
 namespace gamenet::net {
 
 class IocpPoller : public Poller {
@@ -18,15 +20,19 @@ public:
     gamenet::base::Timestamp poll(int timeoutMs, ChannelList* activeChannels) override;
     void updateChannel(Channel* channel) override;
     void removeChannel(Channel* channel) override;
+    void preserveSocketAssociation(SocketFd sockfd) override;
+    bool wakeup() override;
 
 private:
     static constexpr int kNew = -1;
     static constexpr int kAdded = 1;
     static constexpr int kDeleted = 2;
+    static constexpr ULONG_PTR kWakeupCompletionKey = static_cast<ULONG_PTR>(-1);
 
     void associateChannel(Channel* channel);
 
     HANDLE iocp_;
+    std::unordered_set<SocketFd> associatedFds_;
 };
 
 }  // namespace gamenet::net

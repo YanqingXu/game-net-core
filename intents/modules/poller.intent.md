@@ -73,7 +73,8 @@ without forcing upper layers to change semantic assumptions.
 Windows WinSock `select()` is not an acceptable performance target for the
 current migration. It may remain only as deleted legacy context or local
 experimentation outside the active target; CI must validate the IOCP path before
-Windows support is promoted.
+Windows support is promoted. See `docs/development/windows_iocp_milestone.md`
+for the required IOCP completion ownership and promotion gates.
 
 ---
 
