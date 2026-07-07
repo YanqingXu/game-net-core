@@ -157,3 +157,63 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build-release --output-on-failure
+
+  windows-msvc:
+    name: Windows MSVC IOCP build and tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        shell: pwsh
+        run: |
+          cmake --version
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+
+      - name: Check repository guards
+        shell: pwsh
+        run: |
+          python tests/scope/test_scope_guard.py
+          python tests/scope/test_intent_consistency.py
+          python tools/check_scope_boundaries.py
+          python tests/cmake/test_sanitizer_flags.py
+          python tests/cmake/test_install_package_contract.py
+          python tests/cmake/test_migration_status_contract.py
+          python tests/cmake/test_msvc_utf8_contract.py
+          python tests/cmake/test_platform_backend_contract.py
+          python tests/cmake/test_tcp_lifecycle_contracts.py
+          python tests/cmake/test_tcp_connection_context_contract.py
+          python tests/cmake/test_windows_iocp_milestone_contract.py
+          python tests/cmake/test_windows_iocp_data_path_contract.py
+          python tests/cmake/test_release_safe_tests.py
+          python tests/ci/test_workflow_jobs.py
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build-windows
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-windows --config Debug --parallel
+
+      - name: Test
+        shell: pwsh
+        run: ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10
+
+      - name: Install and verify package consumer
+        shell: pwsh
+        run: |
+          cmake --install build-windows --config Debug --prefix "$pwd/build-windows/_install"
+          cmake -S tests/cmake/install_consumer -B build-windows-install-consumer `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
+          cmake --build build-windows-install-consumer --config Debug --parallel

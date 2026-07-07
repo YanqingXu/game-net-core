@@ -2,9 +2,10 @@
 
 Last checked: 2026-07-07
 
-Windows support is not promoted into CI for the Reactor / TCP foundation yet.
-The current Windows source selection intentionally uses `IocpPoller`, and
-WinSock `select()` is not an accepted fallback for the active target.
+Windows support for the Reactor / TCP foundation is represented by the
+`windows-msvc` workflow job. The current Windows source selection intentionally
+uses `IocpPoller`, and WinSock `select()` is not an accepted fallback for the
+active target.
 
 ## Current Evidence
 
@@ -21,9 +22,9 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
   --build build-local-vs2026 --config Debug --parallel
 ```
 
-Full Windows CTest is still not a CI support gate, but a local VS2026 Debug run
-with a 10-second per-test timeout now passes 29/29 tests with 0 failing tests.
-The local IOCP evidence includes:
+Full Windows CTest is now part of the Windows MSVC workflow gate. A local
+VS2026 Debug run with a 10-second per-test timeout also passes 29/29 tests with
+0 failing tests. The local IOCP evidence includes:
 
 - `contract.event_loop.test_event_loop` and
   `contract.timer_queue.test_timer_queue`: `EventLoop::wakeup()` posts an IOCP
@@ -50,10 +51,11 @@ The local IOCP evidence includes:
   lifecycle behavior are backed by loop-owned `WSARecv` / `WSASend`
   overlapped operations.
 
-The Windows install/package consumer gate also passes locally. The VS2026 Debug
-build installs to `build-local-vs2026/_install`, and the external
-`tests/cmake/install_consumer` fixture configures, builds, and runs through
-`find_package(GameNetCore)` and `GameNet::core`.
+The Windows install/package consumer gate is also part of the Windows MSVC
+workflow gate and passes locally. The VS2026 Debug build installs to
+`build-local-vs2026/_install`, and the external `tests/cmake/install_consumer`
+fixture configures, builds, and runs through `find_package(GameNetCore)` and
+`GameNet::core`.
 
 The detailed data-path design is recorded in
 `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md`, with the
@@ -74,9 +76,9 @@ TDD implementation plan in
 - Socket close, Channel removal, pending overlapped cancellation, and final
   callbacks must have explicit cancel/close ordering.
 
-## Promotion Gates
+## CI Gates
 
-Windows CI may be added after these local gates stay green:
+The Windows MSVC workflow job must keep these gates green:
 
 - `contract.event_loop.test_event_loop` and
   `contract.timer_queue.test_timer_queue` stay green on Windows without relying
@@ -90,8 +92,8 @@ Windows CI may be added after these local gates stay green:
 - Cancel/close ordering is covered for active connections with pending
   overlapped operations.
 - The install/package consumer gate passes on Windows with `GameNet::core`.
-- Documentation and migration status still say Windows support is not promoted
-  into CI until a real Windows workflow job is added and kept green.
+- The workflow continues to validate the IOCP backend and does not introduce a
+  select-style Windows backend.
 
 ## Non-Goals
 

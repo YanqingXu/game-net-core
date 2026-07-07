@@ -13,8 +13,8 @@ The `ci` workflow validates:
   source/header comments consistently and parallel Debug builds serialize PDB
   writes safely.
 - Windows IOCP milestone guard for
-  `docs/development/windows_iocp_milestone.md`, keeping Windows support
-  explicitly deferred until a Windows workflow job is added and kept green.
+  `docs/development/windows_iocp_milestone.md`, keeping Windows support tied
+  to the IOCP backend and the Windows MSVC workflow gate.
 - Windows IOCP data-path guard for the planned overlapped operation layer,
   socket extension helpers, and completion metadata translation.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
@@ -25,6 +25,8 @@ The `ci` workflow validates:
 - Install and `find_package(GameNetCore)` consumer verification.
 - ASan/UBSan Debug build and CTest suite on Linux.
 - Release build and CTest suite on Linux.
+- Windows MSVC Debug build, CTest suite, and install/package consumer
+  verification through the IOCP backend.
 
 It keeps deferred modules disabled:
 
@@ -83,7 +85,7 @@ Debug, ASan/UBSan, and Release jobs are all test-execution gates.
 
 ## Install Package Gate
 
-The Linux Debug job also verifies that the split core target is consumable from
+The Linux Debug job verifies that the split core target is consumable from
 outside the source tree:
 
 ```bash
@@ -98,14 +100,19 @@ The consumer fixture must use `find_package(GameNetCore REQUIRED)` and link only
 against `GameNet::core`. This keeps the package contract focused on the current
 Reactor/TCP foundation target.
 
+The Windows MSVC job runs the same package consumer gate after installing the
+Debug build from `build-windows`, using the Visual Studio generator and `x64`
+platform so the installed `GameNet::core` target is verified on the IOCP
+backend.
+
 ## Current Platform Gate
 
-The active CI gate runs on `ubuntu-24.04`.
+The active CI gate runs on `ubuntu-24.04` and `windows-latest`.
 
-Windows CI is intentionally deferred until a Windows workflow job is added.
-Local evidence now covers the IOCP runtime path and Windows install/package
-consumer verification. Adding a Windows job must validate the IOCP completion
-path and must not freeze a select-based backend as an accepted target.
+The Windows job validates the IOCP completion path and must not freeze a
+select-based backend as an accepted target. It uses the Visual Studio generator,
+builds Debug, runs CTest with `-C Debug`, installs the package, and builds the
+external install consumer through `find_package(GameNetCore)`.
 
 ## Required Local Equivalent
 
@@ -119,6 +126,17 @@ ctest --test-dir build --output-on-failure
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
 cmake --build build-release --parallel
 ctest --test-dir build-release --output-on-failure
+```
+
+On Windows with Visual Studio installed, the local equivalent is:
+
+```powershell
+cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+cmake --build build-windows --config Debug --parallel
+ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10
+cmake --install build-windows --config Debug --prefix "$pwd/build-windows/_install"
+cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
+cmake --build build-windows-install-consumer --config Debug --parallel
 ```
 
 Run the scope guard before the CMake commands. On Windows hosts where the

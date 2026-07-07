@@ -28,7 +28,7 @@ def main() -> None:
     assert data_path_plan.exists(), f"missing Windows IOCP data-path plan: {data_path_plan}"
     milestone_text = milestone.read_text(encoding="utf-8")
     require(milestone_text, "Windows IOCP Milestone", milestone)
-    require(milestone_text, "Windows support is not promoted", milestone)
+    require(milestone_text, "`windows-msvc` workflow job", milestone)
     require(milestone_text, "WinSock `select()` is not an accepted fallback", milestone)
     require(milestone_text, "IocpPoller owns the completion port", milestone)
     require(milestone_text, "EventLoop wakeup must complete through IOCP", milestone)
@@ -52,8 +52,9 @@ def main() -> None:
     require(milestone_text, "not by a select-style fallback", milestone)
     require(milestone_text, "2026-07-07-windows-iocp-data-path-design.md", milestone)
     require(milestone_text, "2026-07-07-windows-iocp-data-path.md", milestone)
-    require(milestone_text, "Windows CI may be added after these local gates stay green", milestone)
-    require(milestone_text, "Windows install/package consumer gate also passes locally", milestone)
+    require(milestone_text, "Full Windows CTest is now part of the Windows MSVC workflow gate", milestone)
+    require(milestone_text, "Windows install/package consumer gate is also part of the Windows MSVC", milestone)
+    require(milestone_text, "The Windows MSVC workflow job must keep these gates green", milestone)
     require(milestone_text, "find_package(GameNetCore)", milestone)
     require(milestone_text, "GameNet::core", milestone)
 
@@ -80,7 +81,7 @@ def main() -> None:
 
     migration_text = migration_status.read_text(encoding="utf-8")
     require(migration_text, "Windows IOCP milestone contract guard", migration_status)
-    require(migration_text, "Windows support is not promoted", migration_status)
+    require(migration_text, "Windows support is now represented by a `windows-msvc` workflow job", migration_status)
     require(migration_text, "PostQueuedCompletionStatus", migration_status)
     require(migration_text, "29/29", migration_status)
     require(migration_text, "0 failing tests", migration_status)
@@ -97,7 +98,7 @@ def main() -> None:
     require(migration_text, "Windows install/package consumer gate also passes locally", migration_status)
     require(migration_text, "find_package(GameNetCore)", migration_status)
     require(migration_text, "GameNet::core", migration_status)
-    require(migration_text, "proposed as the next platform-specific migration step", migration_status)
+    require(migration_text, "remote green status is established by pull request or manual workflow execution", migration_status)
     require(migration_text, "2026-07-07-windows-iocp-data-path-design.md", migration_status)
     require(migration_text, "2026-07-07-windows-iocp-data-path.md", migration_status)
 
@@ -125,6 +126,8 @@ def main() -> None:
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "python3 tests/cmake/test_windows_iocp_milestone_contract.py", workflow)
+    require(workflow_text, "windows-msvc:", workflow)
+    require(workflow_text, "ctest --test-dir build-windows -C Debug", workflow)
 
     ci_contract_text = ci_contract.read_text(encoding="utf-8")
     require(ci_contract_text, "python3 tests/cmake/test_windows_iocp_milestone_contract.py", ci_contract)

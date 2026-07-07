@@ -42,10 +42,11 @@ foundation: 6 unit tests, 22 contract tests, and 1 integration test.
   so contract checks remain active with `NDEBUG`.
 - Install/package: CI installs the core target and builds an external consumer
   fixture through `find_package(GameNetCore)` and `GameNet::core`.
-- Windows: Windows support is not promoted into CI yet. Local VS2026 Debug
-  configure/build succeeds after the MSVC `/utf-8` compile option was added,
-  and a local full Windows CTest run with a 10-second per-test timeout passes
-  29/29 configured tests with 0 failing tests. The IOCP data path now covers
+- Windows: Windows support is now represented by a `windows-msvc` workflow job
+  for the Reactor / TCP IOCP backend. Local VS2026 Debug configure/build
+  succeeds after the MSVC `/utf-8` and `/FS` compile options were added, and a
+  local full Windows CTest run with a 10-second per-test timeout passes 29/29
+  configured tests with 0 failing tests. The IOCP data path now covers
   `contract.event_loop.test_event_loop`,
   `contract.timer_queue.test_timer_queue`,
   `contract.acceptor.test_acceptor_contract`,
@@ -63,9 +64,10 @@ foundation: 6 unit tests, 22 contract tests, and 1 integration test.
   The Windows install/package consumer gate also passes locally: the VS2026
   Debug build installs to `build-local-vs2026/_install`, and the external
   `tests/cmake/install_consumer` fixture configures, builds, and runs through
-  `find_package(GameNetCore)` and `GameNet::core`. Windows CI can now be
-  proposed as the next platform-specific migration step. The IOCP data-path design and
-  implementation plan are recorded in
+  `find_package(GameNetCore)` and `GameNet::core`. The Windows workflow uses
+  the Visual Studio generator, Debug CTest, install, and external package
+  consumer gates; remote green status is established by pull request or manual workflow execution.
+  The IOCP data-path design and implementation plan are recorded in
   `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md` and
   `docs/superpowers/plans/2026-07-07-windows-iocp-data-path.md`. See
   `docs/development/windows_iocp_milestone.md`.
