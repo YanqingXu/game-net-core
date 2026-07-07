@@ -48,6 +48,8 @@ target_compile_features(gamenet_core PUBLIC cxx_std_23)
 target_compile_options(gamenet_core
     PUBLIC
         $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
+    PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/FS>
 )
 
 find_package(Threads REQUIRED)

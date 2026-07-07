@@ -29,8 +29,9 @@ def main() -> None:
     assert "SelectPoller path" not in platform_text
 
     docs_text = ci_docs.read_text(encoding="utf-8")
-    require(docs_text, "Windows CI is intentionally deferred until the local IOCP runtime evidence", ci_docs)
-    require(docs_text, "Windows install/package consumer verification", ci_docs)
+    require(docs_text, "Windows CI is intentionally deferred until a Windows workflow job is added", ci_docs)
+    require(docs_text, "Local evidence now covers the IOCP runtime path", ci_docs)
+    require(docs_text, "Windows install/package", ci_docs)
     require(docs_text, "select-based", ci_docs)
 
     workflow_text = workflow.read_text(encoding="utf-8")

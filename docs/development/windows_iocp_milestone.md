@@ -50,6 +50,11 @@ The local IOCP evidence includes:
   lifecycle behavior are backed by loop-owned `WSARecv` / `WSASend`
   overlapped operations.
 
+The Windows install/package consumer gate also passes locally. The VS2026 Debug
+build installs to `build-local-vs2026/_install`, and the external
+`tests/cmake/install_consumer` fixture configures, builds, and runs through
+`find_package(GameNetCore)` and `GameNet::core`.
+
 The detailed data-path design is recorded in
 `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md`, with the
 TDD implementation plan in
@@ -71,7 +76,7 @@ TDD implementation plan in
 
 ## Promotion Gates
 
-Windows CI may be added only after all of these are true:
+Windows CI may be added after these local gates stay green:
 
 - `contract.event_loop.test_event_loop` and
   `contract.timer_queue.test_timer_queue` stay green on Windows without relying
@@ -86,7 +91,7 @@ Windows CI may be added only after all of these are true:
   overlapped operations.
 - The install/package consumer gate passes on Windows with `GameNet::core`.
 - Documentation and migration status still say Windows support is not promoted
-  into CI until the remaining Windows packaging gate is green.
+  into CI until a real Windows workflow job is added and kept green.
 
 ## Non-Goals
 

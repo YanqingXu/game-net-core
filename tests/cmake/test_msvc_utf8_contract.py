@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def require(text: str, needle: str, source: Path) -> None:
-    assert needle in text, f"missing MSVC UTF-8 build contract fragment in {source}: {needle}"
+    assert needle in text, f"missing MSVC build contract fragment in {source}: {needle}"
 
 
 def main() -> None:
@@ -18,6 +18,8 @@ def main() -> None:
     require(core_text, "target_compile_options(gamenet_core", core_cmake)
     require(core_text, "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>", core_cmake)
     require(core_text, "PUBLIC", core_cmake)
+    require(core_text, "$<$<CXX_COMPILER_ID:MSVC>:/FS>", core_cmake)
+    require(core_text, "PRIVATE", core_cmake)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "python3 tests/cmake/test_msvc_utf8_contract.py", workflow)
@@ -29,6 +31,7 @@ def main() -> None:
     require(ci_docs_text, "test_msvc_utf8_contract.py", ci_docs)
     require(ci_docs_text, "MSVC", ci_docs)
     require(ci_docs_text, "/utf-8", ci_docs)
+    require(ci_docs_text, "/FS", ci_docs)
 
 
 if __name__ == "__main__":

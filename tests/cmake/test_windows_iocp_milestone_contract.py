@@ -52,7 +52,10 @@ def main() -> None:
     require(milestone_text, "not by a select-style fallback", milestone)
     require(milestone_text, "2026-07-07-windows-iocp-data-path-design.md", milestone)
     require(milestone_text, "2026-07-07-windows-iocp-data-path.md", milestone)
-    require(milestone_text, "Windows CI may be added only after", milestone)
+    require(milestone_text, "Windows CI may be added after these local gates stay green", milestone)
+    require(milestone_text, "Windows install/package consumer gate also passes locally", milestone)
+    require(milestone_text, "find_package(GameNetCore)", milestone)
+    require(milestone_text, "GameNet::core", milestone)
 
     spec_text = data_path_spec.read_text(encoding="utf-8")
     require(spec_text, "loop-owned Windows IOCP operation layer", data_path_spec)
@@ -91,6 +94,10 @@ def main() -> None:
     require(migration_text, "contract.tcp_server.test_tcp_server_contract", migration_status)
     require(migration_text, "contract.connector.test_connector_contract", migration_status)
     require(migration_text, "integration.tcp.test_tcp_server_client_echo", migration_status)
+    require(migration_text, "Windows install/package consumer gate also passes locally", migration_status)
+    require(migration_text, "find_package(GameNetCore)", migration_status)
+    require(migration_text, "GameNet::core", migration_status)
+    require(migration_text, "proposed as the next platform-specific migration step", migration_status)
     require(migration_text, "2026-07-07-windows-iocp-data-path-design.md", migration_status)
     require(migration_text, "2026-07-07-windows-iocp-data-path.md", migration_status)
 

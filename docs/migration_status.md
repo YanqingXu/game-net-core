@@ -60,8 +60,11 @@ foundation: 6 unit tests, 22 contract tests, and 1 integration test.
   `WSASend`. The active Windows source selection points at the IOCP backend,
   the legacy select backend files have been removed from the active target, and
   a select-based Windows CI job must not be promoted as the performance target.
-  Windows CI can be proposed after the install/package consumer gate is
-  verified on Windows with `GameNet::core`. The IOCP data-path design and
+  The Windows install/package consumer gate also passes locally: the VS2026
+  Debug build installs to `build-local-vs2026/_install`, and the external
+  `tests/cmake/install_consumer` fixture configures, builds, and runs through
+  `find_package(GameNetCore)` and `GameNet::core`. Windows CI can now be
+  proposed as the next platform-specific migration step. The IOCP data-path design and
   implementation plan are recorded in
   `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md` and
   `docs/superpowers/plans/2026-07-07-windows-iocp-data-path.md`. See

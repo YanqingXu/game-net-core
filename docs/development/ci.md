@@ -9,12 +9,12 @@ The `ci` workflow validates:
 - CMake configure with C++23 and testing enabled.
 - Scope boundary guard for deferred modules and legacy `mini_trantor` symbols.
 - Intent consistency guard for active module paths and support intents.
-- MSVC `/utf-8` compile-option guard so Windows builds parse UTF-8 source and
-  header comments consistently.
+- MSVC `/utf-8` and `/FS` compile-option guard so Windows builds parse UTF-8
+  source/header comments consistently and parallel Debug builds serialize PDB
+  writes safely.
 - Windows IOCP milestone guard for
   `docs/development/windows_iocp_milestone.md`, keeping Windows support
-  explicitly deferred until the Windows install/package consumer gate is
-  verified.
+  explicitly deferred until a Windows workflow job is added and kept green.
 - Windows IOCP data-path guard for the planned overlapped operation layer,
   socket extension helpers, and completion metadata translation.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
@@ -102,10 +102,10 @@ Reactor/TCP foundation target.
 
 The active CI gate runs on `ubuntu-24.04`.
 
-Windows CI is intentionally deferred until the local IOCP runtime evidence is
-paired with a Windows install/package consumer verification. Adding a Windows
-job must validate the IOCP completion path and must not freeze a select-based
-backend as an accepted target.
+Windows CI is intentionally deferred until a Windows workflow job is added.
+Local evidence now covers the IOCP runtime path and Windows install/package
+consumer verification. Adding a Windows job must validate the IOCP completion
+path and must not freeze a select-based backend as an accepted target.
 
 ## Required Local Equivalent
 
