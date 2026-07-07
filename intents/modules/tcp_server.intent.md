@@ -31,6 +31,8 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - idle-timeout policy must not bypass connection owner-loop close semantics
 - backpressure configuration must not mutate worker-loop Channel state directly from base loop code
 - shutdown should detach callbacks before asynchronous teardown continues
+- stop() during active write must let connection-owner close/cancel ordering
+  drain pending operations before connection destruction
 
 ---
 
@@ -57,6 +59,11 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - backpressure policy installed by TcpServer pauses and later resumes per-connection reads without breaking ownership rules
 - destruction invalidates delayed removal callbacks safely
 - stop() stops Acceptor, force-closes all connections, stops thread pool; idempotent
+- `tests/contract/tcp_server/test_tcp_server_stop_active_write.cpp` verifies
+  stop() during an active write keeps teardown single-shot and owner-loop safe
+- `tests/contract/tcp_server/test_tcp_server_stop_soak.cpp` repeats stop()
+  from worker-owned connections and verifies worker-loop teardown completes
+  before the thread pool is joined
 
 ---
 

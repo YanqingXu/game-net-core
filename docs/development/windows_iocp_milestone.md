@@ -23,33 +23,50 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 ```
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
-VS2026 Debug run with a 10-second per-test timeout also passes 29/29 tests with
+VS2026 Debug run with a 10-second per-test timeout also passes 37/37 tests with
 0 failing tests. The local IOCP evidence includes:
 
 - `contract.event_loop.test_event_loop` and
   `contract.timer_queue.test_timer_queue`: `EventLoop::wakeup()` posts an IOCP
   completion packet through `PostQueuedCompletionStatus`, so cross-thread
-  queued work and timer scheduling no longer sleep until the default poll
-  timeout.
+  queued work, timer scheduling, and ready-timer cancellation no longer sleep
+  until the default poll timeout.
+- `contract.event_loop_thread_pool.test_event_loop_thread_pool`: published
+  worker loops accept cross-thread queued work under a light soak and execute
+  it on worker loop threads rather than the base loop.
 - `contract.acceptor.test_acceptor_contract`,
   `contract.tcp_server.test_tcp_server_contract`, and
-  `contract.tcp_server.test_tcp_server_stop_active_connections`: the Acceptor
-  path is backed by `AcceptEx`.
-- `contract.connector.test_connector_contract` and
-  `contract.tcp_client.test_tcp_client_contract`: active connects are backed by
-  `ConnectEx` and preserve the IOCP socket association when the fd transfers
-  from Connector to TcpConnection.
+  `contract.tcp_server.test_tcp_server_stop_active_connections`,
+  `contract.tcp_server.test_tcp_server_stop_active_write`,
+  `contract.tcp_server.test_tcp_server_stop_soak`: the Acceptor and server
+  stop paths are backed by `AcceptEx` and owner-loop connection teardown;
+  worker-loop teardown is allowed to finish before the worker pool is joined.
+- `contract.connector.test_connector_contract`,
+  `contract.tcp_client.test_tcp_client_contract`, and
+  `contract.tcp_client.test_tcp_client_stop_pending_connect`: active connects
+  are backed by `ConnectEx`; stop during pending ConnectEx cancels and drains
+  the connector-owned completion before a later server start can accept stale
+  work, and successful connects preserve the IOCP socket association when the
+  fd transfers from Connector to TcpConnection.
+- `contract.tcp_client.test_tcp_client_retry_stop_soak`: repeated retry-stop
+  cycles keep stale retry timers from connecting after a later server start.
 - `contract.poller.test_poller_contract`: the Windows Poller contract is backed
   by a posted IOCP read operation, not by a select-style fallback.
 - `contract.tcp_connection.test_tcp_connection_lifecycle`,
   `contract.tcp_connection.test_tcp_connection_high_water_mark`,
   `contract.tcp_connection.test_tcp_connection_peer_close`,
   `contract.tcp_connection.test_tcp_connection_peer_reset`,
+  `contract.tcp_connection.test_tcp_connection_cross_thread_send`,
   `contract.tcp_connection.test_tcp_connection_shutdown_pending_output`,
-  `contract.tcp_connection.test_tcp_connection_write_complete_ordering`, and
+  `contract.tcp_connection.test_tcp_connection_write_complete_ordering`,
+  `contract.tcp_connection.test_tcp_connection_cross_thread_force_close_soak`,
+  `contract.tcp_connection.test_tcp_connection_cross_thread_shutdown`,
+  `contract.tcp_connection.test_tcp_connection_force_close_pending_read`, and
   `integration.tcp.test_tcp_server_client_echo`: TcpConnection read/write and
   lifecycle behavior are backed by loop-owned `WSARecv` / `WSASend`
-  overlapped operations.
+  overlapped operations, including force-close cancellation of a pending read
+  before connection-owned operation storage can be destroyed and cross-thread
+  shutdown draining pending output before half-close.
 
 The Windows install/package consumer gate is also part of the Windows MSVC
 workflow gate and passes locally. The VS2026 Debug build installs to
@@ -85,10 +102,13 @@ The Windows MSVC workflow job must keep these gates green:
   on the default poll timeout.
 - IOCP wakeup has a direct contract that proves cross-thread queued work wakes
   the owner loop.
+- EventLoopThreadPool worker publication and queued-work soak stay green on
+  Windows through the same EventLoop scheduling API.
 - Poller readiness/completion contracts are backed by posted IOCP operations,
   not by a select-style fallback.
-- TcpConnection read, write, peer close/reset, shutdown-with-pending-output,
-  and repeated teardown contracts pass through the IOCP data path.
+- TcpConnection read, write, cross-thread send, peer close/reset,
+  shutdown-with-pending-output, cross-thread shutdown, and repeated teardown
+  contracts pass through the IOCP data path.
 - Cancel/close ordering is covered for active connections with pending
   overlapped operations.
 - The install/package consumer gate passes on Windows with `GameNet::core`.

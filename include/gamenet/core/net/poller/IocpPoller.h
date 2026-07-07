@@ -1,8 +1,11 @@
 #pragma once
 
-// IocpPoller 是 Windows IOCP 后端骨架。
-// 它拥有 completion port 并把 socket 句柄关联到该端口；实际 TCP
-// overlapped read/write completion state 由后续连接层迁移接入。
+// Windows IOCP backend for EventLoop.
+// IocpPoller owns the completion port, associates loop-owned socket handles,
+// translates completion packets into Channel events, and posts wakeup packets
+// through the same backend abstraction. TCP read/write completions arrive via
+// loop-owned IocpOperation metadata owned by the connection transport; Poller
+// observes that metadata but does not own Channel or TcpConnection.
 
 #include "gamenet/core/net/Poller.h"
 

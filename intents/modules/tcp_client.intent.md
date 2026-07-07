@@ -72,6 +72,8 @@ all while preserving the same owner-loop discipline as the server side.
 - retry after failure uses the configured backoff strategy via EventLoop timer
 - stop() cancels pending retry or connect work so a later server start cannot
   resurrect a stopped client through a stale timer
+- stop() during an in-flight ConnectEx cancels and drains the connector-owned
+  operation before releasing Channel storage
 - disconnect during an active connect attempt cancels Connector cleanly
 - destruction during a pending connect or reconnect timer must not leak
   fds or leave stale Channel registrations
@@ -94,6 +96,10 @@ all while preserving the same owner-loop discipline as the server side.
 - reconnect after server-initiated close uses configured backoff delay
 - `tests/contract/tcp_client/test_tcp_client_retry_stop_race.cpp` verifies
   stop() cancels pending retry before a later server start can connect
+- `tests/contract/tcp_client/test_tcp_client_retry_stop_soak.cpp` repeats the
+  retry-stop race to catch stale retry timers across multiple client lifecycles
+- `tests/contract/tcp_client/test_tcp_client_stop_pending_connect.cpp` verifies
+  stop() cancels an in-flight ConnectEx before a later server start can connect
 - cross-thread connect marshals to owner loop before Connector starts
 - cross-thread disconnect marshals to owner loop before teardown begins
 - destruction during pending connect does not leak fd or crash

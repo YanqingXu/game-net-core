@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <memory>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -44,6 +45,50 @@ int main() {
         std::this_thread::sleep_for(120ms);
         canceller.join();
         GAMENET_TEST_ASSERT(!fired.load());
+    }
+
+    {
+        gamenet::net::EventLoopThread loopThread;
+        gamenet::net::EventLoop* loop = loopThread.startLoop();
+
+        std::atomic<bool> firstFired{false};
+        std::atomic<bool> secondFired{false};
+        std::atomic<bool> observed{false};
+        std::promise<void> finished;
+        auto finishedFuture = finished.get_future();
+        auto second = std::make_shared<gamenet::net::TimerId>();
+
+        loop->runInLoop([loop, second, &firstFired, &secondFired, &observed, &finished] {
+            const auto when = gamenet::base::now() + 20ms;
+
+            // timer-cancel-ready-contract: canceling a timer from an earlier
+            // ready callback prevents the later callback from firing.
+            loop->runAt(when, [loop, second, &firstFired, &observed, &finished] {
+                firstFired = true;
+                loop->cancel(*second);
+                loop->runAfter(40ms, [loop, &observed, &finished] {
+                    if (!observed.exchange(true)) {
+                        finished.set_value();
+                    }
+                    loop->quit();
+                });
+            });
+
+            *second = loop->runAt(when, [&secondFired] {
+                secondFired = true;
+            });
+
+            loop->runAfter(250ms, [loop, &observed, &finished] {
+                if (!observed.exchange(true)) {
+                    finished.set_value();
+                }
+                loop->quit();
+            });
+        });
+
+        GAMENET_TEST_ASSERT(finishedFuture.wait_for(1s) == std::future_status::ready);
+        GAMENET_TEST_ASSERT(firstFired.load());
+        GAMENET_TEST_ASSERT(!secondFired.load());
     }
 
     {

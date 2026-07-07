@@ -4,6 +4,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <utility>
@@ -95,8 +96,9 @@ void TcpServer::stopInLoop() {
     if (acceptor_->listening()) {
         acceptor_->stop();
     }
-    forceCloseAllConnections();
-    threadPool_->stop();
+    if (!forceCloseAllConnections()) {
+        threadPool_->stop();
+    }
 }
 
 void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
@@ -149,21 +151,47 @@ void TcpServer::removeConnectionInLoop(const TcpConnectionPtr& connection) {
     connectionLoop->queueInLoop([connection] { connection->connectDestroyed(); });
 }
 
-void TcpServer::forceCloseAllConnections() {
+bool TcpServer::forceCloseAllConnections() {
     auto connections = std::move(connections_);
     connections_.clear();
+    if (connections.empty()) {
+        return false;
+    }
+
+    auto remaining = std::make_shared<std::atomic<std::size_t>>(connections.size());
+    std::weak_ptr<void> lifetime = lifetimeToken_;
+    EventLoop* baseLoop = loop_;
+    EventLoopThreadPool* threadPool = threadPool_.get();
+    auto notifyClosed = [remaining, lifetime, baseLoop, threadPool] {
+        if (remaining->fetch_sub(1) != 1) {
+            return;
+        }
+
+        baseLoop->runInLoop([lifetime, threadPool] {
+            if (lifetime.lock()) {
+                threadPool->stop();
+            }
+        });
+    };
 
     for (auto& [name, connection] : connections) {
         (void)name;
-        connection->setCloseCallback({});
+        connection->setCloseCallback([notifyClosed](const TcpConnectionPtr& conn) {
+            conn->connectDestroyed();
+            notifyClosed();
+        });
         EventLoop* connectionLoop = connection->getLoop();
-        connectionLoop->runInLoop([connection] {
+        connectionLoop->runInLoop([connection, notifyClosed] {
             if (!connection->disconnected()) {
                 connection->forceClose();
+                return;
             }
             connection->connectDestroyed();
+            notifyClosed();
         });
     }
+
+    return true;
 }
 
 }  // namespace gamenet::net

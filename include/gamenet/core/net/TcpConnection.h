@@ -74,6 +74,7 @@ private:
     void sendInLoop(const char* data, std::size_t len);
     void shutdownInLoop();
     void forceCloseInLoop();
+    void finishClose();
     void queueWriteComplete();
     void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen);
     void setState(StateE state) noexcept;
@@ -99,6 +100,8 @@ private:
     std::any context_;
     bool channelAdded_{false};
     bool channelRemoved_{false};
+    bool forceClosePending_{false};
+    TcpConnectionPtr forceCloseGuard_;
 };
 
 }  // namespace gamenet::net

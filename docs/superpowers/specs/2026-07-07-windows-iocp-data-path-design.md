@@ -224,9 +224,9 @@ green Windows runtime contracts in this order:
 
 The IOCP data path has been implemented for the current Reactor / TCP
 foundation and is represented by the `windows-msvc` workflow job. Local VS2026
-Debug verification has reached 29/29 configured CTest tests and the Windows
+Debug verification has reached 37/37 configured CTest tests and the Windows
 install/package consumer gate also passes through `find_package(GameNetCore)`
-and `GameNet::core`. The remote green status is established by pull request or manual workflow execution.
+and `GameNet::core`. The remote green status is established by ci #17 on main.
 
 ## Compatibility
 
@@ -241,8 +241,8 @@ for the current core target and do not expose higher protocol concepts.
 - Windows IOCP wakeup remains green.
 - Windows accept/connect/read/write use posted overlapped operations.
 - Existing lifecycle and callback ordering contracts pass on Windows.
-- Full Windows CTest reaches 29/29 for the current test set before the Windows
+- Full Windows CTest reaches 37/37 for the current test set before the Windows
   workflow gate is treated as green.
 - Documentation states that Windows support is represented by the
-  `windows-msvc` workflow job, with remote green status established by pull
-  request or manual workflow execution.
+  `windows-msvc` workflow job, with remote green status established by ci #17
+  on main.

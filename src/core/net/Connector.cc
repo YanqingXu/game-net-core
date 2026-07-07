@@ -25,6 +25,7 @@ struct Connector::IocpConnectState {
     IocpOperation operation{};
     LPFN_CONNECTEX connectEx{nullptr};
     bool pending{false};
+    bool canceling{false};
 
     IocpConnectState() {
         operation.kind = IocpOperationKind::Connect;
@@ -140,6 +141,11 @@ void Connector::stopInLoop() {
         connectTimeoutTimerId_ = {};
     }
     if (state_ == kConnecting) {
+#ifdef _WIN32
+        if (channel_ && cancelPendingConnectInLoop(channel_->fd())) {
+            return;
+        }
+#endif
         state_ = kDisconnected;
         const SocketFd sockfd = removeAndResetChannel();
         sockets::close(sockfd);
@@ -235,6 +241,10 @@ void Connector::handleWrite() {
 #ifdef _WIN32
     if (iocpConnect_) {
         iocpConnect_->pending = false;
+        if (iocpConnect_->canceling || !connect_) {
+            finishCancelInLoop();
+            return;
+        }
         if (iocpConnect_->operation.error != 0) {
             handleError();
             return;
@@ -312,6 +322,10 @@ void Connector::handleError() {
 #ifdef _WIN32
     if (iocpConnect_) {
         iocpConnect_->pending = false;
+        if (iocpConnect_->canceling || !connect_) {
+            finishCancelInLoop();
+            return;
+        }
     }
 #endif
 
@@ -372,6 +386,56 @@ void Connector::retry(SocketFd sockfd) {
         retryDelayMs_ = std::min(retryDelayMs_ * 2, maxRetryDelayMs_);
     }
 }
+
+#ifdef _WIN32
+
+bool Connector::cancelPendingConnectInLoop(SocketFd sockfd) noexcept {
+    if (!iocpConnect_ || !iocpConnect_->pending) {
+        return false;
+    }
+
+    iocpConnect_->canceling = true;
+    if (!connectStopGuard_) {
+        connectStopGuard_ = shared_from_this();
+    }
+
+    if (::CancelIoEx(reinterpret_cast<HANDLE>(sockfd), &iocpConnect_->operation.overlapped) != FALSE) {
+        return true;
+    }
+
+    const DWORD error = ::GetLastError();
+    if (error == ERROR_NOT_FOUND || error == ERROR_INVALID_HANDLE) {
+        iocpConnect_->pending = false;
+        iocpConnect_->canceling = false;
+        connectStopGuard_.reset();
+        return false;
+    }
+
+    return true;
+}
+
+void Connector::finishCancelInLoop() {
+    loop_->assertInLoopThread();
+
+    if (connectTimeoutTimerId_.valid()) {
+        loop_->cancel(connectTimeoutTimerId_);
+        connectTimeoutTimerId_ = {};
+    }
+
+    if (state_ == kConnecting && channel_) {
+        const SocketFd sockfd = removeAndResetChannel();
+        sockets::close(sockfd);
+    }
+
+    state_ = kDisconnected;
+    if (iocpConnect_) {
+        iocpConnect_->pending = false;
+        iocpConnect_->canceling = false;
+    }
+    connectStopGuard_.reset();
+}
+
+#endif
 
 SocketFd Connector::removeAndResetChannel() {
     channel_->disableAll();

@@ -83,6 +83,8 @@ Exposed through EventLoop:
 - repeating timer fires multiple times and can be canceled
 - cross-thread runAfter marshals back and fires on the owner loop thread
 - cancel before expiration prevents callback execution
+- canceling a ready timer from an earlier ready callback prevents the canceled
+  callback from firing
 - timer queue teardown owns only timer metadata and does not leave backend registration behind
 
 ---

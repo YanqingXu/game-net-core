@@ -199,6 +199,10 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
             messageCallback_(shared_from_this(), &inputBuffer_);
         }
 #ifdef _WIN32
+        if (forceClosePending_) {
+            handleClose();
+            return;
+        }
         if (state_ == kConnected) {
             iocpTransport_->startRead();
         }
@@ -229,6 +233,12 @@ void TcpConnection::handleWrite() {
 #endif
     if (n > 0) {
         outputBuffer_.retrieve(static_cast<std::size_t>(n));
+#ifdef _WIN32
+        if (forceClosePending_) {
+            handleClose();
+            return;
+        }
+#endif
         if (outputBuffer_.readableBytes() == 0) {
             channel_->disableWriting();
             queueWriteComplete();
@@ -254,7 +264,29 @@ void TcpConnection::handleClose() {
         return;
     }
 
+#ifdef _WIN32
+    if (iocpTransport_->hasPendingOperations()) {
+        if (!forceClosePending_) {
+            forceCloseGuard_ = shared_from_this();
+        }
+        forceClosePending_ = true;
+        setState(kDisconnecting);
+        iocpTransport_->cancelPendingOperations(channel_->fd());
+        return;
+    }
+#endif
+
+    finishClose();
+}
+
+void TcpConnection::finishClose() {
+    loop_->assertInLoopThread();
+    if (state_ == kDisconnected) {
+        return;
+    }
+
     setState(kDisconnected);
+    forceClosePending_ = false;
     channel_->disableAll();
 
     auto self = shared_from_this();
@@ -264,6 +296,7 @@ void TcpConnection::handleClose() {
     if (closeCallback_) {
         closeCallback_(self);
     }
+    forceCloseGuard_.reset();
 }
 
 void TcpConnection::handleError(int savedErrno) {

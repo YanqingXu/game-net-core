@@ -24,6 +24,7 @@ def main() -> None:
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
     tcp_transport = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport.h"
     tcp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
+    poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
     poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
@@ -96,6 +97,13 @@ def main() -> None:
     require(tcp_transport_source_text, "WSASend", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Read", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Write", tcp_transport_source)
+
+    poller_header_text = poller_header.read_text(encoding="utf-8")
+    require(poller_header_text, "Windows IOCP backend for EventLoop", poller_header)
+    require(poller_header_text, "loop-owned IocpOperation metadata", poller_header)
+    assert "skeleton" not in poller_header_text.lower(), (
+        "IocpPoller comments must describe the active data path, not the old skeleton milestone"
+    )
 
     poller_text = poller_source.read_text(encoding="utf-8")
     require(poller_text, "reinterpret_cast<IocpOperation*>", poller_source)

@@ -73,6 +73,10 @@ private:
     void handleError();
     void handleConnectTimeout();
     void retry(SocketFd sockfd);
+#ifdef _WIN32
+    bool cancelPendingConnectInLoop(SocketFd sockfd) noexcept;
+    void finishCancelInLoop();
+#endif
     SocketFd removeAndResetChannel();
     void resetChannel();
 
@@ -87,6 +91,7 @@ private:
 #ifdef _WIN32
     struct IocpConnectState;
     std::unique_ptr<IocpConnectState> iocpConnect_;
+    std::shared_ptr<Connector> connectStopGuard_;
 #endif
     Duration retryDelayMs_;
     Duration maxRetryDelayMs_;

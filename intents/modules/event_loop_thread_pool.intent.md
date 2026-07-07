@@ -45,6 +45,8 @@ EventLoopThread workers and returning loops for connection assignment.
 - multi-thread start publishes the configured worker loops
 - getNextLoop rotates through workers predictably
 - stop() quits all worker loops and clears thread/loop containers
+- cross-thread queued work reaches each published worker loop under a light
+  soak and does not run on the base loop when workers are configured
 
 ---
 

@@ -13,10 +13,10 @@
 ## Implementation status
 
 This plan has been executed through the current Reactor / TCP IOCP data path.
-The local VS2026 Debug gate configures, builds, and passes 29/29 configured
+The local VS2026 Debug gate configures, builds, and passes 37/37 configured
 CTest tests; the Windows install/package consumer gate also passes through
 `find_package(GameNetCore)` and `GameNet::core`; and the `windows-msvc` workflow job now represents the Windows CI gate.
-The remote green status is established by pull request or manual workflow execution.
+The remote green status is established by ci #17 on main.
 
 ## File Structure
 
@@ -1133,7 +1133,7 @@ Run:
 & 'D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe' --test-dir build-local-vs2026 -C Debug --output-on-failure --timeout 10
 ```
 
-Expected: 29/29 tests pass. If fewer than 29 pass, keep Windows support deferred and update the milestone with the exact failing tests.
+Expected: 37/37 tests pass. If fewer than 37 pass, keep Windows support deferred and update the milestone with the exact failing tests.
 
 - [ ] **Step 2: Run repository guards**
 
@@ -1165,7 +1165,7 @@ If full Windows CTest passes, replace the current Windows status paragraph with:
 
 ```markdown
 - Windows: Windows support remains intentionally staged, but the local VS2026
-  Debug IOCP gate now configures, builds, and passes 29/29 configured CTest
+  Debug IOCP gate now configures, builds, and passes 37/37 configured CTest
   tests. Windows CI can be proposed after the install/package consumer gate is
   verified on Windows and the milestone document is updated with that evidence.
 ```

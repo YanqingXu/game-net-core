@@ -29,9 +29,6 @@ HANDLE createCompletionPortOrDie() {
 }
 
 uint32_t completionEvents(const IocpOperation& operation) noexcept {
-    if (operation.error != 0) {
-        return Channel::kErrorEvent | Channel::kCloseEvent;
-    }
     switch (operation.kind) {
     case IocpOperationKind::Accept:
     case IocpOperationKind::Read:

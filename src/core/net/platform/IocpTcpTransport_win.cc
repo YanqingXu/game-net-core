@@ -110,6 +110,28 @@ bool IocpTcpTransport::writePending() const noexcept {
     return writePending_;
 }
 
+bool IocpTcpTransport::hasPendingOperations() const noexcept {
+    return readPending_ || writePending_;
+}
+
+void IocpTcpTransport::cancelPendingOperations(SocketFd sockfd) noexcept {
+    auto cancelOne = [sockfd](bool pending, OVERLAPPED* overlapped) noexcept {
+        if (!pending) {
+            return;
+        }
+        if (::CancelIoEx(reinterpret_cast<HANDLE>(sockfd), overlapped) != FALSE) {
+            return;
+        }
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_NOT_FOUND || error == ERROR_INVALID_HANDLE) {
+            return;
+        }
+    };
+
+    cancelOne(readPending_, &readOperation_.overlapped);
+    cancelOne(writePending_, &writeOperation_.overlapped);
+}
+
 }  // namespace gamenet::net
 
 #endif

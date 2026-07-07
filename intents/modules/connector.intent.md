@@ -105,6 +105,8 @@ Transitions:
 - successful connect delivers fd through callback on owner loop thread
 - connect failure triggers retry with configured backoff delay
 - stop() during pending connect closes socket and removes Channel
+- stop() during pending Windows ConnectEx cancels and drains the completion
+  before releasing connector-owned Channel / operation storage
 - stop() during pending retry cancels timer
 - destroy during kConnecting state does not leak fd
 - self-connect is detected and triggers retry

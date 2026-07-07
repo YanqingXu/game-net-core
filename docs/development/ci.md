@@ -17,6 +17,8 @@ The `ci` workflow validates:
   to the IOCP backend and the Windows MSVC workflow gate.
 - Windows IOCP data-path guard for the planned overlapped operation layer,
   socket extension helpers, and completion metadata translation.
+- EventLoopThreadPool contract guard for queued-work race/soak coverage.
+- TimerQueue contract guard for ready-timer cancellation races.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core library build.
@@ -45,11 +47,13 @@ python3 tests/scope/test_intent_consistency.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
 python3 tests/cmake/test_install_package_contract.py
+python3 tests/cmake/test_event_loop_thread_pool_contracts.py
 python3 tests/cmake/test_migration_status_contract.py
 python3 tests/cmake/test_msvc_utf8_contract.py
 python3 tests/cmake/test_platform_backend_contract.py
 python3 tests/cmake/test_tcp_lifecycle_contracts.py
 python3 tests/cmake/test_tcp_connection_context_contract.py
+python3 tests/cmake/test_timer_queue_contracts.py
 python3 tests/cmake/test_windows_iocp_milestone_contract.py
 python3 tests/cmake/test_windows_iocp_data_path_contract.py
 python3 tests/cmake/test_release_safe_tests.py
@@ -148,11 +152,13 @@ py -3 tests\scope\test_intent_consistency.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
 py -3 tests\cmake\test_install_package_contract.py
+py -3 tests\cmake\test_event_loop_thread_pool_contracts.py
 py -3 tests\cmake\test_migration_status_contract.py
 py -3 tests\cmake\test_msvc_utf8_contract.py
 py -3 tests\cmake\test_platform_backend_contract.py
 py -3 tests\cmake\test_tcp_lifecycle_contracts.py
 py -3 tests\cmake\test_tcp_connection_context_contract.py
+py -3 tests\cmake\test_timer_queue_contracts.py
 py -3 tests\cmake\test_windows_iocp_milestone_contract.py
 py -3 tests\cmake\test_windows_iocp_data_path_contract.py
 py -3 tests\cmake\test_release_safe_tests.py

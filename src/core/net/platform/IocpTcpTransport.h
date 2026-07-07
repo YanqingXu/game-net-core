@@ -22,6 +22,8 @@ public:
     void startWrite(const char* data, std::size_t len);
     ssize_t completeWrite(int* savedErrno);
     bool writePending() const noexcept;
+    bool hasPendingOperations() const noexcept;
+    void cancelPendingOperations(SocketFd sockfd) noexcept;
 
 private:
     Channel* channel_;

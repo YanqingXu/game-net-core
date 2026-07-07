@@ -42,7 +42,7 @@ private:
     void newConnection(SocketFd sockfd, const InetAddress& peerAddr);
     void removeConnection(const TcpConnectionPtr& connection);
     void removeConnectionInLoop(const TcpConnectionPtr& connection);
-    void forceCloseAllConnections();
+    bool forceCloseAllConnections();
 
     EventLoop* loop_;
     std::string name_;
