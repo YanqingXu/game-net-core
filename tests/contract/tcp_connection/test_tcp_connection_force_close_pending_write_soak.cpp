@@ -43,6 +43,7 @@ void setSmallSendBuffer(gamenet::net::SocketFd sockfd) {
     const int rc = ::setsockopt(
         sockfd,
         SOL_SOCKET,
+        SO_SNDBUF,
         &bufferSize,
         static_cast<socklen_t>(sizeof(bufferSize)));
 #endif

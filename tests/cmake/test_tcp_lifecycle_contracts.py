@@ -973,6 +973,12 @@ def main() -> None:
         require(pending_write_socketpair_text, "setNonBlockingForTest(connectionFd);", pending_write_socketpair_test)
         require(pending_write_socketpair_text, "setNonBlockingForTest(peerFd);", pending_write_socketpair_test)
         require(pending_write_socketpair_text, "setSmallSendBuffer(connectionFd);", pending_write_socketpair_test)
+        require(
+            pending_write_socketpair_text,
+            "SO_SNDBUF,\n        reinterpret_cast<const char*>(&bufferSize)",
+            pending_write_socketpair_test,
+        )
+        require(pending_write_socketpair_text, "SO_SNDBUF,\n        &bufferSize", pending_write_socketpair_test)
 
     tcp_client_intent_text = tcp_client_intent.read_text(encoding="utf-8")
     require(tcp_client_intent_text, "stop() cancels pending retry", tcp_client_intent)
