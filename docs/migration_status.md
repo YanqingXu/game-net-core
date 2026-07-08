@@ -48,14 +48,38 @@ foundation: 7 unit tests, 48 contract tests, and 1 integration test.
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, TCP lifecycle contract guard, TcpConnection context contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure.
 - Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, client retry stop race, client retry-stop soak, client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client cross-thread active connect, peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, high-water mark notification, repeated forceClose idempotence, cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
+- Test support hardening: repeated TcpConnection lifecycle/race setup now uses
+  shared tests/support helpers. `SocketPair.h` centralizes socketpair,
+  nonblocking, and small-send-buffer setup; `TcpConnectionCallbacks.h`
+  centralizes owner-loop connection/disconnection/close callback counting for
+  force-close contracts; and `LoopTest.h` centralizes EventLoop watchdog
+  execution for those lifecycle tests.
 - Sanitizers: CI includes an ASan/UBSan Debug build and CTest job for the
   Reactor / TCP foundation. The worktree also defines a Linux TSan
   race-oriented threading test gate for thread-affinity and lifecycle risks.
+- Long soak: this worktree adds a non-default `long-soak` workflow. It is
+  manual-only through `workflow_dispatch` and runs the `threading` CTest slice
+  with `ctest --repeat until-fail` so mixed-timing lifecycle contracts can
+  gather stronger soak evidence without blocking ordinary push or pull-request
+  CI. Local Windows Debug long-soak smoke also passes for
+  `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:3 --timeout 30`;
+  36/36 threading-labeled tests passed across 3 repeats on 2026-07-08. This is
+  local soak evidence only; remote `long-soak` workflow evidence remains
+  pending until the manual workflow is run on GitHub.
 - Release: CI includes a Release build and CTest gate for the Reactor / TCP
   foundation. C++ tests use a Release-safe helper instead of standard `assert`
-  so contract checks remain active with `NDEBUG`.
+  so contract checks remain active with `NDEBUG`. Local Windows Release
+  evidence now also passes after shortening generated CMake test target names
+  to keep MSBuild `.tlog` paths below Windows path-length limits:
+  `cmake --build build-release --config Release --parallel` succeeds, and
+  `ctest --test-dir build-release -C Release --output-on-failure --timeout 10`
+  reports 56/56 Release tests passed.
 - Install/package: CI installs the core target and builds an external consumer
-  fixture through `find_package(GameNetCore)` and `GameNet::core`.
+  fixture through `find_package(GameNetCore)` and `GameNet::core`. Release
+  install/package consumer also passes locally: the Release build installs to
+  `build-release/_install`, the external fixture configures into
+  `build-release-install-consumer`, builds in Release, and the
+  `gamenet_install_consumer` executable exits 0.
 - Windows: Windows support is now represented by a `windows-msvc` workflow job
   for the Reactor / TCP IOCP backend. Local VS2026 Debug configure/build
   succeeds after the MSVC `/utf-8` and `/FS` compile options were added, and a

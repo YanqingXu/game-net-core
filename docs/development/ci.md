@@ -12,6 +12,9 @@ The `ci` workflow validates:
 - MSVC `/utf-8` and `/FS` compile-option guard so Windows builds parse UTF-8
   source/header comments consistently and parallel Debug builds serialize PDB
   writes safely.
+- Short generated CMake test target names so verbose contract test identifiers
+  remain visible in CTest while MSBuild intermediate `.tlog` paths stay below
+  Windows path-length limits.
 - Windows IOCP milestone guard for
   `docs/development/windows_iocp_milestone.md`, keeping Windows support tied
   to the IOCP backend and the Windows MSVC workflow gate.
@@ -20,6 +23,7 @@ The `ci` workflow validates:
 - EventLoopThreadPool contract guard for queued-work race/soak coverage.
 - TimerQueue contract guard for ready-timer cancellation races.
 - Threading gate contract guard for the race-oriented TSan test selection.
+- Long-soak workflow guard for the non-default repeated threading contract gate.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core library build.
@@ -61,6 +65,7 @@ python3 tests/cmake/test_windows_iocp_milestone_contract.py
 python3 tests/cmake/test_windows_iocp_data_path_contract.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
+python3 tests/ci/test_long_soak_workflow.py
 ```
 
 It fails the workflow if active intents use legacy `mini/net` paths, or if
@@ -109,6 +114,22 @@ ctest --test-dir build-release --output-on-failure
 The C++ tests use the `tests/support/TestAssert.h` helper instead of standard
 `assert`, so contract checks remain active when Release builds define `NDEBUG`.
 Debug, ASan/UBSan, and Release jobs are all test-execution gates.
+
+## Non-Default Long Soak
+
+The `long-soak` workflow is manual-only through `workflow_dispatch`; it is not
+attached to `push` or `pull_request`. It complements the regular CI and TSan
+jobs by rebuilding the core target and repeatedly running the `threading`
+contract slice:
+
+```bash
+cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+cmake --build build-long-soak --parallel
+ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:<repeat> --timeout <timeout_seconds>
+```
+
+Use it for phase hardening evidence when mixed-timing lifecycle contracts need
+more iteration than the ordinary PR gate should spend.
 
 ## Install Package Gate
 
@@ -191,6 +212,7 @@ py -3 tests\cmake\test_windows_iocp_milestone_contract.py
 py -3 tests\cmake\test_windows_iocp_data_path_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
+py -3 tests\ci\test_long_soak_workflow.py
 ```
 
 The local command and CI workflow should stay aligned so test results remain

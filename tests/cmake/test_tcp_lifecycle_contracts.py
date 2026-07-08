@@ -172,6 +172,9 @@ def main() -> None:
     )
     iocp_transport_header = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport.h"
     iocp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
+    loop_test_helper = repo_root / "tests" / "support" / "LoopTest.h"
+    tcp_connection_callbacks_helper = repo_root / "tests" / "support" / "TcpConnectionCallbacks.h"
+    socket_pair_helper = repo_root / "tests" / "support" / "SocketPair.h"
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
     tcp_connection_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpConnection.h"
     tcp_client_source = repo_root / "src" / "core" / "net" / "TcpClient.cc"
@@ -282,6 +285,11 @@ def main() -> None:
         f"{server_stop_from_worker_callback_soak_test}"
     )
     assert connection_lifecycle_test.exists(), f"missing TCP connection lifecycle contract: {connection_lifecycle_test}"
+    assert loop_test_helper.exists(), f"missing shared EventLoop test helper: {loop_test_helper}"
+    assert tcp_connection_callbacks_helper.exists(), (
+        f"missing shared TcpConnection callback test helper: {tcp_connection_callbacks_helper}"
+    )
+    assert socket_pair_helper.exists(), f"missing shared socket pair test helper: {socket_pair_helper}"
 
     test_text = server_stop_test.read_text(encoding="utf-8")
     require(test_text, "stop-reentrant-disconnect", server_stop_test)
@@ -715,8 +723,7 @@ def main() -> None:
     repeated_force_close_text = connection_repeated_force_close_test.read_text(encoding="utf-8")
     require(repeated_force_close_text, "repeated-force-close-is-idempotent", connection_repeated_force_close_test)
     require(repeated_force_close_text, "conn->forceClose();", connection_repeated_force_close_test)
-    require(repeated_force_close_text, "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)", connection_repeated_force_close_test)
-    require(repeated_force_close_text, "GAMENET_TEST_ASSERT(closeCallbackCount == 1)", connection_repeated_force_close_test)
+    require(repeated_force_close_text, "assertSingleConnectDisconnectClose(callbacks)", connection_repeated_force_close_test)
     require(repeated_force_close_text, "conn->connectDestroyed();", connection_repeated_force_close_test)
 
     cross_thread_force_close_soak_text = connection_cross_thread_force_close_soak_test.read_text(encoding="utf-8")
@@ -730,12 +737,7 @@ def main() -> None:
     require(cross_thread_force_close_soak_text, "conn->forceClose();", connection_cross_thread_force_close_soak_test)
     require(
         cross_thread_force_close_soak_text,
-        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
-        connection_cross_thread_force_close_soak_test,
-    )
-    require(
-        cross_thread_force_close_soak_text,
-        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        "assertSingleConnectDisconnectClose(callbacks)",
         connection_cross_thread_force_close_soak_test,
     )
     require(cross_thread_force_close_soak_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", connection_cross_thread_force_close_soak_test)
@@ -750,7 +752,7 @@ def main() -> None:
     require(force_close_pending_read_text, "conn->forceClose();", connection_force_close_pending_read_test)
     require(force_close_pending_read_text, "conn->connectDestroyed();", connection_force_close_pending_read_test)
     require(force_close_pending_read_text, "connection.reset();", connection_force_close_pending_read_test)
-    require(force_close_pending_read_text, "GAMENET_TEST_ASSERT(closeCallbackCount == 1)", connection_force_close_pending_read_test)
+    require(force_close_pending_read_text, "assertSingleConnectDisconnectClose(callbacks)", connection_force_close_pending_read_test)
     require(force_close_pending_read_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", connection_force_close_pending_read_test)
 
     cross_thread_force_close_pending_read_text = connection_cross_thread_force_close_pending_read_test.read_text(
@@ -769,12 +771,7 @@ def main() -> None:
     require(cross_thread_force_close_pending_read_text, "connection.reset();", connection_cross_thread_force_close_pending_read_test)
     require(
         cross_thread_force_close_pending_read_text,
-        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
-        connection_cross_thread_force_close_pending_read_test,
-    )
-    require(
-        cross_thread_force_close_pending_read_text,
-        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        "assertSingleConnectDisconnectClose(callbacks)",
         connection_cross_thread_force_close_pending_read_test,
     )
     require(
@@ -823,12 +820,7 @@ def main() -> None:
     )
     require(
         force_close_pending_read_mixed_timing_soak_text,
-        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
-        connection_force_close_pending_read_mixed_timing_soak_test,
-    )
-    require(
-        force_close_pending_read_mixed_timing_soak_text,
-        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        "assertSingleConnectDisconnectClose(callbacks)",
         connection_force_close_pending_read_mixed_timing_soak_test,
     )
     require(
@@ -848,12 +840,7 @@ def main() -> None:
     require(force_close_pending_write_soak_text, "conn->forceClose();", connection_force_close_pending_write_soak_test)
     require(
         force_close_pending_write_soak_text,
-        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
-        connection_force_close_pending_write_soak_test,
-    )
-    require(
-        force_close_pending_write_soak_text,
-        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        "assertSingleConnectDisconnectClose(callbacks)",
         connection_force_close_pending_write_soak_test,
     )
     require(
@@ -902,12 +889,7 @@ def main() -> None:
     )
     require(
         force_close_pending_write_mixed_timing_soak_text,
-        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
-        connection_force_close_pending_write_mixed_timing_soak_test,
-    )
-    require(
-        force_close_pending_write_mixed_timing_soak_text,
-        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        "assertSingleConnectDisconnectClose(callbacks)",
         connection_force_close_pending_write_mixed_timing_soak_test,
     )
     require(
@@ -929,12 +911,7 @@ def main() -> None:
     require(cross_thread_force_close_pending_write_text, "conn->forceClose();", connection_cross_thread_force_close_pending_write_test)
     require(
         cross_thread_force_close_pending_write_text,
-        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
-        connection_cross_thread_force_close_pending_write_test,
-    )
-    require(
-        cross_thread_force_close_pending_write_text,
-        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        "assertSingleConnectDisconnectClose(callbacks)",
         connection_cross_thread_force_close_pending_write_test,
     )
     require(
@@ -963,22 +940,73 @@ def main() -> None:
     ):
         socketpair_text = socketpair_test.read_text(encoding="utf-8")
         require(socketpair_text, '#include "gamenet/core/net/SocketTypes.h"', socketpair_test)
+        if socketpair_test == connection_peer_reset_test:
+            continue
+        require(socketpair_text, '#include "support/SocketPair.h"', socketpair_test)
+        require(socketpair_text, "gamenet::test::ConnectedSocketPair pair", socketpair_test)
 
-    for pending_write_socketpair_test in (
+    socket_pair_helper_text = socket_pair_helper.read_text(encoding="utf-8")
+    require(socket_pair_helper_text, "enum class SocketPairMode", socket_pair_helper)
+    require(socket_pair_helper_text, "ConnectedSocketPair", socket_pair_helper)
+    require(socket_pair_helper_text, "setNonBlockingForTest(connectionFd);", socket_pair_helper)
+    require(socket_pair_helper_text, "setNonBlockingForTest(peerFd);", socket_pair_helper)
+    require(socket_pair_helper_text, "setSmallSendBufferForTest(connectionFd);", socket_pair_helper)
+
+    tcp_connection_callbacks_helper_text = tcp_connection_callbacks_helper.read_text(encoding="utf-8")
+    require(tcp_connection_callbacks_helper_text, "struct TcpConnectionCallbackCounts", tcp_connection_callbacks_helper)
+    require(tcp_connection_callbacks_helper_text, "setCountingConnectionCallback", tcp_connection_callbacks_helper)
+    require(tcp_connection_callbacks_helper_text, "assertSingleConnectDisconnectClose", tcp_connection_callbacks_helper)
+
+    loop_test_helper_text = loop_test_helper.read_text(encoding="utf-8")
+    require(loop_test_helper_text, "runLoopWithTimeout", loop_test_helper)
+    require(loop_test_helper_text, "GAMENET_TEST_FAIL(message)", loop_test_helper)
+
+    for counting_callback_test in (
+        connection_repeated_force_close_test,
+        connection_cross_thread_force_close_soak_test,
+        connection_force_close_pending_read_test,
+        connection_cross_thread_force_close_pending_read_test,
+        connection_force_close_pending_read_mixed_timing_soak_test,
         connection_force_close_pending_write_soak_test,
         connection_force_close_pending_write_mixed_timing_soak_test,
         connection_cross_thread_force_close_pending_write_test,
     ):
-        pending_write_socketpair_text = pending_write_socketpair_test.read_text(encoding="utf-8")
-        require(pending_write_socketpair_text, "setNonBlockingForTest(connectionFd);", pending_write_socketpair_test)
-        require(pending_write_socketpair_text, "setNonBlockingForTest(peerFd);", pending_write_socketpair_test)
-        require(pending_write_socketpair_text, "setSmallSendBuffer(connectionFd);", pending_write_socketpair_test)
+        counting_callback_text = counting_callback_test.read_text(encoding="utf-8")
+        require(counting_callback_text, '#include "support/TcpConnectionCallbacks.h"', counting_callback_test)
+        require(counting_callback_text, "gamenet::test::TcpConnectionCallbackCounts callbacks", counting_callback_test)
+        require(counting_callback_text, "gamenet::test::setCountingConnectionCallback", counting_callback_test)
+        require(counting_callback_text, "gamenet::test::assertSingleConnectDisconnectClose(callbacks)", counting_callback_test)
+
+    for loop_watchdog_test in (
+        connection_repeated_force_close_test,
+        connection_cross_thread_force_close_soak_test,
+        connection_force_close_pending_read_test,
+        connection_cross_thread_force_close_pending_read_test,
+        connection_force_close_pending_read_mixed_timing_soak_test,
+        connection_force_close_pending_write_soak_test,
+        connection_force_close_pending_write_mixed_timing_soak_test,
+        connection_cross_thread_force_close_pending_write_test,
+    ):
+        loop_watchdog_text = loop_watchdog_test.read_text(encoding="utf-8")
+        require(loop_watchdog_text, '#include "support/LoopTest.h"', loop_watchdog_test)
+        require(loop_watchdog_text, "gamenet::test::runLoopWithTimeout", loop_watchdog_test)
+
+    for small_buffer_socketpair_test in (
+        connection_shutdown_pending_test,
+        connection_cross_thread_shutdown_test,
+        connection_high_water_test,
+        connection_force_close_pending_write_soak_test,
+        connection_force_close_pending_write_mixed_timing_soak_test,
+        connection_cross_thread_force_close_pending_write_test,
+    ):
+        small_buffer_socketpair_text = small_buffer_socketpair_test.read_text(encoding="utf-8")
+        require(small_buffer_socketpair_text, '#include "support/SocketPair.h"', small_buffer_socketpair_test)
+        require(small_buffer_socketpair_text, "gamenet::test::ConnectedSocketPair pair(", small_buffer_socketpair_test)
         require(
-            pending_write_socketpair_text,
-            "SO_SNDBUF,\n        reinterpret_cast<const char*>(&bufferSize)",
-            pending_write_socketpair_test,
+            small_buffer_socketpair_text,
+            "gamenet::test::SocketPairMode::SmallSendBuffer",
+            small_buffer_socketpair_test,
         )
-        require(pending_write_socketpair_text, "SO_SNDBUF,\n        &bufferSize", pending_write_socketpair_test)
 
     tcp_client_intent_text = tcp_client_intent.read_text(encoding="utf-8")
     require(tcp_client_intent_text, "stop() cancels pending retry", tcp_client_intent)

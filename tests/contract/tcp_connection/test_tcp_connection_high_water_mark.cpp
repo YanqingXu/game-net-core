@@ -5,86 +5,16 @@
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/SocketsOps.h"
 
+#include "support/SocketPair.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <cstddef>
 #include <memory>
 #include <string>
 
-#ifndef _WIN32
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
-
-namespace {
-
-void setNonBlockingForTest(gamenet::net::SocketFd sockfd) {
-#ifndef _WIN32
-    const int flags = ::fcntl(sockfd, F_GETFL, 0);
-    GAMENET_TEST_ASSERT(flags >= 0);
-    GAMENET_TEST_ASSERT(::fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == 0);
-#else
-    (void)sockfd;
-#endif
-}
-
-void setSmallSendBuffer(gamenet::net::SocketFd sockfd) {
-    int bufferSize = 4096;
-#ifdef _WIN32
-    const int rc = ::setsockopt(
-        sockfd,
-        SOL_SOCKET,
-        SO_SNDBUF,
-        reinterpret_cast<const char*>(&bufferSize),
-        static_cast<socklen_t>(sizeof(bufferSize)));
-#else
-    const int rc = ::setsockopt(
-        sockfd,
-        SOL_SOCKET,
-        SO_SNDBUF,
-        &bufferSize,
-        static_cast<socklen_t>(sizeof(bufferSize)));
-#endif
-    GAMENET_TEST_ASSERT(rc == 0);
-}
-
-struct ConnectedPair {
-    gamenet::net::SocketFd connectionFd{gamenet::net::kInvalidSocket};
-    gamenet::net::SocketFd peerFd{gamenet::net::kInvalidSocket};
-
-    ConnectedPair() {
-#ifdef _WIN32
-        gamenet::net::SocketFd fds[2]{
-            gamenet::net::kInvalidSocket,
-            gamenet::net::kInvalidSocket,
-        };
-        gamenet::net::sockets::createSocketPairOrDie(fds);
-        connectionFd = fds[0];
-        peerFd = fds[1];
-#else
-        int fds[2];
-        GAMENET_TEST_ASSERT(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
-        connectionFd = fds[0];
-        peerFd = fds[1];
-#endif
-        setNonBlockingForTest(connectionFd);
-        setNonBlockingForTest(peerFd);
-        setSmallSendBuffer(connectionFd);
-    }
-
-    ~ConnectedPair() {
-        if (gamenet::net::sockets::isValid(peerFd)) {
-            gamenet::net::sockets::close(peerFd);
-        }
-    }
-};
-
-}  // namespace
-
 int main() {
     gamenet::net::EventLoop loop;
-    ConnectedPair pair;
+    gamenet::test::ConnectedSocketPair pair(gamenet::test::SocketPairMode::SmallSendBuffer);
 
     const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
     const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));

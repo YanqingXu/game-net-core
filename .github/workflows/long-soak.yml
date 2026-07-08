@@ -1,0 +1,74 @@
+name: long-soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: CTest repeat count for threading contracts
+        required: true
+        default: "20"
+      timeout_seconds:
+        description: Per-test timeout in seconds
+        required: true
+        default: "60"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-long-soak:
+    name: Linux long-soak threading contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          cmake --version
+          c++ --version
+
+      - name: Check repository guards
+        run: |
+          python3 tests/scope/test_scope_guard.py
+          python3 tests/scope/test_intent_consistency.py
+          python3 tools/check_scope_boundaries.py
+          python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_event_loop_thread_pool_contracts.py
+          python3 tests/cmake/test_migration_status_contract.py
+          python3 tests/cmake/test_msvc_utf8_contract.py
+          python3 tests/cmake/test_platform_backend_contract.py
+          python3 tests/cmake/test_tcp_lifecycle_contracts.py
+          python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_timer_queue_contracts.py
+          python3 tests/cmake/test_threading_gate_contracts.py
+          python3 tests/cmake/test_windows_iocp_milestone_contract.py
+          python3 tests/cmake/test_windows_iocp_data_path_contract.py
+          python3 tests/cmake/test_release_safe_tests.py
+          python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-long-soak
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build
+        run: cmake --build build-long-soak --parallel
+
+      - name: Repeated threading CTest
+        run: >
+          ctest --test-dir build-long-soak --output-on-failure
+          -L threading
+          --repeat until-fail:${{ inputs.repeat }}
+          --timeout ${{ inputs.timeout_seconds }}

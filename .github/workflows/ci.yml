@@ -49,6 +49,7 @@ jobs:
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
 
       - name: Configure
         run: >
@@ -104,6 +105,7 @@ jobs:
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
 
       - name: Configure
         run: >
@@ -152,6 +154,7 @@ jobs:
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
 
       - name: Configure
         run: >
@@ -200,6 +203,7 @@ jobs:
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
 
       - name: Configure
         run: >
@@ -249,6 +253,7 @@ jobs:
           python tests/cmake/test_windows_iocp_data_path_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
+          python tests/ci/test_long_soak_workflow.py
 
       - name: Configure
         shell: pwsh

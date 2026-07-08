@@ -1,8 +1,10 @@
 function(add_gamenet_test layer module source)
     get_filename_component(test_name "${source}" NAME_WE)
     string(REPLACE "/" "_" module_id "${module}")
-    set(target "${layer}_${module_id}_${test_name}")
     set(test_id "${layer}.${module}.${test_name}")
+    string(SHA1 test_hash "${test_id}")
+    string(SUBSTRING "${test_hash}" 0 10 test_hash_short)
+    set(target "gnt_${layer}_${module_id}_${test_hash_short}")
     set(test_labels ${layer} ${module} ${ARGN})
 
     add_executable(${target} ${source})

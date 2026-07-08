@@ -10,6 +10,7 @@ def require(text: str, needle: str, source: Path) -> None:
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
+    tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
@@ -20,6 +21,12 @@ def main() -> None:
     require(core_text, "PUBLIC", core_cmake)
     require(core_text, "$<$<CXX_COMPILER_ID:MSVC>:/FS>", core_cmake)
     require(core_text, "PRIVATE", core_cmake)
+
+    tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
+    require(tests_cmake_text, 'string(SHA1 test_hash "${test_id}")', tests_cmake)
+    require(tests_cmake_text, 'string(SUBSTRING "${test_hash}" 0 10 test_hash_short)', tests_cmake)
+    require(tests_cmake_text, 'set(target "gnt_${layer}_${module_id}_${test_hash_short}")', tests_cmake)
+    require(tests_cmake_text, 'add_test(NAME "${test_id}" COMMAND ${target})', tests_cmake)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "python3 tests/cmake/test_msvc_utf8_contract.py", workflow)
@@ -32,6 +39,7 @@ def main() -> None:
     require(ci_docs_text, "MSVC", ci_docs)
     require(ci_docs_text, "/utf-8", ci_docs)
     require(ci_docs_text, "/FS", ci_docs)
+    require(ci_docs_text, "Short generated CMake test target names", ci_docs)
 
 
 if __name__ == "__main__":
