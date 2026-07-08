@@ -64,6 +64,16 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - `tests/contract/tcp_server/test_tcp_server_stop_soak.cpp` repeats stop()
   from worker-owned connections and verifies worker-loop teardown completes
   before the thread pool is joined
+- `tests/contract/tcp_server/test_tcp_server_stop_multi_worker.cpp` verifies
+  base-loop stop() drains multiple worker-owned connections and leaves base-loop
+  bookkeeping empty after teardown converges
+- `tests/contract/tcp_server/test_tcp_server_stop_worker_active_write_soak.cpp`
+  repeats base-loop stop() while worker-owned connections have active writes and
+  verifies owner-loop teardown drains before base-loop bookkeeping reaches zero
+- `tests/contract/tcp_server/test_tcp_server_stop_from_worker_callback_soak.cpp`
+  repeats stop() re-entering from a worker-owned connection callback with
+  multiple worker-owned connections and verifies base-loop bookkeeping still
+  drains to zero
 
 ---
 

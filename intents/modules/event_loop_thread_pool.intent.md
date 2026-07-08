@@ -47,6 +47,9 @@ EventLoopThread workers and returning loops for connection assignment.
 - stop() quits all worker loops and clears thread/loop containers
 - cross-thread queued work reaches each published worker loop under a light
   soak and does not run on the base loop when workers are configured
+- `tests/contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp`
+  verifies repeated start/stop cycles publish worker loops, execute queued work
+  on workers, and return selection to base-loop fallback after stop()
 
 ---
 

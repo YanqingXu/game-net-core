@@ -38,10 +38,13 @@ TcpClient::~TcpClient() {
     }
 
     if (conn) {
-        conn->setCloseCallback({});
+        conn->setCloseCallback([](const TcpConnectionPtr& connection) {
+            connection->connectDestroyed();
+        });
         conn->getLoop()->runInLoop([conn] {
             if (!conn->disconnected()) {
                 conn->forceClose();
+                return;
             }
             conn->connectDestroyed();
         });

@@ -24,6 +24,23 @@ def main() -> None:
     server_stop_soak_test = (
         repo_root / "tests" / "contract" / "tcp_server" / "test_tcp_server_stop_soak.cpp"
     )
+    server_stop_multi_worker_test = (
+        repo_root / "tests" / "contract" / "tcp_server" / "test_tcp_server_stop_multi_worker.cpp"
+    )
+    server_stop_worker_active_write_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_server"
+        / "test_tcp_server_stop_worker_active_write_soak.cpp"
+    )
+    server_stop_from_worker_callback_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_server"
+        / "test_tcp_server_stop_from_worker_callback_soak.cpp"
+    )
     client_retry_stop_test = (
         repo_root / "tests" / "contract" / "tcp_client" / "test_tcp_client_retry_stop_race.cpp"
     )
@@ -32,6 +49,58 @@ def main() -> None:
     )
     client_stop_pending_connect_test = (
         repo_root / "tests" / "contract" / "tcp_client" / "test_tcp_client_stop_pending_connect.cpp"
+    )
+    client_stop_pending_connect_soak_test = (
+        repo_root / "tests" / "contract" / "tcp_client" / "test_tcp_client_stop_pending_connect_soak.cpp"
+    )
+    client_cross_thread_stop_pending_connect_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_cross_thread_stop_pending_connect.cpp"
+    )
+    client_stop_pending_connect_mixed_timing_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_stop_pending_connect_mixed_timing_soak.cpp"
+    )
+    client_destroy_pending_connect_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_destroy_pending_connect.cpp"
+    )
+    client_destroy_active_connection_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_destroy_active_connection.cpp"
+    )
+    client_stop_active_connection_mixed_timing_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_stop_active_connection_mixed_timing_soak.cpp"
+    )
+    client_cross_thread_disconnect_active_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_cross_thread_disconnect_active.cpp"
+    )
+    client_cross_thread_connect_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_cross_thread_connect.cpp"
     )
     connection_peer_close_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_peer_close.cpp"
@@ -63,6 +132,41 @@ def main() -> None:
     connection_force_close_pending_read_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_force_close_pending_read.cpp"
     )
+    connection_cross_thread_force_close_pending_read_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_cross_thread_force_close_pending_read.cpp"
+    )
+    connection_force_close_pending_read_mixed_timing_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_force_close_pending_read_mixed_timing_soak.cpp"
+    )
+    connection_force_close_pending_write_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_force_close_pending_write_soak.cpp"
+    )
+    connection_force_close_pending_write_mixed_timing_soak_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp"
+    )
+    connection_cross_thread_force_close_pending_write_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_cross_thread_force_close_pending_write.cpp"
+    )
     connection_lifecycle_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_lifecycle.cpp"
     )
@@ -70,6 +174,7 @@ def main() -> None:
     iocp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
     tcp_connection_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpConnection.h"
+    tcp_client_source = repo_root / "src" / "core" / "net" / "TcpClient.cc"
     tcp_server_source = repo_root / "src" / "core" / "net" / "TcpServer.cc"
     connector_header = repo_root / "include" / "gamenet" / "core" / "net" / "Connector.h"
     connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
@@ -80,12 +185,47 @@ def main() -> None:
         f"missing TCP server stop active-write contract: {server_stop_active_write_test}"
     )
     assert server_stop_soak_test.exists(), f"missing TCP server stop soak contract: {server_stop_soak_test}"
+    assert server_stop_multi_worker_test.exists(), (
+        f"missing TCP server multi-worker stop contract: {server_stop_multi_worker_test}"
+    )
+    assert server_stop_worker_active_write_soak_test.exists(), (
+        "missing TCP server worker-owned active-write stop soak contract: "
+        f"{server_stop_worker_active_write_soak_test}"
+    )
     assert client_retry_stop_test.exists(), f"missing TCP client retry-stop race contract: {client_retry_stop_test}"
     assert client_retry_stop_soak_test.exists(), (
         f"missing TCP client retry-stop soak contract: {client_retry_stop_soak_test}"
     )
     assert client_stop_pending_connect_test.exists(), (
         f"missing TCP client pending-connect stop contract: {client_stop_pending_connect_test}"
+    )
+    assert client_stop_pending_connect_soak_test.exists(), (
+        f"missing TCP client pending-connect stop soak contract: {client_stop_pending_connect_soak_test}"
+    )
+    assert client_cross_thread_stop_pending_connect_test.exists(), (
+        "missing TCP client cross-thread pending-connect stop contract: "
+        f"{client_cross_thread_stop_pending_connect_test}"
+    )
+    assert client_stop_pending_connect_mixed_timing_soak_test.exists(), (
+        "missing TCP client mixed-timing pending-connect stop soak contract: "
+        f"{client_stop_pending_connect_mixed_timing_soak_test}"
+    )
+    assert client_destroy_pending_connect_test.exists(), (
+        f"missing TCP client pending-connect destruction contract: {client_destroy_pending_connect_test}"
+    )
+    assert client_destroy_active_connection_test.exists(), (
+        f"missing TCP client active-connection destruction contract: {client_destroy_active_connection_test}"
+    )
+    assert client_stop_active_connection_mixed_timing_soak_test.exists(), (
+        "missing TCP client active-connection stop mixed-timing soak contract: "
+        f"{client_stop_active_connection_mixed_timing_soak_test}"
+    )
+    assert client_cross_thread_disconnect_active_test.exists(), (
+        "missing TCP client active cross-thread disconnect contract: "
+        f"{client_cross_thread_disconnect_active_test}"
+    )
+    assert client_cross_thread_connect_test.exists(), (
+        f"missing TCP client cross-thread connect contract: {client_cross_thread_connect_test}"
     )
     assert connection_peer_close_test.exists(), (
         f"missing TCP connection peer-close contract: {connection_peer_close_test}"
@@ -117,6 +257,30 @@ def main() -> None:
     assert connection_force_close_pending_read_test.exists(), (
         f"missing TCP connection pending-read force-close contract: {connection_force_close_pending_read_test}"
     )
+    assert connection_cross_thread_force_close_pending_read_test.exists(), (
+        "missing TCP connection cross-thread pending-read force-close contract: "
+        f"{connection_cross_thread_force_close_pending_read_test}"
+    )
+    assert connection_force_close_pending_read_mixed_timing_soak_test.exists(), (
+        "missing TCP connection mixed-timing pending-read force-close soak contract: "
+        f"{connection_force_close_pending_read_mixed_timing_soak_test}"
+    )
+    assert connection_force_close_pending_write_soak_test.exists(), (
+        "missing TCP connection pending-write force-close soak contract: "
+        f"{connection_force_close_pending_write_soak_test}"
+    )
+    assert connection_force_close_pending_write_mixed_timing_soak_test.exists(), (
+        "missing TCP connection mixed-timing pending-write force-close soak contract: "
+        f"{connection_force_close_pending_write_mixed_timing_soak_test}"
+    )
+    assert connection_cross_thread_force_close_pending_write_test.exists(), (
+        "missing TCP connection cross-thread pending-write force-close contract: "
+        f"{connection_cross_thread_force_close_pending_write_test}"
+    )
+    assert server_stop_from_worker_callback_soak_test.exists(), (
+        "missing TCP server worker-callback stop soak contract: "
+        f"{server_stop_from_worker_callback_soak_test}"
+    )
     assert connection_lifecycle_test.exists(), f"missing TCP connection lifecycle contract: {connection_lifecycle_test}"
 
     test_text = server_stop_test.read_text(encoding="utf-8")
@@ -144,6 +308,78 @@ def main() -> None:
     require(server_stop_soak_text, "GAMENET_TEST_ASSERT(disconnectedCallbackCount.load() == 1)", server_stop_soak_test)
     require(server_stop_soak_text, "GAMENET_TEST_ASSERT(server.connectionCount() == 0)", server_stop_soak_test)
 
+    server_stop_multi_worker_text = server_stop_multi_worker_test.read_text(encoding="utf-8")
+    require(server_stop_multi_worker_text, "server-stop-multi-worker-contract", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "server.setThreadNum(2);", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "constexpr int clientCount", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "server.stop();", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "baseLoop.runInLoop", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "GAMENET_TEST_ASSERT(workerLoopIds.size() >= 2)", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "GAMENET_TEST_ASSERT(server.connectionCount() == 0)", server_stop_multi_worker_test)
+    require(server_stop_multi_worker_text, "GAMENET_TEST_ASSERT(baseLoop.isInLoopThread())", server_stop_multi_worker_test)
+
+    server_stop_worker_active_write_soak_text = server_stop_worker_active_write_soak_test.read_text(encoding="utf-8")
+    require(
+        server_stop_worker_active_write_soak_text,
+        "server-stop-worker-active-write-soak",
+        server_stop_worker_active_write_soak_test,
+    )
+    require(server_stop_worker_active_write_soak_text, "constexpr int iterationCount", server_stop_worker_active_write_soak_test)
+    require(server_stop_worker_active_write_soak_text, "server.setThreadNum(2);", server_stop_worker_active_write_soak_test)
+    require(server_stop_worker_active_write_soak_text, "conn->send(payload);", server_stop_worker_active_write_soak_test)
+    require(server_stop_worker_active_write_soak_text, "server.stop();", server_stop_worker_active_write_soak_test)
+    require(server_stop_worker_active_write_soak_text, "baseLoop.runInLoop", server_stop_worker_active_write_soak_test)
+    require(
+        server_stop_worker_active_write_soak_text,
+        "GAMENET_TEST_ASSERT(workerLoopIds.size() >= 2)",
+        server_stop_worker_active_write_soak_test,
+    )
+    require(
+        server_stop_worker_active_write_soak_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount.load() == clientCount)",
+        server_stop_worker_active_write_soak_test,
+    )
+    require(
+        server_stop_worker_active_write_soak_text,
+        "GAMENET_TEST_ASSERT(server.connectionCount() == 0)",
+        server_stop_worker_active_write_soak_test,
+    )
+
+    server_stop_from_worker_callback_soak_text = (
+        server_stop_from_worker_callback_soak_test.read_text(encoding="utf-8")
+    )
+    require(
+        server_stop_from_worker_callback_soak_text,
+        "server-stop-from-worker-callback-soak",
+        server_stop_from_worker_callback_soak_test,
+    )
+    require(server_stop_from_worker_callback_soak_text, "constexpr int iterationCount", server_stop_from_worker_callback_soak_test)
+    require(server_stop_from_worker_callback_soak_text, "constexpr int clientCount", server_stop_from_worker_callback_soak_test)
+    require(server_stop_from_worker_callback_soak_text, "server.setThreadNum(2);", server_stop_from_worker_callback_soak_test)
+    require(server_stop_from_worker_callback_soak_text, "server.stop();", server_stop_from_worker_callback_soak_test)
+    require(server_stop_from_worker_callback_soak_text, "conn->getLoop()->isInLoopThread()", server_stop_from_worker_callback_soak_test)
+    require(server_stop_from_worker_callback_soak_text, "baseLoop.runInLoop", server_stop_from_worker_callback_soak_test)
+    require(
+        server_stop_from_worker_callback_soak_text,
+        "GAMENET_TEST_ASSERT(workerLoopIds.size() >= 2)",
+        server_stop_from_worker_callback_soak_test,
+    )
+    require(
+        server_stop_from_worker_callback_soak_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount.load() == clientCount)",
+        server_stop_from_worker_callback_soak_test,
+    )
+    require(
+        server_stop_from_worker_callback_soak_text,
+        "GAMENET_TEST_ASSERT(server.connectionCount() == 0)",
+        server_stop_from_worker_callback_soak_test,
+    )
+    require(
+        server_stop_worker_active_write_soak_text,
+        "GAMENET_TEST_ASSERT(baseLoop.isInLoopThread())",
+        server_stop_worker_active_write_soak_test,
+    )
+
     client_test_text = client_retry_stop_test.read_text(encoding="utf-8")
     require(client_test_text, "client-retry-stop-race", client_retry_stop_test)
     require(client_test_text, "client.enableRetry();", client_retry_stop_test)
@@ -169,6 +405,256 @@ def main() -> None:
     require(client_stop_pending_connect_text, "GAMENET_TEST_ASSERT(!connectedAfterStop)", client_stop_pending_connect_test)
     require(client_stop_pending_connect_text, "GAMENET_TEST_ASSERT(client.connection() == nullptr)", client_stop_pending_connect_test)
     require(client_stop_pending_connect_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", client_stop_pending_connect_test)
+
+    client_stop_pending_connect_soak_text = client_stop_pending_connect_soak_test.read_text(encoding="utf-8")
+    require(client_stop_pending_connect_soak_text, "client-stop-pending-connect-soak", client_stop_pending_connect_soak_test)
+    require(client_stop_pending_connect_soak_text, "constexpr int iterationCount", client_stop_pending_connect_soak_test)
+    require(client_stop_pending_connect_soak_text, "client.connect();", client_stop_pending_connect_soak_test)
+    require(client_stop_pending_connect_soak_text, "client.stop();", client_stop_pending_connect_soak_test)
+    require(client_stop_pending_connect_soak_text, "server.start();", client_stop_pending_connect_soak_test)
+    require(client_stop_pending_connect_soak_text, "GAMENET_TEST_ASSERT(!connectedAfterStop)", client_stop_pending_connect_soak_test)
+    require(
+        client_stop_pending_connect_soak_text,
+        "GAMENET_TEST_ASSERT(client.connection() == nullptr)",
+        client_stop_pending_connect_soak_test,
+    )
+    require(client_stop_pending_connect_soak_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", client_stop_pending_connect_soak_test)
+
+    client_cross_thread_stop_pending_connect_text = client_cross_thread_stop_pending_connect_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        client_cross_thread_stop_pending_connect_text,
+        "client-cross-thread-stop-pending-connect",
+        client_cross_thread_stop_pending_connect_test,
+    )
+    require(client_cross_thread_stop_pending_connect_text, "std::thread stopper", client_cross_thread_stop_pending_connect_test)
+    require(client_cross_thread_stop_pending_connect_text, "client.connect();", client_cross_thread_stop_pending_connect_test)
+    require(client_cross_thread_stop_pending_connect_text, "client.stop();", client_cross_thread_stop_pending_connect_test)
+    require(client_cross_thread_stop_pending_connect_text, "server.start();", client_cross_thread_stop_pending_connect_test)
+    require(
+        client_cross_thread_stop_pending_connect_text,
+        "GAMENET_TEST_ASSERT(!connectedAfterStop)",
+        client_cross_thread_stop_pending_connect_test,
+    )
+    require(
+        client_cross_thread_stop_pending_connect_text,
+        "GAMENET_TEST_ASSERT(client.connection() == nullptr)",
+        client_cross_thread_stop_pending_connect_test,
+    )
+    require(
+        client_cross_thread_stop_pending_connect_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        client_cross_thread_stop_pending_connect_test,
+    )
+
+    client_stop_pending_connect_mixed_timing_soak_text = (
+        client_stop_pending_connect_mixed_timing_soak_test.read_text(encoding="utf-8")
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "client-stop-pending-connect-mixed-timing-soak",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "constexpr int iterationCount",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "iteration % 4",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "std::thread stopper",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "client.connect();",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "client.stop();",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "server.start();",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(stopIssued.load())",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(!connectedAfterStop)",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(client.connection() == nullptr)",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_pending_connect_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        client_stop_pending_connect_mixed_timing_soak_test,
+    )
+
+    client_destroy_pending_connect_text = client_destroy_pending_connect_test.read_text(encoding="utf-8")
+    require(client_destroy_pending_connect_text, "client-destroy-pending-connect", client_destroy_pending_connect_test)
+    require(client_destroy_pending_connect_text, "std::unique_ptr<gamenet::net::TcpClient>", client_destroy_pending_connect_test)
+    require(client_destroy_pending_connect_text, "client->connect();", client_destroy_pending_connect_test)
+    require(client_destroy_pending_connect_text, "client.reset();", client_destroy_pending_connect_test)
+    require(client_destroy_pending_connect_text, "server.start();", client_destroy_pending_connect_test)
+    require(client_destroy_pending_connect_text, "GAMENET_TEST_ASSERT(!connectedAfterDestroy)", client_destroy_pending_connect_test)
+    require(client_destroy_pending_connect_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", client_destroy_pending_connect_test)
+
+    client_destroy_active_connection_text = client_destroy_active_connection_test.read_text(encoding="utf-8")
+    require(client_destroy_active_connection_text, "client-destroy-active-connection", client_destroy_active_connection_test)
+    require(client_destroy_active_connection_text, "std::unique_ptr<gamenet::net::TcpClient>", client_destroy_active_connection_test)
+    require(client_destroy_active_connection_text, "server.start();", client_destroy_active_connection_test)
+    require(client_destroy_active_connection_text, "client->connect();", client_destroy_active_connection_test)
+    require(client_destroy_active_connection_text, "client.reset();", client_destroy_active_connection_test)
+    require(client_destroy_active_connection_text, "GAMENET_TEST_ASSERT(server.connectionCount() == 0)", client_destroy_active_connection_test)
+    require(client_destroy_active_connection_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", client_destroy_active_connection_test)
+
+    client_stop_active_connection_mixed_timing_soak_text = (
+        client_stop_active_connection_mixed_timing_soak_test.read_text(encoding="utf-8")
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "client-stop-active-connection-mixed-timing-soak",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "constexpr int iterationCount",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "iteration % 4",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "std::thread stopper",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "server.start();",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "client.connect();",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "client.stop();",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(stopIssued.load())",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(client.connection() == nullptr)",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(server.connectionCount() == 0)",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+    require(
+        client_stop_active_connection_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        client_stop_active_connection_mixed_timing_soak_test,
+    )
+
+    client_cross_thread_disconnect_active_text = client_cross_thread_disconnect_active_test.read_text(encoding="utf-8")
+    require(
+        client_cross_thread_disconnect_active_text,
+        "client-cross-thread-disconnect-active",
+        client_cross_thread_disconnect_active_test,
+    )
+    require(
+        client_cross_thread_disconnect_active_text,
+        "std::thread disconnectThread",
+        client_cross_thread_disconnect_active_test,
+    )
+    require(client_cross_thread_disconnect_active_text, "server.start();", client_cross_thread_disconnect_active_test)
+    require(client_cross_thread_disconnect_active_text, "client.connect();", client_cross_thread_disconnect_active_test)
+    require(client_cross_thread_disconnect_active_text, "client.disconnect();", client_cross_thread_disconnect_active_test)
+    require(
+        client_cross_thread_disconnect_active_text,
+        "GAMENET_TEST_ASSERT(!loop.isInLoopThread())",
+        client_cross_thread_disconnect_active_test,
+    )
+    require(
+        client_cross_thread_disconnect_active_text,
+        "GAMENET_TEST_ASSERT(disconnectIssued.load())",
+        client_cross_thread_disconnect_active_test,
+    )
+    require(
+        client_cross_thread_disconnect_active_text,
+        "GAMENET_TEST_ASSERT(client.connection() == nullptr)",
+        client_cross_thread_disconnect_active_test,
+    )
+    require(
+        client_cross_thread_disconnect_active_text,
+        "GAMENET_TEST_ASSERT(server.connectionCount() == 0)",
+        client_cross_thread_disconnect_active_test,
+    )
+    require(
+        client_cross_thread_disconnect_active_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        client_cross_thread_disconnect_active_test,
+    )
+
+    client_cross_thread_connect_text = client_cross_thread_connect_test.read_text(encoding="utf-8")
+    require(client_cross_thread_connect_text, "client-cross-thread-connect", client_cross_thread_connect_test)
+    require(client_cross_thread_connect_text, "std::thread connectThread", client_cross_thread_connect_test)
+    require(client_cross_thread_connect_text, "server.start();", client_cross_thread_connect_test)
+    require(client_cross_thread_connect_text, "client.connect();", client_cross_thread_connect_test)
+    require(client_cross_thread_connect_text, "conn->forceClose();", client_cross_thread_connect_test)
+    require(
+        client_cross_thread_connect_text,
+        "GAMENET_TEST_ASSERT(!loop.isInLoopThread())",
+        client_cross_thread_connect_test,
+    )
+    require(
+        client_cross_thread_connect_text,
+        "GAMENET_TEST_ASSERT(connectIssued.load())",
+        client_cross_thread_connect_test,
+    )
+    require(
+        client_cross_thread_connect_text,
+        "GAMENET_TEST_ASSERT(client.connection() == conn)",
+        client_cross_thread_connect_test,
+    )
+    require(
+        client_cross_thread_connect_text,
+        "GAMENET_TEST_ASSERT(client.connection() == nullptr)",
+        client_cross_thread_connect_test,
+    )
+    require(
+        client_cross_thread_connect_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        client_cross_thread_connect_test,
+    )
 
     peer_close_test_text = connection_peer_close_test.read_text(encoding="utf-8")
     require(peer_close_test_text, "peer-close-converges-once", connection_peer_close_test)
@@ -267,6 +753,196 @@ def main() -> None:
     require(force_close_pending_read_text, "GAMENET_TEST_ASSERT(closeCallbackCount == 1)", connection_force_close_pending_read_test)
     require(force_close_pending_read_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", connection_force_close_pending_read_test)
 
+    cross_thread_force_close_pending_read_text = connection_cross_thread_force_close_pending_read_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        cross_thread_force_close_pending_read_text,
+        "cross-thread-force-close-pending-read-contract",
+        connection_cross_thread_force_close_pending_read_test,
+    )
+    require(cross_thread_force_close_pending_read_text, "constexpr int iterationCount", connection_cross_thread_force_close_pending_read_test)
+    require(cross_thread_force_close_pending_read_text, "std::thread closer", connection_cross_thread_force_close_pending_read_test)
+    require(cross_thread_force_close_pending_read_text, "conn->connectEstablished();", connection_cross_thread_force_close_pending_read_test)
+    require(cross_thread_force_close_pending_read_text, "conn->forceClose();", connection_cross_thread_force_close_pending_read_test)
+    require(cross_thread_force_close_pending_read_text, "conn->connectDestroyed();", connection_cross_thread_force_close_pending_read_test)
+    require(cross_thread_force_close_pending_read_text, "connection.reset();", connection_cross_thread_force_close_pending_read_test)
+    require(
+        cross_thread_force_close_pending_read_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
+        connection_cross_thread_force_close_pending_read_test,
+    )
+    require(
+        cross_thread_force_close_pending_read_text,
+        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        connection_cross_thread_force_close_pending_read_test,
+    )
+    require(
+        cross_thread_force_close_pending_read_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        connection_cross_thread_force_close_pending_read_test,
+    )
+
+    force_close_pending_read_mixed_timing_soak_text = (
+        connection_force_close_pending_read_mixed_timing_soak_test.read_text(encoding="utf-8")
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "force-close-pending-read-mixed-timing-soak",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "constexpr int iterationCount",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "iteration % 4",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "std::thread closer",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "conn->connectEstablished();",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "conn->forceClose();",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(forceCloseIssued.load())",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_read_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        connection_force_close_pending_read_mixed_timing_soak_test,
+    )
+
+    force_close_pending_write_soak_text = connection_force_close_pending_write_soak_test.read_text(encoding="utf-8")
+    require(
+        force_close_pending_write_soak_text,
+        "force-close-pending-write-soak-contract",
+        connection_force_close_pending_write_soak_test,
+    )
+    require(force_close_pending_write_soak_text, "constexpr int iterationCount", connection_force_close_pending_write_soak_test)
+    require(force_close_pending_write_soak_text, "conn->send(payload);", connection_force_close_pending_write_soak_test)
+    require(force_close_pending_write_soak_text, "conn->forceClose();", connection_force_close_pending_write_soak_test)
+    require(
+        force_close_pending_write_soak_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
+        connection_force_close_pending_write_soak_test,
+    )
+    require(
+        force_close_pending_write_soak_text,
+        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        connection_force_close_pending_write_soak_test,
+    )
+    require(
+        force_close_pending_write_soak_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        connection_force_close_pending_write_soak_test,
+    )
+
+    force_close_pending_write_mixed_timing_soak_text = (
+        connection_force_close_pending_write_mixed_timing_soak_test.read_text(encoding="utf-8")
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "force-close-pending-write-mixed-timing-soak",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "constexpr int iterationCount",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "iteration % 4",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "std::thread closer",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "conn->send(payload);",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "conn->forceClose();",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(forceCloseIssued.load())",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+    require(
+        force_close_pending_write_mixed_timing_soak_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        connection_force_close_pending_write_mixed_timing_soak_test,
+    )
+
+    cross_thread_force_close_pending_write_text = connection_cross_thread_force_close_pending_write_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        cross_thread_force_close_pending_write_text,
+        "cross-thread-force-close-pending-write-contract",
+        connection_cross_thread_force_close_pending_write_test,
+    )
+    require(cross_thread_force_close_pending_write_text, "std::thread closer", connection_cross_thread_force_close_pending_write_test)
+    require(cross_thread_force_close_pending_write_text, "conn->send(payload);", connection_cross_thread_force_close_pending_write_test)
+    require(cross_thread_force_close_pending_write_text, "conn->forceClose();", connection_cross_thread_force_close_pending_write_test)
+    require(
+        cross_thread_force_close_pending_write_text,
+        "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)",
+        connection_cross_thread_force_close_pending_write_test,
+    )
+    require(
+        cross_thread_force_close_pending_write_text,
+        "GAMENET_TEST_ASSERT(closeCallbackCount == 1)",
+        connection_cross_thread_force_close_pending_write_test,
+    )
+    require(
+        cross_thread_force_close_pending_write_text,
+        "GAMENET_TEST_ASSERT(loop.isInLoopThread())",
+        connection_cross_thread_force_close_pending_write_test,
+    )
+
     for socketpair_test in (
         connection_lifecycle_test,
         connection_peer_close_test,
@@ -279,6 +955,11 @@ def main() -> None:
         connection_repeated_force_close_test,
         connection_cross_thread_force_close_soak_test,
         connection_force_close_pending_read_test,
+        connection_cross_thread_force_close_pending_read_test,
+        connection_force_close_pending_read_mixed_timing_soak_test,
+        connection_force_close_pending_write_soak_test,
+        connection_force_close_pending_write_mixed_timing_soak_test,
+        connection_cross_thread_force_close_pending_write_test,
     ):
         socketpair_text = socketpair_test.read_text(encoding="utf-8")
         require(socketpair_text, '#include "gamenet/core/net/SocketTypes.h"', socketpair_test)
@@ -288,11 +969,22 @@ def main() -> None:
     require(tcp_client_intent_text, "test_tcp_client_retry_stop_race.cpp", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_retry_stop_soak.cpp", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_stop_pending_connect.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_stop_pending_connect_soak.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_cross_thread_stop_pending_connect.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_stop_pending_connect_mixed_timing_soak.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_destroy_pending_connect.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_destroy_active_connection.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_stop_active_connection_mixed_timing_soak.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_cross_thread_disconnect_active.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_cross_thread_connect.cpp", tcp_client_intent)
 
     tcp_server_intent_text = tcp_server_intent.read_text(encoding="utf-8")
     require(tcp_server_intent_text, "stop() during active write", tcp_server_intent)
     require(tcp_server_intent_text, "test_tcp_server_stop_active_write.cpp", tcp_server_intent)
     require(tcp_server_intent_text, "test_tcp_server_stop_soak.cpp", tcp_server_intent)
+    require(tcp_server_intent_text, "test_tcp_server_stop_multi_worker.cpp", tcp_server_intent)
+    require(tcp_server_intent_text, "test_tcp_server_stop_worker_active_write_soak.cpp", tcp_server_intent)
+    require(tcp_server_intent_text, "test_tcp_server_stop_from_worker_callback_soak.cpp", tcp_server_intent)
 
     tcp_connection_intent_text = tcp_connection_intent.read_text(encoding="utf-8")
     require(tcp_connection_intent_text, "peer close or reset converges on the normal close path", tcp_connection_intent)
@@ -312,6 +1004,11 @@ def main() -> None:
     require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_soak.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "pending IOCP read/write operations are canceled", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_read.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_pending_read.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_read_mixed_timing_soak.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_write_soak.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp", tcp_connection_intent)
 
     iocp_transport_header_text = iocp_transport_header.read_text(encoding="utf-8")
     require(iocp_transport_header_text, "cancelPendingOperations", iocp_transport_header)
@@ -328,6 +1025,11 @@ def main() -> None:
 
     tcp_connection_header_text = tcp_connection_header.read_text(encoding="utf-8")
     require(tcp_connection_header_text, "forceCloseGuard_", tcp_connection_header)
+
+    tcp_client_source_text = tcp_client_source.read_text(encoding="utf-8")
+    require(tcp_client_source_text, "connection->connectDestroyed();", tcp_client_source)
+    require(tcp_client_source_text, "if (!conn->disconnected())", tcp_client_source)
+    require(tcp_client_source_text, "conn->forceClose();", tcp_client_source)
 
     tcp_server_source_text = tcp_server_source.read_text(encoding="utf-8")
     require(tcp_server_source_text, "bool TcpServer::forceCloseAllConnections()", tcp_server_source)
@@ -354,9 +1056,30 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_server_stop_active_connections.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_stop_active_write.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_stop_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_stop_multi_worker.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_stop_multi_worker.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_stop_worker_active_write_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_stop_worker_active_write_soak.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_stop_from_worker_callback_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_stop_from_worker_callback_soak.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_retry_stop_race.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_retry_stop_soak.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_stop_pending_connect.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_stop_pending_connect_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_stop_pending_connect.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_stop_pending_connect.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_stop_pending_connect_mixed_timing_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_stop_pending_connect_mixed_timing_soak.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_destroy_pending_connect.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_destroy_pending_connect.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_destroy_active_connection.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_destroy_active_connection.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_stop_active_connection_mixed_timing_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_stop_active_connection_mixed_timing_soak.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_disconnect_active.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_disconnect_active.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_connect.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_connect.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_peer_close.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_peer_reset.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_write_complete_ordering.cpp", tests_cmake)
@@ -367,6 +1090,17 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_connection_repeated_force_close.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_soak.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_force_close_pending_read.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_read.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_read.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_read.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_read_mixed_timing_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_read_mixed_timing_soak.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_write_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_write_soak.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "contract tcp_server", tests_cmake)
     require(tests_cmake_text, "contract tcp_client", tests_cmake)
     require(tests_cmake_text, "contract tcp_connection", tests_cmake)

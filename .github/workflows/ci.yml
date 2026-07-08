@@ -44,6 +44,7 @@ jobs:
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
+          python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
@@ -98,6 +99,7 @@ jobs:
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
+          python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
@@ -117,6 +119,54 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build-asan --output-on-failure
+
+  linux-tsan:
+    name: Linux TSan race-oriented build and tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          cmake --version
+          c++ --version
+
+      - name: Check repository guards
+        run: |
+          python3 tests/scope/test_scope_guard.py
+          python3 tests/scope/test_intent_consistency.py
+          python3 tools/check_scope_boundaries.py
+          python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_event_loop_thread_pool_contracts.py
+          python3 tests/cmake/test_migration_status_contract.py
+          python3 tests/cmake/test_msvc_utf8_contract.py
+          python3 tests/cmake/test_platform_backend_contract.py
+          python3 tests/cmake/test_tcp_lifecycle_contracts.py
+          python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_timer_queue_contracts.py
+          python3 tests/cmake/test_threading_gate_contracts.py
+          python3 tests/cmake/test_windows_iocp_milestone_contract.py
+          python3 tests/cmake/test_windows_iocp_data_path_contract.py
+          python3 tests/cmake/test_release_safe_tests.py
+          python3 tests/ci/test_workflow_jobs.py
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-tsan
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TSAN=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build
+        run: cmake --build build-tsan --parallel
+
+      - name: Test
+        run: ctest --test-dir build-tsan --output-on-failure -L threading --timeout 30
 
   linux-release:
     name: Linux Release build
@@ -145,6 +195,7 @@ jobs:
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
+          python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_release_safe_tests.py
@@ -193,6 +244,7 @@ jobs:
           python tests/cmake/test_tcp_lifecycle_contracts.py
           python tests/cmake/test_tcp_connection_context_contract.py
           python tests/cmake/test_timer_queue_contracts.py
+          python tests/cmake/test_threading_gate_contracts.py
           python tests/cmake/test_windows_iocp_milestone_contract.py
           python tests/cmake/test_windows_iocp_data_path_contract.py
           python tests/cmake/test_release_safe_tests.py

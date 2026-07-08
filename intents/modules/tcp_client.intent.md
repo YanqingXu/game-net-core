@@ -100,6 +100,31 @@ all while preserving the same owner-loop discipline as the server side.
   retry-stop race to catch stale retry timers across multiple client lifecycles
 - `tests/contract/tcp_client/test_tcp_client_stop_pending_connect.cpp` verifies
   stop() cancels an in-flight ConnectEx before a later server start can connect
+- `tests/contract/tcp_client/test_tcp_client_stop_pending_connect_soak.cpp`
+  repeats stop() during in-flight ConnectEx attempts to catch stale completion
+  resurrection across multiple client lifecycles
+- `tests/contract/tcp_client/test_tcp_client_cross_thread_stop_pending_connect.cpp`
+  verifies non-owner stop() marshals cancellation of an in-flight ConnectEx to
+  the owner loop before a later server start can publish a stopped connection
+- `tests/contract/tcp_client/test_tcp_client_stop_pending_connect_mixed_timing_soak.cpp`
+  alternates immediate and delayed owner/non-owner stop() timing during pending
+  ConnectEx attempts to catch stale completion resurrection under varied timing
+- `tests/contract/tcp_client/test_tcp_client_destroy_pending_connect.cpp`
+  verifies owner-loop destruction during a pending ConnectEx clears callbacks
+  and cancels connector work before a later server start can resurrect a client
+- `tests/contract/tcp_client/test_tcp_client_destroy_active_connection.cpp`
+  verifies owner-loop destruction with an active TcpConnection releases client
+  ownership and lets peer teardown converge without stale TcpClient callbacks
+- `tests/contract/tcp_client/test_tcp_client_stop_active_connection_mixed_timing_soak.cpp`
+  verifies immediate and delayed owner/non-owner stop() timing on an active
+  retry-enabled connection clears future connect intent before peer close can
+  resurrect the client through retry
+- `tests/contract/tcp_client/test_tcp_client_cross_thread_disconnect_active.cpp`
+  verifies non-owner disconnect() on an active connection marshals graceful
+  teardown to the owner loop and converges through normal close/remove paths
+- `tests/contract/tcp_client/test_tcp_client_cross_thread_connect.cpp`
+  verifies non-owner connect() marshals Connector startup to the owner loop and
+  publishes connection callbacks on that loop
 - cross-thread connect marshals to owner loop before Connector starts
 - cross-thread disconnect marshals to owner loop before teardown begins
 - destruction during pending connect does not leak fd or crash

@@ -1,6 +1,6 @@
 # Windows IOCP Milestone
 
-Last checked: 2026-07-07
+Last checked: 2026-07-08
 
 Windows support for the Reactor / TCP foundation is represented by the
 `windows-msvc` workflow job. The current Windows source selection intentionally
@@ -23,7 +23,7 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 ```
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
-VS2026 Debug run with a 10-second per-test timeout also passes 37/37 tests with
+VS2026 Debug run with a 10-second per-test timeout also passes 54/54 tests with
 0 failing tests. The local IOCP evidence includes:
 
 - `contract.event_loop.test_event_loop` and
@@ -31,16 +31,23 @@ VS2026 Debug run with a 10-second per-test timeout also passes 37/37 tests with
   completion packet through `PostQueuedCompletionStatus`, so cross-thread
   queued work, timer scheduling, and ready-timer cancellation no longer sleep
   until the default poll timeout.
-- `contract.event_loop_thread_pool.test_event_loop_thread_pool`: published
-  worker loops accept cross-thread queued work under a light soak and execute
-  it on worker loop threads rather than the base loop.
+- `contract.event_loop_thread_pool.test_event_loop_thread_pool` and
+  `contract.event_loop_thread_pool.test_event_loop_thread_pool_restart_soak`:
+  published worker loops accept cross-thread queued work under a light soak,
+  execute it on worker loop threads rather than the base loop, and repeated
+  start/stop cycles return loop selection to base-loop fallback.
 - `contract.acceptor.test_acceptor_contract`,
   `contract.tcp_server.test_tcp_server_contract`, and
   `contract.tcp_server.test_tcp_server_stop_active_connections`,
   `contract.tcp_server.test_tcp_server_stop_active_write`,
+  `contract.tcp_server.test_tcp_server_stop_multi_worker`,
+  `contract.tcp_server.test_tcp_server_stop_worker_active_write_soak`,
+  `contract.tcp_server.test_tcp_server_stop_from_worker_callback_soak`,
   `contract.tcp_server.test_tcp_server_stop_soak`: the Acceptor and server
   stop paths are backed by `AcceptEx` and owner-loop connection teardown;
-  worker-loop teardown is allowed to finish before the worker pool is joined.
+  worker-loop teardown, including active writes and worker-callback stop()
+  reentry owned by worker loops, is allowed to finish before the worker pool is
+  joined.
 - `contract.connector.test_connector_contract`,
   `contract.tcp_client.test_tcp_client_contract`, and
   `contract.tcp_client.test_tcp_client_stop_pending_connect`: active connects
@@ -50,6 +57,32 @@ VS2026 Debug run with a 10-second per-test timeout also passes 37/37 tests with
   fd transfers from Connector to TcpConnection.
 - `contract.tcp_client.test_tcp_client_retry_stop_soak`: repeated retry-stop
   cycles keep stale retry timers from connecting after a later server start.
+- `contract.tcp_client.test_tcp_client_stop_pending_connect_soak`: repeated
+  stop cycles during in-flight `ConnectEx` attempts keep stale completions
+  from publishing a stopped client connection after a later server start.
+- `contract.tcp_client.test_tcp_client_cross_thread_stop_pending_connect`:
+  non-owner `stop()` marshals cancellation of an in-flight `ConnectEx` to the
+  owner loop before a later server start can publish a stopped connection.
+- `contract.tcp_client.test_tcp_client_stop_pending_connect_mixed_timing_soak`:
+  immediate and delayed owner/non-owner `stop()` timing during pending
+  `ConnectEx` attempts still cancels before a later server start can publish a
+  stale connection.
+- `contract.tcp_client.test_tcp_client_destroy_pending_connect`: owner-loop
+  destruction during a pending `ConnectEx` clears callbacks and cancels
+  connector work before a later server start can resurrect a client.
+- `contract.tcp_client.test_tcp_client_destroy_active_connection`: owner-loop
+  destruction with an active TcpConnection releases client ownership and lets
+  peer teardown converge without stale TcpClient callbacks.
+- `contract.tcp_client.test_tcp_client_stop_active_connection_mixed_timing_soak`:
+  immediate and delayed owner/non-owner `stop()` timing on an active
+  retry-enabled connection clears future connect intent before peer close can
+  resurrect the client through retry.
+- `contract.tcp_client.test_tcp_client_cross_thread_disconnect_active`:
+  non-owner `disconnect()` on an active connection marshals graceful teardown to
+  the owner loop and converges through the normal close/remove path.
+- `contract.tcp_client.test_tcp_client_cross_thread_connect`: non-owner
+  `connect()` marshals Connector startup to the owner loop and publishes
+  connection callbacks on that loop.
 - `contract.poller.test_poller_contract`: the Windows Poller contract is backed
   by a posted IOCP read operation, not by a select-style fallback.
 - `contract.tcp_connection.test_tcp_connection_lifecycle`,
@@ -60,13 +93,19 @@ VS2026 Debug run with a 10-second per-test timeout also passes 37/37 tests with
   `contract.tcp_connection.test_tcp_connection_shutdown_pending_output`,
   `contract.tcp_connection.test_tcp_connection_write_complete_ordering`,
   `contract.tcp_connection.test_tcp_connection_cross_thread_force_close_soak`,
+  `contract.tcp_connection.test_tcp_connection_cross_thread_force_close_pending_write`,
   `contract.tcp_connection.test_tcp_connection_cross_thread_shutdown`,
-  `contract.tcp_connection.test_tcp_connection_force_close_pending_read`, and
+  `contract.tcp_connection.test_tcp_connection_force_close_pending_read`,
+  `contract.tcp_connection.test_tcp_connection_cross_thread_force_close_pending_read`,
+  `contract.tcp_connection.test_tcp_connection_force_close_pending_read_mixed_timing_soak`,
+  `contract.tcp_connection.test_tcp_connection_force_close_pending_write_soak`,
+  `contract.tcp_connection.test_tcp_connection_force_close_pending_write_mixed_timing_soak`, and
   `integration.tcp.test_tcp_server_client_echo`: TcpConnection read/write and
   lifecycle behavior are backed by loop-owned `WSARecv` / `WSASend`
-  overlapped operations, including force-close cancellation of a pending read
-  before connection-owned operation storage can be destroyed and cross-thread
-  shutdown draining pending output before half-close.
+  overlapped operations, including owner-loop and cross-thread force-close
+  cancellation of pending read/write operations before connection-owned
+  operation storage can be destroyed and cross-thread shutdown draining pending
+  output before half-close.
 
 The Windows install/package consumer gate is also part of the Windows MSVC
 workflow gate and passes locally. The VS2026 Debug build installs to

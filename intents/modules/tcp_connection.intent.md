@@ -135,6 +135,21 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_force_close_pending_read.cpp`
   verifies forceClose cancels a pending read and waits for the owner-loop
   completion path before connection destruction
+- `tests/contract/tcp_connection/test_tcp_connection_cross_thread_force_close_pending_read.cpp`
+  repeats non-owner forceClose during pending read and verifies the request
+  marshals to the owner loop before cancel/drain releases connection storage
+- `tests/contract/tcp_connection/test_tcp_connection_force_close_pending_read_mixed_timing_soak.cpp`
+  alternates immediate and delayed owner/non-owner forceClose timing during a
+  pending read and verifies cancel/close convergence remains single-shot
+- `tests/contract/tcp_connection/test_tcp_connection_force_close_pending_write_soak.cpp`
+  repeats forceClose during a large pending write and verifies IO cancellation
+  drains before connection-owned operation storage is released
+- `tests/contract/tcp_connection/test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp`
+  alternates immediate and delayed owner/non-owner forceClose timing during a
+  large pending write and verifies cancel/close convergence remains single-shot
+- `tests/contract/tcp_connection/test_tcp_connection_cross_thread_force_close_pending_write.cpp`
+  verifies non-owner-thread forceClose marshals to the owner loop while a large
+  write is pending and still drains cancel/close before destruction
 - high-water to low-water drain path pauses and resumes read processing on the owner loop
 - coroutine awaiters resume through EventLoop rather than arbitrary caller thread
 - repeated teardown does not leave stale registration behind

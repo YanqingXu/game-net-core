@@ -35,15 +35,18 @@ int main() {
 
         std::atomic<bool> fired{false};
         auto timerId = loop->runAfter(50ms, [&] { fired = true; });
-        loop->runAfter(80ms, [loop] { loop->quit(); });
+        std::promise<void> finished;
+        auto finishedFuture = finished.get_future();
 
-        std::thread canceller([loop, timerId] {
-            std::this_thread::sleep_for(10ms);
-            loop->cancel(timerId);
+        loop->runAfter(80ms, [loop, &finished] {
+            finished.set_value();
+            loop->quit();
         });
 
-        std::this_thread::sleep_for(120ms);
-        canceller.join();
+        GAMENET_TEST_ASSERT(!loop->isInLoopThread());
+        loop->cancel(timerId);
+
+        GAMENET_TEST_ASSERT(finishedFuture.wait_for(1s) == std::future_status::ready);
         GAMENET_TEST_ASSERT(!fired.load());
     }
 

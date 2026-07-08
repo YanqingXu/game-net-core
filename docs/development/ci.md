@@ -19,6 +19,7 @@ The `ci` workflow validates:
   socket extension helpers, and completion metadata translation.
 - EventLoopThreadPool contract guard for queued-work race/soak coverage.
 - TimerQueue contract guard for ready-timer cancellation races.
+- Threading gate contract guard for the race-oriented TSan test selection.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core library build.
@@ -26,6 +27,7 @@ The `ci` workflow validates:
 - Unit, contract, and integration tests through CTest.
 - Install and `find_package(GameNetCore)` consumer verification.
 - ASan/UBSan Debug build and CTest suite on Linux.
+- TSan Debug build and `threading`-labeled CTest suite on Linux.
 - Release build and CTest suite on Linux.
 - Windows MSVC Debug build, CTest suite, and install/package consumer
   verification through the IOCP backend.
@@ -54,6 +56,7 @@ python3 tests/cmake/test_platform_backend_contract.py
 python3 tests/cmake/test_tcp_lifecycle_contracts.py
 python3 tests/cmake/test_tcp_connection_context_contract.py
 python3 tests/cmake/test_timer_queue_contracts.py
+python3 tests/cmake/test_threading_gate_contracts.py
 python3 tests/cmake/test_windows_iocp_milestone_contract.py
 python3 tests/cmake/test_windows_iocp_data_path_contract.py
 python3 tests/cmake/test_release_safe_tests.py
@@ -73,6 +76,26 @@ The ASan/UBSan job uses:
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
 cmake --build build-asan --parallel
 ctest --test-dir build-asan --output-on-failure
+```
+
+The TSan job is race-oriented rather than a replacement for full Debug CTest.
+It builds the same core/test targets with ThreadSanitizer enabled and runs the
+tests labeled `threading`. That label intentionally covers cross-thread APIs,
+worker-loop scheduling, and lifecycle tests with cancel/close race risk such as
+pending-read and pending-write `forceClose()` contracts,
+mixed-timing pending-ConnectEx `TcpClient::stop()` contracts, and
+active retry-enabled `TcpClient::stop()` after peer-close contracts,
+active cross-thread `TcpClient::disconnect()` contracts,
+active cross-thread `TcpClient::connect()` contracts,
+mixed-timing pending-read `TcpConnection::forceClose()` contracts,
+mixed-timing pending-write `TcpConnection::forceClose()` contracts, plus
+worker-owned active-write `TcpServer::stop()` contracts, and worker-callback
+`TcpServer::stop()` contracts:
+
+```bash
+cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
+cmake --build build-tsan --parallel
+ctest --test-dir build-tsan --output-on-failure -L threading --timeout 30
 ```
 
 The Release job uses:
@@ -127,6 +150,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 
+cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
+cmake --build build-tsan --parallel
+ctest --test-dir build-tsan --output-on-failure -L threading --timeout 30
+
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
 cmake --build build-release --parallel
 ctest --test-dir build-release --output-on-failure
@@ -159,6 +186,7 @@ py -3 tests\cmake\test_platform_backend_contract.py
 py -3 tests\cmake\test_tcp_lifecycle_contracts.py
 py -3 tests\cmake\test_tcp_connection_context_contract.py
 py -3 tests\cmake\test_timer_queue_contracts.py
+py -3 tests\cmake\test_threading_gate_contracts.py
 py -3 tests\cmake\test_windows_iocp_milestone_contract.py
 py -3 tests\cmake\test_windows_iocp_data_path_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
