@@ -964,6 +964,16 @@ def main() -> None:
         socketpair_text = socketpair_test.read_text(encoding="utf-8")
         require(socketpair_text, '#include "gamenet/core/net/SocketTypes.h"', socketpair_test)
 
+    for pending_write_socketpair_test in (
+        connection_force_close_pending_write_soak_test,
+        connection_force_close_pending_write_mixed_timing_soak_test,
+        connection_cross_thread_force_close_pending_write_test,
+    ):
+        pending_write_socketpair_text = pending_write_socketpair_test.read_text(encoding="utf-8")
+        require(pending_write_socketpair_text, "setNonBlockingForTest(connectionFd);", pending_write_socketpair_test)
+        require(pending_write_socketpair_text, "setNonBlockingForTest(peerFd);", pending_write_socketpair_test)
+        require(pending_write_socketpair_text, "setSmallSendBuffer(connectionFd);", pending_write_socketpair_test)
+
     tcp_client_intent_text = tcp_client_intent.read_text(encoding="utf-8")
     require(tcp_client_intent_text, "stop() cancels pending retry", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_retry_stop_race.cpp", tcp_client_intent)

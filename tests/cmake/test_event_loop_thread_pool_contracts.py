@@ -19,6 +19,7 @@ def main() -> None:
     )
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     pool_intent = repo_root / "intents" / "modules" / "event_loop_thread_pool.intent.md"
+    pool_source = repo_root / "src" / "core" / "net" / "EventLoopThreadPool.cc"
     migration_status = repo_root / "docs" / "migration_status.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
@@ -33,6 +34,7 @@ def main() -> None:
     pool_restart_soak_text = pool_restart_soak_test.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     pool_intent_text = pool_intent.read_text(encoding="utf-8")
+    pool_source_text = pool_source.read_text(encoding="utf-8")
     migration_text = migration_status.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
@@ -49,6 +51,8 @@ def main() -> None:
     require(pool_restart_soak_text, "pool.stop();", pool_restart_soak_test)
     require(pool_restart_soak_text, "queueInLoop", pool_restart_soak_test)
     require(pool_restart_soak_text, "GAMENET_TEST_ASSERT(stoppedLoops.front() == &baseLoop)", pool_restart_soak_test)
+    require(pool_source_text, "baseLoop_->assertInLoopThread();", pool_source)
+    require(pool_source_text, "thread->stop();", pool_source)
     require(tests_cmake_text, "contract event_loop_thread_pool", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread_pool.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread_pool_restart_soak.cpp threading lifecycle", tests_cmake)

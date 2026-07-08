@@ -13,11 +13,41 @@
 #ifdef _WIN32
 #include <array>
 #else
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
 
 namespace {
+
+void setNonBlockingForTest(gamenet::net::SocketFd sockfd) {
+#ifndef _WIN32
+    const int flags = ::fcntl(sockfd, F_GETFL, 0);
+    GAMENET_TEST_ASSERT(flags >= 0);
+    GAMENET_TEST_ASSERT(::fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == 0);
+#else
+    (void)sockfd;
+#endif
+}
+
+void setSmallSendBuffer(gamenet::net::SocketFd sockfd) {
+    int bufferSize = 4096;
+#ifdef _WIN32
+    const int rc = ::setsockopt(
+        sockfd,
+        SOL_SOCKET,
+        SO_SNDBUF,
+        reinterpret_cast<const char*>(&bufferSize),
+        static_cast<socklen_t>(sizeof(bufferSize)));
+#else
+    const int rc = ::setsockopt(
+        sockfd,
+        SOL_SOCKET,
+        &bufferSize,
+        static_cast<socklen_t>(sizeof(bufferSize)));
+#endif
+    GAMENET_TEST_ASSERT(rc == 0);
+}
 
 struct ConnectedPair {
     gamenet::net::SocketFd connectionFd{gamenet::net::kInvalidSocket};
@@ -38,6 +68,9 @@ struct ConnectedPair {
         connectionFd = fds[0];
         peerFd = fds[1];
 #endif
+        setNonBlockingForTest(connectionFd);
+        setNonBlockingForTest(peerFd);
+        setSmallSendBuffer(connectionFd);
     }
 
     ~ConnectedPair() {
