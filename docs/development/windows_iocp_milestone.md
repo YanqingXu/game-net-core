@@ -23,7 +23,7 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 ```
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
-VS2026 Debug run with a 10-second per-test timeout also passes 54/54 tests with
+VS2026 Debug run with a 10-second per-test timeout also passes 56/56 tests with
 0 failing tests. The local IOCP evidence includes:
 
 - `contract.event_loop.test_event_loop` and
@@ -36,6 +36,9 @@ VS2026 Debug run with a 10-second per-test timeout also passes 54/54 tests with
   published worker loops accept cross-thread queued work under a light soak,
   execute it on worker loop threads rather than the base loop, and repeated
   start/stop cycles return loop selection to base-loop fallback.
+- `unit.base.test_logger` and `contract.base.test_logger_contract`: base
+  logging remains synchronous, thread-safe, and independent of EventLoop
+  ownership while preserving the configured Windows CTest gate.
 - `contract.acceptor.test_acceptor_contract`,
   `contract.tcp_server.test_tcp_server_contract`, and
   `contract.tcp_server.test_tcp_server_stop_active_connections`,

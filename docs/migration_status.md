@@ -22,8 +22,8 @@ until the current core has stable targets, tests, and examples.
 
 ## Verification State
 
-The current worktree configures 54 configured CTest tests for the Reactor / TCP
-foundation: 6 unit tests, 47 contract tests, and 1 integration test.
+The current worktree configures 56 configured CTest tests for the Reactor / TCP
+foundation: 7 unit tests, 48 contract tests, and 1 integration test.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
@@ -47,7 +47,7 @@ foundation: 6 unit tests, 47 contract tests, and 1 integration test.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, TCP lifecycle contract guard, TcpConnection context contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure.
-- Added lifecycle coverage in this worktree: server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, client retry stop race, client retry-stop soak, client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client cross-thread active connect, peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, high-water mark notification, repeated forceClose idempotence, cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
+- Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, client retry stop race, client retry-stop soak, client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client cross-thread active connect, peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, high-water mark notification, repeated forceClose idempotence, cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
 - Sanitizers: CI includes an ASan/UBSan Debug build and CTest job for the
   Reactor / TCP foundation. The worktree also defines a Linux TSan
   race-oriented threading test gate for thread-affinity and lifecycle risks.
@@ -59,9 +59,11 @@ foundation: 6 unit tests, 47 contract tests, and 1 integration test.
 - Windows: Windows support is now represented by a `windows-msvc` workflow job
   for the Reactor / TCP IOCP backend. Local VS2026 Debug configure/build
   succeeds after the MSVC `/utf-8` and `/FS` compile options were added, and a
-  local full Windows CTest run with a 10-second per-test timeout passes 54/54
+  local full Windows CTest run with a 10-second per-test timeout passes 56/56
   configured tests with 0 failing tests. The IOCP data path now covers
   `contract.event_loop.test_event_loop`,
+  `unit.base.test_logger`,
+  `contract.base.test_logger_contract`,
   `contract.event_loop_thread_pool.test_event_loop_thread_pool`,
   `contract.timer_queue.test_timer_queue`,
   `contract.acceptor.test_acceptor_contract`,

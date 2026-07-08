@@ -1,117 +1,150 @@
 ## 总体判断
 
-`game-net-core` 这轮进展的重点已经从“Windows IOCP 数据路径落地”继续推进到了 **Reactor/TCP 生命周期硬化**。也就是说，它不是进入 Phase 4 去迁移 protocol / transport / game 模块，而是在把 Phase 2/3 的 core foundation 做得更接近“可长期承载上层模块”的状态。
+`game-net-core` 又推进了一层：上一轮的重点是 **Windows IOCP 数据路径落地 + 37 个 lifecycle/race tests**；这一轮的重点已经变成 **TSan/race-oriented gate、54 个 CTest、跨线程生命周期压力覆盖、Linux pending-write 测试修复**。
 
-我现在会把它评估为：
+我现在会把当前状态评估为：
 
-**Phase 2 / Phase 3 基本完成；当前处于 Phase 3.5：core hardening、race hardening、Windows IOCP cancel/close hardening；Phase 4 仍然明确未开始。**
+**Phase 2 / Phase 3 已基本完成；项目进入 Phase 3.5 的 core hardening / race hardening / sanitizer hardening 阶段。Phase 4 仍未开始，也不应该现在开始。**
 
-迁移状态文档仍然明确说当前 active execution target 是 Reactor / TCP foundation，protocol、transport、game foundation、experimental 仍 deferred，直到 core 有稳定 targets、tests、examples。 Phase 表也显示 Phase 1/2/3 已经 present，而 Phase 4 仍是 deferred。
+仓库自己的 migration status 仍然明确说 active target 是 Reactor / TCP foundation，高层 protocol、transport、game foundation、experimental 模块继续 deferred，直到 core 有稳定 targets、tests、examples。 Phase 表也仍然显示 Phase 1/2/3 present，Phase 4 deferred。
 
-## 最新进展概览
+## 这次的新变化
 
-最新提交记录显示，当前 head 是 `dcff9e886ceaad3ae983fd5fdf88d034c7a5057e`，提交信息为 **`test: harden reactor tcp lifecycle`**。它位于上一轮看到的 `5e3c84b...` 之后。 从 `5e3c84b` 到当前 head 只 ahead 2 个提交，但改动密度很高：新增/修改了 TCP lifecycle tests、TimerQueue contract、EventLoopThreadPool contract、Connector/TcpConnection/TcpServer 的 cancel/close 逻辑、Windows IOCP milestone 文档和 CI guard。
+最新提交已经从上次分析的 `dcff9e8` 前进到 `16969d8`，最近三笔提交分别是：
 
-当前 worktree 已经配置 **37 个 CTest tests**，结构是 6 个 unit、30 个 contract、1 个 integration。相比上一轮 29 个测试，新增的 8 个基本都集中在 race、soak、cross-thread、pending operation cancellation 这些真正危险的生命周期区域。
+`204d20c`：`test: harden tcp lifecycle threading gates`
+`99e303b`：`fix: stabilize tsan threading contracts`
+`16969d8`：`fix: repair linux pending write socket options`。
 
-需要注意一个细节：当前 `dcff9e8` 这个最新提交本身没有查到 workflow run；仓库文档记录的最新 remote green 是 **ci #17 for commit `4cdf589` on main**，包含 Linux CMake、Linux ASan/UBSan、Linux Release、Windows MSVC IOCP 四个 job 全成功。  所以结论应表述为：**当前代码已经把 37-test hardening 写入 worktree 和 guards；最新完整远端 CI green 证据停在 ci #17 / `4cdf589`，而不是最新 `dcff9e8`。**
+这组提交的含义很清楚：项目不是继续加高层功能，而是在把 Reactor/TCP 的 **线程亲和、跨线程 API、pending connect/read/write、stop/destroy/forceClose、worker-loop teardown** 这些高风险路径压到 TSan 和 soak/race contract 下。
 
-## 最大变化：从“IOCP 主路径可跑”进入“IOCP cancel/close 语义可控”
+当前 worktree 已经配置 **54 个 CTest tests**，其中 6 个 unit、47 个 contract、1 个 integration；相比上一轮的 37 个测试，又新增了 17 个 contract，主要围绕 threading/race/lifecycle。
 
-上一轮最大变化是 IOCP 数据路径：`AcceptEx`、`ConnectEx`、`WSARecv`、`WSASend` 进入 core TCP 路径。现在的关键变化是：**pending ConnectEx / pending WSARecv / pending WSASend 的取消和销毁顺序开始被显式建模与测试。**
+## 最大推进点：加入 Linux TSan race-oriented gate
 
-`Connector` 现在有 Windows 专用的 `cancelPendingConnectInLoop()`、`finishCancelInLoop()`，并引入 `connectStopGuard_` 来保证 pending ConnectEx 取消完成前对象仍存活。 在 `stopInLoop()` 中，如果处于 `kConnecting` 并且能取消 pending connect，就先返回等待完成包；完成路径进入 `handleWrite()` / `handleError()` 时，如果处于 canceling 或 `!connect_`，会走 `finishCancelInLoop()`，而不是误把 stale completion 当作成功连接。   Windows 下实际调用 `CancelIoEx`，并处理 `ERROR_NOT_FOUND` / `ERROR_INVALID_HANDLE` 这类竞态结果。
+这是这轮最重要的工程升级。
 
-`TcpConnection` 也新增了 `forceClosePending_` 和 `forceCloseGuard_`，并把关闭过程拆成 `handleClose()` 与 `finishClose()`。  Windows 下如果 IOCP transport 仍有 pending operations，`handleClose()` 不直接销毁，而是进入 pending close 状态、设置 guard、调用 `cancelPendingOperations()`，等待 completion 回来后再 `finishClose()`。 `handleRead()` / `handleWrite()` 在 completion 后如果发现 `forceClosePending_`，会再次进入 `handleClose()` 完成关闭收敛。
+CI workflow 现在新增了 `linux-tsan` job，名字是 **Linux TSan race-oriented build and tests**；它使用 `GAMENET_ENABLE_TSAN=ON` 配置 Debug build，并且只跑 `threading` label 的 CTest，timeout 为 30 秒。
 
-`IocpTcpTransport` 也从“能 WSARecv/WSASend”升级到“能报告 pending 状态并取消 pending operations”。它新增了 `hasPendingOperations()` 和 `cancelPendingOperations()`，后者对 read/write overlapped 调用 `CancelIoEx`。
+这意味着项目开始把“线程契约”从普通 contract test 推到 sanitizer 维度。对于一个 Reactor/one-loop-per-thread 网络库，这一步比增加 HTTP/RPC 功能更有价值。因为真正容易出事故的不是 echo 能不能跑，而是：
 
-这是一类非常关键的改动，因为 IOCP 的核心风险从来不是“能否收到 completion”，而是 **关闭、取消、对象生命周期、completion 晚到** 是否能统一收敛。当前方向明显抓住了这个核心风险。
+跨线程 `connect()` / `disconnect()` / `stop()` 是否只 marshal 到 owner loop；
+pending `ConnectEx` 被 stop/destroy 后是否还有 stale completion；
+pending read/write 被 forceClose 后对象是否仍活到 completion 收敛；
+worker-owned connection stop 时，thread pool 是否过早 join；
+TimerQueue ready callback 与 cancel race 是否会 double-fire。
 
-## TCP lifecycle 测试覆盖明显变硬
+migration status 也明确记录了这个 race-oriented CI：新 job 会以 `threading` label 过滤测试，覆盖 cross-thread API、worker-loop scheduling、pending read/write forceClose cancel-close、mixed-timing pending ConnectEx stop、active retry-enabled TcpClient stop-after-peer-close、cross-thread TcpClient connect/disconnect、worker-owned active-write stop、worker-callback TcpServer stop 等路径；但远端 green 证据要等下一次 workflow run。
 
-`tests/CMakeLists.txt` 当前已经把 lifecycle/race 测试扩展到了 37 个配置测试，其中新增的重点包括：
+需要特别说明：当前最新 head `16969d8` 没查到 workflow run。 仓库文档记录的最近远端 green 仍是 **ci #17 / commit `4cdf589`**，包含 Linux CMake、Linux ASan/UBSan、Linux Release、Windows MSVC IOCP 四个 job 成功。 所以最新状态应表述为：**54-test + TSan gate 已进入 worktree；最新 head 的远端 green 还需要下一次 CI run 证明。**
 
-`TcpClient`：`retry_stop_race`、`retry_stop_soak`、`stop_pending_connect`。
-`TcpServer`：`stop_active_connections`、`stop_active_write`、`stop_soak`。
-`TcpConnection`：cross-thread send、cross-thread shutdown、cross-thread forceClose soak、forceClose pending read、shutdown pending output、write-complete ordering、peer close/reset、high-water、repeated forceClose。
+## 测试覆盖已经从 lifecycle 扩到 threading/race 矩阵
 
-这些不是装饰性测试。比如 `test_tcp_client_stop_pending_connect.cpp` 明确验证：`client.stop()` 必须取消 in-flight `ConnectEx`，即使稍后 server start，也不能接受 stale completion 形成连接。
+`tests/CMakeLists.txt` 现在显示测试矩阵明显加厚：
 
-`test_tcp_server_stop_active_write.cpp` 验证 server 在连接建立后发送 8MB payload，然后立即 `server.stop()`，最终必须只收到一次 disconnect callback，连接计数归零。 这对 backpressure / pending output / stop reentrancy 都是重要边界。
+`EventLoopThreadPool` 增加了 restart soak。
+`TcpClient` 增加了 retry stop soak、pending connect stop soak、cross-thread stop pending connect、mixed-timing pending connect stop soak、destroy pending connect、destroy active connection、active connection mixed-timing stop soak、cross-thread active disconnect、cross-thread connect。
+`TcpServer` 增加了 multi-worker stop、worker active write stop soak、worker callback stop soak。
+`TcpConnection` 增加了 cross-thread pending-read/pending-write forceClose、mixed-timing pending-read/pending-write forceClose soak 等。
 
-`test_tcp_connection_cross_thread_send.cpp` 验证从非 owner thread 调用 `send()` 时，payload 必须复制并经 EventLoop marshal，写入仍发生在 owner loop，且用户 callback 不得跑到错误线程。 最终断言包括 write-complete 一次、peer 读到完整 payload、close callback 一次、connection disconnected。
+这说明项目现在已经不是“主路径 + 几个关闭测试”，而是开始系统化覆盖：
 
-`test_tcp_connection_force_close_pending_read.cpp` 验证在 pending read 存在时 `forceClose()` 仍能收敛到单次 connected/disconnected/close callback，并且 connection 被释放。 这正好对应 IOCP pending read cancellation 的高风险点。
+1. owner-loop API 调度；
+2. non-owner thread 调用；
+3. pending operation cancellation；
+4. delayed / immediate / mixed timing；
+5. worker-owned connection teardown；
+6. stop/destroy 与 callback reentrancy；
+7. Linux + Windows 的差异路径。
 
-## EventLoopThreadPool 和 TimerQueue 也从“基本正确”进入 race/soak 覆盖
+`test_threading_gate_contracts.py` 还把这些测试强制要求带 `threading` 和 `lifecycle` label，并要求 workflow 中存在 `linux-tsan`、`GAMENET_ENABLE_TSAN=ON`、`ctest ... -L threading --timeout 30`。 这很关键：不是“写了测试但 TSan 不跑”，而是把高风险测试挂进专门的 race-oriented gate。
 
-这轮不只是 TCP 测试增加了。CI guard 新增了 `test_event_loop_thread_pool_contracts.py` 和 `test_timer_queue_contracts.py`。workflow 四个 job 都会在 CMake configure 前运行这些 guard。
+## TcpClient / Connector 方向：pending connect 与跨线程 API 继续硬化
 
-`EventLoopThreadPool` 的 contract guard 要求覆盖“cross-thread queued work reaches each published worker loop”。 实际 C++ 测试里，4 个 submitter 线程向 3 个 worker loop 各提交 16 次任务，断言所有任务都在 worker loops 执行，base loop 执行次数为 0。 这比“能启动两个线程，round-robin 返回 loop”强很多。
+`TcpClient` 现在对析构 active connection 的处理更严谨：析构时重置 lifetime token，取出 connection，清空 close callback 并改成只做 `connectDestroyed()`，然后在 connection loop 上 forceClose 或 connectDestroyed；同时 stop connector。
 
-`TimerQueue` 的新增契约是 ready-timer cancellation race：一个 ready callback 取消同一批 ready timer 中后一个 timer，要求后一个 callback 不触发。 实际测试里两个 timer 使用同一 `when`，第一个 callback cancel 第二个，然后最终断言 `firstFired` 为 true、`secondFired` 为 false。 这对 timer queue 的 reset/cancel/inQueue 状态机非常关键。
+`connect()`、`disconnect()`、`stop()` 都是捕获 lifetime token 后通过 `loop_->runInLoop()` marshal 到 owner loop。 这和当前新增的 cross-thread tests 是一致的：例如 `test_tcp_client_cross_thread_connect.cpp` 明确从非 owner thread 调用 `client.connect()`，并断言连接回调仍然运行在 owner loop，连接断开后 client connection 为空、server connectionCount 为 0。
 
-## CI 和工程护栏继续加厚
+这种测试不是简单补覆盖率，而是在确认 API surface 的线程承诺：用户可以从非 owner thread 请求 connect/disconnect/stop，但真正状态机只能在 owner loop 上前进。
 
-CI 文档现在明确把 EventLoopThreadPool queued-work race/soak、TimerQueue ready-timer cancellation race、Windows IOCP milestone/data-path、intent consistency、scope boundary、install package、ASan/UBSan、Release、Windows MSVC Debug + install consumer 都放进 gate 范围。
+## TcpConnection 方向：pending write / pending read / forceClose 混合时序
 
-同时 deferred modules 仍然关闭：TLS、experimental transport、HTTP、WebSocket、RPC、UDP、KCP、PMTU/FEC、metrics、game pipeline 都没有进入 active scope。 文档还强调如果 active implementation/test surface 出现 deferred high-level module name，workflow 会失败；Phase 4 promotion 必须同步更新 active scope 和 migration status。
+这轮还明显加强了 pending-write 测试质量。最新提交 `16969d8` 专门修复 Linux pending write 测试中的 socket option：给 pending-write socketpair 测试补上 `SO_SNDBUF`，保证小发送缓冲真正生效，从而更稳定地制造 pending write。
 
-这说明项目方向很清楚：**继续把 core 打硬，而不是被 mini_trantor 的上层模块诱惑提前膨胀。**
+`test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp` 展示了现在测试的复杂度：每轮建立 socketpair，设置非阻塞和小 send buffer，发送 8MB payload，然后用 4 种模式交错触发 owner/non-owner、immediate/delayed `forceClose()`，最终要求 connected/disconnected/close callback 都只发生一次且 connection 被释放。
 
-## 与 mini_trantor 的关系再评估
+这正是网络库最难的部分：不是“能写完”，而是“写不完、正在写、另一个线程关闭、completion 晚到、对象准备销毁”的情况下是否仍然单次收敛。
 
-`mini_trantor` 仍然是更完整的实验框架：它包含 coroutine bridge、HTTP/WebSocket/RPC、DNS/TLS/IPv6、TCP/UDP/KCP transport、PacketFramer、CodecAdapter、SessionManager、LogicLoop、GameServerPipeline、broadcast/metrics 等。 它的模块成熟度矩阵也承认很多区域仍需 race、soak、fuzz、backpressure、长跑压测。
+## EventLoopThreadPool 方向：stop/join 语义修正
 
-`game-net-core` 现在不是追求“功能上赶上 mini_trantor”，而是在做更底层的工程反向收敛：把 `mini_trantor` 中最核心、最容易被上层复杂度污染的 Reactor/TCP/loop/thread/timer/socket 基础抽出来，以更小 target、更强 contract、更清晰 package 和更严格 CI 重新证明。
+上一轮 EventLoopThreadPool 已经有 queued-work soak；这轮源码修了 `stop()`：现在 `stop()` 明确要求在 base loop 线程调用，并逐个调用 `EventLoopThread::stop()`，而不是只对 worker loop 调 `quit()` 后直接清空。
 
-尤其 Windows 方向上，`mini_trantor` README 仍描述 Windows 使用 `SelectPoller` preview。 而 `game-net-core` 已把 Windows active source selection 指向 IOCP backend，并记录 IOCP path 覆盖 `PostQueuedCompletionStatus`、`AcceptEx`、`ConnectEx`、`WSARecv`、`WSASend`。 这意味着拆出来的 core 不只是“子集”，而是在部分底层平台能力上已经开始反超原仓库的工程质量。
+这个改动很有价值，因为 thread pool stop 的核心不是发 quit 信号，而是 **join / 生命周期收敛**。如果只 quit 不 join，TSan 和长期压测都很容易暴露 worker thread 与 pool teardown 的竞态。`test_event_loop_thread_pool_contracts.py` 也把这一点写进 guard：要求源码里出现 `baseLoop_->assertInLoopThread();` 和 `thread->stop();`。
+
+## Windows IOCP 当前状态
+
+Windows IOCP 方向没有退回；相反，这轮文档把 54/54 本地 Windows CTest 证据同步进 milestone。Windows milestone 记录：本地 VS2026 Debug build 成功，CTest 10 秒 timeout 下 54/54 passed，0 failing tests。
+
+Windows 覆盖也比上一轮更完整：
+
+EventLoop wakeup 通过 `PostQueuedCompletionStatus`，不再依赖默认 poll timeout；
+EventLoopThreadPool worker loops 有 queued-work soak 和 restart-stop soak；
+TcpServer stop 覆盖 active write、multi-worker、worker-callback stop reentry；
+TcpClient 覆盖 pending ConnectEx stop、cross-thread stop、destroy pending/active、retry stop、cross-thread connect/disconnect；
+TcpConnection 覆盖 pending read/write、cross-thread forceClose、cross-thread shutdown、pending-output shutdown 等。
+
+但这仍是 **local evidence + workflow gate 配置**，不是最新 head 的远端 green。Windows workflow 仍然是必须保持的 gate。
+
+## CI 与 scope 边界
+
+`src/core/CMakeLists.txt` 仍然只有 `gamenet_core` 目标，源文件也仍然是 core/net/base 与平台后端；Windows 分支是 `SocketsOps_win`、`Wakeup_win`、`IocpSocketOps_win`、`IocpTcpTransport_win`、`IocpPoller`，非 Windows 是 Linux socket/wakeup/EPollPoller。没有 protocol、transport、game、HTTP、RPC、KCP 等模块进入 active target。
+
+CI workflow 也继续保持 deferred modules disabled：各 job 都显式设置 `GAMENET_ENABLE_TLS=OFF` 和 `GAMENET_ENABLE_EXPERIMENTAL=OFF`；TSan job 也是只针对当前 core target 的 threading label。
+
+这说明项目没有因为测试变多而 scope 失控。它仍然是在打磨 core。
+
+## 与 mini_trantor 的关系
+
+`mini_trantor` 是大而全的实验框架：包含 Reactor/TCP、coroutine bridge、HTTP/WebSocket/RPC、DNS/TLS/IPv6、TCP/UDP/KCP transport、PacketFramer/CodecAdapter、SessionManager/LogicLoop/GameServerPipeline、broadcast/metrics 等。 它的成熟度矩阵也承认不少模块仍需要 close race、half-close、soak、backpressure、DNS race、fuzz corpus、重连窗口压力等证据。
+
+`game-net-core` 现在不是在“追平 mini_trantor 的功能列表”，而是在把 mini_trantor 的最底层网络核心抽出来重新做成更可靠的 foundation。尤其是 Windows 后端和 TSan/threading gate，已经明显走向比原仓库更硬的工程化路线。
 
 ## 当前成熟度评估
 
-我会按模块给一个实际判断：
-
-**EventLoop / Channel / Poller / TimerQueue：接近 Stable。** EventLoop 主路径、cross-thread wakeup、TimerQueue ready-cancel race、Poller backend abstraction 都有明确契约。TimerQueue 的同批 ready timer cancellation 测试是一个质量跃迁。
-
-**EventLoopThread / EventLoopThreadPool：接近 Stable，但还需要更长 soak。** 当前已有 worker-loop queued-work soak，能证明 published worker loops 的 thread-affinity 和 cross-thread queueing，不再只是启动/停止测试。
-
-**TcpServer / TcpClient / TcpConnection / Connector：Stable-leaning Beta。** 主链路、关闭路径、cross-thread send/shutdown/forceClose、pending output、pending read、retry stop、pending connect 都有 contract；但 TCP lifecycle 本身是高风险区，我会等更多 long soak、TSan/race-oriented evidence 后再称 full Stable。
-
-**Windows IOCP backend：Beta，方向正确。** 它已经不是 skeleton，已经覆盖 accept/connect/read/write/wakeup/install consumer；但 IOCP cancel/close 的长期 race 仍然需要更多重复/压力/延迟注入测试。当前已开始处理 `CancelIoEx`、pending completion 和 lifetime guard，这是正确方向。
-
-**Phase 4 模块：仍未开始，不应提前。** Protocol framing、transport abstraction、session、logic loop、broadcast、UDP/KCP 等仍应等待 core 的 Linux/Windows gate 持续稳定。
+**Reactor / EventLoop / TimerQueue：Stable-leaning。** EventLoop wakeup、TimerQueue ready-cancel race、owner-loop timer execution、cross-thread scheduling 都已有明确 contract；现在又进入 TSan threading label。
+**EventLoopThreadPool：Stable-leaning，但还需远端 TSan green。** stop 已改为 owner-loop assert + thread->stop，queued-work soak 与 restart-stop soak 都已进入测试。
+**TcpConnection：Beta+，接近 Stable 的路上。** read/write/close 主路径已强，pending read/write forceClose、cross-thread shutdown、pending output、mixed timing soak 都在补齐；但这个模块是最高风险区，仍需 TSan/长期 soak 反复跑。
+**TcpClient / Connector：Beta+。** pending ConnectEx stop/destroy、cross-thread connect/disconnect、retry stop 都在硬化；真正升级到 Stable 需要最新 TSan job 和 Windows workflow 持续 green。
+**TcpServer：Beta+。** multi-worker stop、worker active write、worker callback reentry 都开始覆盖，这是服务端生命周期的重要跃迁。
+**Windows IOCP backend：Beta，方向非常正确。** 数据路径和 cancel/close 模型已经形成，但仍需要更多远端 CI 与长跑证据。
+**Phase 4：未开始。** 当前不应急着迁移 PacketFramer/transport/session，更不应直接上 HTTP/RPC/game pipeline。
 
 ## 当前风险
 
-第一，**最新 head `dcff9e8` 尚无对应 workflow run**。文档记录了 ci #17 / `4cdf589` green，但当前 37-test hardening 的最新提交未查到 workflow run。 所以当前应避免说“最新 head 已远端 green”；更准确是“最新 worktree 已配置 37 tests，最近完整远端 baseline 是 ci #17 green”。
+第一，**最新 head 还没有远端 workflow run**。`16969d8` 未查到 workflow run，最新完整远端 green 仍停在 ci #17 / `4cdf589`。
 
-第二，**IOCP cancel/close 语义虽然开始成型，但仍是最危险区域**。`CancelIoEx` 后 completion 仍可能回来，对象必须靠 guard 活到 completion 收敛；当前实现已经做了 guard，但还需要更多随机化、重复、压力测试来证明没有偶发 late completion/use-after-free。
+第二，**TSan job 是正确方向，但还缺 green 证据**。migration status 明确说 remote green evidence for this new job is pending until the next workflow run。
 
-第三，**测试数量增长快，下一步需要避免 contract guard 变成字符串检查自嗨**。现在 Python guard 会检查测试/文档/intent/CMake 是否包含指定 fragment；这适合防止结构漂移，但真正的质量仍来自 C++ contract 在多平台、sanitizer、soak 下长期跑。也就是说 Python guard 是元护栏，不应替代运行时 race 证据。
+第三，**测试规模已经快速膨胀到 54 个，后续要防止测试碎片化**。现在 contract 数量很多，建议下一步把常用 socketpair、nonblocking、small send buffer、loop runner、callback counter 抽成 tests/support 工具，避免每个测试复制一份辅助逻辑。
 
-第四，**还没有看到 TSan 作为稳定 gate**。Linux ASan/UBSan 和 Release 已有，但这个项目的风险核心是线程亲和、跨线程投递、生命周期和 callback reentrancy；未来 TSan 或替代的 race-oriented CI 会非常有价值。
+第四，**mixed-timing soak 还偏短**。目前很多 soak 是 8 次或轻量循环，适合作为 CI smoke/race gate，但不能替代长跑 soak。后续最好有 nightly 或手动 workflow 跑更大 iteration。
 
-## 当前方向判断
+## 下一步建议
 
-当前方向非常健康，而且比上一轮更清晰：
+当前最优先的下一步不是 Phase 4，而是：
 
-**它正在把 game-net-core 做成一个“Linux epoll + Windows IOCP 双后端、以 lifecycle contract 为中心、可安装消费的 C++23 Reactor/TCP foundation”。**
-
-最合理的下一步不是 Phase 4，而是继续补这些证据：
-
-1. 让 `dcff9e8` 这批 37-test hardening 通过完整远端 CI，并更新 migration status。
-2. 增加 IOCP pending read/write/connect cancel 的重复压力测试，最好带随机时序、短 timeout 和多轮 iteration。
-3. 给 `TcpServer::stop()`、`TcpClient::stop()`、`TcpConnection::forceClose()` 做更长 soak，覆盖 worker-owned connections 和 base-loop shutdown ordering。
-4. 逐步引入 TSan 或可替代的 race CI。
-5. 当 core 连续稳定后，Phase 4 首选迁移 **PacketFramer / protocol framing**，而不是 HTTP/RPC/game pipeline，因为它最贴近 TCP core、最容易保持边界纯净。
+1. 触发最新 head 的完整 CI，尤其确认新增 `linux-tsan` job 是否 green。
+2. 如果 TSan green，再把 migration status 从 “pending remote green evidence” 更新为最新 run 结果。
+3. 抽象 tests/support，降低 lifecycle/race 测试重复代码。
+4. 增加一个非默认的 long-soak workflow，扩大 mixed timing iteration，不阻塞普通 PR，但用于阶段性稳定性证据。
+5. 保持 Phase 4 延后。等 Linux Debug/ASan/TSan/Release + Windows IOCP Debug 全部稳定后，Phase 4 首选仍应是 **PacketFramer / protocol framing**，而不是 HTTP/RPC/game pipeline。
 
 ## 最终评价
 
-`game-net-core` 当前已经不是“刚拆出来的 core 仓库”，而是一个正在快速成型的 **网络核心基础库**。它的最大价值不是功能多，而是边界硬：scope guard、intent guard、install package、Release-safe tests、ASan/UBSan、Windows IOCP gate、lifecycle/race contract 都在围绕同一个目标服务。
+`game-net-core` 当前已经从“拆出 Reactor/TCP core”推进到 **可验证、可安装、双平台、race-oriented 的 core foundation**。这次最大的进步不是代码量，而是验证质量：54 个 CTest、47 个 contract、TSan threading gate、Windows IOCP cancel/close 文档与测试矩阵，说明项目正在朝“可靠底座”而不是“功能堆叠”前进。
 
-我的评估是：
+我的判断是：
 
-**当前进度：Phase 2/3 基本完成，Phase 3.5 core hardening 正在进行。**
-**当前方向：继续压实 Reactor/TCP lifecycle、IOCP cancel/close、TimerQueue/EventLoopThreadPool race，而不是提前迁移上层模块。**
-**当前短板：最新 head 还缺远端 CI 结果；IOCP cancel/close 需要更长时间和更随机化的 race/soak 证据；TSan/race gate 仍值得补。**
+**当前进度：Phase 2/3 完成度很高，Phase 3.5 hardening 正在快速推进。**
+**当前方向：继续压实 Reactor/TCP lifecycle、跨线程 API、TSan threading gate、IOCP cancel/close，而不是提前迁移上层模块。**
+**当前关键门槛：最新 head 的 Linux TSan + Windows IOCP + Linux ASan/Release 全部远端 green。**
