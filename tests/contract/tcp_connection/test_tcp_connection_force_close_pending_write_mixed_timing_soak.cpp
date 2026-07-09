@@ -8,12 +8,13 @@
 #include "support/LoopTest.h"
 #include "support/SocketPair.h"
 #include "support/TcpConnectionCallbacks.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <atomic>
 #include <chrono>
 #include <memory>
 #include <string>
-#include <thread>
 
 int main() {
     constexpr int iterationCount = 8;
@@ -21,22 +22,16 @@ int main() {
     for (int iteration = 0; iteration < iterationCount; ++iteration) {
         gamenet::net::EventLoop loop;
         gamenet::test::ConnectedSocketPair pair(gamenet::test::SocketPairMode::SmallSendBuffer);
-
-        const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-        const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-        std::shared_ptr<gamenet::net::TcpConnection> connection = std::make_shared<gamenet::net::TcpConnection>(
-            &loop,
-            "force-close-pending-write-mixed-timing-soak-" + std::to_string(iteration),
-            pair.connectionFd,
-            localAddr,
-            peerAddr);
+        std::shared_ptr<gamenet::net::TcpConnection> connection = gamenet::test::makeTcpConnection(
+            loop,
+            pair,
+            "force-close-pending-write-mixed-timing-soak-" + std::to_string(iteration));
 
         gamenet::test::TcpConnectionCallbackCounts callbacks;
         std::atomic<bool> forceCloseIssued{false};
         std::atomic<bool> ownerForceCloseIssued{false};
         std::atomic<bool> nonOwnerForceCloseIssued{false};
-        std::thread closer;
+        gamenet::test::NonOwnerThreadHandoff closer;
 
         gamenet::test::setCountingConnectionCallback(connection, loop, callbacks);
 
@@ -65,7 +60,7 @@ int main() {
                 ownerForceCloseIssued = true;
                 conn->forceClose();
             } else if (mode == 1) {
-                closer = std::thread([conn, &loop, &forceCloseIssued, &nonOwnerForceCloseIssued] {
+                closer = gamenet::test::startNonOwnerThread([conn, &loop, &forceCloseIssued, &nonOwnerForceCloseIssued] {
                     GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                     forceCloseIssued = true;
                     nonOwnerForceCloseIssued = true;
@@ -81,8 +76,9 @@ int main() {
                         conn->forceClose();
                     });
             } else {
-                closer = std::thread([conn, &loop, &forceCloseIssued, &nonOwnerForceCloseIssued, iteration] {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5 + iteration));
+                closer = gamenet::test::startNonOwnerThreadAfter(
+                    std::chrono::milliseconds(5 + iteration),
+                    [conn, &loop, &forceCloseIssued, &nonOwnerForceCloseIssued] {
                     GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                     forceCloseIssued = true;
                     nonOwnerForceCloseIssued = true;
@@ -96,9 +92,7 @@ int main() {
             std::chrono::seconds(2),
             "timed out waiting for mixed-timing pending-write forceClose teardown");
 
-        if (closer.joinable()) {
-            closer.join();
-        }
+        closer.join();
 
         GAMENET_TEST_ASSERT(forceCloseIssued.load());
         GAMENET_TEST_ASSERT(ownerForceCloseIssued.load() || nonOwnerForceCloseIssued.load());

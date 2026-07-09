@@ -5,9 +5,9 @@
 #include "gamenet/core/net/TcpServer.h"
 
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <chrono>
 #include <string>
-#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -41,12 +41,11 @@ int main() {
         // marshal cancellation of an in-flight ConnectEx to the owner loop
         // before a later server start can publish a stale connection.
         client.connect();
-        std::thread stopper([&] {
+        gamenet::test::runFromNonOwnerThread([&] {
             GAMENET_TEST_ASSERT(!loop.isInLoopThread());
             stopIssued = true;
             client.stop();
         });
-        stopper.join();
 
         loop.runAfter(25ms + std::chrono::milliseconds(iteration * 5), [&] {
             GAMENET_TEST_ASSERT(loop.isInLoopThread());

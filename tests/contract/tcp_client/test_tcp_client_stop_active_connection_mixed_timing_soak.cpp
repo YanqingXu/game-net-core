@@ -4,11 +4,12 @@
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 
+#include "support/LoopTest.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <atomic>
 #include <chrono>
 #include <string>
-#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -37,7 +38,7 @@ int main() {
         int serverConnectedCount = 0;
         int serverDisconnectedCount = 0;
         gamenet::net::TcpConnectionPtr serverConnection;
-        std::thread stopper;
+        gamenet::test::NonOwnerThreadHandoff stopper;
 
         auto closePeerAfterStop = [&] {
             if (peerCloseIssued) {
@@ -83,7 +84,7 @@ int main() {
                     ownerStopIssued = true;
                     client.stop();
                 } else if (mode == 1) {
-                    stopper = std::thread([&] {
+                    stopper = gamenet::test::startNonOwnerThread([&] {
                         GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                         stopIssued = true;
                         nonOwnerStopIssued = true;
@@ -97,8 +98,7 @@ int main() {
                         client.stop();
                     });
                 } else {
-                    stopper = std::thread([&] {
-                        std::this_thread::sleep_for(5ms + std::chrono::milliseconds(iteration));
+                    stopper = gamenet::test::startNonOwnerThreadAfter(5ms + std::chrono::milliseconds(iteration), [&] {
                         GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                         stopIssued = true;
                         nonOwnerStopIssued = true;
@@ -132,16 +132,12 @@ int main() {
             loop.quit();
         });
 
-        loop.runAfter(2s, [&] {
-            GAMENET_TEST_ASSERT(false && "timed out waiting for active TcpClient stop soak teardown");
-            loop.quit();
-        });
+        gamenet::test::runLoopWithTimeout(
+            loop,
+            2s,
+            "timed out waiting for active TcpClient stop soak teardown");
 
-        loop.loop();
-
-        if (stopper.joinable()) {
-            stopper.join();
-        }
+        stopper.join();
 
         GAMENET_TEST_ASSERT(stopIssued.load());
         GAMENET_TEST_ASSERT(ownerStopIssued.load() || nonOwnerStopIssued.load());

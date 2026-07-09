@@ -20,6 +20,8 @@ The `ci` workflow validates:
   to the IOCP backend and the Windows MSVC workflow gate.
 - Windows IOCP data-path guard for the planned overlapped operation layer,
   socket extension helpers, and completion metadata translation.
+- EventLoop contract guard for owner-thread scheduling, quit, and bounded
+  future wait helper coverage.
 - EventLoopThreadPool contract guard for queued-work race/soak coverage.
 - TimerQueue contract guard for ready-timer cancellation races.
 - Threading gate contract guard for the race-oriented TSan test selection.
@@ -53,6 +55,7 @@ python3 tests/scope/test_intent_consistency.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
 python3 tests/cmake/test_install_package_contract.py
+python3 tests/cmake/test_event_loop_contracts.py
 python3 tests/cmake/test_event_loop_thread_pool_contracts.py
 python3 tests/cmake/test_migration_status_contract.py
 python3 tests/cmake/test_msvc_utf8_contract.py
@@ -88,14 +91,20 @@ It builds the same core/test targets with ThreadSanitizer enabled and runs the
 tests labeled `threading`. That label intentionally covers cross-thread APIs,
 worker-loop scheduling, and lifecycle tests with cancel/close race risk such as
 pending-read and pending-write `forceClose()` contracts,
+direct `Connector::stop()` retry-timer cancellation contracts,
 mixed-timing pending-ConnectEx `TcpClient::stop()` contracts, and
 active retry-enabled `TcpClient::stop()` after peer-close contracts,
 active cross-thread `TcpClient::disconnect()` contracts,
+repeated active `TcpClient::disconnect()` idempotence contracts,
+repeated active `TcpClient::stop()` idempotence contracts,
+repeated active `TcpClient::connect()` idempotence contracts,
 active cross-thread `TcpClient::connect()` contracts,
+post-close `TcpConnection::send()` ignore contracts,
 mixed-timing pending-read `TcpConnection::forceClose()` contracts,
-mixed-timing pending-write `TcpConnection::forceClose()` contracts, plus
-worker-owned active-write `TcpServer::stop()` contracts, and worker-callback
-`TcpServer::stop()` contracts:
+mixed-timing pending-write `TcpConnection::forceClose()` contracts,
+repeated `TcpConnection::shutdown()` idempotence contracts, plus
+worker-owned active-write `TcpServer::stop()` contracts, worker-callback
+`TcpServer::stop()` contracts, and repeated `TcpServer::stop()` idempotence contracts:
 
 ```bash
 cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
@@ -130,6 +139,17 @@ ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until
 
 Use it for phase hardening evidence when mixed-timing lifecycle contracts need
 more iteration than the ordinary PR gate should spend.
+
+Remote evidence: run 28986707243, job 86017363504, commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221,
+repeat 20, timeout 60 seconds, completed successfully at
+2026-07-09T01:15:38Z with 36/36 threading-labeled tests passed in
+608.67 seconds.
+
+Local Windows Debug evidence for the current worktree: the same repeat shape
+with `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`
+passed the current 43-test threading slice on 2026-07-09; CTest reported
+43/43 threading-labeled tests passed across 20 repeats and total test time was
+637.56 seconds.
 
 ## Install Package Gate
 
@@ -200,6 +220,7 @@ py -3 tests\scope\test_intent_consistency.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
 py -3 tests\cmake\test_install_package_contract.py
+py -3 tests\cmake\test_event_loop_contracts.py
 py -3 tests\cmake\test_event_loop_thread_pool_contracts.py
 py -3 tests\cmake\test_migration_status_contract.py
 py -3 tests\cmake\test_msvc_utf8_contract.py

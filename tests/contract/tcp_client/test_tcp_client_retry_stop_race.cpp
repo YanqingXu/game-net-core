@@ -4,6 +4,7 @@
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 
+#include "support/TcpClientStopHarness.h"
 #include "support/TestAssert.h"
 #include <chrono>
 
@@ -13,18 +14,11 @@ int main() {
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "retry-stop-server");
     gamenet::net::TcpClient client(&loop, server.listenAddress(), "retry-stop-client");
-
-    bool stopIssued = false;
-    bool serverStartedAfterStop = false;
-    bool connectedAfterStop = false;
+    gamenet::test::TcpClientStopHarness harness(loop);
 
     client.enableRetry();
     client.setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
-        GAMENET_TEST_ASSERT(loop.isInLoopThread());
-        if (conn->connected()) {
-            connectedAfterStop = true;
-            conn->forceClose();
-        }
+        harness.observeConnection(conn);
     });
 
     // client-retry-stop-race: stop() must cancel any in-flight connect or
@@ -32,25 +26,22 @@ int main() {
     client.connect();
     loop.runAfter(250ms, [&] {
         GAMENET_TEST_ASSERT(loop.isInLoopThread());
-        stopIssued = true;
+        harness.markStopIssued();
         client.stop();
         server.start();
-        serverStartedAfterStop = true;
+        harness.markServerStartedAfterStop();
     });
 
     loop.runAfter(1200ms, [&] {
         GAMENET_TEST_ASSERT(loop.isInLoopThread());
         server.stop();
-        GAMENET_TEST_ASSERT(client.connection() == nullptr);
+        harness.assertStopped(client);
         loop.quit();
     });
 
     loop.loop();
 
-    GAMENET_TEST_ASSERT(stopIssued);
-    GAMENET_TEST_ASSERT(serverStartedAfterStop);
-    GAMENET_TEST_ASSERT(!connectedAfterStop);
-    GAMENET_TEST_ASSERT(client.connection() == nullptr);
+    harness.assertStopped(client);
 
     return 0;
 }

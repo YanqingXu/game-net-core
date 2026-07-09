@@ -6,6 +6,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "support/SocketPair.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
@@ -14,16 +15,7 @@
 int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair;
-
-    const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-    const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-    auto connection = std::make_shared<gamenet::net::TcpConnection>(
-        &loop,
-        "write-complete-after-send-return",
-        pair.connectionFd,
-        localAddr,
-        peerAddr);
+    auto connection = gamenet::test::makeTcpConnection(loop, pair, "write-complete-after-send-return");
 
     bool connectedCallback = false;
     bool sendReturned = false;

@@ -25,6 +25,7 @@ def main() -> None:
     require(workflow, "cancel-in-progress: true")
     require(workflow, "python3 tests/scope/test_intent_consistency.py")
     require(workflow, "python3 tests/cmake/test_install_package_contract.py")
+    require(workflow, "python3 tests/cmake/test_event_loop_contracts.py")
     require(workflow, "python3 tests/cmake/test_event_loop_thread_pool_contracts.py")
     require(workflow, "python3 tests/cmake/test_migration_status_contract.py")
     require(workflow, "python3 tests/cmake/test_msvc_utf8_contract.py")

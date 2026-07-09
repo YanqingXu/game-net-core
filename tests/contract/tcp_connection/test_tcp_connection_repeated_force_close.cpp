@@ -8,6 +8,7 @@
 #include "support/LoopTest.h"
 #include "support/SocketPair.h"
 #include "support/TcpConnectionCallbacks.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
@@ -15,16 +16,7 @@
 int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair;
-
-    const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-    const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-    auto connection = std::make_shared<gamenet::net::TcpConnection>(
-        &loop,
-        "repeated-force-close-is-idempotent",
-        pair.connectionFd,
-        localAddr,
-        peerAddr);
+    auto connection = gamenet::test::makeTcpConnection(loop, pair, "repeated-force-close-is-idempotent");
 
     gamenet::test::TcpConnectionCallbackCounts callbacks;
     gamenet::test::setCountingConnectionCallback(connection, loop, callbacks);

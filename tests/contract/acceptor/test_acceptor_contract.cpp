@@ -3,26 +3,14 @@
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketsOps.h"
 
-#include <array>
+#include "support/ClientSocket.h"
 #include "support/TestAssert.h"
+
+#include <array>
 #include <chrono>
 #include <thread>
 
 using namespace std::chrono_literals;
-
-namespace {
-
-gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
-    gamenet::net::SocketFd fd = gamenet::net::sockets::createNonblockingOrDie(serverAddr.family());
-    const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
-    if (rc < 0) {
-        const int error = gamenet::net::sockets::lastError();
-        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
-    }
-    return fd;
-}
-
-}  // namespace
 
 int main() {
     gamenet::net::EventLoop loop;
@@ -37,7 +25,7 @@ int main() {
         GAMENET_TEST_ASSERT(!peerAddr.toIp().empty());
 
         ++accepted;
-        gamenet::net::sockets::close(sockfd);
+        gamenet::test::closeTestSocket(sockfd);
 
         if (accepted == kClientCount) {
             acceptor.stop();
@@ -54,11 +42,11 @@ int main() {
         std::this_thread::sleep_for(30ms);
         std::array<gamenet::net::SocketFd, kClientCount> fds{};
         for (auto& fd : fds) {
-            fd = connectTo(listenAddr);
+            fd = gamenet::test::connectTestClient(listenAddr);
         }
         std::this_thread::sleep_for(80ms);
         for (auto fd : fds) {
-            gamenet::net::sockets::close(fd);
+            gamenet::test::closeTestSocket(fd);
         }
     });
 

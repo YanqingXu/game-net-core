@@ -122,6 +122,15 @@ all while preserving the same owner-loop discipline as the server side.
 - `tests/contract/tcp_client/test_tcp_client_cross_thread_disconnect_active.cpp`
   verifies non-owner disconnect() on an active connection marshals graceful
   teardown to the owner loop and converges through normal close/remove paths
+- `tests/contract/tcp_client/test_tcp_client_repeated_disconnect.cpp`
+  verifies repeated owner and non-owner disconnect() calls are idempotent and
+  converge through one client/server disconnect callback pair
+- `tests/contract/tcp_client/test_tcp_client_repeated_stop.cpp`
+  verifies repeated owner and non-owner stop() calls on an active retry-enabled
+  client are idempotent and prevent peer close from resurrecting the client
+- `tests/contract/tcp_client/test_tcp_client_repeated_connect.cpp`
+  verifies repeated owner and non-owner connect() calls are idempotent and
+  still create at most one active client/server connection pair
 - `tests/contract/tcp_client/test_tcp_client_cross_thread_connect.cpp`
   verifies non-owner connect() marshals Connector startup to the owner loop and
   publishes connection callbacks on that loop

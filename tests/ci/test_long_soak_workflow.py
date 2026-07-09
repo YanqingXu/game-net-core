@@ -41,10 +41,17 @@ def main() -> None:
     require(ci_docs_text, "long-soak", ci_docs)
     require(ci_docs_text, "ctest --test-dir build-long-soak --output-on-failure", ci_docs)
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
+    require(ci_docs_text, "Remote evidence: run 28986707243", ci_docs)
+    require(ci_docs_text, "job 86017363504", ci_docs)
+    require(ci_docs_text, "commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221", ci_docs)
+    require(ci_docs_text, "repeat 20", ci_docs)
+    require(ci_docs_text, "timeout 60 seconds", ci_docs)
+    require(ci_docs_text, "36/36 threading-labeled tests passed", ci_docs)
 
     migration_text = migration_status.read_text(encoding="utf-8")
     require(migration_text, "non-default `long-soak` workflow", migration_status)
     require(migration_text, "`ctest --repeat until-fail`", migration_status)
+    require(migration_text, "Remote GitHub `long-soak` evidence is now recorded", migration_status)
 
 
 if __name__ == "__main__":

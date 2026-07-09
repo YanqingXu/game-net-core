@@ -37,6 +37,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
           python3 tests/cmake/test_msvc_utf8_contract.py
@@ -93,6 +94,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
           python3 tests/cmake/test_msvc_utf8_contract.py
@@ -142,6 +144,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
           python3 tests/cmake/test_msvc_utf8_contract.py
@@ -191,6 +194,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
           python3 tests/cmake/test_msvc_utf8_contract.py
@@ -241,6 +245,7 @@ jobs:
           python tools/check_scope_boundaries.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
+          python tests/cmake/test_event_loop_contracts.py
           python tests/cmake/test_event_loop_thread_pool_contracts.py
           python tests/cmake/test_migration_status_contract.py
           python tests/cmake/test_msvc_utf8_contract.py

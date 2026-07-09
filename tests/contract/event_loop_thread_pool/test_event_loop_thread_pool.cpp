@@ -1,6 +1,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThreadPool.h"
 
+#include "support/FutureTest.h"
 #include "support/TestAssert.h"
 #include <array>
 #include <atomic>
@@ -66,8 +67,10 @@ int main() {
             }
         });
 
-        const auto status = observedFuture.wait_for(std::chrono::seconds(1));
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(
+            observedFuture,
+            std::chrono::seconds(1),
+            "wrong-thread start did not report runtime_error");
         worker.join();
     }
 
@@ -121,8 +124,10 @@ int main() {
             submitter.join();
         }
 
-        const auto status = allExecutedFuture.wait_for(std::chrono::seconds(2));
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(
+            allExecutedFuture,
+            std::chrono::seconds(2),
+            "worker queued work did not finish");
         GAMENET_TEST_ASSERT(baseExecutions.load() == 0);
         GAMENET_TEST_ASSERT(totalExecutions.load() == expectedExecutions);
         for (const auto& executions : workerExecutions) {
@@ -152,8 +157,10 @@ int main() {
             }
         });
 
-        const auto status = observedFuture.wait_for(std::chrono::seconds(1));
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(
+            observedFuture,
+            std::chrono::seconds(1),
+            "wrong-thread getNextLoop did not report runtime_error");
         worker.join();
         pool.stop();
     }

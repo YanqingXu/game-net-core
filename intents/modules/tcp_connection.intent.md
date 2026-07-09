@@ -84,6 +84,8 @@ inline inside TcpConnection.
 - disconnected state should block unsafe user-visible actions
 - shutdown waits for pending output to drain before issuing the socket
   half-close
+- repeated shutdown requests are idempotent and must not duplicate the
+  owner-loop half-close, write-complete, disconnected, or close callbacks
 - high-water callback fires once when output crosses the threshold and is
   delivered on the owner loop
 - helper-component failure must still converge on TcpConnection's existing error/close model
@@ -120,15 +122,24 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp`
   verifies cross-thread send copies payload ownership, marshals to the owner
   loop, and delivers write-complete on that loop
+- `tests/contract/tcp_connection/test_tcp_connection_send_after_close.cpp`
+  verifies owner and non-owner send() calls after disconnection are ignored
+  without writing to the peer or firing write-complete callbacks
 - `tests/contract/tcp_connection/test_tcp_connection_shutdown_pending_output.cpp`
   verifies shutdown waits for pending output to drain before peer EOF
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`
   verifies cross-thread shutdown marshals to the owner loop, drains pending
   output, and then half-closes exactly once
+- `tests/contract/tcp_connection/test_tcp_connection_repeated_shutdown.cpp`
+  verifies repeated owner and non-owner shutdown requests drain pending output
+  and converge on one owner-loop half-close
 - `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
   verifies high-water callback threshold delivery on the owner loop
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_force_close.cpp`
   verifies repeated forceClose teardown remains single-shot
+- `tests/contract/tcp_connection/test_tcp_connection_repeated_connect_destroyed.cpp`
+  verifies repeated connectDestroyed teardown does not leave stale
+  registration behind after forceClose
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_force_close_soak.cpp`
   repeats cross-thread forceClose and verifies teardown marshals to the owner
   loop without duplicating callbacks

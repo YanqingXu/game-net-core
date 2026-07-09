@@ -8,10 +8,11 @@
 #include "support/LoopTest.h"
 #include "support/SocketPair.h"
 #include "support/TcpConnectionCallbacks.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <chrono>
 #include <memory>
-#include <thread>
 
 int main() {
     constexpr int iterationCount = 5;
@@ -19,16 +20,7 @@ int main() {
     for (int iteration = 0; iteration < iterationCount; ++iteration) {
         gamenet::net::EventLoop loop;
         gamenet::test::ConnectedSocketPair pair;
-
-        const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-        const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-        auto connection = std::make_shared<gamenet::net::TcpConnection>(
-            &loop,
-            "cross-thread-force-close-soak-contract",
-            pair.connectionFd,
-            localAddr,
-            peerAddr);
+        auto connection = gamenet::test::makeTcpConnection(loop, pair, "cross-thread-force-close-soak-contract");
 
         gamenet::test::TcpConnectionCallbackCounts callbacks;
         gamenet::test::setCountingConnectionCallback(connection, loop, callbacks);
@@ -48,10 +40,9 @@ int main() {
 
             // cross-thread-force-close-soak-contract: forceClose from a
             // non-owner thread must marshal back and keep teardown single-shot.
-            std::thread closer([conn] {
+            gamenet::test::runFromNonOwnerThread([conn] {
                 conn->forceClose();
             });
-            closer.join();
         });
 
         gamenet::test::runLoopWithTimeout(

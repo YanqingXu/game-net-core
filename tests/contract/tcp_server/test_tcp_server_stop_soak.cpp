@@ -1,27 +1,14 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
-#include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 
+#include "support/ClientSocket.h"
+#include "support/LoopTest.h"
 #include "support/TestAssert.h"
 #include <atomic>
 #include <chrono>
 #include <string>
-
-namespace {
-
-gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
-    gamenet::net::SocketFd fd = gamenet::net::sockets::createNonblockingOrDie(serverAddr.family());
-    const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
-    if (rc < 0) {
-        const int error = gamenet::net::sockets::lastError();
-        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
-    }
-    return fd;
-}
-
-}  // namespace
 
 int main() {
     constexpr int iterationCount = 3;
@@ -63,15 +50,14 @@ int main() {
         });
 
         server.start();
-        gamenet::net::SocketFd clientFd = connectTo(server.listenAddress());
+        gamenet::net::SocketFd clientFd = gamenet::test::connectTestClient(server.listenAddress());
 
-        baseLoop.runAfter(std::chrono::seconds(2), [&] {
-            GAMENET_TEST_ASSERT(false && "timed out waiting for server.stop() worker-loop soak teardown");
-            baseLoop.quit();
-        });
-        baseLoop.loop();
+        gamenet::test::runLoopWithTimeout(
+            baseLoop,
+            std::chrono::seconds(2),
+            "timed out waiting for server.stop() worker-loop soak teardown");
 
-        gamenet::net::sockets::close(clientFd);
+        gamenet::test::closeTestSocket(clientFd);
 
         GAMENET_TEST_ASSERT(stopIssued.load());
         GAMENET_TEST_ASSERT(connectedCallbackCount.load() == 1);

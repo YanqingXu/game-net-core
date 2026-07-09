@@ -1,6 +1,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
 
+#include "support/FutureTest.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <future>
@@ -34,8 +35,7 @@ int main() {
             loop->quit();
         });
 
-        const auto status = future.wait_for(2s);
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(future, 2s, "cross-thread queueInLoop did not execute");
         GAMENET_TEST_ASSERT(future.get() != callerThread);
     }
 
@@ -58,8 +58,7 @@ int main() {
             order.push_back(2);
         });
 
-        const auto status = future.wait_for(1s);
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(future, 1s, "nested queueInLoop order did not finish");
         GAMENET_TEST_ASSERT((order == std::vector<int>{1, 2, 3}));
     }
 
@@ -77,8 +76,7 @@ int main() {
             loop->quit();
         });
 
-        const auto status = future.wait_for(1s);
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(future, 1s, "cross-thread queueInLoop wakeup did not finish");
     }
 
     {
@@ -98,8 +96,7 @@ int main() {
         std::this_thread::sleep_for(50ms);
         loop->quit();
 
-        const auto status = exitedFuture.wait_for(1s);
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(exitedFuture, 1s, "loop owner thread did not exit after quit");
         loopOwner.join();
     }
 
@@ -115,8 +112,7 @@ int main() {
             loop->quit();
         });
 
-        const auto status = nestedFuture.wait_for(1s);
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(nestedFuture, 1s, "nested queued functor did not run after quit");
     }
 
     return 0;

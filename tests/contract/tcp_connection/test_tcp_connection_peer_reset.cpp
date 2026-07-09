@@ -5,23 +5,15 @@
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/SocketsOps.h"
 
+#include "support/ClientSocket.h"
 #include "support/TestAssert.h"
+
 #include <chrono>
 #include <cstring>
 #include <memory>
 #include <thread>
 
 namespace {
-
-gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
-    gamenet::net::SocketFd fd = gamenet::net::sockets::createNonblockingOrDie(serverAddr.family());
-    const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
-    if (rc < 0) {
-        const int error = gamenet::net::sockets::lastError();
-        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
-    }
-    return fd;
-}
 
 void setResetOnClose(gamenet::net::SocketFd fd) {
     linger resetOnClose{};
@@ -60,7 +52,7 @@ struct LoopbackTcpPair {
         gamenet::net::sockets::listenOrDie(listener);
 
         const gamenet::net::InetAddress listenAddr(gamenet::net::sockets::getLocalAddr(listener));
-        peerFd = connectTo(listenAddr);
+        peerFd = gamenet::test::connectTestClient(listenAddr);
 
         for (int attempt = 0; attempt < 1000; ++attempt) {
             sockaddr_storage peerAddr{};
@@ -81,14 +73,14 @@ struct LoopbackTcpPair {
 
     ~LoopbackTcpPair() {
         if (gamenet::net::sockets::isValid(peerFd)) {
-            gamenet::net::sockets::close(peerFd);
+            gamenet::test::closeTestSocket(peerFd);
         }
     }
 
     void resetPeer() {
         GAMENET_TEST_ASSERT(gamenet::net::sockets::isValid(peerFd));
         setResetOnClose(peerFd);
-        gamenet::net::sockets::close(peerFd);
+        gamenet::test::closeTestSocket(peerFd);
         peerFd = gamenet::net::kInvalidSocket;
     }
 };

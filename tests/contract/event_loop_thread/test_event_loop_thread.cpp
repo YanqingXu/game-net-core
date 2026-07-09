@@ -1,6 +1,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
 
+#include "support/FutureTest.h"
 #include "support/TestAssert.h"
 #include <atomic>
 #include <chrono>
@@ -27,8 +28,7 @@ int main() {
             loop->quit();
         });
 
-        const auto status = executedFuture.wait_for(1s);
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(executedFuture, 1s, "queued work did not execute on EventLoopThread");
         GAMENET_TEST_ASSERT(executedFuture.get() != callerThread);
     }
 
@@ -47,16 +47,14 @@ int main() {
             loop->quit();
         });
 
-        const auto taskStatus = taskRanFuture.wait_for(1s);
-        GAMENET_TEST_ASSERT(taskStatus == std::future_status::ready);
+        gamenet::test::waitUntilReady(taskRanFuture, 1s, "task did not run before EventLoopThread destruction");
 
         std::thread destroyer([&] {
             loopThread.reset();
             destroyed.set_value();
         });
 
-        const auto destroyStatus = destroyedFuture.wait_for(1s);
-        GAMENET_TEST_ASSERT(destroyStatus == std::future_status::ready);
+        gamenet::test::waitUntilReady(destroyedFuture, 1s, "EventLoopThread destruction did not finish");
         destroyer.join();
     }
 
@@ -74,7 +72,7 @@ int main() {
             ++taskFinished;
         });
 
-        GAMENET_TEST_ASSERT(taskStartedFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(taskStartedFuture, 1s, "long task did not start before stop");
         loopThread.stop();
         loopThread.stop();
         GAMENET_TEST_ASSERT(taskFinished.load() == 1);
@@ -89,10 +87,9 @@ int main() {
             restartedTask.set_value();
         });
 
-        GAMENET_TEST_ASSERT(restartedTaskFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(restartedTaskFuture, 1s, "restarted EventLoopThread task did not run");
         loopThread.stop();
     }
 
     return 0;
 }
-

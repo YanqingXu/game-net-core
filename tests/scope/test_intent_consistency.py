@@ -72,6 +72,11 @@ def main() -> None:
     platform_intent = (repo_root / "intents" / "modules" / "platform_runtime.intent.md").read_text(
         encoding="utf-8"
     )
+    readme_text = (repo_root / "README.md").read_text(encoding="utf-8")
+    require(
+        "- Logger" in readme_text,
+        "README Current Scope must list Logger once Logger is built and contract-tested in core",
+    )
     require(
         "gamenet/core/net/platform/SocketTypes.h" in platform_intent,
         "platform runtime intent must name the migrated platform socket type header",

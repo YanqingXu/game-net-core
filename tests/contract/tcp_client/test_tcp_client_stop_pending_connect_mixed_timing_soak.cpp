@@ -5,10 +5,10 @@
 #include "gamenet/core/net/TcpServer.h"
 
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <atomic>
 #include <chrono>
 #include <string>
-#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -46,14 +46,14 @@ int main() {
         // start can publish a stale TcpConnection.
         client.connect();
 
-        std::thread stopper;
+        gamenet::test::NonOwnerThreadHandoff stopper;
         const int mode = iteration % 4;
         if (mode == 0) {
             stopIssued = true;
             ownerStopIssued = true;
             client.stop();
         } else if (mode == 1) {
-            stopper = std::thread([&] {
+            stopper = gamenet::test::startNonOwnerThread([&] {
                 GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                 stopIssued = true;
                 nonOwnerStopIssued = true;
@@ -67,8 +67,7 @@ int main() {
                 client.stop();
             });
         } else {
-            stopper = std::thread([&] {
-                std::this_thread::sleep_for(5ms + std::chrono::milliseconds(iteration));
+            stopper = gamenet::test::startNonOwnerThreadAfter(5ms + std::chrono::milliseconds(iteration), [&] {
                 GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                 stopIssued = true;
                 nonOwnerStopIssued = true;
@@ -92,9 +91,7 @@ int main() {
 
         loop.loop();
 
-        if (stopper.joinable()) {
-            stopper.join();
-        }
+        stopper.join();
 
         GAMENET_TEST_ASSERT(stopIssued.load());
         GAMENET_TEST_ASSERT(ownerStopIssued.load() || nonOwnerStopIssued.load());

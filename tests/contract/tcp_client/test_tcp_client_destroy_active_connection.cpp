@@ -4,6 +4,7 @@
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 
+#include "support/LoopTest.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
@@ -74,12 +75,10 @@ int main() {
         server.start();
         client->connect();
 
-        loop.runAfter(2s, [&] {
-            GAMENET_TEST_ASSERT(false && "timed out waiting for active TcpClient destruction teardown");
-            loop.quit();
-        });
-
-        loop.loop();
+        gamenet::test::runLoopWithTimeout(
+            loop,
+            2s,
+            "timed out waiting for active TcpClient destruction teardown");
 
         GAMENET_TEST_ASSERT(clientConnectedCount == 1);
         GAMENET_TEST_ASSERT(serverConnectedCount == 1);

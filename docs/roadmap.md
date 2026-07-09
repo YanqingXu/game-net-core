@@ -25,6 +25,9 @@ See `migration_status.md` for the current checked state of these phases.
 
 ## Phase 4: Higher-level Modules
 
+Phase 4 must not begin until the Phase 4 readiness gate in
+`docs/migration_status.md` is satisfied with current evidence.
+
 - Add protocol framing.
 - Add transport abstraction.
 - Add game foundation pieces such as session, logic-loop, and broadcast support.

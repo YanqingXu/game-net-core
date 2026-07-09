@@ -7,26 +7,18 @@
 #include "gamenet/core/net/TimerId.h"
 
 #include "support/SocketPair.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <chrono>
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <thread>
 
 int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair(gamenet::test::SocketPairMode::SmallSendBuffer);
-
-    const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-    const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-    auto connection = std::make_shared<gamenet::net::TcpConnection>(
-        &loop,
-        "cross-thread-shutdown-drains-output",
-        pair.connectionFd,
-        localAddr,
-        peerAddr);
+    auto connection = gamenet::test::makeTcpConnection(loop, pair, "cross-thread-shutdown-drains-output");
 
     const std::string payload(1024 * 1024, 'x');
 
@@ -101,10 +93,9 @@ int main() {
 
         // cross-thread-shutdown-drains-output: shutdown() from a non-owner
         // thread must marshal back, drain pending output, then half-close.
-        std::thread shutdownThread([conn] {
+        gamenet::test::runFromNonOwnerThread([conn] {
             conn->shutdown();
         });
-        shutdownThread.join();
         shutdownIssued = true;
     });
 

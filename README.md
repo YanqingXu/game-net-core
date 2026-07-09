@@ -28,6 +28,7 @@ state.
 
 Stable / Core:
 
+- Logger
 - EventLoop
 - Channel
 - Poller

@@ -2,23 +2,15 @@
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 
+#include "support/ClientSocket.h"
 #include "support/TestAssert.h"
+
 #include <chrono>
 #include <thread>
 
 using namespace std::chrono_literals;
 
 namespace {
-
-gamenet::net::SocketFd connectTo(const gamenet::net::InetAddress& serverAddr) {
-    gamenet::net::SocketFd fd = gamenet::net::sockets::createNonblockingOrDie(serverAddr.family());
-    const int rc = gamenet::net::sockets::connect(fd, serverAddr.getSockAddr(), serverAddr.getSockAddrLen());
-    if (rc < 0) {
-        const int error = gamenet::net::sockets::lastError();
-        GAMENET_TEST_ASSERT(gamenet::net::sockets::isInProgress(error) || gamenet::net::sockets::isWouldBlock(error));
-    }
-    return fd;
-}
 
 gamenet::net::SocketFd acceptEventually(gamenet::net::Socket& listener, gamenet::net::InetAddress* peerAddr) {
     for (int attempt = 0; attempt < 100; ++attempt) {
@@ -47,7 +39,7 @@ int main() {
     GAMENET_TEST_ASSERT(listenAddr.isIpv4());
     GAMENET_TEST_ASSERT(listenAddr.port() != 0);
 
-    gamenet::net::SocketFd client = connectTo(listenAddr);
+    gamenet::net::SocketFd client = gamenet::test::connectTestClient(listenAddr);
 
     gamenet::net::InetAddress peerAddr;
     gamenet::net::SocketFd accepted = acceptEventually(listener, &peerAddr);
@@ -57,8 +49,8 @@ int main() {
     GAMENET_TEST_ASSERT(peerAddr.toIp() == "127.0.0.1");
     GAMENET_TEST_ASSERT(peerAddr.port() != 0);
 
-    gamenet::net::sockets::close(accepted);
-    gamenet::net::sockets::close(client);
+    gamenet::test::closeTestSocket(accepted);
+    gamenet::test::closeTestSocket(client);
 
     return 0;
 }

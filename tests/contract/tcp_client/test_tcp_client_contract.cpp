@@ -5,6 +5,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
 
+#include "support/LoopTest.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
@@ -41,11 +42,7 @@ int main() {
     });
 
     client.connect();
-    loop.runAfter(2s, [&] {
-        GAMENET_TEST_ASSERT(false && "timed out waiting for tcp client lifecycle");
-        loop.quit();
-    });
-    loop.loop();
+    gamenet::test::runLoopWithTimeout(loop, 2s, "timed out waiting for tcp client lifecycle");
 
     GAMENET_TEST_ASSERT(connected);
     GAMENET_TEST_ASSERT(disconnected);

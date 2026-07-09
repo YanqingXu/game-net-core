@@ -1,6 +1,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThreadPool.h"
 
+#include "support/FutureTest.h"
 #include "support/TestAssert.h"
 #include <atomic>
 #include <chrono>
@@ -53,8 +54,10 @@ int main() {
             });
         }
 
-        const auto status = allExecutedFuture.wait_for(std::chrono::seconds(2));
-        GAMENET_TEST_ASSERT(status == std::future_status::ready);
+        gamenet::test::waitUntilReady(
+            allExecutedFuture,
+            std::chrono::seconds(2),
+            "restart worker queued work did not finish");
         GAMENET_TEST_ASSERT(executed.load() == workerCount);
         GAMENET_TEST_ASSERT(baseExecutions.load() == 0);
         {

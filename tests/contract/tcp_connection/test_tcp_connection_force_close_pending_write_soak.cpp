@@ -8,6 +8,7 @@
 #include "support/LoopTest.h"
 #include "support/SocketPair.h"
 #include "support/TcpConnectionCallbacks.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
@@ -19,16 +20,10 @@ int main() {
     for (int iteration = 0; iteration < iterationCount; ++iteration) {
         gamenet::net::EventLoop loop;
         gamenet::test::ConnectedSocketPair pair(gamenet::test::SocketPairMode::SmallSendBuffer);
-
-        const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-        const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-        std::shared_ptr<gamenet::net::TcpConnection> connection = std::make_shared<gamenet::net::TcpConnection>(
-            &loop,
-            "force-close-pending-write-soak-contract-" + std::to_string(iteration),
-            pair.connectionFd,
-            localAddr,
-            peerAddr);
+        std::shared_ptr<gamenet::net::TcpConnection> connection = gamenet::test::makeTcpConnection(
+            loop,
+            pair,
+            "force-close-pending-write-soak-contract-" + std::to_string(iteration));
 
         gamenet::test::TcpConnectionCallbackCounts callbacks;
         gamenet::test::setCountingConnectionCallback(connection, loop, callbacks);

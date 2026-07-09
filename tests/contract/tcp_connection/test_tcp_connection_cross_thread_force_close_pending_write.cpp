@@ -8,11 +8,12 @@
 #include "support/LoopTest.h"
 #include "support/SocketPair.h"
 #include "support/TcpConnectionCallbacks.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <chrono>
 #include <memory>
 #include <string>
-#include <thread>
 
 int main() {
     constexpr int iterationCount = 5;
@@ -20,16 +21,10 @@ int main() {
     for (int iteration = 0; iteration < iterationCount; ++iteration) {
         gamenet::net::EventLoop loop;
         gamenet::test::ConnectedSocketPair pair(gamenet::test::SocketPairMode::SmallSendBuffer);
-
-        const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-        const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-        std::shared_ptr<gamenet::net::TcpConnection> connection = std::make_shared<gamenet::net::TcpConnection>(
-            &loop,
-            "cross-thread-force-close-pending-write-contract-" + std::to_string(iteration),
-            pair.connectionFd,
-            localAddr,
-            peerAddr);
+        std::shared_ptr<gamenet::net::TcpConnection> connection = gamenet::test::makeTcpConnection(
+            loop,
+            pair,
+            "cross-thread-force-close-pending-write-contract-" + std::to_string(iteration));
 
         gamenet::test::TcpConnectionCallbackCounts callbacks;
         gamenet::test::setCountingConnectionCallback(connection, loop, callbacks);
@@ -53,10 +48,9 @@ int main() {
             // cross-thread-force-close-pending-write-contract: forceClose()
             // from a non-owner thread must marshal back to the owner loop and
             // cancel/drain pending write state before connection destruction.
-            std::thread closer([conn] {
+            gamenet::test::runFromNonOwnerThread([conn] {
                 conn->forceClose();
             });
-            closer.join();
         });
 
         gamenet::test::runLoopWithTimeout(

@@ -46,6 +46,7 @@ def main() -> None:
         "contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp",
         "contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp",
         "contract/timer_queue/test_timer_queue.cpp",
+        "contract/connector/test_connector_retry_stop.cpp",
         "contract/tcp_client/test_tcp_client_retry_stop_race.cpp",
         "contract/tcp_client/test_tcp_client_retry_stop_soak.cpp",
         "contract/tcp_client/test_tcp_client_stop_pending_connect.cpp",
@@ -56,15 +57,21 @@ def main() -> None:
         "contract/tcp_client/test_tcp_client_destroy_active_connection.cpp",
         "contract/tcp_client/test_tcp_client_stop_active_connection_mixed_timing_soak.cpp",
         "contract/tcp_client/test_tcp_client_cross_thread_disconnect_active.cpp",
+        "contract/tcp_client/test_tcp_client_repeated_disconnect.cpp",
+        "contract/tcp_client/test_tcp_client_repeated_stop.cpp",
+        "contract/tcp_client/test_tcp_client_repeated_connect.cpp",
         "contract/tcp_client/test_tcp_client_cross_thread_connect.cpp",
         "contract/tcp_server/test_tcp_server_stop_active_connections.cpp",
         "contract/tcp_server/test_tcp_server_stop_active_write.cpp",
         "contract/tcp_server/test_tcp_server_stop_multi_worker.cpp",
         "contract/tcp_server/test_tcp_server_stop_worker_active_write_soak.cpp",
         "contract/tcp_server/test_tcp_server_stop_from_worker_callback_soak.cpp",
+        "contract/tcp_server/test_tcp_server_repeated_stop.cpp",
         "contract/tcp_server/test_tcp_server_stop_soak.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp",
+        "contract/tcp_connection/test_tcp_connection_send_after_close.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp",
+        "contract/tcp_connection/test_tcp_connection_repeated_shutdown.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_force_close_soak.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_force_close_pending_write.cpp",
         "contract/tcp_connection/test_tcp_connection_force_close_pending_read.cpp",
@@ -84,25 +91,39 @@ def main() -> None:
 
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, "test_threading_gate_contracts.py", ci_docs)
+    require(ci_docs_text, "direct `Connector::stop()` retry-timer cancellation contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-ConnectEx `TcpClient::stop()` contracts", ci_docs)
     require(ci_docs_text, "active retry-enabled `TcpClient::stop()` after peer-close contracts", ci_docs)
     require(ci_docs_text, "active cross-thread `TcpClient::disconnect()` contracts", ci_docs)
+    require(ci_docs_text, "repeated active `TcpClient::disconnect()` idempotence contracts", ci_docs)
+    require(ci_docs_text, "repeated active `TcpClient::stop()` idempotence contracts", ci_docs)
+    require(ci_docs_text, "repeated active `TcpClient::connect()` idempotence contracts", ci_docs)
     require(ci_docs_text, "active cross-thread `TcpClient::connect()` contracts", ci_docs)
+    require(ci_docs_text, "post-close `TcpConnection::send()` ignore contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-read `TcpConnection::forceClose()` contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-write `TcpConnection::forceClose()` contracts", ci_docs)
+    require(ci_docs_text, "repeated `TcpConnection::shutdown()` idempotence contracts", ci_docs)
     require(ci_docs_text, "worker-owned active-write `TcpServer::stop()` contracts", ci_docs)
     require(ci_docs_text, "worker-callback\n`TcpServer::stop()` contracts", ci_docs)
+    require(ci_docs_text, "repeated `TcpServer::stop()` idempotence contracts", ci_docs)
 
     migration_text = migration_status.read_text(encoding="utf-8")
     require(migration_text, "Linux TSan race-oriented build and tests", migration_status)
+    require(migration_text, "direct Connector retry-stop cancellation", migration_status)
     require(migration_text, "mixed-timing pending ConnectEx stop", migration_status)
     require(migration_text, "active retry-enabled TcpClient stop-after-peer-close", migration_status)
     require(migration_text, "active cross-thread TcpClient disconnect", migration_status)
+    require(migration_text, "repeated active TcpClient disconnect idempotence", migration_status)
+    require(migration_text, "repeated active TcpClient stop idempotence", migration_status)
+    require(migration_text, "repeated active TcpClient connect idempotence", migration_status)
     require(migration_text, "active cross-thread TcpClient connect", migration_status)
+    require(migration_text, "post-close TcpConnection send ignore", migration_status)
     require(migration_text, "mixed-timing pending-read forceClose", migration_status)
     require(migration_text, "mixed-timing pending-write forceClose", migration_status)
+    require(migration_text, "repeated TcpConnection shutdown idempotence", migration_status)
     require(migration_text, "worker-owned active-write stop", migration_status)
     require(migration_text, "worker-callback TcpServer stop", migration_status)
+    require(migration_text, "repeated TcpServer stop idempotence", migration_status)
 
 
 if __name__ == "__main__":

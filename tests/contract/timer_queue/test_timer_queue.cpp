@@ -2,6 +2,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
 
+#include "support/FutureTest.h"
 #include "support/TestAssert.h"
 #include <atomic>
 #include <chrono>
@@ -25,7 +26,7 @@ int main() {
             loop->quit();
         });
 
-        GAMENET_TEST_ASSERT(firedFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(firedFuture, 1s, "one-shot timer did not fire");
         GAMENET_TEST_ASSERT(firedFuture.get() != callerThread);
     }
 
@@ -46,7 +47,7 @@ int main() {
         GAMENET_TEST_ASSERT(!loop->isInLoopThread());
         loop->cancel(timerId);
 
-        GAMENET_TEST_ASSERT(finishedFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(finishedFuture, 1s, "cancel-before-expiration observer did not finish");
         GAMENET_TEST_ASSERT(!fired.load());
     }
 
@@ -89,7 +90,7 @@ int main() {
             });
         });
 
-        GAMENET_TEST_ASSERT(finishedFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(finishedFuture, 1s, "ready-timer cancellation observer did not finish");
         GAMENET_TEST_ASSERT(firstFired.load());
         GAMENET_TEST_ASSERT(!secondFired.load());
     }
@@ -114,7 +115,7 @@ int main() {
             }
         });
 
-        GAMENET_TEST_ASSERT(firedCountFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(firedCountFuture, 1s, "repeating timer did not reach cancellation count");
         GAMENET_TEST_ASSERT(firedCountFuture.get() == 3);
     }
 
@@ -134,7 +135,7 @@ int main() {
             });
         });
 
-        GAMENET_TEST_ASSERT(firedFuture.wait_for(1s) == std::future_status::ready);
+        gamenet::test::waitUntilReady(firedFuture, 1s, "cross-thread scheduled timer did not fire");
         GAMENET_TEST_ASSERT(firedFuture.get() != callerThread);
         scheduler.join();
     }

@@ -6,6 +6,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "support/SocketPair.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
 #include <chrono>
 #include <cstddef>
@@ -15,16 +16,7 @@
 int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair(gamenet::test::SocketPairMode::SmallSendBuffer);
-
-    const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-    const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-    auto connection = std::make_shared<gamenet::net::TcpConnection>(
-        &loop,
-        "high-water-mark-fires-on-owner-loop",
-        pair.connectionFd,
-        localAddr,
-        peerAddr);
+    auto connection = gamenet::test::makeTcpConnection(loop, pair, "high-water-mark-fires-on-owner-loop");
 
     constexpr std::size_t highWaterMark = 1024;
     int highWaterCallbackCount = 0;

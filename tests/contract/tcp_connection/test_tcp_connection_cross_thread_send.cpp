@@ -7,26 +7,18 @@
 #include "gamenet/core/net/TimerId.h"
 
 #include "support/SocketPair.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <chrono>
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <thread>
 
 int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair;
-
-    const gamenet::net::InetAddress localAddr(gamenet::net::sockets::getLocalAddr(pair.connectionFd));
-    const gamenet::net::InetAddress peerAddr(gamenet::net::sockets::getPeerAddr(pair.connectionFd));
-
-    auto connection = std::make_shared<gamenet::net::TcpConnection>(
-        &loop,
-        "cross-thread-send-marshals-to-owner-loop",
-        pair.connectionFd,
-        localAddr,
-        peerAddr);
+    auto connection = gamenet::test::makeTcpConnection(loop, pair, "cross-thread-send-marshals-to-owner-loop");
 
     const std::string payload = "cross-thread-send-payload";
 
@@ -103,10 +95,9 @@ int main() {
         // cross-thread-send-marshals-to-owner-loop: send() from a non-owner
         // thread must copy the payload, marshal through EventLoop, and write
         // from the owner loop without executing user callbacks off-thread.
-        std::thread sendThread([conn, &payload] {
+        gamenet::test::runFromNonOwnerThread([conn, &payload] {
             conn->send(payload);
         });
-        sendThread.join();
         sendIssued = true;
     });
 

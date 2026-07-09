@@ -74,6 +74,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   repeats stop() re-entering from a worker-owned connection callback with
   multiple worker-owned connections and verifies base-loop bookkeeping still
   drains to zero
+- `tests/contract/tcp_server/test_tcp_server_repeated_stop.cpp` verifies
+  repeated base-loop stop() requests while a worker-owned connection is active
+  remain idempotent and still converge on a single disconnect callback
 
 ---
 

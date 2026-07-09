@@ -108,6 +108,9 @@ Transitions:
 - stop() during pending Windows ConnectEx cancels and drains the completion
   before releasing connector-owned Channel / operation storage
 - stop() during pending retry cancels timer
+- `tests/contract/connector/test_connector_retry_stop.cpp` verifies stop()
+  after retry scheduling prevents a later listener from receiving a stale retry
+  connection
 - destroy during kConnecting state does not leak fd
 - self-connect is detected and triggers retry
 - no callback fires after destruction

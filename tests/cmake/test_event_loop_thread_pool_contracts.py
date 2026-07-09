@@ -41,16 +41,26 @@ def main() -> None:
     ci_contract_text = ci_contract.read_text(encoding="utf-8")
 
     require(pool_intent_text, "cross-thread queued work reaches each published worker loop", pool_intent)
+    require(pool_test_text, '#include "support/FutureTest.h"', pool_test)
     require(pool_test_text, "event-loop-thread-pool-soak-contract", pool_test)
     require(pool_test_text, "queueInLoop", pool_test)
+    require(pool_test_text, "gamenet::test::waitUntilReady", pool_test)
     require(pool_test_text, "GAMENET_TEST_ASSERT(baseExecutions.load() == 0)", pool_test)
     require(pool_test_text, "GAMENET_TEST_ASSERT(totalExecutions.load() == expectedExecutions)", pool_test)
+    require(pool_restart_soak_text, '#include "support/FutureTest.h"', pool_restart_soak_test)
     require(pool_restart_soak_text, "event-loop-thread-pool-restart-soak-contract", pool_restart_soak_test)
     require(pool_restart_soak_text, "constexpr int iterationCount", pool_restart_soak_test)
     require(pool_restart_soak_text, "pool.start();", pool_restart_soak_test)
     require(pool_restart_soak_text, "pool.stop();", pool_restart_soak_test)
     require(pool_restart_soak_text, "queueInLoop", pool_restart_soak_test)
+    require(pool_restart_soak_text, "gamenet::test::waitUntilReady", pool_restart_soak_test)
     require(pool_restart_soak_text, "GAMENET_TEST_ASSERT(stoppedLoops.front() == &baseLoop)", pool_restart_soak_test)
+    assert "std::future_status::ready" not in pool_test_text, (
+        f"{pool_test} must use FutureTest.h for bounded future waits"
+    )
+    assert "std::future_status::ready" not in pool_restart_soak_text, (
+        f"{pool_restart_soak_test} must use FutureTest.h for bounded future waits"
+    )
     require(pool_source_text, "baseLoop_->assertInLoopThread();", pool_source)
     require(pool_source_text, "thread->stop();", pool_source)
     require(tests_cmake_text, "contract event_loop_thread_pool", tests_cmake)

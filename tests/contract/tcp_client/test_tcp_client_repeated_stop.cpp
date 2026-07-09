@@ -7,6 +7,7 @@
 #include "support/LoopTest.h"
 #include "support/TestAssert.h"
 #include "support/ThreadHandoff.h"
+
 #include <atomic>
 #include <chrono>
 
@@ -14,15 +15,36 @@ using namespace std::chrono_literals;
 
 int main() {
     gamenet::net::EventLoop loop;
-    gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "client-cross-thread-connect-server");
-    gamenet::net::TcpClient client(&loop, server.listenAddress(), "client-cross-thread-connect-client");
+    gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "client-repeated-stop-server");
+    gamenet::net::TcpClient client(&loop, server.listenAddress(), "client-repeated-stop-client");
 
-    std::atomic<bool> connectIssued{false};
+    client.enableRetry();
+
+    bool ownerStopIssued = false;
+    std::atomic<bool> nonOwnerStopIssued{false};
+    bool peerCloseQueued = false;
+    bool finishQueued = false;
     int clientConnectedCount = 0;
     int clientDisconnectedCount = 0;
     int serverConnectedCount = 0;
     int serverDisconnectedCount = 0;
-    bool finishQueued = false;
+    gamenet::net::TcpConnectionPtr serverConnection;
+
+    auto maybeClosePeer = [&] {
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        if (peerCloseQueued || !ownerStopIssued || !nonOwnerStopIssued.load() || !serverConnection) {
+            return;
+        }
+
+        peerCloseQueued = true;
+        loop.runAfter(50ms, [&] {
+            GAMENET_TEST_ASSERT(loop.isInLoopThread());
+            GAMENET_TEST_ASSERT(ownerStopIssued);
+            GAMENET_TEST_ASSERT(nonOwnerStopIssued.load());
+            GAMENET_TEST_ASSERT(serverConnection);
+            serverConnection->forceClose();
+        });
+    };
 
     auto maybeFinish = [&] {
         GAMENET_TEST_ASSERT(loop.isInLoopThread());
@@ -31,9 +53,15 @@ int main() {
         }
 
         finishQueued = true;
-        loop.runAfter(50ms, [&] {
+        loop.runAfter(150ms, [&] {
             GAMENET_TEST_ASSERT(loop.isInLoopThread());
-            GAMENET_TEST_ASSERT(connectIssued.load());
+            GAMENET_TEST_ASSERT(ownerStopIssued);
+            GAMENET_TEST_ASSERT(nonOwnerStopIssued.load());
+            GAMENET_TEST_ASSERT(peerCloseQueued);
+            GAMENET_TEST_ASSERT(clientConnectedCount == 1);
+            GAMENET_TEST_ASSERT(clientDisconnectedCount == 1);
+            GAMENET_TEST_ASSERT(serverConnectedCount == 1);
+            GAMENET_TEST_ASSERT(serverDisconnectedCount == 1);
             GAMENET_TEST_ASSERT(client.connection() == nullptr);
             GAMENET_TEST_ASSERT(server.connectionCount() == 0);
             server.stop();
@@ -47,11 +75,14 @@ int main() {
             ++serverConnectedCount;
             GAMENET_TEST_ASSERT(serverConnectedCount == 1);
             GAMENET_TEST_ASSERT(server.connectionCount() == 1);
+            serverConnection = conn;
+            maybeClosePeer();
             return;
         }
 
         ++serverDisconnectedCount;
         GAMENET_TEST_ASSERT(serverDisconnectedCount == 1);
+        serverConnection.reset();
         maybeFinish();
     });
 
@@ -60,12 +91,21 @@ int main() {
         if (conn->connected()) {
             ++clientConnectedCount;
             GAMENET_TEST_ASSERT(clientConnectedCount == 1);
-            GAMENET_TEST_ASSERT(connectIssued.load());
             GAMENET_TEST_ASSERT(client.connection() == conn);
 
-            // client-cross-thread-connect: non-owner connect() must marshal
-            // Connector startup to the owner loop and publish callbacks there.
-            conn->forceClose();
+            // client-repeated-stop-idempotent: repeated owner and non-owner
+            // stop() requests on an active retry-enabled client must clear
+            // connect intent once, so peer close cannot resurrect the client.
+            ownerStopIssued = true;
+            client.stop();
+            client.stop();
+            gamenet::test::runFromNonOwnerThread([&] {
+                GAMENET_TEST_ASSERT(!loop.isInLoopThread());
+                nonOwnerStopIssued = true;
+                client.stop();
+                client.stop();
+            });
+            maybeClosePeer();
             return;
         }
 
@@ -75,19 +115,16 @@ int main() {
     });
 
     server.start();
-
-    gamenet::test::runFromNonOwnerThread([&] {
-        GAMENET_TEST_ASSERT(!loop.isInLoopThread());
-        connectIssued = true;
-        client.connect();
-    });
+    client.connect();
 
     gamenet::test::runLoopWithTimeout(
         loop,
         2s,
-        "timed out waiting for cross-thread TcpClient connect teardown");
+        "timed out waiting for repeated TcpClient stop teardown");
 
-    GAMENET_TEST_ASSERT(connectIssued.load());
+    GAMENET_TEST_ASSERT(ownerStopIssued);
+    GAMENET_TEST_ASSERT(nonOwnerStopIssued.load());
+    GAMENET_TEST_ASSERT(peerCloseQueued);
     GAMENET_TEST_ASSERT(clientConnectedCount == 1);
     GAMENET_TEST_ASSERT(clientDisconnectedCount == 1);
     GAMENET_TEST_ASSERT(serverConnectedCount == 1);

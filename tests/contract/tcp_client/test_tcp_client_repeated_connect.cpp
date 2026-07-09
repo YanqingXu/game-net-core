@@ -7,6 +7,7 @@
 #include "support/LoopTest.h"
 #include "support/TestAssert.h"
 #include "support/ThreadHandoff.h"
+
 #include <atomic>
 #include <chrono>
 
@@ -14,10 +15,11 @@ using namespace std::chrono_literals;
 
 int main() {
     gamenet::net::EventLoop loop;
-    gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "client-cross-thread-connect-server");
-    gamenet::net::TcpClient client(&loop, server.listenAddress(), "client-cross-thread-connect-client");
+    gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "client-repeated-connect-server");
+    gamenet::net::TcpClient client(&loop, server.listenAddress(), "client-repeated-connect-client");
 
-    std::atomic<bool> connectIssued{false};
+    bool ownerConnectIssued = false;
+    std::atomic<bool> nonOwnerConnectIssued{false};
     int clientConnectedCount = 0;
     int clientDisconnectedCount = 0;
     int serverConnectedCount = 0;
@@ -33,7 +35,8 @@ int main() {
         finishQueued = true;
         loop.runAfter(50ms, [&] {
             GAMENET_TEST_ASSERT(loop.isInLoopThread());
-            GAMENET_TEST_ASSERT(connectIssued.load());
+            GAMENET_TEST_ASSERT(ownerConnectIssued);
+            GAMENET_TEST_ASSERT(nonOwnerConnectIssued.load());
             GAMENET_TEST_ASSERT(client.connection() == nullptr);
             GAMENET_TEST_ASSERT(server.connectionCount() == 0);
             server.stop();
@@ -60,11 +63,13 @@ int main() {
         if (conn->connected()) {
             ++clientConnectedCount;
             GAMENET_TEST_ASSERT(clientConnectedCount == 1);
-            GAMENET_TEST_ASSERT(connectIssued.load());
+            GAMENET_TEST_ASSERT(ownerConnectIssued);
+            GAMENET_TEST_ASSERT(nonOwnerConnectIssued.load());
             GAMENET_TEST_ASSERT(client.connection() == conn);
 
-            // client-cross-thread-connect: non-owner connect() must marshal
-            // Connector startup to the owner loop and publish callbacks there.
+            // client-repeated-connect-is-idempotent: repeated owner and
+            // non-owner connect() requests must not create multiple active
+            // Connector attempts or TcpConnection objects.
             conn->forceClose();
             return;
         }
@@ -76,18 +81,24 @@ int main() {
 
     server.start();
 
+    ownerConnectIssued = true;
+    client.connect();
+    client.connect();
+
     gamenet::test::runFromNonOwnerThread([&] {
         GAMENET_TEST_ASSERT(!loop.isInLoopThread());
-        connectIssued = true;
+        nonOwnerConnectIssued = true;
+        client.connect();
         client.connect();
     });
 
     gamenet::test::runLoopWithTimeout(
         loop,
         2s,
-        "timed out waiting for cross-thread TcpClient connect teardown");
+        "timed out waiting for repeated TcpClient connect teardown");
 
-    GAMENET_TEST_ASSERT(connectIssued.load());
+    GAMENET_TEST_ASSERT(ownerConnectIssued);
+    GAMENET_TEST_ASSERT(nonOwnerConnectIssued.load());
     GAMENET_TEST_ASSERT(clientConnectedCount == 1);
     GAMENET_TEST_ASSERT(clientDisconnectedCount == 1);
     GAMENET_TEST_ASSERT(serverConnectedCount == 1);

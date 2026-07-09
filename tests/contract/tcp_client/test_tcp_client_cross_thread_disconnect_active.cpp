@@ -4,10 +4,11 @@
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 
+#include "support/LoopTest.h"
 #include "support/TestAssert.h"
+#include "support/ThreadHandoff.h"
 #include <atomic>
 #include <chrono>
-#include <thread>
 
 using namespace std::chrono_literals;
 
@@ -17,7 +18,6 @@ int main() {
     gamenet::net::TcpClient client(&loop, server.listenAddress(), "client-disconnect-client");
 
     std::atomic<bool> disconnectIssued{false};
-    std::thread disconnectThread;
     int clientConnectedCount = 0;
     int clientDisconnectedCount = 0;
     int serverConnectedCount = 0;
@@ -65,7 +65,7 @@ int main() {
             // client-cross-thread-disconnect-active: non-owner disconnect()
             // must marshal graceful shutdown to the owner loop and converge
             // through the normal close/remove path.
-            disconnectThread = std::thread([&] {
+            gamenet::test::runFromNonOwnerThread([&] {
                 GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                 disconnectIssued = true;
                 client.disconnect();
@@ -81,15 +81,10 @@ int main() {
     server.start();
     client.connect();
 
-    loop.runAfter(2s, [&] {
-        GAMENET_TEST_ASSERT(false && "timed out waiting for cross-thread TcpClient disconnect teardown");
-        loop.quit();
-    });
-    loop.loop();
-
-    if (disconnectThread.joinable()) {
-        disconnectThread.join();
-    }
+    gamenet::test::runLoopWithTimeout(
+        loop,
+        2s,
+        "timed out waiting for cross-thread TcpClient disconnect teardown");
 
     GAMENET_TEST_ASSERT(disconnectIssued.load());
     GAMENET_TEST_ASSERT(clientConnectedCount == 1);
