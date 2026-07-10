@@ -14,6 +14,8 @@ def main() -> None:
         repo_root / "tests" / "contract" / "event_loop_thread" / "test_event_loop_thread.cpp"
     )
     future_test_helper = repo_root / "tests" / "support" / "FutureTest.h"
+    event_loop_header = repo_root / "include" / "gamenet" / "core" / "net" / "EventLoop.h"
+    event_loop_source = repo_root / "src" / "core" / "net" / "EventLoop.cc"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     event_loop_intent = repo_root / "intents" / "modules" / "event_loop.intent.md"
     event_loop_thread_intent = repo_root / "intents" / "modules" / "event_loop_thread.intent.md"
@@ -29,6 +31,8 @@ def main() -> None:
     event_loop_test_text = event_loop_test.read_text(encoding="utf-8")
     event_loop_thread_test_text = event_loop_thread_test.read_text(encoding="utf-8")
     future_test_helper_text = future_test_helper.read_text(encoding="utf-8")
+    event_loop_header_text = event_loop_header.read_text(encoding="utf-8")
+    event_loop_source_text = event_loop_source.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     event_loop_intent_text = event_loop_intent.read_text(encoding="utf-8")
     event_loop_thread_intent_text = event_loop_thread_intent.read_text(encoding="utf-8")
@@ -38,6 +42,11 @@ def main() -> None:
     ci_contract_text = ci_contract.read_text(encoding="utf-8")
 
     require(event_loop_intent_text, "cross-thread queueInLoop wakes blocked poll", event_loop_intent)
+    require(
+        event_loop_intent_text,
+        "cross-thread-observed pending functor execution state is atomic or synchronized",
+        event_loop_intent,
+    )
     require(event_loop_intent_text, "quit still drains already-queued nested functors", event_loop_intent)
     require(event_loop_thread_intent_text, "explicit stop drains accepted work", event_loop_thread_intent)
 
@@ -60,6 +69,10 @@ def main() -> None:
 
     require(future_test_helper_text, "waitUntilReady", future_test_helper)
     require(future_test_helper_text, "std::future_status::ready", future_test_helper)
+    require(event_loop_header_text, "std::atomic<bool> callingPendingFunctors_", event_loop_header)
+    require(event_loop_source_text, "callingPendingFunctors_.load(std::memory_order_relaxed)", event_loop_source)
+    require(event_loop_source_text, "callingPendingFunctors_.store(true, std::memory_order_relaxed)", event_loop_source)
+    require(event_loop_source_text, "callingPendingFunctors_.store(false, std::memory_order_relaxed)", event_loop_source)
     require(tests_cmake_text, "test_event_loop.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread.cpp threading lifecycle", tests_cmake)
     require(

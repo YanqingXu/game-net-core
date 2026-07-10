@@ -83,22 +83,25 @@ void TcpClient::stop() {
     });
 }
 
-void TcpClient::enableRetry() noexcept {
-    retry_ = true;
-    if (connector_) {
-        connector_->setRetryEnabled(true);
-    }
+void TcpClient::enableRetry() {
+    setRetry(true);
 }
 
-void TcpClient::disableRetry() noexcept {
-    retry_ = false;
-    if (connector_) {
-        connector_->setRetryEnabled(false);
-    }
+void TcpClient::disableRetry() {
+    setRetry(false);
+}
+
+void TcpClient::setRetry(bool enabled) {
+    std::weak_ptr<void> lifetime = lifetimeToken_;
+    loop_->runInLoop([this, lifetime, enabled] {
+        if (lifetime.lock()) {
+            setRetryInLoop(enabled);
+        }
+    });
 }
 
 bool TcpClient::retry() const noexcept {
-    return retry_;
+    return retry_.load(std::memory_order_relaxed);
 }
 
 const std::string& TcpClient::name() const noexcept {
@@ -170,6 +173,14 @@ void TcpClient::stopInLoop() {
     connector_->stop();
 }
 
+void TcpClient::setRetryInLoop(bool enabled) noexcept {
+    loop_->assertInLoopThread();
+    retry_.store(enabled, std::memory_order_relaxed);
+    if (connector_) {
+        connector_->setRetryEnabled(enabled);
+    }
+}
+
 void TcpClient::newConnection(SocketFd sockfd) {
     loop_->assertInLoopThread();
 
@@ -208,7 +219,7 @@ void TcpClient::removeConnection(const TcpConnectionPtr& conn) {
 
     loop_->queueInLoop([conn] { conn->connectDestroyed(); });
 
-    if (retry_ && connect_) {
+    if (retry_.load(std::memory_order_relaxed) && connect_) {
         connector_->restart();
     }
 }

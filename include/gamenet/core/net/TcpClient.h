@@ -8,6 +8,7 @@
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketTypes.h"
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -26,8 +27,8 @@ public:
     void disconnect();
     void stop();
 
-    void enableRetry() noexcept;
-    void disableRetry() noexcept;
+    void enableRetry();
+    void disableRetry();
     bool retry() const noexcept;
 
     const std::string& name() const noexcept;
@@ -42,6 +43,8 @@ private:
     void connectInLoop();
     void disconnectInLoop();
     void stopInLoop();
+    void setRetry(bool enabled);
+    void setRetryInLoop(bool enabled) noexcept;
     void newConnection(SocketFd sockfd);
     void removeConnection(const TcpConnectionPtr& conn);
 
@@ -51,7 +54,7 @@ private:
     ConnectionCallback connectionCallback_;
     MessageCallback messageCallback_;
     WriteCompleteCallback writeCompleteCallback_;
-    bool retry_{false};
+    std::atomic<bool> retry_{false};
     bool connect_{false};
     int nextConnId_{1};
     std::shared_ptr<void> lifetimeToken_{std::make_shared<int>(0)};

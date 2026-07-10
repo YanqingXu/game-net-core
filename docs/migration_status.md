@@ -22,14 +22,16 @@ until the current core has stable targets, tests, and examples.
 
 ## Verification State
 
-The current worktree configures 64 configured CTest tests for the Reactor / TCP
-foundation: 7 unit tests, 56 contract tests, and 1 integration test.
+The current worktree configures 65 configured CTest tests for the Reactor / TCP
+foundation: 7 unit tests, 57 contract tests, and 1 integration test.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
 - Test: `ctest --test-dir build --output-on-failure`
-- Current result: Latest remote CI run: ci #23 for commit 9b27a0a on main
-  completed successfully on 2026-07-08. The successful workflow included
+- Current HEAD: d3fc1241e0773c650a4753f1955f987f22f31036.
+- Current result: Latest recorded remote CI green run: ci #23 for commit 9b27a0a on main
+  completed successfully on 2026-07-08. Fresh remote CI green evidence for current HEAD is not recorded here.
+  The successful workflow included
   `Linux CMake build and tests`, `Linux ASan/UBSan build and tests`,
   `Linux TSan race-oriented build and tests`, `Linux Release build`, and
   `Windows MSVC IOCP build and tests`.
@@ -46,16 +48,17 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
   repeated active TcpClient stop idempotence contracts,
   repeated active TcpClient connect idempotence contracts,
   active cross-thread TcpClient connect contracts,
+  active cross-thread TcpClient retry configuration contracts,
   post-close TcpConnection send ignore contracts, mixed-timing pending-read forceClose contracts,
   mixed-timing pending-write forceClose contracts,
   repeated TcpConnection shutdown idempotence contracts,
   worker-owned active-write stop contracts, worker-callback TcpServer stop
   contracts, and repeated TcpServer stop idempotence contracts.
-  Race-oriented CI remote green evidence is established by ci #23 on main.
+  Latest recorded race-oriented CI remote green evidence is ci #23 on main.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
-- Intent/documentation guards: CI runs the intent consistency guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure.
-- Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, server repeated stop idempotence (`contract.tcp_server.test_tcp_server_repeated_stop`), client retry stop race, client retry-stop soak, direct Connector retry-stop cancellation (`contract.connector.test_connector_retry_stop`), client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client repeated active disconnect idempotence, client repeated active stop idempotence (`contract.tcp_client.test_tcp_client_repeated_stop`), client repeated active connect idempotence (`contract.tcp_client.test_tcp_client_repeated_connect`), client cross-thread active connect, peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, post-close TcpConnection send ignore (`contract.tcp_connection.test_tcp_connection_send_after_close`), write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, repeated TcpConnection shutdown idempotence (`contract.tcp_connection.test_tcp_connection_repeated_shutdown`), high-water mark notification, repeated forceClose idempotence, repeated connectDestroyed stale-registration cleanup (`contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`), cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
+- Intent/documentation guards: CI runs the intent consistency guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
+- Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, EventLoop cross-thread pending-functor execution-state atomicity guard, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, server repeated stop idempotence (`contract.tcp_server.test_tcp_server_repeated_stop`), client retry stop race, client retry-stop soak, direct Connector retry-stop cancellation (`contract.connector.test_connector_retry_stop`), client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client repeated active disconnect idempotence, client repeated active stop idempotence (`contract.tcp_client.test_tcp_client_repeated_stop`), client repeated active connect idempotence (`contract.tcp_client.test_tcp_client_repeated_connect`), client cross-thread active connect, client cross-thread retry configuration (`contract.tcp_client.test_tcp_client_cross_thread_retry_config`), peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, post-close TcpConnection send ignore (`contract.tcp_connection.test_tcp_connection_send_after_close`), write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, repeated TcpConnection shutdown idempotence (`contract.tcp_connection.test_tcp_connection_repeated_shutdown`), high-water mark notification, repeated forceClose idempotence, repeated connectDestroyed stale-registration cleanup (`contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`), cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
 - Test support hardening: repeated TcpConnection lifecycle/race setup now uses
   shared tests/support helpers. `SocketPair.h` centralizes socketpair,
   nonblocking, and small-send-buffer setup; `ClientSocket.h` centralizes nonblocking test-client connect and cleanup
@@ -79,11 +82,13 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
   manual-only through `workflow_dispatch` and runs the `threading` CTest slice
   with `ctest --repeat until-fail` so mixed-timing lifecycle contracts can
   gather stronger soak evidence without blocking ordinary push or pull-request
-  CI. Local Windows Debug long-soak also passes for the current 43-test threading slice
-  with the workflow default repeat shape:
+  CI. The long-soak repository guard parity includes the EventLoop contract guard,
+  keeping manual soak guards aligned with the ordinary CI guard surface. Local Windows Debug long-soak evidence currently covers the previous 43-test threading slice
+  before the cross-thread TcpClient retry configuration contract expanded the threading label to 44 tests. The workflow default repeat shape was:
   `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`;
   43/43 threading-labeled tests passed across 20 repeats on 2026-07-09,
-  and CTest reported total test time was 637.56 seconds.
+  and CTest reported total test time was 637.56 seconds. The expanded 44-test threading slice is covered by current full Windows Debug and Release
+  CTest runs once; repeat-soak evidence for that expanded slice is not recorded here.
   Remote GitHub `long-soak` evidence is now recorded:
   run 28986707243, job 86017363504, commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221,
   repeat 20, timeout 60 seconds, completed successfully at
@@ -96,7 +101,7 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
   to keep MSBuild `.tlog` paths below Windows path-length limits:
   `cmake --build build-release --config Release --parallel` succeeds, and
   `ctest --test-dir build-release -C Release --output-on-failure --timeout 10`
-  reports 64/64 Release tests passed.
+  reports 65/65 Release tests passed.
 - Install/package: CI installs the core target and builds an external consumer
   fixture through `find_package(GameNetCore)` and `GameNet::core`. Release
   install/package consumer also passes locally: the Release build installs to
@@ -106,7 +111,7 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
 - Windows: Windows support is now represented by a `windows-msvc` workflow job
   for the Reactor / TCP IOCP backend. Local VS2026 Debug configure/build
   succeeds after the MSVC `/utf-8` and `/FS` compile options were added, and a
-  local full Windows CTest run with a 10-second per-test timeout passes 64/64
+  local full Windows CTest run with a 10-second per-test timeout passes 65/65
   configured tests with 0 failing tests. The IOCP data path now covers
   `contract.event_loop.test_event_loop`,
   `unit.base.test_logger`,
@@ -131,6 +136,7 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
   `contract.tcp_client.test_tcp_client_repeated_stop`,
   `contract.tcp_client.test_tcp_client_repeated_connect`,
   `contract.tcp_client.test_tcp_client_cross_thread_connect`,
+  `contract.tcp_client.test_tcp_client_cross_thread_retry_config`,
   `contract.tcp_server.test_tcp_server_contract`,
   `contract.tcp_server.test_tcp_server_stop_active_connections`,
   `contract.tcp_server.test_tcp_server_stop_active_write`,
@@ -161,7 +167,7 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
   `tests/cmake/install_consumer` fixture configures, builds, and runs through
   `find_package(GameNetCore)` and `GameNet::core`. The Windows workflow uses
   the Visual Studio generator, Debug CTest, install, and external package
-  consumer gates; remote green status is established by ci #23 on main.
+  consumer gates; latest recorded remote green status is ci #23 on main.
   The IOCP data-path design and implementation plan are recorded in
   `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md` and
   `docs/superpowers/plans/2026-07-07-windows-iocp-data-path.md`. See
@@ -171,7 +177,7 @@ foundation: 7 unit tests, 56 contract tests, and 1 integration test.
 
 Phase 4 remains deferred until every gate item below has current evidence:
 
-- The latest HEAD has green remote CI evidence for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP.
+- Fresh latest-HEAD remote CI evidence is recorded for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP.
 - The remote `long-soak` workflow has a green run recorded with run id, commit sha, repeat count, timeout, date, and result.
 - `docs/migration_status.md`, `docs/development/ci.md`, and `docs/development/windows_iocp_milestone.md` have no pending evidence.
 - TcpConnection, TcpClient/Connector, and TcpServer lifecycle/race tests have no known flaky entries.

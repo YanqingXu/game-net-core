@@ -50,6 +50,8 @@ all while preserving the same owner-loop discipline as the server side.
 ## 6. Threading Rules
 - connect() and disconnect() may be called cross-thread;
   they must marshal into the owner loop via runInLoop
+- enableRetry() and disableRetry() may be called cross-thread;
+  they must update Connector retry state on the owner loop via runInLoop
 - newConnection / removeConnection run on the owner loop thread
 - user callbacks (connection / message / close) fire on the owner loop thread
 - Connector state machine transitions happen on the owner loop thread only
@@ -134,8 +136,13 @@ all while preserving the same owner-loop discipline as the server side.
 - `tests/contract/tcp_client/test_tcp_client_cross_thread_connect.cpp`
   verifies non-owner connect() marshals Connector startup to the owner loop and
   publishes connection callbacks on that loop
+- `tests/contract/tcp_client/test_tcp_client_cross_thread_retry_config.cpp`
+  verifies non-owner disableRetry() marshals retry-state mutation to the owner
+  loop and prevents peer close from resurrecting a disabled-retry client
 - cross-thread connect marshals to owner loop before Connector starts
 - cross-thread disconnect marshals to owner loop before teardown begins
+- cross-thread retry configuration marshals to owner loop before Connector
+  retry state changes
 - destruction during pending connect does not leak fd or crash
 - destruction with an active TcpConnection cleans up safely
 

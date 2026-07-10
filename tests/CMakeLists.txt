@@ -49,6 +49,7 @@ add_gamenet_test(contract tcp_client ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_cl
 add_gamenet_test(contract tcp_client ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_client/test_tcp_client_repeated_stop.cpp threading lifecycle)
 add_gamenet_test(contract tcp_client ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_client/test_tcp_client_repeated_connect.cpp threading lifecycle)
 add_gamenet_test(contract tcp_client ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_client/test_tcp_client_cross_thread_connect.cpp threading lifecycle)
+add_gamenet_test(contract tcp_client ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_client/test_tcp_client_cross_thread_retry_config.cpp threading lifecycle)
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_contract.cpp threading lifecycle)
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_stop_active_connections.cpp threading lifecycle)
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_stop_active_write.cpp threading lifecycle)

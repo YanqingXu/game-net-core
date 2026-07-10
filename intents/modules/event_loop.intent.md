@@ -92,6 +92,7 @@ Additional APIs can be added later for richer timer and coroutine features.
 - queueInLoop always enqueues
 - cross-thread enqueue must ensure wakeup when loop may be blocked
 - pending functor queue flush occurs on owner thread only
+- cross-thread-observed pending functor execution state is atomic or synchronized
 
 ---
 

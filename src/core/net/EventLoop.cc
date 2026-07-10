@@ -126,7 +126,7 @@ void EventLoop::queueInLoop(Functor cb) {
         }
     }
 
-    if (!isInLoopThread() || callingPendingFunctors_) {
+    if (!isInLoopThread() || callingPendingFunctors_.load(std::memory_order_relaxed)) {
         wakeup();
     }
 }
@@ -212,7 +212,7 @@ void EventLoop::handleRead(gamenet::base::Timestamp receiveTime) {
 void EventLoop::doPendingFunctors() {
     std::vector<PendingFunctor> functors;
     std::size_t pendingPeak = 0;
-    callingPendingFunctors_ = true;
+    callingPendingFunctors_.store(true, std::memory_order_relaxed);
 
     {
         std::lock_guard lock(mutex_);
@@ -236,7 +236,7 @@ void EventLoop::doPendingFunctors() {
         functor.functor();
     }
 
-    callingPendingFunctors_ = false;
+    callingPendingFunctors_.store(false, std::memory_order_relaxed);
 }
 
 void EventLoop::emitEventLoopMetric(EventLoopMetricSample sample) {

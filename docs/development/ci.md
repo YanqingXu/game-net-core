@@ -78,6 +78,15 @@ It fails the workflow if active intents use legacy `mini/net` paths, or if
 the active implementation and test surface. Promoting a Phase 4 component must
 update the active scope and migration status in the same change.
 
+## Remote Evidence Boundary
+
+Latest recorded `ci` workflow green evidence: ci #23 for commit 9b27a0a on main, completed successfully on 2026-07-08.
+Current main HEAD at this checkpoint: d3fc1241e0773c650a4753f1955f987f22f31036.
+
+Do not describe ci #23 as latest-HEAD green evidence for d3fc124. If a later
+run validates d3fc124 or a newer HEAD, record the run number, commit SHA, date,
+and job result before promoting Phase 4 readiness.
+
 The ASan/UBSan job uses:
 
 ```bash
@@ -99,6 +108,7 @@ repeated active `TcpClient::disconnect()` idempotence contracts,
 repeated active `TcpClient::stop()` idempotence contracts,
 repeated active `TcpClient::connect()` idempotence contracts,
 active cross-thread `TcpClient::connect()` contracts,
+active cross-thread `TcpClient` retry configuration contracts,
 post-close `TcpConnection::send()` ignore contracts,
 mixed-timing pending-read `TcpConnection::forceClose()` contracts,
 mixed-timing pending-write `TcpConnection::forceClose()` contracts,
@@ -131,6 +141,10 @@ attached to `push` or `pull_request`. It complements the regular CI and TSan
 jobs by rebuilding the core target and repeatedly running the `threading`
 contract slice:
 
+Long-soak repository guards include `tests/cmake/test_event_loop_contracts.py`
+so the manual soak guard surface stays aligned with the ordinary `ci` workflow
+before CMake configure.
+
 ```bash
 cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 cmake --build build-long-soak --parallel
@@ -145,11 +159,14 @@ repeat 20, timeout 60 seconds, completed successfully at
 2026-07-09T01:15:38Z with 36/36 threading-labeled tests passed in
 608.67 seconds.
 
-Local Windows Debug evidence for the current worktree: the same repeat shape
+Local Windows Debug evidence for the current worktree before the cross-thread
+TcpClient retry configuration contract was added: the same repeat shape
 with `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`
-passed the current 43-test threading slice on 2026-07-09; CTest reported
+passed the previous 43-test threading slice on 2026-07-09; CTest reported
 43/43 threading-labeled tests passed across 20 repeats and total test time was
-637.56 seconds.
+637.56 seconds. The current expanded 44-test threading slice is covered once
+by the full Windows Debug and Release CTest runs; repeat-soak evidence for the
+expanded slice is not recorded here.
 
 ## Install Package Gate
 

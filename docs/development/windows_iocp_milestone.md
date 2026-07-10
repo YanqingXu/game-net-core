@@ -23,7 +23,7 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 ```
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
-VS2026 Debug run with a 10-second per-test timeout also passes 64/64 tests with
+VS2026 Debug run with a 10-second per-test timeout also passes 65/65 tests with
 0 failing tests. The local IOCP evidence includes:
 
 - `contract.event_loop.test_event_loop` and
@@ -99,6 +99,9 @@ VS2026 Debug run with a 10-second per-test timeout also passes 64/64 tests with
 - `contract.tcp_client.test_tcp_client_cross_thread_connect`: non-owner
   `connect()` marshals Connector startup to the owner loop and publishes
   connection callbacks on that loop.
+- `contract.tcp_client.test_tcp_client_cross_thread_retry_config`: non-owner
+  `disableRetry()` marshals retry-state mutation to the owner loop and prevents
+  peer close from resurrecting a disabled-retry client.
 - `contract.poller.test_poller_contract`: the Windows Poller contract is backed
   by a posted IOCP read operation, not by a select-style fallback.
 - `contract.tcp_connection.test_tcp_connection_lifecycle`,

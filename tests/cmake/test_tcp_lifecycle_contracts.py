@@ -120,6 +120,13 @@ def main() -> None:
         / "tcp_client"
         / "test_tcp_client_cross_thread_connect.cpp"
     )
+    client_cross_thread_retry_config_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_client"
+        / "test_tcp_client_cross_thread_retry_config.cpp"
+    )
     connection_peer_close_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_peer_close.cpp"
     )
@@ -223,6 +230,7 @@ def main() -> None:
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
     tcp_connection_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpConnection.h"
     tcp_client_source = repo_root / "src" / "core" / "net" / "TcpClient.cc"
+    tcp_client_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpClient.h"
     tcp_server_source = repo_root / "src" / "core" / "net" / "TcpServer.cc"
     connector_header = repo_root / "include" / "gamenet" / "core" / "net" / "Connector.h"
     connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
@@ -284,6 +292,10 @@ def main() -> None:
     )
     assert client_cross_thread_connect_test.exists(), (
         f"missing TCP client cross-thread connect contract: {client_cross_thread_connect_test}"
+    )
+    assert client_cross_thread_retry_config_test.exists(), (
+        "missing TCP client cross-thread retry config contract: "
+        f"{client_cross_thread_retry_config_test}"
     )
     assert connection_peer_close_test.exists(), (
         f"missing TCP connection peer-close contract: {connection_peer_close_test}"
@@ -867,6 +879,41 @@ def main() -> None:
         client_cross_thread_connect_test,
     )
 
+    client_cross_thread_retry_config_text = client_cross_thread_retry_config_test.read_text(encoding="utf-8")
+    require(
+        client_cross_thread_retry_config_text,
+        "client-cross-thread-retry-config",
+        client_cross_thread_retry_config_test,
+    )
+    require(
+        client_cross_thread_retry_config_text,
+        "gamenet::test::runFromNonOwnerThread",
+        client_cross_thread_retry_config_test,
+    )
+    require(client_cross_thread_retry_config_text, "client.enableRetry();", client_cross_thread_retry_config_test)
+    require(client_cross_thread_retry_config_text, "client.disableRetry();", client_cross_thread_retry_config_test)
+    require(client_cross_thread_retry_config_text, "serverConnection->forceClose();", client_cross_thread_retry_config_test)
+    require(
+        client_cross_thread_retry_config_text,
+        "GAMENET_TEST_ASSERT(!loop.isInLoopThread())",
+        client_cross_thread_retry_config_test,
+    )
+    require(
+        client_cross_thread_retry_config_text,
+        "GAMENET_TEST_ASSERT(!client.retry())",
+        client_cross_thread_retry_config_test,
+    )
+    require(
+        client_cross_thread_retry_config_text,
+        "GAMENET_TEST_ASSERT(clientConnectedCount == 1)",
+        client_cross_thread_retry_config_test,
+    )
+    require(
+        client_cross_thread_retry_config_text,
+        "GAMENET_TEST_ASSERT(serverConnectedCount == 1)",
+        client_cross_thread_retry_config_test,
+    )
+
     peer_close_test_text = connection_peer_close_test.read_text(encoding="utf-8")
     require(peer_close_test_text, "peer-close-converges-once", connection_peer_close_test)
     require(peer_close_test_text, "closePeer();", connection_peer_close_test)
@@ -1378,6 +1425,7 @@ def main() -> None:
         client_repeated_stop_test,
         client_repeated_connect_test,
         client_cross_thread_connect_test,
+        client_cross_thread_retry_config_test,
         connection_cross_thread_send_test,
         connection_send_after_close_test,
         connection_cross_thread_shutdown_test,
@@ -1424,6 +1472,11 @@ def main() -> None:
         )
 
     tcp_client_intent_text = tcp_client_intent.read_text(encoding="utf-8")
+    require(
+        tcp_client_intent_text,
+        "enableRetry() and disableRetry() may be called cross-thread",
+        tcp_client_intent,
+    )
     require(tcp_client_intent_text, "stop() cancels pending retry", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_retry_stop_race.cpp", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_retry_stop_soak.cpp", tcp_client_intent)
@@ -1439,6 +1492,7 @@ def main() -> None:
     require(tcp_client_intent_text, "test_tcp_client_repeated_stop.cpp", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_repeated_connect.cpp", tcp_client_intent)
     require(tcp_client_intent_text, "test_tcp_client_cross_thread_connect.cpp", tcp_client_intent)
+    require(tcp_client_intent_text, "test_tcp_client_cross_thread_retry_config.cpp", tcp_client_intent)
 
     connector_intent = repo_root / "intents" / "modules" / "connector.intent.md"
     connector_intent_text = connector_intent.read_text(encoding="utf-8")
@@ -1502,6 +1556,12 @@ def main() -> None:
     require(tcp_client_source_text, "connection->connectDestroyed();", tcp_client_source)
     require(tcp_client_source_text, "if (!conn->disconnected())", tcp_client_source)
     require(tcp_client_source_text, "conn->forceClose();", tcp_client_source)
+    require(tcp_client_source_text, "void TcpClient::setRetryInLoop(bool enabled) noexcept", tcp_client_source)
+    require(tcp_client_source_text, "loop_->runInLoop([this, lifetime, enabled]", tcp_client_source)
+    require(tcp_client_source_text, "connector_->setRetryEnabled(enabled);", tcp_client_source)
+
+    tcp_client_header_text = tcp_client_header.read_text(encoding="utf-8")
+    require(tcp_client_header_text, "void setRetryInLoop(bool enabled) noexcept;", tcp_client_header)
 
     tcp_server_source_text = tcp_server_source.read_text(encoding="utf-8")
     require(tcp_server_source_text, "bool TcpServer::forceCloseAllConnections()", tcp_server_source)
@@ -1560,6 +1620,8 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_client_repeated_connect.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_cross_thread_connect.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_cross_thread_connect.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_retry_config.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_cross_thread_retry_config.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_connector_retry_stop.cpp", tests_cmake)
     require(tests_cmake_text, "test_connector_retry_stop.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_peer_close.cpp", tests_cmake)

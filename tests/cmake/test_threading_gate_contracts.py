@@ -61,6 +61,7 @@ def main() -> None:
         "contract/tcp_client/test_tcp_client_repeated_stop.cpp",
         "contract/tcp_client/test_tcp_client_repeated_connect.cpp",
         "contract/tcp_client/test_tcp_client_cross_thread_connect.cpp",
+        "contract/tcp_client/test_tcp_client_cross_thread_retry_config.cpp",
         "contract/tcp_server/test_tcp_server_stop_active_connections.cpp",
         "contract/tcp_server/test_tcp_server_stop_active_write.cpp",
         "contract/tcp_server/test_tcp_server_stop_multi_worker.cpp",
@@ -99,6 +100,7 @@ def main() -> None:
     require(ci_docs_text, "repeated active `TcpClient::stop()` idempotence contracts", ci_docs)
     require(ci_docs_text, "repeated active `TcpClient::connect()` idempotence contracts", ci_docs)
     require(ci_docs_text, "active cross-thread `TcpClient::connect()` contracts", ci_docs)
+    require(ci_docs_text, "active cross-thread `TcpClient` retry configuration contracts", ci_docs)
     require(ci_docs_text, "post-close `TcpConnection::send()` ignore contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-read `TcpConnection::forceClose()` contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-write `TcpConnection::forceClose()` contracts", ci_docs)
@@ -117,6 +119,7 @@ def main() -> None:
     require(migration_text, "repeated active TcpClient stop idempotence", migration_status)
     require(migration_text, "repeated active TcpClient connect idempotence", migration_status)
     require(migration_text, "active cross-thread TcpClient connect", migration_status)
+    require(migration_text, "active cross-thread TcpClient retry configuration", migration_status)
     require(migration_text, "post-close TcpConnection send ignore", migration_status)
     require(migration_text, "mixed-timing pending-read forceClose", migration_status)
     require(migration_text, "mixed-timing pending-write forceClose", migration_status)

@@ -69,7 +69,7 @@ private:
     bool looping_;
     std::atomic<bool> quit_;
     bool eventHandling_;
-    bool callingPendingFunctors_;
+    std::atomic<bool> callingPendingFunctors_;
     const std::thread::id threadId_;
     gamenet::base::Timestamp pollReturnTime_;
     std::unique_ptr<Poller> poller_;
