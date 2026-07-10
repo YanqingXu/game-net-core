@@ -1559,9 +1559,13 @@ def main() -> None:
     require(tcp_client_source_text, "void TcpClient::setRetryInLoop(bool enabled) noexcept", tcp_client_source)
     require(tcp_client_source_text, "loop_->runInLoop([this, lifetime, enabled]", tcp_client_source)
     require(tcp_client_source_text, "connector_->setRetryEnabled(enabled);", tcp_client_source)
+    require(tcp_client_source_text, "activeConnectRequestId_.compare_exchange_strong", tcp_client_source)
+    require(tcp_client_source_text, "void TcpClient::handleConnectorEvent(ConnectorEvent event)", tcp_client_source)
+    require(tcp_client_source_text, "finishTerminalConnectFailure(requestId);", tcp_client_source)
 
     tcp_client_header_text = tcp_client_header.read_text(encoding="utf-8")
     require(tcp_client_header_text, "void setRetryInLoop(bool enabled) noexcept;", tcp_client_header)
+    require(tcp_client_header_text, "std::atomic<std::uint64_t> activeConnectRequestId_{0};", tcp_client_header)
 
     tcp_server_source_text = tcp_server_source.read_text(encoding="utf-8")
     require(tcp_server_source_text, "bool TcpServer::forceCloseAllConnections()", tcp_server_source)

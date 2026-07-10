@@ -19,6 +19,7 @@ def main() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
+    require(workflow_text, 'default: "50"', workflow)
     assert "\n  push:" not in workflow_text, "long-soak must not run on push"
     assert "\n  pull_request:" not in workflow_text, "long-soak must not run on pull_request"
     require(workflow_text, "linux-long-soak:", workflow)
@@ -48,12 +49,21 @@ def main() -> None:
     require(ci_docs_text, "long-soak", ci_docs)
     require(ci_docs_text, "ctest --test-dir build-long-soak --output-on-failure", ci_docs)
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
-    require(ci_docs_text, "Remote evidence: run 28986707243", ci_docs)
-    require(ci_docs_text, "job 86017363504", ci_docs)
-    require(ci_docs_text, "commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221", ci_docs)
-    require(ci_docs_text, "repeat 20", ci_docs)
+    require(ci_docs_text, "defaults to repeat 50", ci_docs)
+    require(ci_docs_text, "60-second per-test timeout", ci_docs)
+    require(ci_docs_text, "Current remote evidence: run `29077148022`", ci_docs)
+    require(ci_docs_text, "job `86311227712`", ci_docs)
+    require(ci_docs_text, "`a7fd77cbd2140041cebb3f900d5c609fafc2adad`", ci_docs)
+    require(ci_docs_text, "repeat 50", ci_docs)
     require(ci_docs_text, "timeout 60 seconds", ci_docs)
-    require(ci_docs_text, "36/36 threading-labeled tests passed", ci_docs)
+    require(ci_docs_text, "46/46\nthreading-labeled tests passed", ci_docs)
+    require(ci_docs_text, "1632.47 seconds", ci_docs)
+    require(ci_docs_text, "28m27s", ci_docs)
+    require(
+        ci_docs_text,
+        "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:50 --timeout 60",
+        ci_docs,
+    )
     require(ci_docs_text, "previous 43-test threading slice", ci_docs)
     require(ci_docs_text, "then-expanded 44-test threading slice", ci_docs)
     require(ci_docs_text, "present threading slice to 46 tests", ci_docs)
@@ -63,7 +73,7 @@ def main() -> None:
     require(migration_text, "non-default `long-soak` workflow", migration_status)
     require(migration_text, "long-soak repository guard parity includes the EventLoop contract guard", migration_status)
     require(migration_text, "`ctest --repeat until-fail`", migration_status)
-    require(migration_text, "Remote GitHub `long-soak` evidence is now recorded", migration_status)
+    require(migration_text, "Current remote GitHub `long-soak` evidence is recorded", migration_status)
 
 
 if __name__ == "__main__":

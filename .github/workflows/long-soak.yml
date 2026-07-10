@@ -6,7 +6,7 @@ on:
       repeat:
         description: CTest repeat count for threading contracts
         required: true
-        default: "20"
+        default: "50"
       timeout_seconds:
         description: Per-test timeout in seconds
         required: true

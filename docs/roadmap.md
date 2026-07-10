@@ -32,6 +32,9 @@ Completed in the current worktree:
 - marshal TcpServer callback installation/replacement to each connection owner loop;
 - fix the Linux repeated-connect failure found in `ci` run `29059799283` by
   releasing Connector member ownership before deferred Channel destruction;
+- fix the second Linux repeated-connect ordering failure found in `ci` run
+  `29073362905` by admitting one generation-tagged `connect()` request per
+  pending/active lifecycle and releasing it after terminal failure/teardown;
 - define Logger runtime replacement, callback snapshot/concurrency, re-entry,
   and capture-lifetime semantics with a threading contract;
 - add a default-off, non-CTest core benchmark with versioned JSON output for
@@ -43,18 +46,21 @@ Completed in the current worktree:
   metadata so historical mini_trantor stages and test counts cannot authorize
   current work;
 - replace self-referential HEAD documentation with immutable validation records;
-- pass local Windows Debug, Release, install-consumer, and 5-repeat threading preflight.
+- pass local Windows Debug, Release, install-consumer, and 5-repeat threading preflight;
+- validate candidate `a7fd77cbd2140041cebb3f900d5c609fafc2adad` in `ci`
+  run `29076601085` with all five Linux/Windows jobs green;
+- pass remote `long-soak` run `29077148022` with all 46 threading tests at
+  repeat 50 and a 60-second per-test timeout;
+- retain same-SHA Linux epoll and Windows IOCP Release JSON artifacts from
+  `core-benchmark` run `29077151229`.
 
 Remaining gates, in order:
 
-1. Commit the focused Phase 3.5 changes and obtain one green `ci` run where all
-   five jobs validate the same commit.
-2. Run remote `long-soak` with the current 46-test threading slice at repeat 50
-   and record run id, commit, date, timeout, result, and duration.
-3. Dispatch the manual `core-benchmark` workflow on the focused commit and
-   retain its same-SHA Linux epoll and Windows IOCP Release JSON artifacts.
-4. Review the complete CI, soak, and cross-platform benchmark evidence ledger,
-   then tag `v0.1.0-core-preview`.
+1. Merge PR #2 after its evidence-documentation follow-up passes the ordinary
+   five-job CI gate.
+2. Publish `v0.1.0-core-preview` from the frozen core candidate.
+3. Keep Phase 4 deferred until the tag is present; then begin with a design-only
+   PacketFramer change.
 
 ## Phase 4: Higher-level Modules
 
