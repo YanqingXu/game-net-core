@@ -97,23 +97,22 @@ update the active scope and migration status in the same change.
 
 Record immutable validation evidence instead of a self-referential current HEAD:
 
-- Last fully validated commit: `9b27a0a3c3993cb1f90ef4357fa80027205ca221`.
-- CI workflow run id: `28948507704` (`ci` #23).
-- Validation date: 2026-07-08.
+- Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`.
+- CI workflow run id: `29076601085` (`ci` #27, PR #2).
+- Validation date: 2026-07-10.
 - Result: Linux Debug, ASan/UBSan, TSan, Release, and Windows MSVC IOCP passed.
 
-The most recent audited candidate is
-`d1474b5f32e609a7d2e2648af31b45635595d304`, run id `29073362905`
-(`ci` #26), completed 2026-07-10. Its Windows MSVC IOCP job passed, while
-Linux Debug, ASan/UBSan, TSan, and Release all failed on
+The preceding audited candidate,
+`d1474b5f32e609a7d2e2648af31b45635595d304`, failed in run id `29073362905`
+(`ci` #26) on
 `contract.tcp_client.test_tcp_client_repeated_connect` at
 `serverConnectedCount == 1`. On Linux, the first connection can close
 synchronously inside its connection callback; duplicate cross-thread
 `connect()` submissions that were already queued then observed no active
-TcpConnection and restarted Connector. The current worktree admits one
+TcpConnection and restarted Connector. The validated fix admits one
 generation-tagged connect request per pending/active lifecycle and releases
 that admission after terminal no-retry failure or connection removal. Local
-Debug and Release pass 67/67 tests, and the failed contract passes 50 repeats.
+Debug and Release pass 67/67 tests, and the repaired contract passes 50 repeats.
 No later commit may be described as validated until a new run id, commit,
 date, and complete job result are recorded here.
 
@@ -187,9 +186,20 @@ ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until
 Use it for phase hardening evidence when mixed-timing lifecycle contracts need
 more iteration than the ordinary PR gate should spend.
 
-Remote evidence: run 28986707243, job 86017363504, commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221,
-repeat 20, timeout 60 seconds, completed successfully at
-2026-07-09T01:15:38Z with 36/36 threading-labeled tests passed in
+Current remote evidence: run `29077148022`, job `86311227712`, commit
+`a7fd77cbd2140041cebb3f900d5c609fafc2adad`, repeat 50, timeout 60 seconds,
+completed successfully at 2026-07-10T08:04:12Z. CTest reported 46/46
+threading-labeled tests passed and total real test time of 1632.47 seconds;
+the complete workflow job took 28m27s. The command recorded in the log was:
+
+```bash
+ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:50 --timeout 60
+```
+
+Earlier evidence remains useful as history but no longer defines the gate:
+run `28986707243`, job `86017363504`, commit
+`9b27a0a3c3993cb1f90ef4357fa80027205ca221`, repeat 20, timeout 60 seconds,
+completed successfully at 2026-07-09T01:15:38Z with 36/36 tests passed in
 608.67 seconds.
 
 Local Windows Debug evidence before the cross-thread
@@ -211,7 +221,34 @@ Current local Windows preflight on 2026-07-10 passes 67/67 Debug tests in
 slice across 5 repeats passes in 176.90 seconds with a 15-second per-test timeout.
 The Release install plus external `find_package(GameNetCore)` / `GameNet::core`
 consumer also configures, builds, and exits successfully. These local results
-do not replace fresh Linux sanitizer jobs or the required remote repeat-50 run.
+supplement the same-SHA remote CI and repeat-50 evidence above.
+
+## Remote Core Benchmark Evidence
+
+Manual `core-benchmark` run `29077151229` completed successfully on commit
+`a7fd77cbd2140041cebb3f900d5c609fafc2adad` at 2026-07-10T07:37:15Z. It
+published two SHA-bound Release artifacts:
+
+- `core-benchmark-linux-release-a7fd77cbd2140041cebb3f900d5c609fafc2adad`
+- `core-benchmark-windows-release-a7fd77cbd2140041cebb3f900d5c609fafc2adad`
+
+Each artifact contains `echo-1-worker.json`, `echo-2-workers.json`,
+`connections-256.json`, and `slow-client-4.json`. All eight files use schema
+`gamenet.core_benchmark.v1` and report `status: ok`. Echo uses four connections,
+10,000 messages per connection, and 256-byte payloads. The connection scenario
+uses 256 idle connections. The slow-client scenario offers 8 MiB to each of
+four non-reading clients with a 65,536-byte high-water mark.
+
+Linux identifies backend `epoll` and completion mode `epoll_wait_batch`; its
+one/two-worker echo snapshots are 32.337/65.234 MiB/s with P99 97.419/74.229 us,
+the connection working-set delta is 991,232 bytes (3,872 bytes per connection),
+and slow-client working-set delta is 26,562,560 bytes with four high-water
+callbacks. Windows identifies backend `iocp` and completion mode
+`single_get_queued_completion_status`; its one/two-worker snapshots are
+16.188/26.110 MiB/s with P99 162.8/151.3 us, the connection working-set delta
+is 18,137,088 bytes (70,848 bytes per connection), and slow-client working-set
+delta is 67,493,888 bytes with four high-water callbacks. These are raw
+environment-specific snapshots, not performance thresholds.
 
 ## Install Package Gate
 

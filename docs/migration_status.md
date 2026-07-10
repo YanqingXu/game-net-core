@@ -28,24 +28,23 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
 - Test: `ctest --test-dir build --output-on-failure`
-- Last fully validated commit: `9b27a0a3c3993cb1f90ef4357fa80027205ca221`.
-- CI workflow run id: `28948507704` (`ci` #23).
-- Validation date: 2026-07-08.
+- Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`.
+- CI workflow run id: `29076601085` (`ci` #27, PR #2).
+- Validation date: 2026-07-10.
 - Result: all five jobs passed:
   `Linux CMake build and tests`, `Linux ASan/UBSan build and tests`,
   `Linux TSan race-oriented build and tests`, `Linux Release build`, and
   `Windows MSVC IOCP build and tests`.
-- Most recent audited candidate: commit
-  `d1474b5f32e609a7d2e2648af31b45635595d304`, `ci` run id
-  `29073362905` (#26), completed 2026-07-10. Windows MSVC IOCP passed;
-  Linux Debug, ASan/UBSan, TSan, and Release failed on
+- The preceding audited candidate, commit
+  `d1474b5f32e609a7d2e2648af31b45635595d304`, failed in `ci` run id
+  `29073362905` (#26) on
   `contract.tcp_client.test_tcp_client_repeated_connect` at
   `serverConnectedCount == 1`. Linux synchronously completed the first
   connection teardown before queued duplicate `connect()` submissions were
-  drained, allowing a second Connector attempt. The current worktree
+  drained, allowing a second Connector attempt. The validated fix
   coalesces one generation-tagged connect request across each pending/active
   lifecycle and releases it on terminal no-retry failure or connection
-  removal; fresh remote validation is still required.
+  removal.
 - Race-oriented CI: this worktree adds a `linux-tsan` workflow job named
   `Linux TSan race-oriented build and tests`. It configures with
   `GAMENET_ENABLE_TSAN=ON`, builds the Debug target set, and runs the CTest
@@ -65,7 +64,8 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   repeated TcpConnection shutdown idempotence contracts,
   worker-owned active-write stop contracts, worker-callback TcpServer stop
   contracts, and repeated TcpServer stop idempotence contracts.
-  Latest recorded race-oriented CI remote green evidence is ci #23 on main.
+  Latest recorded race-oriented CI remote green evidence is `ci` #27 on
+  commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
@@ -108,7 +108,7 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. Local Windows Debug long-soak evidence currently covers the previous
+  timeout. Local Windows Debug long-soak evidence also covers the previous
   43-test threading slice before the cross-thread TcpClient retry configuration
   contract expanded the threading label to 44 tests. That earlier local run used:
   `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`;
@@ -117,17 +117,19 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   44-test threading slice was covered once by the full Windows Debug and Release
   CTest checkpoint. The new cross-thread TcpConnection state contract expands the
   threading slice to 45 tests. The Logger concurrency contract expands the current
-  threading slice to 46 tests; remote repeat-soak evidence for that expanded
-  slice is not recorded here.
+  threading slice to 46 tests.
   Current Windows Debug preflight passes all 46 threading tests across 5
   repeats with `--timeout 15`; CTest reported 176.90 seconds on 2026-07-10.
   The repaired repeated-connect contract separately passes 50 repeats in
-  32.41 seconds. This is not the required remote repeat-50 evidence.
-  Remote GitHub `long-soak` evidence is now recorded:
-  run 28986707243, job 86017363504, commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221,
-  repeat 20, timeout 60 seconds, completed successfully at
-  2026-07-09T01:15:38Z with 36/36 threading-labeled tests passed in
-  608.67 seconds.
+  32.41 seconds. Current remote GitHub `long-soak` evidence is recorded in run
+  `29077148022`, job `86311227712`, commit
+  `a7fd77cbd2140041cebb3f900d5c609fafc2adad`, repeat 50, timeout 60 seconds,
+  completed successfully at 2026-07-10T08:04:12Z. The log records
+  `ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:50 --timeout 60`;
+  46/46 threading-labeled tests passed in 1632.47 seconds of real CTest time,
+  and the complete job took 28m27s. Historical run `28986707243` covered the
+  earlier 36-test slice at repeat 20 on commit
+  `9b27a0a3c3993cb1f90ef4357fa80027205ca221`.
 - Release: CI includes a Release build and CTest gate for the Reactor / TCP
   foundation. C++ tests use a Release-safe helper instead of standard `assert`
   so contract checks remain active with `NDEBUG`. Local Windows Release
@@ -150,9 +152,19 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   explicitly reports `high_water_notification_only`; it is not a memory-cap
   claim. Raw local evidence is under
   `docs/development/benchmark_results/2026-07-10-windows-msvc-release/`.
-  The manual-only `core-benchmark` workflow is ready to produce matching Linux
-  epoll and Windows IOCP Release artifacts from one SHA.
-  Linux Release JSON remains required before PR-0C has cross-platform evidence.
+  The manual-only `core-benchmark` workflow run `29077151229` completed successfully on
+  `a7fd77cbd2140041cebb3f900d5c609fafc2adad` and published matching Linux
+  epoll (`epoll_wait_batch`) and Windows IOCP
+  (`single_get_queued_completion_status`) Release artifacts. Both artifact
+  names include the full commit SHA and each contains the same four scenarios.
+  Linux one/two-worker echo measured 32.337/65.234 MiB/s with P99
+  97.419/74.229 us; Windows measured 16.188/26.110 MiB/s with P99
+  162.8/151.3 us. The 256-connection working-set deltas were 991,232 bytes on
+  Linux and 18,137,088 bytes on Windows. Four slow clients offered 8 MiB each,
+  producing four high-water callbacks and working-set deltas of 26,562,560
+  bytes on Linux and 67,493,888 bytes on Windows. All eight JSON files use
+  `gamenet.core_benchmark.v1` and report `status: ok`; these values are evidence
+  snapshots, not performance thresholds.
 - Install/package: CI installs the core target and builds an external consumer
   fixture through `find_package(GameNetCore)` and `GameNet::core`. Release
   install/package consumer also passes locally: the Release build installs to
@@ -221,9 +233,9 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   `tests/cmake/install_consumer` fixture configures, builds, and runs through
   `find_package(GameNetCore)` and `GameNet::core`. The Windows workflow uses
   the Visual Studio generator, Debug CTest, install, and external package
-  consumer gates. The latest recorded green Windows job is `ci` #26, run
-  `29073362905`, on commit `d1474b5f32e609a7d2e2648af31b45635595d304`;
-  that workflow is not a full green checkpoint because all four Linux jobs failed.
+  consumer gates. The latest recorded green Windows job is `ci` #27, run
+  `29076601085`, on commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`;
+  all four Linux jobs in the same workflow also passed.
   The IOCP data-path design and implementation plan are recorded in
   `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md` and
   `docs/superpowers/plans/2026-07-07-windows-iocp-data-path.md`. See
@@ -231,18 +243,21 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
 
 ## Phase 4 Readiness Gate
 
-Phase 4 remains deferred until every gate item below has current evidence:
+Phase 4 remains deferred until PR #2 is merged and the Core Preview tag is
+published. Every technical evidence item below is current for candidate
+`a7fd77cbd2140041cebb3f900d5c609fafc2adad`:
 
-- Fresh latest-HEAD remote CI evidence is recorded for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP.
-- The remote `long-soak` workflow has a green run recorded with run id, commit sha, repeat count, timeout, date, and result.
-- `docs/migration_status.md`, `docs/development/ci.md`, and `docs/development/windows_iocp_milestone.md` have no pending evidence.
-- TcpConnection, TcpClient/Connector, and TcpServer lifecycle/race tests have no known flaky entries.
-- Linux and Windows install/package consumers pass through `find_package(GameNetCore)` and `GameNet::core`.
-- Matching Release `gamenet.core_benchmark.v1` evidence is recorded for Linux
+- [x] Fresh candidate-SHA remote CI evidence is recorded for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP.
+- [x] The remote `long-soak` workflow has a green run recorded with run id, commit sha, repeat count, timeout, date, result, and duration.
+- [x] `docs/migration_status.md`, `docs/development/ci.md`, and `docs/development/windows_iocp_milestone.md` have no pending evidence for the validated candidate.
+- [x] TcpConnection, TcpClient/Connector, and TcpServer lifecycle/race tests have no known flaky entries.
+- [x] Linux and Windows install/package consumers pass through `find_package(GameNetCore)` and `GameNet::core`.
+- [x] Matching Release `gamenet.core_benchmark.v1` evidence is recorded for Linux
   epoll and Windows IOCP with commands, scenario parameters, backend, and
-  completion mode; the current worktree has local Windows evidence only.
-- The first Phase 4 design-only PR should target protocol framing / PacketFramer.
-- HTTP, RPC, and game pipeline modules must stay deferred until protocol framing has its own approved intent, invariants, contracts, and tests.
+  completion mode.
+- [ ] Merge PR #2 and publish `v0.1.0-core-preview` before Phase 4 work begins.
+- [ ] The first Phase 4 design-only PR should target protocol framing / PacketFramer.
+- [ ] HTTP, RPC, and game pipeline modules must stay deferred until protocol framing has its own approved intent, invariants, contracts, and tests.
 
 Before promoting Phase 4 work, keep the Linux and Windows CI gates green and
 add any missing local, soak, race-oriented, or platform-specific verification as

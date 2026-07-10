@@ -33,14 +33,13 @@ def main() -> None:
         f"{unit_count} unit tests, {contract_count} contract tests, and {integration_count} integration test",
         migration_status,
     )
-    require(status_text, "Last fully validated commit: `9b27a0a3c3993cb1f90ef4357fa80027205ca221`", migration_status)
-    require(status_text, "CI workflow run id: `28948507704` (`ci` #23)", migration_status)
-    require(status_text, "Validation date: 2026-07-08", migration_status)
-    require(status_text, "Most recent audited candidate", migration_status)
+    require(status_text, "Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`", migration_status)
+    require(status_text, "CI workflow run id: `29076601085` (`ci` #27, PR #2)", migration_status)
+    require(status_text, "Validation date: 2026-07-10", migration_status)
+    require(status_text, "preceding audited candidate", migration_status)
     require(status_text, "`d1474b5f32e609a7d2e2648af31b45635595d304`", migration_status)
     require(status_text, "`29073362905` (#26)", migration_status)
     require(status_text, "contract.tcp_client.test_tcp_client_repeated_connect", migration_status)
-    require(status_text, "fresh remote validation is still required", migration_status)
     require(status_text, "Linux CMake build and tests", migration_status)
     require(status_text, "Linux ASan/UBSan build and tests", migration_status)
     require(status_text, "Linux Release build", migration_status)
@@ -49,7 +48,7 @@ def main() -> None:
     require(status_text, "GAMENET_ENABLE_TSAN=ON", migration_status)
     require(status_text, "threading` label", migration_status)
     require(status_text, "pending read/write forceClose cancel-close", migration_status)
-    require(status_text, "Latest recorded race-oriented CI remote green evidence is ci #23 on main", migration_status)
+    require(status_text, "Latest recorded race-oriented CI remote green evidence is `ci` #27", migration_status)
     require(status_text, "intent consistency guard", migration_status)
     require(status_text, "intent metadata contract guard", migration_status)
     require(status_text, "all 52 formal `*.intent.md` documents", migration_status)
@@ -73,7 +72,7 @@ def main() -> None:
     require(status_text, "Windows install/package consumer gate also passes locally", migration_status)
     require(status_text, "find_package(GameNetCore)", migration_status)
     require(status_text, "GameNet::core", migration_status)
-    require(status_text, "latest recorded green Windows job is `ci` #26", migration_status)
+    require(status_text, "latest recorded green Windows job is `ci` #27", migration_status)
     require(status_text, "contract.timer_queue.test_timer_queue", migration_status)
     require(status_text, "server stop with active connections", migration_status)
     require(status_text, "server stop during active write", migration_status)
@@ -156,7 +155,7 @@ def main() -> None:
         "centralizes multi-client TcpServer connection setup and worker-loop distribution assertions",
         migration_status,
     )
-    require(status_text, "Local Windows Debug long-soak evidence currently covers the previous", migration_status)
+    require(status_text, "Local Windows Debug long-soak evidence also covers the previous", migration_status)
     require(status_text, "43-test threading slice", migration_status)
     require(status_text, "expanded the threading label to 44 tests", migration_status)
     require(status_text, "ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60", migration_status)
@@ -170,16 +169,16 @@ def main() -> None:
         migration_status,
     )
     require(status_text, "CTest reported 176.90 seconds", migration_status)
-    require(status_text, "not the required remote repeat-50 evidence", migration_status)
-    require(status_text, "Remote GitHub `long-soak` evidence is now recorded", migration_status)
-    require(status_text, "run 28986707243", migration_status)
-    require(status_text, "job 86017363504", migration_status)
-    require(status_text, "commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221", migration_status)
-    require(status_text, "repeat 20", migration_status)
+    require(status_text, "Current remote GitHub `long-soak` evidence is recorded", migration_status)
+    require(status_text, "`29077148022`", migration_status)
+    require(status_text, "`86311227712`", migration_status)
+    require(status_text, "`a7fd77cbd2140041cebb3f900d5c609fafc2adad`", migration_status)
+    require(status_text, "repeat 50", migration_status)
     require(status_text, "timeout 60 seconds", migration_status)
-    require(status_text, "2026-07-09T01:15:38Z", migration_status)
-    require(status_text, "36/36 threading-labeled tests passed", migration_status)
-    require(status_text, "608.67 seconds", migration_status)
+    require(status_text, "2026-07-10T08:04:12Z", migration_status)
+    require(status_text, "46/46 threading-labeled tests passed", migration_status)
+    require(status_text, "1632.47 seconds", migration_status)
+    require(status_text, "28m27s", migration_status)
     require(status_text, "Local Windows Release", migration_status)
     require(status_text, "evidence now also passes", migration_status)
     require(status_text, "cmake --build build-release --config Release --parallel", migration_status)
@@ -193,7 +192,11 @@ def main() -> None:
     require(status_text, "71,264 bytes", migration_status)
     require(status_text, "67,465,216-byte", migration_status)
     require(status_text, "manual-only `core-benchmark` workflow", migration_status)
-    require(status_text, "Linux Release JSON remains required", migration_status)
+    require(status_text, "`29077151229`", migration_status)
+    require(status_text, "`epoll_wait_batch`", migration_status)
+    require(status_text, "32.337/65.234 MiB/s", migration_status)
+    require(status_text, "16.188/26.110 MiB/s", migration_status)
+    require(status_text, "All eight JSON files", migration_status)
     require(status_text, "install/package consumer also passes locally", migration_status)
     require(status_text, "build-release/_install", migration_status)
     require(status_text, "build-release-install-consumer", migration_status)
@@ -202,22 +205,22 @@ def main() -> None:
     require(status_text, "## Phase 4 Readiness Gate", migration_status)
     require(
         status_text,
-        "Phase 4 remains deferred until every gate item below has current evidence",
+        "Phase 4 remains deferred until PR #2 is merged and the Core Preview tag is",
         migration_status,
     )
     require(
         status_text,
-        "Fresh latest-HEAD remote CI evidence is recorded for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP",
+        "Fresh candidate-SHA remote CI evidence is recorded for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP",
         migration_status,
     )
     require(
         status_text,
-        "remote `long-soak` workflow has a green run recorded with run id, commit sha, repeat count, timeout, date, and result",
+        "remote `long-soak` workflow has a green run recorded with run id, commit sha, repeat count, timeout, date, result, and duration",
         migration_status,
     )
     require(
         status_text,
-        "`docs/migration_status.md`, `docs/development/ci.md`, and `docs/development/windows_iocp_milestone.md` have no pending evidence",
+        "`docs/migration_status.md`, `docs/development/ci.md`, and `docs/development/windows_iocp_milestone.md` have no pending evidence for the validated candidate",
         migration_status,
     )
     require(
@@ -276,6 +279,15 @@ def main() -> None:
     assert "pending until the manual workflow is run on GitHub" not in status_text, (
         "migration status must not say the manual long-soak is pending after run 28986707243 passed"
     )
+    assert "fresh remote validation is still required" not in status_text, (
+        "migration status must not retain the failed-candidate state after ci #27 passed"
+    )
+    assert "Linux Release JSON remains required" not in status_text, (
+        "migration status must not retain local-only benchmark wording after run 29077151229 passed"
+    )
+    assert "not the required remote repeat-50 evidence" not in status_text, (
+        "migration status must not retain pre-soak wording after run 29077148022 passed"
+    )
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "python3 tests/cmake/test_migration_status_contract.py", workflow)
@@ -285,10 +297,14 @@ def main() -> None:
 
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, "## Remote Evidence Boundary", ci_docs)
-    require(ci_docs_text, "Last fully validated commit: `9b27a0a3c3993cb1f90ef4357fa80027205ca221`", ci_docs)
-    require(ci_docs_text, "CI workflow run id: `28948507704` (`ci` #23)", ci_docs)
+    require(ci_docs_text, "Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`", ci_docs)
+    require(ci_docs_text, "CI workflow run id: `29076601085` (`ci` #27, PR #2)", ci_docs)
     require(ci_docs_text, "run id `29073362905`", ci_docs)
     require(ci_docs_text, "contract.tcp_client.test_tcp_client_repeated_connect", ci_docs)
+    require(ci_docs_text, "run `29077148022`", ci_docs)
+    require(ci_docs_text, "run `29077151229`", ci_docs)
+    require(ci_docs_text, "core-benchmark-linux-release-a7fd77cbd2140041cebb3f900d5c609fafc2adad", ci_docs)
+    require(ci_docs_text, "core-benchmark-windows-release-a7fd77cbd2140041cebb3f900d5c609fafc2adad", ci_docs)
     assert "Current main HEAD" not in ci_docs_text, (
         "CI docs must not store a self-referential current-HEAD checkpoint"
     )

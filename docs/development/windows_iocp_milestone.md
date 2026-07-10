@@ -24,16 +24,24 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
 VS2026 Debug run with a 10-second per-test timeout also passes 67/67 tests with
-0 failing tests on 2026-07-10. The local IOCP evidence includes:
+0 failing tests on 2026-07-10. Remote `ci` run `29076601085` (#27) validates
+commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`; its Windows MSVC IOCP job
+`86309502342` passed alongside all four Linux jobs on the same SHA.
 
 The first opt-in Windows MSVC Release performance baseline now records the
 current `single_get_queued_completion_status` mode explicitly. Four loopback
 JSON artifacts cover one-worker and two-worker echo throughput/P50/P99, 256
 idle connections, and four non-reading clients offered 8 MiB each. The raw
 evidence lives under
-`docs/development/benchmark_results/2026-07-10-windows-msvc-release/`; it is a
-local dirty-worktree baseline and does not replace current-commit CI or Linux
-epoll benchmark evidence.
+`docs/development/benchmark_results/2026-07-10-windows-msvc-release/`. The
+local dirty-worktree baseline is supplemented by manual `core-benchmark` run
+`29077151229`, which published the same four `gamenet.core_benchmark.v1`
+scenarios as SHA-bound Linux epoll and Windows IOCP Release artifacts. All
+eight remote JSON files report `status: ok`. The Windows artifact records
+16.188/26.110 MiB/s one/two-worker echo throughput, P99 162.8/151.3 us,
+70,848 bytes of working-set delta per connection at 256 connections, and four
+high-water callbacks in the slow-client scenario. These are evidence snapshots,
+not performance thresholds.
 
 - `contract.event_loop.test_event_loop` and
   `contract.timer_queue.test_timer_queue`: `EventLoop::wakeup()` posts an IOCP
@@ -104,7 +112,9 @@ epoll benchmark evidence.
   close from resurrecting the client through retry.
 - `contract.tcp_client.test_tcp_client_repeated_connect`: repeated owner and
   non-owner `connect()` calls while a client is connecting or active publish at
-  most one active client/server connection pair.
+  most one active client/server connection pair; generation-tagged admission is
+  released after terminal no-retry failure so a later explicit connect remains
+  available.
 - `contract.tcp_client.test_tcp_client_cross_thread_connect`: non-owner
   `connect()` marshals Connector startup to the owner loop and publishes
   connection callbacks on that loop.
