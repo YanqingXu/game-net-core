@@ -1,3 +1,10 @@
+---
+status: active
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: none
+---
+
 # Module Intent: TcpServer
 
 ## 1. Intent

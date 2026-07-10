@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # Architecture Intent: v3 Stage Boundary
 
 ## 1. Intent

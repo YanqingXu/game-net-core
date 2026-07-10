@@ -77,8 +77,7 @@ private:
     bool cancelPendingConnectInLoop(SocketFd sockfd) noexcept;
     void finishCancelInLoop();
 #endif
-    SocketFd removeAndResetChannel();
-    void resetChannel();
+    SocketFd removeAndReleaseChannel();
 
     EventLoop* loop_;
     InetAddress serverAddr_;

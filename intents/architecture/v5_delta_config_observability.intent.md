@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # Architecture Intent: v5-delta — Configuration and Observability
 
 ## 1. Intent

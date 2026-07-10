@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: post-core-preview
+---
+
 # Module Intent: Backpressure Policy
 
 ## 1. Intent

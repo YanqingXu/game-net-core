@@ -1,0 +1,35 @@
+{
+  "schema": "gamenet.core_benchmark.v1",
+  "status": "ok",
+  "error": null,
+  "scenario": "slow-client",
+  "platform": "windows",
+  "backend": "iocp",
+  "completion_mode": "single_get_queued_completion_status",
+  "backpressure_policy": "high_water_notification_only",
+  "build_type": "Release",
+  "parameters": {
+    "connections": 4,
+    "event_loop_threads": 1,
+    "messages_per_connection": 1000,
+    "payload_bytes": 256,
+    "slow_bytes_per_connection": 8388608,
+    "high_water_bytes": 65536,
+    "settle_ms": 1000,
+    "timeout_ms": 30000
+  },
+  "measurements": {
+    "elapsed_seconds": 1.037,
+    "round_trips": 0,
+    "application_bytes": 0,
+    "throughput_mib_per_second": null,
+    "p50_latency_us": null,
+    "p99_latency_us": null,
+    "working_set_before_bytes": 13058048,
+    "working_set_after_bytes": 80523264,
+    "working_set_delta_bytes": 67465216,
+    "approx_bytes_per_connection": 16866304.000,
+    "offered_bytes": 33554432,
+    "high_water_callbacks": 4
+  }
+}

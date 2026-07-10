@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::transport
+migration_source: mini_trantor
+promote_gate: phase-4-transport
+---
+
 # Module Intent: ConnectionTransport
 
 ## 1. Intent

@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # System Intent: game-net-core Overview
 
 ## 1. Intent

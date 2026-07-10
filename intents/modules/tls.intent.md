@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::transport
+migration_source: mini_trantor
+promote_gate: post-core-preview
+---
+
 # Module Intent: TLS/SSL Integration
 
 ## 1. Intent

@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # Architecture Intent: Game Network Base Scope Boundary
 
 ## 1. Intent

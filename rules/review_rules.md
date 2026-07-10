@@ -32,13 +32,17 @@ The following areas always require focused review:
 
 ## 4. PR Standard
 Each PR for a core module should contain:
-- intent reference
-- stage reference (`v1-alpha`, `v1-beta`, or `v1-coro-preview`)
+- an intent reference whose metadata status is `active`
+- the current roadmap phase/gate reference
 - answers to the 5 core-module change gate questions
 - public interface
 - implementation
 - tests
 - diagram/doc updates if lifecycle-sensitive
+
+A `deferred` or `legacy` intent cannot authorize implementation. Promotion must
+first update the intent body against the current repository, change its metadata
+and index catalog, and add the matching rule/test/evidence surface.
 
 ## 5. Core Module Change Gate
 - Which loop/thread owns this module?

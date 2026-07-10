@@ -61,12 +61,21 @@ public:
         return *this;
     }
 
+    // Process-global runtime configuration and emission may be called from any thread.
+    // Each record snapshots the callback set when its destructor emits. Replacing a
+    // callback affects later snapshots; an in-flight snapshot may retain the old copy.
+    // Callbacks run on the emitting thread without the configuration lock, may be
+    // invoked concurrently, and may re-enter configuration. Callback-owned sinks,
+    // captured mutable state, and recursive logging require caller synchronization.
     static LogLevel logLevel();
     static bool shouldLog(LogLevel level);
     static void setLogLevel(LogLevel level);
     static void setOutputFunction(OutputFunc func);
     static void setTopicOutputFunction(TopicOutputFunc func);
     static void setFlushFunction(FlushFunc func);
+
+    // Test-only reset; call only at a quiescent test boundary with no concurrent
+    // emission or configuration.
     static void resetForTesting();
 
 private:

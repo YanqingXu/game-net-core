@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # v6-alpha: Client Ecosystem — HTTP Client & RPC Connection Pool
 
 ## 1. Intent

@@ -32,15 +32,27 @@ No other direct mutation path is allowed for core loop state.
 
 ## 7. TcpConnection
 - State transitions occur on owning EventLoop thread
+- `connected()` and `disconnected()` are cross-thread-safe snapshot observers;
+  no other loop-owned state becomes cross-thread-readable through them
 - Actual socket write/read handling occurs on owning EventLoop thread
 - Cross-thread send request must be marshaled back into loop thread
+- Socket-option mutation, context access, callback replacement, connection
+  establishment, and connection destruction are owning-EventLoop-thread only
 
-## 8. Wakeup
+## 8. Logger
+- Logger is process-global and is not owned by an EventLoop
+- Log emission and configuration may be called from any thread
+- Callback configuration is snapshotted under Logger-internal synchronization
+- Output callbacks run without the configuration lock and may be concurrent
+- Callback-owned sinks and captured mutable state require their own synchronization
+- `resetForTesting()` requires a quiescent test boundary
+
+## 9. Wakeup
 - Wakeup write can be invoked cross-thread
 - Wakeup read/clear is handled in loop thread
 - Wakeup is a scheduling signal, not business event delivery
 
-## 9. Forbidden
+## 10. Forbidden
 - Direct Poller mutation from non-owner thread
 - Direct Channel mutation that changes registration from non-owner thread
 - User callback execution in ambiguous thread context

@@ -1,0 +1,154 @@
+name: core-benchmark
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-release-benchmark:
+    name: Linux Release epoll benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check benchmark contract
+        run: python3 tests/cmake/test_core_benchmark_contract.py
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-benchmark
+          -DCMAKE_BUILD_TYPE=Release
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_BENCHMARKS=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build
+        run: cmake --build build-benchmark --target gamenet_core_benchmark --parallel
+
+      - name: Run fixed scenario set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-results
+          exe=./build-benchmark/benchmarks/gamenet_core_benchmark
+
+          "$exe" --scenario echo --connections 4 --threads 1 \
+            --messages 10000 --payload 256 --settle-ms 500 --timeout-ms 30000 \
+            > benchmark-results/echo-1-worker.json
+          "$exe" --scenario echo --connections 4 --threads 2 \
+            --messages 10000 --payload 256 --settle-ms 500 --timeout-ms 30000 \
+            > benchmark-results/echo-2-workers.json
+          "$exe" --scenario connections --connections 256 --threads 1 \
+            --settle-ms 1000 --timeout-ms 30000 \
+            > benchmark-results/connections-256.json
+          "$exe" --scenario slow-client --connections 4 --threads 1 \
+            --slow-bytes 8388608 --high-water 65536 \
+            --settle-ms 1000 --timeout-ms 30000 \
+            > benchmark-results/slow-client-4.json
+
+      - name: Validate JSON artifacts
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          files = sorted(Path("benchmark-results").glob("*.json"))
+          assert len(files) == 4, files
+          for path in files:
+              document = json.loads(path.read_text(encoding="utf-8"))
+              assert document["schema"] == "gamenet.core_benchmark.v1", path
+              assert document["status"] == "ok", (path, document.get("error"))
+              assert document["platform"] == "linux", path
+              assert document["backend"] == "epoll", path
+              assert document["build_type"] == "Release", path
+          PY
+
+      - name: Upload Linux raw JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-benchmark-linux-release-${{ github.sha }}
+          path: benchmark-results/*.json
+          if-no-files-found: error
+
+  windows-release-benchmark:
+    name: Windows Release IOCP benchmark
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check benchmark contract
+        shell: pwsh
+        run: python tests/cmake/test_core_benchmark_contract.py
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build-benchmark-windows
+          -G "Visual Studio 18 2026"
+          -A x64
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_BENCHMARKS=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build
+        shell: pwsh
+        run: >
+          cmake --build build-benchmark-windows --config Release
+          --target gamenet_core_benchmark --parallel
+
+      - name: Run fixed scenario set
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force benchmark-results | Out-Null
+          $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benchmark.exe
+
+          function Invoke-CoreBenchmark([string]$name, [string[]]$arguments) {
+            $json = (& $exe @arguments | Out-String)
+            if ($LASTEXITCODE -ne 0) {
+              throw "benchmark failed: $name"
+            }
+            $document = $json | ConvertFrom-Json
+            if ($document.schema -ne 'gamenet.core_benchmark.v1' -or
+                $document.status -ne 'ok' -or
+                $document.platform -ne 'windows' -or
+                $document.backend -ne 'iocp' -or
+                $document.build_type -ne 'Release') {
+              throw "invalid benchmark JSON: $name"
+            }
+            Set-Content -LiteralPath "benchmark-results/$name.json" -Value $json -Encoding utf8 -NoNewline
+          }
+
+          Invoke-CoreBenchmark 'echo-1-worker' @(
+            '--scenario', 'echo', '--connections', '4', '--threads', '1',
+            '--messages', '10000', '--payload', '256', '--settle-ms', '500', '--timeout-ms', '30000')
+          Invoke-CoreBenchmark 'echo-2-workers' @(
+            '--scenario', 'echo', '--connections', '4', '--threads', '2',
+            '--messages', '10000', '--payload', '256', '--settle-ms', '500', '--timeout-ms', '30000')
+          Invoke-CoreBenchmark 'connections-256' @(
+            '--scenario', 'connections', '--connections', '256', '--threads', '1',
+            '--settle-ms', '1000', '--timeout-ms', '30000')
+          Invoke-CoreBenchmark 'slow-client-4' @(
+            '--scenario', 'slow-client', '--connections', '4', '--threads', '1',
+            '--slow-bytes', '8388608', '--high-water', '65536',
+            '--settle-ms', '1000', '--timeout-ms', '30000')
+
+      - name: Upload Windows raw JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-benchmark-windows-release-${{ github.sha }}
+          path: benchmark-results/*.json
+          if-no-files-found: error

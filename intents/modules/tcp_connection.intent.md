@@ -1,3 +1,10 @@
+---
+status: active
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: none
+---
+
 # Module Intent: TcpConnection
 
 ## 1. Intent
@@ -16,6 +23,7 @@ inline inside TcpConnection.
 ## 2. Responsibilities
 - own connection-local socket/channel/buffer state
 - own the public connection state machine
+- expose cross-thread-safe snapshot observation of the public connection state
 - translate read/write/close/error events into unified connection state changes
 - expose send/shutdown APIs that preserve owner-thread execution
 - expose force-close style teardown entry that still converges on the same close path
@@ -39,6 +47,8 @@ inline inside TcpConnection.
 ## 4. Core Invariants
 - one TcpConnection belongs to exactly one EventLoop
 - connection state mutation happens on owner loop thread
+- `connected()` and `disconnected()` only observe the atomic public state;
+  they do not grant cross-thread access to any other connection-owned state
 - close and error teardown converge on one safe path
 - channel registration is removed before effective destruction
 - helper component state that mutates connection behavior is still owned by the same loop
@@ -63,6 +73,12 @@ inline inside TcpConnection.
 ## 6. Threading Rules
 - handleRead/handleWrite/handleClose/handleError run on owner loop thread
 - cross-thread send/shutdown must marshal back into the loop
+- `connected()` and `disconnected()` may be called from any thread and return
+  a point-in-time state snapshot
+- socket-option mutation, connection context access, callback replacement,
+  `connectEstablished()`, and `connectDestroyed()` are owner-loop-only
+- callback setters are setup-time configuration before establishment; the
+  close callback may only be replaced later on the owner loop during teardown
 - setContext/getContext are owner-loop-only; cross-thread users must marshal
   context access through `runInLoop()` or `queueInLoop()`
 - helper components must not create a second mutable thread domain
@@ -103,6 +119,10 @@ inline inside TcpConnection.
 
 ## 9. Test Contracts
 - cross-thread send executes on owner loop thread
+- `tests/contract/tcp_connection/test_tcp_connection_cross_thread_state.cpp`
+  verifies non-owner-thread state observation across connect and close transitions
+- the TcpConnection thread-contract guard verifies state storage is atomic and
+  owner-loop-only mutators assert their thread affinity
 - read/write error path converges on safe close handling
 - peer close or reset converges on the normal close path with one
   disconnected callback and one close callback

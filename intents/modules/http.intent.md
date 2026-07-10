@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::protocol
+migration_source: mini_trantor
+promote_gate: post-phase-4-protocol
+---
+
 # Module Intent: HTTP/1.1 Protocol Layer
 
 ## 1. Intent

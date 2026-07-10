@@ -9,6 +9,8 @@ The `ci` workflow validates:
 - CMake configure with C++23 and testing enabled.
 - Scope boundary guard for deferred modules and legacy `mini_trantor` symbols.
 - Intent consistency guard for active module paths and support intents.
+- Intent metadata contract guard for complete active/deferred/legacy catalogs,
+  target/promotion gates, and stale source-project wording in active intents.
 - MSVC `/utf-8` and `/FS` compile-option guard so Windows builds parse UTF-8
   source/header comments consistently and parallel Debug builds serialize PDB
   writes safely.
@@ -22,10 +24,18 @@ The `ci` workflow validates:
   socket extension helpers, and completion metadata translation.
 - EventLoop contract guard for owner-thread scheduling, quit, and bounded
   future wait helper coverage.
+- Logger thread-contract guard for concurrent emission, runtime callback
+  replacement, callback snapshot/re-entry semantics, and TSan selection.
 - EventLoopThreadPool contract guard for queued-work race/soak coverage.
 - TimerQueue contract guard for ready-timer cancellation races.
 - Threading gate contract guard for the race-oriented TSan test selection.
+- TcpConnection thread-contract guard for atomic public state observation and
+  owner-loop-only callback/socket-option mutation.
+- Core benchmark contract guard for the default-off, non-CTest target,
+  versioned JSON schema, three scenarios, platform resource sampling, and docs.
 - Long-soak workflow guard for the non-default repeated threading contract gate.
+- Manual core-benchmark workflow guard for paired Linux/Windows Release raw
+  JSON artifacts without push/PR triggers or performance thresholds.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core library build.
@@ -52,9 +62,12 @@ The scope guard runs before CMake configure:
 ```bash
 python3 tests/scope/test_scope_guard.py
 python3 tests/scope/test_intent_consistency.py
+python3 tests/scope/test_intent_metadata.py
 python3 tools/check_scope_boundaries.py
 python3 tests/cmake/test_sanitizer_flags.py
 python3 tests/cmake/test_install_package_contract.py
+python3 tests/cmake/test_core_benchmark_contract.py
+python3 tests/cmake/test_logger_thread_contract.py
 python3 tests/cmake/test_event_loop_contracts.py
 python3 tests/cmake/test_event_loop_thread_pool_contracts.py
 python3 tests/cmake/test_migration_status_contract.py
@@ -62,6 +75,7 @@ python3 tests/cmake/test_msvc_utf8_contract.py
 python3 tests/cmake/test_platform_backend_contract.py
 python3 tests/cmake/test_tcp_lifecycle_contracts.py
 python3 tests/cmake/test_tcp_connection_context_contract.py
+python3 tests/cmake/test_tcp_connection_thread_contract.py
 python3 tests/cmake/test_timer_queue_contracts.py
 python3 tests/cmake/test_threading_gate_contracts.py
 python3 tests/cmake/test_windows_iocp_milestone_contract.py
@@ -69,6 +83,7 @@ python3 tests/cmake/test_windows_iocp_data_path_contract.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 python3 tests/ci/test_long_soak_workflow.py
+python3 tests/ci/test_core_benchmark_workflow.py
 ```
 
 It fails the workflow if active intents use legacy `mini/net` paths, or if
@@ -80,12 +95,21 @@ update the active scope and migration status in the same change.
 
 ## Remote Evidence Boundary
 
-Latest recorded `ci` workflow green evidence: ci #23 for commit 9b27a0a on main, completed successfully on 2026-07-08.
-Current main HEAD at this checkpoint: d3fc1241e0773c650a4753f1955f987f22f31036.
+Record immutable validation evidence instead of a self-referential current HEAD:
 
-Do not describe ci #23 as latest-HEAD green evidence for d3fc124. If a later
-run validates d3fc124 or a newer HEAD, record the run number, commit SHA, date,
-and job result before promoting Phase 4 readiness.
+- Last fully validated commit: `9b27a0a3c3993cb1f90ef4357fa80027205ca221`.
+- CI workflow run id: `28948507704` (`ci` #23).
+- Validation date: 2026-07-08.
+- Result: Linux Debug, ASan/UBSan, TSan, Release, and Windows MSVC IOCP passed.
+
+The most recent audited candidate is
+`0d61658ad19e8758dbf8119a3444a587e7a54a5a`, run id `29059799283`
+(`ci` #25), completed 2026-07-10. Its Windows job passed, while all four
+Linux jobs failed on `contract.tcp_client.test_tcp_client_repeated_connect`
+because Connector retained its completed `channel_` member until a queued
+reset. The current worktree fixes that lifecycle window, but no later commit
+may be described as validated until a new run id, commit, date, and complete
+job result are recorded here.
 
 The ASan/UBSan job uses:
 
@@ -109,6 +133,8 @@ repeated active `TcpClient::stop()` idempotence contracts,
 repeated active `TcpClient::connect()` idempotence contracts,
 active cross-thread `TcpClient::connect()` contracts,
 active cross-thread `TcpClient` retry configuration contracts,
+concurrent Logger emission/configuration contracts,
+cross-thread `TcpConnection` state observation contracts,
 post-close `TcpConnection::send()` ignore contracts,
 mixed-timing pending-read `TcpConnection::forceClose()` contracts,
 mixed-timing pending-write `TcpConnection::forceClose()` contracts,
@@ -159,14 +185,23 @@ repeat 20, timeout 60 seconds, completed successfully at
 2026-07-09T01:15:38Z with 36/36 threading-labeled tests passed in
 608.67 seconds.
 
-Local Windows Debug evidence for the current worktree before the cross-thread
+Local Windows Debug evidence before the cross-thread
 TcpClient retry configuration contract was added: the same repeat shape
 with `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`
 passed the previous 43-test threading slice on 2026-07-09; CTest reported
 43/43 threading-labeled tests passed across 20 repeats and total test time was
-637.56 seconds. The current expanded 44-test threading slice is covered once
-by the full Windows Debug and Release CTest runs; repeat-soak evidence for the
-expanded slice is not recorded here.
+637.56 seconds. The then-expanded 44-test threading slice was covered once
+by the full Windows Debug and Release CTest checkpoint; repeat-soak evidence
+for that slice is not recorded here. The cross-thread TcpConnection state
+contract added afterward expanded the threading slice to 45 tests. The Logger
+thread-safety contract now expands the present threading slice to 46 tests.
+
+Current local Windows preflight on 2026-07-10 passes 67/67 Debug tests in
+48.41 seconds, 67/67 Release tests in 39.85 seconds, and the 46-test threading
+slice across 5 repeats in 163.10 seconds with a 15-second per-test timeout.
+The Release install plus external `find_package(GameNetCore)` / `GameNet::core`
+consumer also configures, builds, and exits successfully. These local results
+do not replace fresh Linux sanitizer jobs or the required remote repeat-50 run.
 
 ## Install Package Gate
 
@@ -234,9 +269,12 @@ Microsoft Store `python.exe` alias is inactive, use `py -3` instead:
 ```powershell
 py -3 tests\scope\test_scope_guard.py
 py -3 tests\scope\test_intent_consistency.py
+py -3 tests\scope\test_intent_metadata.py
 py -3 tools\check_scope_boundaries.py
 py -3 tests\cmake\test_sanitizer_flags.py
 py -3 tests\cmake\test_install_package_contract.py
+py -3 tests\cmake\test_core_benchmark_contract.py
+py -3 tests\cmake\test_logger_thread_contract.py
 py -3 tests\cmake\test_event_loop_contracts.py
 py -3 tests\cmake\test_event_loop_thread_pool_contracts.py
 py -3 tests\cmake\test_migration_status_contract.py
@@ -244,6 +282,7 @@ py -3 tests\cmake\test_msvc_utf8_contract.py
 py -3 tests\cmake\test_platform_backend_contract.py
 py -3 tests\cmake\test_tcp_lifecycle_contracts.py
 py -3 tests\cmake\test_tcp_connection_context_contract.py
+py -3 tests\cmake\test_tcp_connection_thread_contract.py
 py -3 tests\cmake\test_timer_queue_contracts.py
 py -3 tests\cmake\test_threading_gate_contracts.py
 py -3 tests\cmake\test_windows_iocp_milestone_contract.py
@@ -251,6 +290,7 @@ py -3 tests\cmake\test_windows_iocp_data_path_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 py -3 tests\ci\test_long_soak_workflow.py
+py -3 tests\ci\test_core_benchmark_workflow.py
 ```
 
 The local command and CI workflow should stay aligned so test results remain

@@ -1,177 +1,269 @@
-## 总体判断
+## 总体结论
 
-`game-net-core` 的进展方向很明确：**不是在做上层 game framework，而是在把 Reactor/TCP core 打磨成可验证、可安装、双平台、race-oriented 的 C++23 网络基础库**。README 仍然把它定义为从 `mini_trantor` 拆出的 networking foundation，迁移策略是先稳定 ownership / threading / contracts，再提升更高层模块。
+截至 `main` 最新提交 [`0d61658`](https://github.com/YanqingXu/game-net-core/commit/0d61658ad19e8758dbf8119a3444a587e7a54a5a)，`game-net-core` 已经完成了“可运行的 Reactor/TCP 网络库”阶段，正在接近“可发布的跨平台核心预览版”。
 
-我会把当前状态判断为：
+我的阶段判断是：
 
-**Phase 1 / 2 / 3 基本完成；当前处在 Phase 3.5：Reactor/TCP core hardening、race hardening、CI hardening、Windows IOCP validation。Phase 4 仍然不应正式开始。**
+> Phase 1～3 基本完成，目前仍处于 Phase 3.5：线程契约、生命周期、CI、长稳测试和 Windows IOCP 收口。Phase 4 尚未正式开始。
 
-仓库自己的 phase table 也支持这个判断：skeleton、Reactor/TCP core、CMake/test/package split 都是 present；protocol / transport / game foundation / experimental 仍然 deferred。
+按不同口径估算：
 
----
+| 评估口径             |      当前进度 | 判断                         |
+| ---------------- | --------: | -------------------------- |
+| Reactor/TCP 功能实现 |   90%～95% | 主链路完整                      |
+| Core 工程化成熟度      |   80% 左右 | 还差最新 HEAD 远端证据、repeat-50、跨平台性能基线 |
+| 完整游戏网络底座愿景       |     约 40% | 协议、会话、逻辑桥、广播尚未迁移           |
+| 生产可用程度           | 仍不建议宣称生产级 | 正确性证据较强，但性能、长稳、优雅停服仍不足     |
 
-## 最新进展：主线已经从“功能迁移”转为“生命周期与并发收敛”
+## 当前实现进度
 
-最新 commit 是 `d3fc124...`，提交信息为 `test: harden reactor lifecycle contracts`；它前面的提交也集中在 lifecycle、threading、TSan、pending write、logger 等 hardening 方向。
+| 模块                           | 状态       | 评价                                                |
+| ---------------------------- | -------- | ------------------------------------------------- |
+| CMake、安装和包导出                 | 已完成      | 已导出 `GameNet::core`，支持 `find_package`             |
+| EventLoop / Channel / Poller | 已完成并持续硬化 | Linux epoll 与 Windows IOCP 均有实现                   |
+| TimerQueue / Wakeup          | 已完成      | 已覆盖线程与取消竞态                                        |
+| Acceptor / Connector         | 已完成      | ConnectEx、retry-stop 等高风险路径已有测试                   |
+| TcpConnection                | 主体完成     | read/write/close、pending IO cancellation 已覆盖      |
+| TcpServer / TcpClient        | 主体完成     | 多线程 stop、retry、重复调用、跨线程调用已有契约                     |
+| EventLoopThreadPool          | 已完成      | 有 restart/stop/queued-work 测试                     |
+| Windows IOCP                 | 功能可用     | `AcceptEx/ConnectEx/WSARecv/WSASend` 已进入真实数据路径    |
+| 测试体系                         | 较完整      | 当前记录为 67 个 CTest：7 unit、59 contract、1 integration |
+| CI                           | 已建立      | Linux Debug、ASan/UBSan、TSan、Release、Windows MSVC  |
+| 长稳测试                         | 部分完成     | 旧提交已有远端证据，当前 46-test 线程切片只有本地 repeat-5，缺远端 repeat-50 |
+| 协议及游戏层                       | 未实现      | 仅保留 intent，符合当前 scope 约束                          |
 
-这说明项目现在的核心工作不是继续往上迁 HTTP/RPC/game pipeline，而是把已有的 Reactor/TCP foundation 压到更强的验证矩阵下。当前 migration status 记录了 **65 个 CTest tests**：7 个 unit、57 个 contract、1 个 integration。
+核心目标和边界在 [README](https://github.com/YanqingXu/game-net-core/blob/main/README.md)、[migration_status.md](https://github.com/YanqingXu/game-net-core/blob/main/docs/migration_status.md) 和 [scope_boundary.md](https://github.com/YanqingXu/game-net-core/blob/main/docs/scope_boundary.md) 中保持得比较清楚。
 
-从 scope 看，Stable/Core 目前包括 Logger、EventLoop、Channel、Poller、TimerQueue、Buffer、InetAddress、Socket、Acceptor、Connector、TcpConnection、TcpServer、TcpClient、EventLoopThreadPool；planned modules 仍是 protocol framing、transport abstraction、session foundation、logic loop、broadcast、UDP/KCP experimental。
+## 当前最重要的未闭环问题
 
----
+### P0：最新 HEAD 还没有完整、可审计的验证证据
 
-## 架构与构建边界：目前保持得比较干净
+仓库最新提交是 `0d61658`，当前 worktree 已把验证文档改成不可自指的证据模型：
 
-顶层 CMake 仍然只打开核心路径：`src/core`、`examples`、`tests`；TLS 和 experimental 都是 option，默认不进入 active scope。安装边界也只安装 `include/gamenet/core`，这对 component split 很重要。
+* last fully validated commit 仍是更早的 `9b27a0a`
+* most recent audited candidate 是 `0d61658`
+* 当前 46 个 threading tests 已有本地 repeat-5 预检，但尚未形成远端 repeat-50 证据
 
-`src/core/CMakeLists.txt` 只构建 `gamenet_core`，并导出 `GameNet::core`；平台选择也清晰：Linux 侧是 `SocketsOps_linux`、`Wakeup_linux`、`EPollPoller`，Windows 侧是 `SocketsOps_win`、`Wakeup_win`、`IocpSocketOps_win`、`IocpTcpTransport_win`、`IocpPoller`。
+因此，Phase 4 入场门槛还没有真正满足。
 
-这个边界是健康的：现在还没有把 protocol、transport、game、experimental 的实现面混进 active target。Phase 4 入口继续压在 migration gate 后面是正确策略。Roadmap 也明确说 Phase 4 必须等 `migration_status.md` 的 readiness gate 满足后才能开始。
+这里的文档模型已经从“Current HEAD”改为只记录：
 
----
+```text
+Last validated commit
+CI run id
+long-soak run id
+验证日期
+测试数量与结果
+```
 
-## CI 进展：已经进入“多维验证”阶段
+后续继续避免使用自指式的 `Current HEAD` 字段。
 
-当前 `ci.yml` 有五个主 job：
+### P0：TcpConnection 公共状态查询线程契约已本地补齐，仍缺远端 TSan 证据
 
-Linux Debug CMake build and tests；Linux ASan/UBSan；Linux TSan race-oriented；Linux Release；Windows MSVC IOCP build and tests。
+当前 worktree 已将 `TcpConnection::state_` 改为 `std::atomic<StateE>`，`connected()` / `disconnected()` 成为可跨线程调用的 snapshot observer，并新增 `contract.tcp_connection.test_tcp_connection_cross_thread_state` 验证非 owner 线程观察 connect/close 状态转换。
 
-这已经不是“能编译就行”的 CI，而是把 core 的几个关键风险面拆开验证：
+同时，`setTcpNoDelay()`、callback setters、context access、`connectEstablished()`、`connectDestroyed()` 继续被明确为 owner-loop-only；`TcpServer` 也已调整为在连接 owner loop 上安装 callback 后再 establishment。
 
-Debug 全量 CTest；ASan/UBSan 覆盖内存与 UB；TSan 只跑 `threading` label 的 race-oriented subset；Release 跑测试，防止 `NDEBUG` 把 contract 检查消掉；Windows MSVC IOCP 既跑 CTest，又验证 install/package consumer。
+剩余缺口不是本地 contract，而是同一 HEAD 上的远端 Linux TSan 和普通 CI 证据。
 
-另外，`long-soak` workflow 是手动触发，不挂 push/PR，默认 repeat 20、timeout 60，只重复跑 `threading` slice。这个设计很好：普通 CI 不被拖慢，但高风险 lifecycle/race 改动可以用它补长跑证据。
+### P1：性能证据已有 Windows baseline，仍缺 Linux/Windows 同 SHA artifact
 
----
+当前 worktree 已新增默认关闭的 `gamenet_core_benchmark`，覆盖：
 
-## Windows IOCP：已经从 skeleton 推到真实数据路径
+* 每连接内存占用
+* 单线程吞吐和延迟
+* 多 EventLoop 扩展效率
+* 慢客户端和输出堆积下的内存上限
 
-Windows 方向的进展很实质。`windows_iocp_milestone.md` 明确说当前 Windows source selection 使用 `IocpPoller`，WinSock `select()` 不是 accepted fallback。
+本地 Windows MSVC Release 已记录 raw JSON 和摘要，benchmark smoke 也覆盖 `echo` / `connections` / `slow-client` 三个场景。仍然缺的是通过 manual `core-benchmark` workflow 在同一 SHA 上产出 Linux epoll 与 Windows IOCP 的 Release artifacts；IOCP 单次 completion 与未来批量 drain 的对比仍是后续性能议题。
 
-IOCP path 现在覆盖了 EventLoop wakeup、TimerQueue、EventLoopThreadPool、Acceptor/TcpServer、Connector/TcpClient、TcpConnection read/write/lifecycle、integration echo 等路径。文档记录 Windows CTest 本地 65/65 passed，并且列出了 `PostQueuedCompletionStatus`、`AcceptEx`、`ConnectEx`、`WSARecv`、`WSASend` 等实际路径。
+### P1：历史 intent 存在迁移语义漂移
 
-实现上，`IocpPoller` 通过 `GetQueuedCompletionStatus` 取 completion，把 `IocpOperation` 映射回 Channel，并用 `PostQueuedCompletionStatus` 实现 wakeup；这说明 Windows 不是简单模拟 epoll，而是走 completion model。
+当前 worktree 已给全部 formal intent 加上 front matter，并由 `tests/scope/test_intent_metadata.py` 强制 active / deferred / legacy 分类。这个问题的剩余部分从“缺少元数据”变成“持续维护分类准确性”。
 
-`IocpTcpTransport` 也已经封装了 overlapped `WSARecv` / `WSASend`、pending read/write 状态、completion bytes、cancel pending operations。
+其中 active intent 必须指向 `GameNet::core`；deferred 和 legacy intent 不能授权实现，只能作为设计资产。统一元数据形态为：
 
----
+```yaml
+status: active | deferred | legacy
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: phase-4-protocol
+```
 
-## 测试矩阵：重点已经覆盖到高风险生命周期路径
+## 推荐依赖关系
 
-`tests/CMakeLists.txt` 显示测试已经系统覆盖 Acceptor、Connector、EventLoop、EventLoopThread、EventLoopThreadPool、Poller、TcpClient、TcpServer、TimerQueue、TcpConnection、integration echo，并大量打上 `threading` / `lifecycle` 标签。
+```mermaid
+flowchart TD
+    C["GameNet::core<br/>Reactor / TCP"] --> P["GameNet::protocol<br/>PacketFramer"]
+    C --> T["GameNet::transport<br/>Endpoint abstraction"]
+    P --> S["GameNet::game_session<br/>PlayerSession / SessionManager"]
+    T --> S
+    S --> L["GameNet::game_logic<br/>LogicLoop / CommandQueue"]
+    S --> B["GameNet::broadcast<br/>Router / Dispatcher"]
+    P --> G["GameServerPipeline<br/>integration target"]
+    T --> G
+    L --> G
+    B --> G
+    T --> X["experimental_udp / kcp"]
+```
 
-最有价值的是 TcpClient / Connector / TcpConnection / TcpServer 的 race/lifecycle 组合测试已经很密：
+依赖原则：
 
-TcpClient 覆盖 retry-stop、pending connect stop、cross-thread stop pending connect、destroy pending connect、destroy active connection、active connection stop mixed timing、cross-thread disconnect、repeated disconnect/stop/connect、cross-thread connect。
+* `core` 永远不能反向依赖协议、会话或游戏层。
+* `protocol` 只负责字节流到帧，不负责玩家和业务语义。
+* `transport` 只抽象发送、关闭和 endpoint 身份，不解析协议。
+* `SessionManager` 管理网络会话，不拥有玩家业务数据。
+* `LogicLoop` 不依赖 `TcpConnection`，只处理值类型命令。
+* `GameServerPipeline` 先作为组合层和集成示例，不要立即变成“大一统核心类”。
+* UDP/KCP 实现 transport 接口，但必须继续保持 experimental。
 
-TcpServer 覆盖 active connections stop、active write stop、multi-worker stop、worker active-write soak、worker callback stop soak、repeated stop、stop soak。
+## 按优先级排序的架构路线图
 
-TcpConnection 覆盖 peer close/reset、repeated forceClose、repeated connectDestroyed、cross-thread send、send after close、cross-thread forceClose、pending read/write forceClose、cross-thread shutdown、repeated shutdown、shutdown pending output、write-complete ordering。
+### P0：完成 Phase 3.5，发布 Core Preview
 
-这组测试方向是对的，因为 Reactor/TCP core 真正容易出事故的地方不是 echo demo，而是 stale completion、stop/destroy reentry、owner-loop handoff、pending IO cancellation、worker loop teardown、callback ordering。
+目标：把当前 Reactor/TCP 核心冻结成稳定基线。
 
----
+完成条件：
 
-## 代码层面看，核心生命周期模型已经比较完整
+* 同一个 HEAD 上五个 CI job 全绿。
+* 当前 46 个 threading tests 至少完成远端 `repeat 50`。
+* `TcpConnection` 状态查询线程契约已在当前 worktree 补齐；仍需最新 HEAD 的远端 CI / TSan 证据确认。
+* 明确 Logger、自定义 callback、Socket option 的线程语义。
+* 清理验证文档的自指 HEAD 问题。
+* 打标签 `v0.1.0-core-preview`。
 
-`TcpConnection::send()` 已经区分 owner-loop 与 cross-thread 调用；非 owner 线程调用会复制 payload 并通过 `runInLoop` 回到 owner loop，且只在 connected 状态下发送。`shutdown()` 和 `forceClose()` 也都通过 loop 收敛。
+### P1：PacketFramer——Phase 4 唯一正确入口
 
-`connectEstablished()` 会 tie channel、enable reading，并在 Windows 侧启动 IOCP read；`connectDestroyed()` 会处理 connected/disconnecting/disconnected 状态，disable/remove Channel，并防止重复 remove。
+新增 `GameNet::protocol`，但第一版只实现长度帧：
 
-`handleClose()` 在 Windows 侧如果还有 pending overlapped operations，会设置 `forceClosePending_`、保留 `forceCloseGuard_`、cancel pending operations，等 completion 收敛后再 `finishClose()`。这正是 IOCP lifecycle 正确性里最重要的一步：不能释放 operation storage 后还让 completion 回来打到悬空对象。
+```text
+uint32 length | payload
+```
 
-`TcpClient` 的 connect/disconnect/stop 都 marshal 到 owner loop；new connection 创建 TcpConnection 后设置 callback 并调用 `connectEstablished()`；removeConnection 也回到 owner loop 后再 queue `connectDestroyed()`，总体符合 owner-loop 模型。
+不要一开始就把 `messageId/requestId/playerId` 塞进 PacketFramer。建议分成：
 
-`TcpServer::stopInLoop()` 会先停 Acceptor，再 forceClose all connections；只有在没有 active connections 时才 stop thread pool。对于 worker-owned connections，它通过 remaining counter 等所有 close path 收敛后再 stop pool，这个设计方向是合理的。
+* `PacketFramer`：处理半包、粘包、长度校验。
+* `GamePacketHeader`：处理 messageId、requestId、flags。
+* `Codec`：负责对象序列化，后续可接 Protobuf、自定义二进制或 Lua。
 
----
+验收测试：
 
-## 我看到的主要风险与缺口
+* 半包
+* 多帧粘包
+* 空帧
+* 超大帧
+* 恶意长度
+* 分段输入
+* fuzz smoke
+* Linux/Windows 一致结果
 
-### 1. 最新 HEAD 的远端 green 证据存在“语义漂移”
+### P2：最小 Transport Endpoint
 
-仓库文档记录的 remote green 是 `ci #23` / commit `9b27a0a...`，并说明该 run 覆盖 Linux CMake、ASan/UBSan、TSan、Release、Windows MSVC IOCP。
+新增 `GameNet::transport`：
 
-但当前最新 commit 已经是 `d3fc124...`。这意味着严格说，**文档里的 green evidence 不是最新 HEAD 的 evidence，而是 latest HEAD 前一笔 commit 的 evidence**。这不是严重问题，因为 `d3fc124` 看起来主要是 tests/docs/contract gate hardening；但在 Phase 4 readiness gate 语境下，应该把“latest HEAD green”说严谨：要么为 `d3fc124` 记录新的 CI run，要么把文档措辞改成“latest recorded remote green is 9b27”。
+* `TransportSessionId`
+* `TransportEndpoint`
+* `send(bytes)`
+* `close(reason)`
+* `ownerLoop()`
+* TCP adapter
 
-本轮推进已选择保守路径：`docs/migration_status.md` 和 `docs/development/ci.md` 明确把 `ci #23` / `9b27a0a...` 记录为 latest recorded remote green evidence，同时保留 Phase 4 gate 对最新 HEAD fresh remote CI evidence 的要求。这样不会把 `d3fc124...` 误写成已有远端 green。
+第一版不要创建庞大的 `TransportManager`，因为目前只有 TCP。等 UDP/KCP 真正进入时再增加 transport registry。
 
-### 2. `long-soak.yml` 的 guard 列表和 `ci.yml` 有轻微不一致
+### P2：Session Foundation
 
-`ci.yml` 的 repository guards 已经包含 `tests/cmake/test_event_loop_contracts.py`。
+新增：
 
-但 `long-soak.yml` 的 guard list 里没有同一个 EventLoop contract guard；它有 event_loop_thread_pool、migration、MSVC、platform backend、TCP lifecycle、TimerQueue、threading、Windows IOCP、release-safe、workflow jobs、long-soak workflow guard。
+* `PlayerSession`
+* `SessionManager`
+* `SessionState`
+* transport/session 双向索引
+* authenticate、online、offline、rebind
+* idle timeout 与 heartbeat 状态
 
-这不是功能 bug，但属于 CI parity drift。建议下一次小 PR 把 `test_event_loop_contracts.py` 加进 long-soak guard list，保持普通 CI、文档、本地 equivalent、long-soak 的 guard surface 一致。
+关键约束：
 
-本轮推进已补齐 parity：`.github/workflows/long-soak.yml` 的 repository guards 现在包含 `tests/cmake/test_event_loop_contracts.py`，`tests/ci/test_long_soak_workflow.py` 也会要求 long-soak workflow、CI 文档和 migration status 同步记录这个 EventLoop guard。
+* SessionManager 由明确的 base/management loop 拥有。
+* I/O loop 只能异步提交，不允许通过 `future.get()` 等待 LogicLoop。
+* Session 只保存网络身份和生命周期，不保存背包、战斗、地图等业务状态。
 
-### 3. `EventLoop::queueInLoop()` 有一个值得优先审计的潜在 TSan 风险
+### P2：LogicLoop 和有界命令队列
 
-`EventLoop` 的 `callingPendingFunctors_` 是普通 `bool`，而 `queueInLoop()` 可能被跨线程调用，并读取 `callingPendingFunctors_` 来决定是否 wakeup。
+新增：
 
-同时，`callingPendingFunctors_` 在 `doPendingFunctors()` 里被 owner loop 写入 true/false。
+* `GameCommand`
+* `GameCommandQueue`
+* `LogicLoop`
+* 固定 tick drain
+* 有界队列与显式 submit result
 
-这类模式在 Reactor 库里很常见，但从严格 C++ data-race 角度看，普通 bool 被一个线程写、另一个线程无锁读，是需要审计的。建议把它改成 `std::atomic<bool>`，或者把这个状态纳入 mutex 保护，或者通过 contract 明确证明只有 owner thread 读写。考虑到项目已经把 TSan 作为 gate，这个点值得尽早处理，避免以后在高并发测试里随机爆 race report。
+必须保证：
 
-本轮推进已按最小 atomic 路径处理：`callingPendingFunctors_` 改为 `std::atomic<bool>`，`queueInLoop()` 使用 relaxed load 做 wakeup 判定，`doPendingFunctors()` 使用 relaxed store 标记 pending functor 执行窗口；EventLoop intent 和 contract guard 也要求 cross-thread-observed pending functor execution state 必须 atomic 或 synchronized。
+```text
+I/O EventLoop -> enqueue command -> LogicLoop
+```
 
-### 4. `TcpClient::enableRetry()/disableRetry()` 的线程域还不够硬
+禁止退化为：
 
-TcpClient intent 明确说 connect/disconnect 可 cross-thread marshal，新连接/移除连接在 owner loop，Connector state transition 在 owner loop。
+```text
+I/O EventLoop -> 同步执行游戏逻辑
+```
 
-但 `enableRetry()` / `disableRetry()` 现在直接写 `retry_` 并调用 connector 的 retry flag setter，没有 owner-loop assert，也没有 marshal。
+### P3：跑通第一个 GameServerPipeline
 
-如果设计意图是“只能在 start/connect 前配置”，建议在 header/intent 里写清楚，并在测试里锁死；如果希望它也是 runtime API，则应改为 owner-loop mutation，避免和 active connect/remove/retry path 并发。这个点不是当前 blocker，但应该在 Phase 4 前收口，因为 protocol framing 之后用户 API 面会变大，模糊线程语义会被放大。
+最小闭环：
 
-本轮推进已选择 runtime API 语义：`enableRetry()` / `disableRetry()` 可跨线程调用，并通过 `runInLoop()` marshal 到 owner loop 后再更新 `Connector` retry state；`retry_` 改为 atomic，供非 owner 线程安全观察。新增 `contract.tcp_client.test_tcp_client_cross_thread_retry_config` 覆盖非 owner `disableRetry()`，并验证 peer close 之后不会通过 retry 复活已禁用 retry 的 client。
+```text
+TCP bytes
+→ PacketFramer
+→ auth/session
+→ GameCommandQueue
+→ LogicLoop handler
+→ response
+→ TransportEndpoint
+```
 
-### 5. Logger 的“线程安全”语义需要再定义精确一点
+先把它放在 `examples/game_server_pipeline_demo` 和 integration tests 中。只有当边界稳定后，才考虑提升成正式 library target。
 
-Logger header 写的是“同步、线程安全的基础日志能力”，并且支持设置 OutputFunc / TopicOutputFunc / FlushFunc。
+### P3：Broadcast 与全链路背压
 
-实现上，callback 配置通过 mutex 取 snapshot，但真正调用 output/topicOutput 是在 mutex 外部进行。
+在 SessionManager 稳定后实现：
 
-这有利于避免 callback reentry 死锁，但“线程安全”到底是指 logger 内部配置安全，还是每条日志输出也全局串行，就需要明确。如果用户自定义 output function 不是线程安全的，当前实现不会替它串行化。建议把 contract 写成二选一：要么保证 output invocation 串行；要么文档明确 OutputFunc 必须自行保证线程安全。
+* `BroadcastRouter`
+* `BroadcastDispatcher`
+* 按 owner loop 批量派发
+* fanout 数量和字节预算
+* 低优先级丢弃策略
+* 显式 metrics reason
 
-### 6. IOCP 当前 correctness 优先，后续性能上可能需要 batching
+AOI、房间和世界状态必须由上层提供目标 session 列表，不能进入 broadcast 核心。
 
-`IocpPoller::poll()` 现在每次 `GetQueuedCompletionStatus` 取一个 completion，然后返回 active channel list。
+### P4：扩展模块
 
-这对 correctness 和 contract 测试足够；但如果目标是高吞吐 game server core，后续可以考虑 `GetQueuedCompletionStatusEx` 或小批量 drain，以减少高并发 completion 下的 loop iteration overhead。这个属于 Phase 3.5 后半段或 Phase 4 前性能预研，不应抢在 lifecycle correctness 前面。
+推荐顺序：
 
----
+1. coroutine bridge，严格复用 EventLoop 调度。
+2. TLS transport adapter。
+3. UDP transport。
+4. KCP preview。
+5. HTTP/WebSocket/RPC adapter。
+6. PMTU/FEC 研究模块。
 
-## 下一步建议的 PR 拆分
+其中 UDP/KCP/PMTU 必须保持独立 experimental target，不能重新侵入 `GameNet::core`。
 
-**PR A：HEAD evidence / docs correction**
+## 可执行开发计划
 
-已按保守分支推进：`docs/migration_status.md`、`docs/development/ci.md`、`assessment.md` 已把 `ci #23` / `9b27a0a...` 写成 latest recorded green evidence，而不是 latest HEAD green evidence。若后续 `d3fc124` 或更新 HEAD 有新的 green run，再记录 run id、commit sha、时间、job 结果。
+| 周期    | PR    | 核心交付物                             | 验收标准                                 |
+| ----- | ----- | --------------------------------- | ------------------------------------ |
+| 2～4 天 | PR-0A | CI evidence、文档证据模型、当前 long-soak   | 五个 CI job 同 SHA 全绿；46 threading × 50 |
+| 2～3 天 | PR-0B | TcpConnection 公共 API 线程契约         | 当前 worktree 已新增跨线程状态查询测试；仍需 TSan 通过 |
+| 1～2 天 | PR-0C | core benchmark 基线                 | Linux/Windows 均输出吞吐、P99、内存数据         |
+| 3～5 天 | PR-1  | PacketFramer intent、target、tests  | 半包/粘包/恶意长度/fuzz 全绿                   |
+| 3～5 天 | PR-2  | TransportEndpoint + TCP adapter   | 不改变 TcpConnection 生命周期语义             |
+| 4～6 天 | PR-3  | PlayerSession + SessionManager    | reconnect、重复登录、断线清理契约通过              |
+| 4～6 天 | PR-4  | LogicLoop + bounded command queue | I/O 线程无同步等待；过载可观测                    |
+| 3～5 天 | PR-5  | Pipeline demo + integration tests | 登录、请求、响应、断线完整闭环                      |
+| 3～5 天 | PR-6  | Broadcast + backpressure metrics  | 大 fanout 分批；无跨线程直接 send              |
+| 后续    | PR-7+ | coroutine/TLS/UDP/KCP             | 每个模块独立 target 和独立成熟度标签               |
 
-**PR B：EventLoop TSan cleanup**
-
-已按最小改法推进：`callingPendingFunctors_` 改成 `std::atomic<bool>`，并用 relaxed load/store 仅承载 wakeup 判定的跨线程观察语义；`tests/cmake/test_event_loop_contracts.py` 锁定 intent/header/source 约束。这个 PR 没有混入 TcpConnection/TcpClient 行为变更。
-
-**PR C：long-soak guard parity**
-
-已推进：`tests/cmake/test_event_loop_contracts.py` 已加入 `.github/workflows/long-soak.yml` 的 guard list，并扩展 `tests/ci/test_long_soak_workflow.py`，要求 long-soak workflow、CI 文档和 migration status 都包含这个 EventLoop guard parity 记录。
-
-**PR D：TcpClient retry config threading contract**
-
-已推进：`enableRetry()/disableRetry()` 明确为 runtime API，跨线程调用经 owner loop marshal 后更新 `Connector` retry state；新增 cross-thread retry config contract，并把 intent、CMake、threading gate、migration/CI 文档同步到这个语义。
-
-**PR E：TcpConnection race hardening continuation**
-
-继续围绕 pending read/write forceClose、shutdown pending output、writeComplete ordering、post-close send ignore、peer close/reset reentry 做 TSan 和 long-soak 证据。这个 PR 应尽量只碰 TcpConnection / IocpTcpTransport / 对应 tests。
-
-**PR F：Phase 4 design-only PacketFramer**
-
-等 A–E 稳定后，再开 Phase 4 的第一步。第一步建议仍然是 protocol framing / PacketFramer 的 design-only PR：只加 intent、invariants、contract plan，不直接实现 HTTP/RPC/session/game pipeline。Roadmap 里 Phase 4 的顺序也是 protocol framing 先于 transport abstraction 和 game foundation。
-
----
-
-## 最终判断
-
-`game-net-core` 当前进展是健康的：core scope 没膨胀，Linux/Windows 双平台路径已经建立，IOCP 不再是 skeleton，CTest 数量和 contract 密度显著提高，TSan 与 long-soak 也已经进入工程流程。
-
-但现在还不是 Phase 4 的最佳时点。下一阶段最有价值的工作不是“迁更多模块”，而是继续补齐 **expanded 44-test threading slice 的 repeat-soak evidence**，并把 **TcpConnection pending IO lifecycle** 继续压到 TSan / long-soak 证据下。等这些都稳定后，再从 **PacketFramer / protocol framing** 作为 Phase 4 的第一个设计入口推进。
+最关键的路线判断没有改变：现在不要迁移 HTTP、RPC、KCP 或完整 GameServerPipeline。先用几天时间把 Phase 3.5 证据彻底收口，然后只从 PacketFramer 切入 Phase 4。这条路线最稳，也最符合你把 `game-net-core` 做成“可长期演进的游戏服务器网络底座”，而不是第二个失控膨胀的 `mini_trantor` 的目标。

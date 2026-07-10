@@ -34,9 +34,12 @@ jobs:
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
@@ -44,6 +47,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_tcp_connection_thread_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
           python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
@@ -51,6 +55,10 @@ jobs:
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
+          python3 tests/ci/test_core_benchmark_workflow.py
+          python3 tests/ci/test_core_benchmark_workflow.py
+          python3 tests/ci/test_core_benchmark_workflow.py
+          python3 tests/ci/test_core_benchmark_workflow.py
 
       - name: Configure
         run: >
@@ -91,9 +99,12 @@ jobs:
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
@@ -101,6 +112,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_tcp_connection_thread_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
           python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
@@ -141,9 +153,12 @@ jobs:
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
@@ -151,6 +166,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_tcp_connection_thread_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
           python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
@@ -191,9 +207,12 @@ jobs:
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
           python3 tests/cmake/test_migration_status_contract.py
@@ -201,6 +220,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_tcp_connection_thread_contract.py
           python3 tests/cmake/test_timer_queue_contracts.py
           python3 tests/cmake/test_threading_gate_contracts.py
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
@@ -242,9 +262,12 @@ jobs:
         run: |
           python tests/scope/test_scope_guard.py
           python tests/scope/test_intent_consistency.py
+          python tests/scope/test_intent_metadata.py
           python tools/check_scope_boundaries.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
+          python tests/cmake/test_core_benchmark_contract.py
+          python tests/cmake/test_logger_thread_contract.py
           python tests/cmake/test_event_loop_contracts.py
           python tests/cmake/test_event_loop_thread_pool_contracts.py
           python tests/cmake/test_migration_status_contract.py
@@ -252,6 +275,7 @@ jobs:
           python tests/cmake/test_platform_backend_contract.py
           python tests/cmake/test_tcp_lifecycle_contracts.py
           python tests/cmake/test_tcp_connection_context_contract.py
+          python tests/cmake/test_tcp_connection_thread_contract.py
           python tests/cmake/test_timer_queue_contracts.py
           python tests/cmake/test_threading_gate_contracts.py
           python tests/cmake/test_windows_iocp_milestone_contract.py
@@ -259,6 +283,7 @@ jobs:
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py
+          python tests/ci/test_core_benchmark_workflow.py
 
       - name: Configure
         shell: pwsh

@@ -11,9 +11,12 @@ from pathlib import Path
 ACTIVE_COMPONENTS = {"core"}
 DEFERRED_COMPONENTS = {"protocol", "transport", "game", "experimental"}
 DEFERRED_SRC_DIRS = {"protocol", "transport", "experimental", "broadcast", "game_logic", "game_session"}
-SCAN_ENTRIES = ("include", "src", "tests", "examples", "cmake", ".github", "CMakeLists.txt")
+SCAN_ENTRIES = ("include", "src", "tests", "examples", "benchmarks", "cmake", ".github", "CMakeLists.txt")
 SKIP_DIRS = {".git", "build", "out", "mini_trantor"}
-SKIP_FILES = {"tests/scope/test_scope_guard.py"}
+SKIP_FILES = {
+    "tests/scope/test_scope_guard.py",
+    "tests/scope/test_intent_metadata.py",
+}
 TEXT_SUFFIXES = {
     "",
     ".cmake",

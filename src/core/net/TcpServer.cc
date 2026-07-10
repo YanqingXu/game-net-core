@@ -114,21 +114,30 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
     auto connection = std::make_shared<TcpConnection>(ioLoop, connName, sockfd, localAddr, peerAddr);
     connections_[connName] = connection;
 
-    connection->setConnectionCallback(connectionCallback_);
-    connection->setMessageCallback(messageCallback_);
-    if (highWaterMarkCallback_ && highWaterMark_ > 0) {
-        connection->setHighWaterMarkCallback(highWaterMarkCallback_, highWaterMark_);
-    }
-    connection->setWriteCompleteCallback(writeCompleteCallback_);
-
     std::weak_ptr<void> lifetime = lifetimeToken_;
-    connection->setCloseCallback([this, lifetime](const TcpConnectionPtr& conn) {
+    CloseCallback closeCallback = [this, lifetime](const TcpConnectionPtr& conn) {
         if (lifetime.lock()) {
             removeConnection(conn);
         }
-    });
+    };
 
-    ioLoop->runInLoop([connection] { connection->connectEstablished(); });
+    ioLoop->runInLoop(
+        [connection,
+         connectionCallback = connectionCallback_,
+         messageCallback = messageCallback_,
+         highWaterMarkCallback = highWaterMarkCallback_,
+         writeCompleteCallback = writeCompleteCallback_,
+         closeCallback = std::move(closeCallback),
+         highWaterMark = highWaterMark_]() mutable {
+            connection->setConnectionCallback(std::move(connectionCallback));
+            connection->setMessageCallback(std::move(messageCallback));
+            if (highWaterMarkCallback && highWaterMark > 0) {
+                connection->setHighWaterMarkCallback(std::move(highWaterMarkCallback), highWaterMark);
+            }
+            connection->setWriteCompleteCallback(std::move(writeCompleteCallback));
+            connection->setCloseCallback(std::move(closeCallback));
+            connection->connectEstablished();
+        });
 }
 
 void TcpServer::removeConnection(const TcpConnectionPtr& connection) {
@@ -176,12 +185,12 @@ bool TcpServer::forceCloseAllConnections() {
 
     for (auto& [name, connection] : connections) {
         (void)name;
-        connection->setCloseCallback([notifyClosed](const TcpConnectionPtr& conn) {
-            conn->connectDestroyed();
-            notifyClosed();
-        });
         EventLoop* connectionLoop = connection->getLoop();
         connectionLoop->runInLoop([connection, notifyClosed] {
+            connection->setCloseCallback([notifyClosed](const TcpConnectionPtr& conn) {
+                conn->connectDestroyed();
+                notifyClosed();
+            });
             if (!connection->disconnected()) {
                 connection->forceClose();
                 return;

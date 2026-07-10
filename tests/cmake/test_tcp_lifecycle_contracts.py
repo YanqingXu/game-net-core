@@ -1577,6 +1577,12 @@ def main() -> None:
     require(connector_source_text, "CancelIoEx", connector_source)
     require(connector_source_text, "finishCancelInLoop", connector_source)
     require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
+    require(connector_source_text, "SocketFd Connector::removeAndReleaseChannel()", connector_source)
+    require(connector_source_text, "std::shared_ptr<Channel>(std::move(channel_))", connector_source)
+    require(connector_source_text, "loop_->queueInLoop([deferredChannel]", connector_source)
+    assert "resetChannel" not in connector_source_text, (
+        "Connector must vacate channel_ synchronously instead of leaving the member occupied until a queued reset"
+    )
 
     iocp_poller_source_text = iocp_poller_source.read_text(encoding="utf-8")
     require(iocp_poller_source_text, "IocpOperationKind::Read", iocp_poller_source)

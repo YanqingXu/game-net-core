@@ -1,6 +1,6 @@
 # Migration Status
 
-Last checked: 2026-07-09
+Last checked: 2026-07-10
 
 ## Current Task Goal
 
@@ -17,24 +17,32 @@ until the current core has stable targets, tests, and examples.
 | --- | --- | --- |
 | 1 | Initialize the `game-net-core` project skeleton | Present: top-level CMake, README, AGENTS, docs, intents, rules, include/src/tests/examples layout |
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
-| 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
+| 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Deferred: intent files are preserved as design assets only |
 
 ## Verification State
 
-The current worktree configures 65 configured CTest tests for the Reactor / TCP
-foundation: 7 unit tests, 57 contract tests, and 1 integration test.
+The current worktree configures 67 configured CTest tests for the Reactor / TCP
+foundation: 7 unit tests, 59 contract tests, and 1 integration test.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
 - Test: `ctest --test-dir build --output-on-failure`
-- Current HEAD: d3fc1241e0773c650a4753f1955f987f22f31036.
-- Current result: Latest recorded remote CI green run: ci #23 for commit 9b27a0a on main
-  completed successfully on 2026-07-08. Fresh remote CI green evidence for current HEAD is not recorded here.
-  The successful workflow included
+- Last fully validated commit: `9b27a0a3c3993cb1f90ef4357fa80027205ca221`.
+- CI workflow run id: `28948507704` (`ci` #23).
+- Validation date: 2026-07-08.
+- Result: all five jobs passed:
   `Linux CMake build and tests`, `Linux ASan/UBSan build and tests`,
   `Linux TSan race-oriented build and tests`, `Linux Release build`, and
   `Windows MSVC IOCP build and tests`.
+- Most recent audited candidate: commit
+  `0d61658ad19e8758dbf8119a3444a587e7a54a5a`, `ci` run id
+  `29059799283` (#25), completed 2026-07-10. Windows MSVC IOCP passed;
+  the four Linux jobs failed on the same
+  `contract.tcp_client.test_tcp_client_repeated_connect` assertion because a
+  completed Connector attempt still occupied `channel_` until a queued reset.
+  The current worktree releases Connector member ownership immediately while
+  deferring only actual Channel destruction; fresh remote validation is still required.
 - Race-oriented CI: this worktree adds a `linux-tsan` workflow job named
   `Linux TSan race-oriented build and tests`. It configures with
   `GAMENET_ENABLE_TSAN=ON`, builds the Debug target set, and runs the CTest
@@ -57,8 +65,18 @@ foundation: 7 unit tests, 57 contract tests, and 1 integration test.
   Latest recorded race-oriented CI remote green evidence is ci #23 on main.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
-- Intent/documentation guards: CI runs the intent consistency guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
-- Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, EventLoop cross-thread pending-functor execution-state atomicity guard, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, server repeated stop idempotence (`contract.tcp_server.test_tcp_server_repeated_stop`), client retry stop race, client retry-stop soak, direct Connector retry-stop cancellation (`contract.connector.test_connector_retry_stop`), client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client repeated active disconnect idempotence, client repeated active stop idempotence (`contract.tcp_client.test_tcp_client_repeated_stop`), client repeated active connect idempotence (`contract.tcp_client.test_tcp_client_repeated_connect`), client cross-thread active connect, client cross-thread retry configuration (`contract.tcp_client.test_tcp_client_cross_thread_retry_config`), peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, post-close TcpConnection send ignore (`contract.tcp_connection.test_tcp_connection_send_after_close`), write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, repeated TcpConnection shutdown idempotence (`contract.tcp_connection.test_tcp_connection_repeated_shutdown`), high-water mark notification, repeated forceClose idempotence, repeated connectDestroyed stale-registration cleanup (`contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`), cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
+- Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
+- Intent governance: all 52 formal `*.intent.md` documents now carry ordered
+  `status`, `target`, `migration_source`, and `promote_gate` front matter and
+  appear exactly once in the intent index: 18 active `GameNet::core` contracts,
+  23 deferred design assets, and 11 legacy source-project stage documents.
+  Active bodies reject stale `MINI_ENABLE_*`, `mini::`, `mini/net`, and
+  `mini-trantor` contracts. Deferred bodies require an explicit future gate;
+  legacy v1/v2/v3/v5/v6 and M1-M32 documents target `historical` with
+  `promote_gate: never`, so their old options, test counts, and phase claims are
+  not current repository evidence. The implemented echo use case is migrated
+  to `GameNet::core` and names its integration contract.
+- Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, concurrent Logger runtime-configuration coverage (`contract.base.test_logger_thread_safety`), EventLoop cross-thread pending-functor execution-state atomicity guard, cross-thread TcpConnection state observation (`contract.tcp_connection.test_tcp_connection_cross_thread_state`), Connector completed-Channel member release guarded by the repeated-connect contract, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, server repeated stop idempotence (`contract.tcp_server.test_tcp_server_repeated_stop`), client retry stop race, client retry-stop soak, direct Connector retry-stop cancellation (`contract.connector.test_connector_retry_stop`), client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client repeated active disconnect idempotence, client repeated active stop idempotence (`contract.tcp_client.test_tcp_client_repeated_stop`), client repeated active connect idempotence (`contract.tcp_client.test_tcp_client_repeated_connect`), client cross-thread active connect, client cross-thread retry configuration (`contract.tcp_client.test_tcp_client_cross_thread_retry_config`), peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, post-close TcpConnection send ignore (`contract.tcp_connection.test_tcp_connection_send_after_close`), write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, repeated TcpConnection shutdown idempotence (`contract.tcp_connection.test_tcp_connection_repeated_shutdown`), high-water mark notification, repeated forceClose idempotence, repeated connectDestroyed stale-registration cleanup (`contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`), cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
 - Test support hardening: repeated TcpConnection lifecycle/race setup now uses
   shared tests/support helpers. `SocketPair.h` centralizes socketpair,
   nonblocking, and small-send-buffer setup; `ClientSocket.h` centralizes nonblocking test-client connect and cleanup
@@ -87,8 +105,15 @@ foundation: 7 unit tests, 57 contract tests, and 1 integration test.
   before the cross-thread TcpClient retry configuration contract expanded the threading label to 44 tests. The workflow default repeat shape was:
   `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`;
   43/43 threading-labeled tests passed across 20 repeats on 2026-07-09,
-  and CTest reported total test time was 637.56 seconds. The expanded 44-test threading slice is covered by current full Windows Debug and Release
-  CTest runs once; repeat-soak evidence for that expanded slice is not recorded here.
+  and CTest reported total test time was 637.56 seconds. The then-expanded
+  44-test threading slice was covered once by the full Windows Debug and Release
+  CTest checkpoint. The new cross-thread TcpConnection state contract expands the
+  threading slice to 45 tests. The Logger concurrency contract expands the current
+  threading slice to 46 tests; remote repeat-soak evidence for that expanded
+  slice is not recorded here.
+  Local Windows Debug preflight for this worktree passes all 46 threading tests
+  across 5 repeats with `--timeout 15`; CTest reported 163.10 seconds on
+  2026-07-10. This is a local preflight, not the required remote repeat-50 evidence.
   Remote GitHub `long-soak` evidence is now recorded:
   run 28986707243, job 86017363504, commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221,
   repeat 20, timeout 60 seconds, completed successfully at
@@ -101,7 +126,24 @@ foundation: 7 unit tests, 57 contract tests, and 1 integration test.
   to keep MSBuild `.tlog` paths below Windows path-length limits:
   `cmake --build build-release --config Release --parallel` succeeds, and
   `ctest --test-dir build-release -C Release --output-on-failure --timeout 10`
-  reports 65/65 Release tests passed.
+  reports 67/67 Release tests passed for the current worktree in 39.85 seconds
+  on 2026-07-10.
+- Core benchmark: `GAMENET_BUILD_BENCHMARKS` defaults to `OFF`; when enabled it
+  builds the non-installed, non-CTest `gamenet_core_benchmark` executable. Its
+  `gamenet.core_benchmark.v1` JSON covers echo throughput/P50/P99, one-versus-two
+  worker scaling, idle-connection process working set, and slow-client output
+  accumulation while identifying backend and completion mode. Local Windows
+  MSVC Release evidence on 2026-07-10 records 51.979 MiB/s and P99 61.7 us with
+  one worker, 73.994 MiB/s and P99 59.2 us with two workers, about 71,264 bytes
+  of process working-set delta per idle connection at 256 connections, and a
+  67,465,216-byte working-set increase after offering 8 MiB to each of four
+  non-reading clients. The slow-client run fired four high-water callbacks and
+  explicitly reports `high_water_notification_only`; it is not a memory-cap
+  claim. Raw local evidence is under
+  `docs/development/benchmark_results/2026-07-10-windows-msvc-release/`.
+  The manual-only `core-benchmark` workflow is ready to produce matching Linux
+  epoll and Windows IOCP Release artifacts from one SHA.
+  Linux Release JSON remains required before PR-0C has cross-platform evidence.
 - Install/package: CI installs the core target and builds an external consumer
   fixture through `find_package(GameNetCore)` and `GameNet::core`. Release
   install/package consumer also passes locally: the Release build installs to
@@ -111,11 +153,13 @@ foundation: 7 unit tests, 57 contract tests, and 1 integration test.
 - Windows: Windows support is now represented by a `windows-msvc` workflow job
   for the Reactor / TCP IOCP backend. Local VS2026 Debug configure/build
   succeeds after the MSVC `/utf-8` and `/FS` compile options were added, and a
-  local full Windows CTest run with a 10-second per-test timeout passes 65/65
-  configured tests with 0 failing tests. The IOCP data path now covers
+  local full Windows Debug CTest run with a 10-second per-test timeout passes
+  67/67 configured tests with 0 failing tests in 48.41 seconds on 2026-07-10.
+  The IOCP data path now covers
   `contract.event_loop.test_event_loop`,
   `unit.base.test_logger`,
   `contract.base.test_logger_contract`,
+  `contract.base.test_logger_thread_safety`,
   `contract.event_loop_thread_pool.test_event_loop_thread_pool`,
   `contract.timer_queue.test_timer_queue`,
   `contract.acceptor.test_acceptor_contract`,
@@ -146,6 +190,7 @@ foundation: 7 unit tests, 57 contract tests, and 1 integration test.
   `contract.tcp_server.test_tcp_server_repeated_stop`,
   `contract.tcp_server.test_tcp_server_stop_soak`,
   `contract.tcp_connection.test_tcp_connection_cross_thread_send`,
+  `contract.tcp_connection.test_tcp_connection_cross_thread_state`,
   `contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`,
   `contract.tcp_connection.test_tcp_connection_send_after_close`,
   `contract.tcp_connection.test_tcp_connection_cross_thread_force_close_soak`,
@@ -182,6 +227,9 @@ Phase 4 remains deferred until every gate item below has current evidence:
 - `docs/migration_status.md`, `docs/development/ci.md`, and `docs/development/windows_iocp_milestone.md` have no pending evidence.
 - TcpConnection, TcpClient/Connector, and TcpServer lifecycle/race tests have no known flaky entries.
 - Linux and Windows install/package consumers pass through `find_package(GameNetCore)` and `GameNet::core`.
+- Matching Release `gamenet.core_benchmark.v1` evidence is recorded for Linux
+  epoll and Windows IOCP with commands, scenario parameters, backend, and
+  completion mode; the current worktree has local Windows evidence only.
 - The first Phase 4 design-only PR should target protocol framing / PacketFramer.
 - HTTP, RPC, and game pipeline modules must stay deferred until protocol framing has its own approved intent, invariants, contracts, and tests.
 

@@ -11,6 +11,7 @@
 #include "gamenet/core/net/SocketTypes.h"
 
 #include <any>
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -41,6 +42,9 @@ public:
     const std::string& name() const noexcept;
     const InetAddress& localAddress() const noexcept;
     const InetAddress& peerAddress() const noexcept;
+
+    // These methods are cross-thread-safe state snapshots. They do not make
+    // any other connection-owned state safe to access outside the owner loop.
     bool connected() const noexcept;
     bool disconnected() const noexcept;
 
@@ -48,6 +52,10 @@ public:
     void send(const void* data, std::size_t len);
     void shutdown();
     void forceClose();
+
+    // Socket options, context, and callback slots are owner-loop-only mutable
+    // state. Configure callbacks before connectEstablished(); only teardown
+    // code running on the owner loop may replace a callback afterward.
     void setTcpNoDelay(bool on);
 
     // Connection context is loop-owned mutable state. Call setContext(), getContext()
@@ -81,7 +89,7 @@ private:
 
     EventLoop* loop_;
     std::string name_;
-    StateE state_;
+    std::atomic<StateE> state_;
     std::unique_ptr<Socket> socket_;
     std::unique_ptr<Channel> channel_;
 #ifdef _WIN32

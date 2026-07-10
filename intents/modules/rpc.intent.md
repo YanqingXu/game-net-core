@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::protocol
+migration_source: mini_trantor
+promote_gate: post-phase-4-protocol
+---
+
 # Module Intent: RPC (Remote Procedure Call) Layer
 
 ## 1. Intent

@@ -1,3 +1,10 @@
+---
+status: active
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: none
+---
+
 # Module Intent: Platform Runtime Boundary
 
 ## Intent

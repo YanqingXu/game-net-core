@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::game
+migration_source: mini_trantor
+promote_gate: phase-4-game-foundation
+---
+
 # Module Intent: Game Gateway Security
 
 ## 1. Intent

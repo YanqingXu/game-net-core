@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # v5-zeta: Engineering Guardrails
 
 ## 1. Intent

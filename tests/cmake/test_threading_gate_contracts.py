@@ -14,7 +14,7 @@ def parse_gamenet_tests(cmake_text: str) -> dict[str, set[str]]:
         r"add_gamenet_test\(\s*"
         r"(?P<layer>\S+)\s+"
         r"(?P<module>\S+)\s+"
-        r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/(?P<source>\S+)"
+        r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/(?P<source>[^\s\)]+)"
         r"(?P<labels>[^\)]*)\)"
     )
     for match in pattern.finditer(cmake_text):
@@ -70,6 +70,7 @@ def main() -> None:
         "contract/tcp_server/test_tcp_server_repeated_stop.cpp",
         "contract/tcp_server/test_tcp_server_stop_soak.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp",
+        "contract/tcp_connection/test_tcp_connection_cross_thread_state.cpp",
         "contract/tcp_connection/test_tcp_connection_send_after_close.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp",
         "contract/tcp_connection/test_tcp_connection_repeated_shutdown.cpp",
@@ -83,6 +84,11 @@ def main() -> None:
     ]
     for source in required_threading_contracts:
         require_labels(tests, source, {"contract", "threading", "lifecycle"})
+    require_labels(
+        tests,
+        "contract/base/test_logger_thread_safety.cpp",
+        {"contract", "threading"},
+    )
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "linux-tsan:", workflow)
@@ -101,7 +107,9 @@ def main() -> None:
     require(ci_docs_text, "repeated active `TcpClient::connect()` idempotence contracts", ci_docs)
     require(ci_docs_text, "active cross-thread `TcpClient::connect()` contracts", ci_docs)
     require(ci_docs_text, "active cross-thread `TcpClient` retry configuration contracts", ci_docs)
+    require(ci_docs_text, "concurrent Logger emission/configuration contracts", ci_docs)
     require(ci_docs_text, "post-close `TcpConnection::send()` ignore contracts", ci_docs)
+    require(ci_docs_text, "cross-thread `TcpConnection` state observation contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-read `TcpConnection::forceClose()` contracts", ci_docs)
     require(ci_docs_text, "mixed-timing pending-write `TcpConnection::forceClose()` contracts", ci_docs)
     require(ci_docs_text, "repeated `TcpConnection::shutdown()` idempotence contracts", ci_docs)
@@ -120,7 +128,9 @@ def main() -> None:
     require(migration_text, "repeated active TcpClient connect idempotence", migration_status)
     require(migration_text, "active cross-thread TcpClient connect", migration_status)
     require(migration_text, "active cross-thread TcpClient retry configuration", migration_status)
+    require(migration_text, "concurrent Logger runtime-configuration coverage", migration_status)
     require(migration_text, "post-close TcpConnection send ignore", migration_status)
+    require(migration_text, "cross-thread TcpConnection state observation", migration_status)
     require(migration_text, "mixed-timing pending-read forceClose", migration_status)
     require(migration_text, "mixed-timing pending-write forceClose", migration_status)
     require(migration_text, "repeated TcpConnection shutdown idempotence", migration_status)

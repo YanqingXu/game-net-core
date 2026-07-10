@@ -147,7 +147,7 @@ void Connector::stopInLoop() {
         }
 #endif
         state_ = kDisconnected;
-        const SocketFd sockfd = removeAndResetChannel();
+        const SocketFd sockfd = removeAndReleaseChannel();
         sockets::close(sockfd);
     }
 }
@@ -260,7 +260,7 @@ void Connector::handleWrite() {
     }
 
     // Remove channel before delivering fd — ownership transfers to upper layer.
-    const SocketFd sockfd = removeAndResetChannel();
+    const SocketFd sockfd = removeAndReleaseChannel();
 
     const int err = sockets::getSocketError(sockfd);
     if (err != 0) {
@@ -335,7 +335,7 @@ void Connector::handleError() {
         connectTimeoutTimerId_ = {};
     }
 
-    const SocketFd sockfd = removeAndResetChannel();
+    const SocketFd sockfd = removeAndReleaseChannel();
     const int err = sockets::getSocketError(sockfd);
     LOG_ERROR << "Connector::handleError SO_ERROR = " << err << ": " << sockets::errorMessage(err);
     if (connectorEventCallback_) {
@@ -359,7 +359,7 @@ void Connector::handleConnectTimeout() {
     }
 
     // Close the connecting socket and retry or fail.
-    const SocketFd sockfd = removeAndResetChannel();
+    const SocketFd sockfd = removeAndReleaseChannel();
     sockets::close(sockfd);
     state_ = kDisconnected;
 
@@ -423,7 +423,7 @@ void Connector::finishCancelInLoop() {
     }
 
     if (state_ == kConnecting && channel_) {
-        const SocketFd sockfd = removeAndResetChannel();
+        const SocketFd sockfd = removeAndReleaseChannel();
         sockets::close(sockfd);
     }
 
@@ -437,18 +437,16 @@ void Connector::finishCancelInLoop() {
 
 #endif
 
-SocketFd Connector::removeAndResetChannel() {
+SocketFd Connector::removeAndReleaseChannel() {
     channel_->disableAll();
     channel_->remove();
     const SocketFd sockfd = channel_->fd();
-    // Can't reset channel_ here because we're inside a channel callback.
-    // Defer the reset via queueInLoop.
-    loop_->queueInLoop([self = shared_from_this()] { self->resetChannel(); });
+    auto deferredChannel = std::shared_ptr<Channel>(std::move(channel_));
+    // The upper callback may tear down the new connection, exposing an already
+    // queued restart before this dispatch unwinds. Vacate the member slot now,
+    // but keep the removed Channel alive until event dispatch returns.
+    loop_->queueInLoop([deferredChannel] { (void)deferredChannel; });
     return sockfd;
-}
-
-void Connector::resetChannel() {
-    channel_.reset();
 }
 
 }  // namespace gamenet::net

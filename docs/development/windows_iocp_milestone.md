@@ -1,6 +1,6 @@
 # Windows IOCP Milestone
 
-Last checked: 2026-07-09
+Last checked: 2026-07-10
 
 Windows support for the Reactor / TCP foundation is represented by the
 `windows-msvc` workflow job. The current Windows source selection intentionally
@@ -23,8 +23,17 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 ```
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
-VS2026 Debug run with a 10-second per-test timeout also passes 65/65 tests with
-0 failing tests. The local IOCP evidence includes:
+VS2026 Debug run with a 10-second per-test timeout also passes 67/67 tests with
+0 failing tests on 2026-07-10. The local IOCP evidence includes:
+
+The first opt-in Windows MSVC Release performance baseline now records the
+current `single_get_queued_completion_status` mode explicitly. Four loopback
+JSON artifacts cover one-worker and two-worker echo throughput/P50/P99, 256
+idle connections, and four non-reading clients offered 8 MiB each. The raw
+evidence lives under
+`docs/development/benchmark_results/2026-07-10-windows-msvc-release/`; it is a
+local dirty-worktree baseline and does not replace current-commit CI or Linux
+epoll benchmark evidence.
 
 - `contract.event_loop.test_event_loop` and
   `contract.timer_queue.test_timer_queue`: `EventLoop::wakeup()` posts an IOCP
@@ -102,6 +111,11 @@ VS2026 Debug run with a 10-second per-test timeout also passes 65/65 tests with
 - `contract.tcp_client.test_tcp_client_cross_thread_retry_config`: non-owner
   `disableRetry()` marshals retry-state mutation to the owner loop and prevents
   peer close from resurrecting a disabled-retry client.
+- `contract.tcp_connection.test_tcp_connection_cross_thread_state`: non-owner
+  observers safely read atomic connected/disconnected snapshots across owner-loop
+  state transitions.
+- `contract.base.test_logger_thread_safety`: concurrent Logger emission and
+  runtime callback replacement remain race-free without EventLoop ownership.
 - `contract.poller.test_poller_contract`: the Windows Poller contract is backed
   by a posted IOCP read operation, not by a select-style fallback.
 - `contract.tcp_connection.test_tcp_connection_lifecycle`,

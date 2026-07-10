@@ -1,3 +1,10 @@
+---
+status: active
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: none
+---
+
 # Architecture Intent: Lifetime Rules
 
 ## 1. Intent

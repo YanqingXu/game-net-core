@@ -1,3 +1,10 @@
+---
+status: deferred
+target: GameNet::experimental
+migration_source: mini_trantor
+promote_gate: experimental-only
+---
+
 # Module Intent: UDP Transport
 
 ## 1. Intent

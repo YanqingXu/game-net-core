@@ -1,7 +1,14 @@
+---
+status: active
+target: GameNet::core
+migration_source: mini_trantor
+promote_gate: none
+---
+
 # Usecase Intent: Echo Server
 
 ## 1. Intent
-Build a minimal echo server on top of mini-trantor to validate:
+Build a minimal echo server on top of `GameNet::core` to validate:
 - accept path
 - connection creation
 - read callback
@@ -13,10 +20,11 @@ The echo server is the first full-path integration usecase.
 It validates whether the reactor core can support a real connection lifecycle.
 
 ## 3. Scope
-- single-thread v1 acceptable
+- one base EventLoop is sufficient for the example
 - plain TCP only
 - no protocol framing
-- no coroutine required in first version
+- no coroutine or business protocol behavior
+- command-line input is limited to an optional listen port
 
 ## 4. Expected Flow
 1. accept new connection
@@ -32,3 +40,18 @@ This usecase should validate:
 - Poller registration works
 - Channel callback path works
 - connection teardown path is safe
+- the received byte sequence is echoed unchanged
+
+## 6. Threading and Ownership
+- `main()` owns EventLoop and TcpServer and destroys both on the owner thread
+- TcpServer owns accepted connection bookkeeping
+- connection and message callbacks run on each TcpConnection owner loop
+- the example performs no direct cross-thread mutation
+- Buffer bytes are retrieved by the message callback and copied into `send()`
+
+## 7. Contracts
+- `examples/echo_server/main.cpp` is the minimal runnable server
+- `tests/integration/tcp/test_tcp_server_client_echo.cpp` verifies the real
+  TcpServer/TcpClient loopback connection and byte-for-byte echo path
+- benchmark and protocol behavior belong to their own intents and must not
+  accumulate in this example

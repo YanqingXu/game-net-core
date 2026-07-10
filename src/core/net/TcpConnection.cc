@@ -56,11 +56,11 @@ const InetAddress& TcpConnection::peerAddress() const noexcept {
 }
 
 bool TcpConnection::connected() const noexcept {
-    return state_ == kConnected;
+    return state_.load(std::memory_order_relaxed) == kConnected;
 }
 
 bool TcpConnection::disconnected() const noexcept {
-    return state_ == kDisconnected;
+    return state_.load(std::memory_order_relaxed) == kDisconnected;
 }
 
 void TcpConnection::send(std::string_view message) {
@@ -73,7 +73,7 @@ void TcpConnection::send(const void* data, std::size_t len) {
     }
 
     if (loop_->isInLoopThread()) {
-        if (state_ == kConnected) {
+        if (state_.load(std::memory_order_relaxed) == kConnected) {
             sendInLoop(static_cast<const char*>(data), len);
         }
         return;
@@ -91,7 +91,7 @@ void TcpConnection::send(const void* data, std::size_t len) {
 void TcpConnection::shutdown() {
     auto self = shared_from_this();
     loop_->runInLoop([self] {
-        if (self->state_ == kConnected) {
+        if (self->state_.load(std::memory_order_relaxed) == kConnected) {
             self->setState(kDisconnecting);
             self->shutdownInLoop();
         }
@@ -104,6 +104,7 @@ void TcpConnection::forceClose() {
 }
 
 void TcpConnection::setTcpNoDelay(bool on) {
+    loop_->assertInLoopThread();
     socket_->setTcpNoDelay(on);
 }
 
@@ -123,29 +124,34 @@ std::any& TcpConnection::getContext() {
 }
 
 void TcpConnection::setConnectionCallback(ConnectionCallback cb) {
+    loop_->assertInLoopThread();
     connectionCallback_ = std::move(cb);
 }
 
 void TcpConnection::setMessageCallback(MessageCallback cb) {
+    loop_->assertInLoopThread();
     messageCallback_ = std::move(cb);
 }
 
 void TcpConnection::setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t highWaterMark) {
+    loop_->assertInLoopThread();
     highWaterMarkCallback_ = std::move(cb);
     highWaterMark_ = highWaterMark;
 }
 
 void TcpConnection::setWriteCompleteCallback(WriteCompleteCallback cb) {
+    loop_->assertInLoopThread();
     writeCompleteCallback_ = std::move(cb);
 }
 
 void TcpConnection::setCloseCallback(CloseCallback cb) {
+    loop_->assertInLoopThread();
     closeCallback_ = std::move(cb);
 }
 
 void TcpConnection::connectEstablished() {
     loop_->assertInLoopThread();
-    if (state_ != kConnecting || channelRemoved_) {
+    if (state_.load(std::memory_order_relaxed) != kConnecting || channelRemoved_) {
         return;
     }
     setState(kConnected);
@@ -163,7 +169,8 @@ void TcpConnection::connectEstablished() {
 
 void TcpConnection::connectDestroyed() {
     loop_->assertInLoopThread();
-    if (state_ == kConnected || state_ == kDisconnecting) {
+    const StateE state = state_.load(std::memory_order_relaxed);
+    if (state == kConnected || state == kDisconnecting) {
         setState(kDisconnected);
         if (connectionCallback_) {
             connectionCallback_(shared_from_this());
@@ -203,7 +210,7 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
             handleClose();
             return;
         }
-        if (state_ == kConnected) {
+        if (state_.load(std::memory_order_relaxed) == kConnected) {
             iocpTransport_->startRead();
         }
 #endif
@@ -242,7 +249,7 @@ void TcpConnection::handleWrite() {
         if (outputBuffer_.readableBytes() == 0) {
             channel_->disableWriting();
             queueWriteComplete();
-            if (state_ == kDisconnecting) {
+            if (state_.load(std::memory_order_relaxed) == kDisconnecting) {
                 shutdownInLoop();
             }
         }
@@ -260,7 +267,7 @@ void TcpConnection::handleWrite() {
 
 void TcpConnection::handleClose() {
     loop_->assertInLoopThread();
-    if (state_ == kDisconnected) {
+    if (state_.load(std::memory_order_relaxed) == kDisconnected) {
         return;
     }
 
@@ -281,7 +288,7 @@ void TcpConnection::handleClose() {
 
 void TcpConnection::finishClose() {
     loop_->assertInLoopThread();
-    if (state_ == kDisconnected) {
+    if (state_.load(std::memory_order_relaxed) == kDisconnected) {
         return;
     }
 
@@ -308,7 +315,7 @@ void TcpConnection::handleError(int savedErrno) {
 
 void TcpConnection::sendInLoop(const char* data, std::size_t len) {
     loop_->assertInLoopThread();
-    if (state_ == kDisconnected) {
+    if (state_.load(std::memory_order_relaxed) == kDisconnected) {
         return;
     }
 
@@ -367,7 +374,8 @@ void TcpConnection::shutdownInLoop() {
 
 void TcpConnection::forceCloseInLoop() {
     loop_->assertInLoopThread();
-    if (state_ == kConnected || state_ == kDisconnecting) {
+    const StateE state = state_.load(std::memory_order_relaxed);
+    if (state == kConnected || state == kDisconnecting) {
         handleClose();
     }
 }
@@ -393,7 +401,7 @@ void TcpConnection::maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newL
 }
 
 void TcpConnection::setState(StateE state) noexcept {
-    state_ = state;
+    state_.store(state, std::memory_order_relaxed);
 }
 
 }  // namespace gamenet::net

@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(GAMENET_BUILD_TESTING "Build tests" ON)
+option(GAMENET_BUILD_BENCHMARKS "Build core performance benchmarks" OFF)
 option(GAMENET_ENABLE_ASAN_UBSAN "Enable ASan/UBSan" OFF)
 option(GAMENET_ENABLE_TSAN "Enable TSan" OFF)
 option(GAMENET_ENABLE_TLS "Build TLS support" OFF)
@@ -25,6 +26,10 @@ set(GAMENET_INSTALL_CMAKEDIR
 
 add_subdirectory(src/core)
 add_subdirectory(examples)
+
+if(GAMENET_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 
 if(GAMENET_BUILD_TESTING)
     enable_testing()

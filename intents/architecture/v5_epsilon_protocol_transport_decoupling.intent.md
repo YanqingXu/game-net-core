@@ -1,3 +1,10 @@
+---
+status: legacy
+target: historical
+migration_source: mini_trantor
+promote_gate: never
+---
+
 # Architecture Intent: v5-epsilon — Protocol and Transport Decoupling
 
 ## 1. Intent
