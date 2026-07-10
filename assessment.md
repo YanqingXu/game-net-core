@@ -1,6 +1,6 @@
 ## 总体结论
 
-截至 `main` 最新提交 [`0d61658`](https://github.com/YanqingXu/game-net-core/commit/0d61658ad19e8758dbf8119a3444a587e7a54a5a)，`game-net-core` 已经完成了“可运行的 Reactor/TCP 网络库”阶段，正在接近“可发布的跨平台核心预览版”。
+截至 `main` 最新提交 [`d1474b5`](https://github.com/YanqingXu/game-net-core/commit/d1474b5f32e609a7d2e2648af31b45635595d304)，`game-net-core` 已经完成了“可运行的 Reactor/TCP 网络库”阶段，正在接近“可发布的跨平台核心预览版”。
 
 我的阶段判断是：
 
@@ -29,7 +29,7 @@
 | Windows IOCP                 | 功能可用     | `AcceptEx/ConnectEx/WSARecv/WSASend` 已进入真实数据路径    |
 | 测试体系                         | 较完整      | 当前记录为 67 个 CTest：7 unit、59 contract、1 integration |
 | CI                           | 已建立      | Linux Debug、ASan/UBSan、TSan、Release、Windows MSVC  |
-| 长稳测试                         | 部分完成     | 旧提交已有远端证据，当前 46-test 线程切片只有本地 repeat-5，缺远端 repeat-50 |
+| 长稳测试                         | 部分完成     | `9b27a0a` 已有远端 36-test × 20；当前 46-test 切片缺远端 repeat-50 |
 | 协议及游戏层                       | 未实现      | 仅保留 intent，符合当前 scope 约束                          |
 
 核心目标和边界在 [README](https://github.com/YanqingXu/game-net-core/blob/main/README.md)、[migration_status.md](https://github.com/YanqingXu/game-net-core/blob/main/docs/migration_status.md) 和 [scope_boundary.md](https://github.com/YanqingXu/game-net-core/blob/main/docs/scope_boundary.md) 中保持得比较清楚。
@@ -38,11 +38,14 @@
 
 ### P0：最新 HEAD 还没有完整、可审计的验证证据
 
-仓库最新提交是 `0d61658`，当前 worktree 已把验证文档改成不可自指的证据模型：
+仓库最新提交是 `d1474b5`，验证文档使用不可自指的证据模型：
 
 * last fully validated commit 仍是更早的 `9b27a0a`
-* most recent audited candidate 是 `0d61658`
-* 当前 46 个 threading tests 已有本地 repeat-5 预检，但尚未形成远端 repeat-50 证据
+* most recent audited candidate 是 `d1474b5`，对应 `ci` run `29073362905`（#26）
+* #26 的 Windows MSVC IOCP job 通过；Linux Debug、ASan/UBSan、TSan、Release 都在 `contract.tcp_client.test_tcp_client_repeated_connect` 失败
+* 失败原因是首个 Linux 连接在回调内同步关闭后，先前排队的重复 `connect()` 请求又启动了第二个连接；当前 worktree 已增加带代次的请求准入门闩，并在本地 Debug/Release 全量测试、46-test threading repeat-5 和该契约 repeat-50 中通过
+* `long-soak` 的手动输入默认值已从 repeat 20 提升到门禁要求的 repeat 50，避免后续执行时误用旧次数
+* 远端 `long-soak` run `28986707243` 成功覆盖的是 `9b27a0a` 上 36 个 threading tests × 20，不是当前 46-test × 50 证据
 
 因此，Phase 4 入场门槛还没有真正满足。
 
@@ -64,7 +67,7 @@ long-soak run id
 
 同时，`setTcpNoDelay()`、callback setters、context access、`connectEstablished()`、`connectDestroyed()` 继续被明确为 owner-loop-only；`TcpServer` 也已调整为在连接 owner loop 上安装 callback 后再 establishment。
 
-剩余缺口不是本地 contract，而是同一 HEAD 上的远端 Linux TSan 和普通 CI 证据。
+`ci` #26 的 TSan job 中该 TcpConnection 状态契约本身通过，但整个 job 被上述 TcpClient repeated-connect 契约拉红。剩余缺口仍是修复提交同一 SHA 上完整通过的远端 Linux TSan 和普通 CI 证据。
 
 ### P1：性能证据已有 Windows baseline，仍缺 Linux/Windows 同 SHA artifact
 

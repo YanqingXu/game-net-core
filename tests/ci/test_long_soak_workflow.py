@@ -19,6 +19,7 @@ def main() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
+    require(workflow_text, 'default: "50"', workflow)
     assert "\n  push:" not in workflow_text, "long-soak must not run on push"
     assert "\n  pull_request:" not in workflow_text, "long-soak must not run on pull_request"
     require(workflow_text, "linux-long-soak:", workflow)
@@ -48,6 +49,8 @@ def main() -> None:
     require(ci_docs_text, "long-soak", ci_docs)
     require(ci_docs_text, "ctest --test-dir build-long-soak --output-on-failure", ci_docs)
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
+    require(ci_docs_text, "defaults to repeat 50", ci_docs)
+    require(ci_docs_text, "60-second per-test timeout", ci_docs)
     require(ci_docs_text, "Remote evidence: run 28986707243", ci_docs)
     require(ci_docs_text, "job 86017363504", ci_docs)
     require(ci_docs_text, "commit 9b27a0a3c3993cb1f90ef4357fa80027205ca221", ci_docs)

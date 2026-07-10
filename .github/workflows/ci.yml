@@ -56,9 +56,6 @@ jobs:
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
           python3 tests/ci/test_core_benchmark_workflow.py
-          python3 tests/ci/test_core_benchmark_workflow.py
-          python3 tests/ci/test_core_benchmark_workflow.py
-          python3 tests/ci/test_core_benchmark_workflow.py
 
       - name: Configure
         run: >

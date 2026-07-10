@@ -32,6 +32,9 @@ Completed in the current worktree:
 - marshal TcpServer callback installation/replacement to each connection owner loop;
 - fix the Linux repeated-connect failure found in `ci` run `29059799283` by
   releasing Connector member ownership before deferred Channel destruction;
+- fix the second Linux repeated-connect ordering failure found in `ci` run
+  `29073362905` by admitting one generation-tagged `connect()` request per
+  pending/active lifecycle and releasing it after terminal failure/teardown;
 - define Logger runtime replacement, callback snapshot/concurrency, re-entry,
   and capture-lifetime semantics with a threading contract;
 - add a default-off, non-CTest core benchmark with versioned JSON output for
@@ -47,8 +50,8 @@ Completed in the current worktree:
 
 Remaining gates, in order:
 
-1. Commit the focused Phase 3.5 changes and obtain one green `ci` run where all
-   five jobs validate the same commit.
+1. Commit the TcpClient request-admission fix and obtain one green `ci` run
+   where all five jobs validate the same commit.
 2. Run remote `long-soak` with the current 46-test threading slice at repeat 50
    and record run id, commit, date, timeout, result, and duration.
 3. Dispatch the manual `core-benchmark` workflow on the focused commit and

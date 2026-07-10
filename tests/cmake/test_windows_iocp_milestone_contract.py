@@ -196,7 +196,7 @@ def main() -> None:
     require(migration_text, "Windows install/package consumer gate also passes locally", migration_status)
     require(migration_text, "find_package(GameNetCore)", migration_status)
     require(migration_text, "GameNet::core", migration_status)
-    require(migration_text, "latest recorded remote green status is ci #23 on main", migration_status)
+    require(migration_text, "latest recorded green Windows job is `ci` #26", migration_status)
     require(migration_text, "2026-07-07-windows-iocp-data-path-design.md", migration_status)
     require(migration_text, "2026-07-07-windows-iocp-data-path.md", migration_status)
 

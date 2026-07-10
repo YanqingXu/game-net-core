@@ -39,6 +39,8 @@ all while preserving the same owner-loop discipline as the server side.
 - connection state mutation happens on the owner loop thread only
 - at most one active Connector attempt or one established TcpConnection
   exists at any time
+- repeated `connect()` submissions for one pending or active connection
+  lifecycle are coalesced before owner-loop dispatch
 - Connector Channel and TcpConnection Channel are removed before
   effective destruction
 - reconnect policy is explicit and configurable, never silently hardcoded
@@ -57,6 +59,8 @@ all while preserving the same owner-loop discipline as the server side.
 ## 6. Threading Rules
 - connect() and disconnect() may be called cross-thread;
   they must marshal into the owner loop via runInLoop
+- connect request admission uses an atomic request id; Connector and
+  TcpConnection state still mutate only on the owner loop
 - enableRetry() and disableRetry() may be called cross-thread;
   they must update Connector retry state on the owner loop via runInLoop
 - newConnection / removeConnection run on the owner loop thread
@@ -87,6 +91,8 @@ all while preserving the same owner-loop discipline as the server side.
 - destruction during a pending connect or reconnect timer must not leak
   fds or leave stale Channel registrations
 - repeated disconnect calls are idempotent
+- a terminal connect failure without a scheduled retry releases the admitted
+  request so a later explicit `connect()` can start a fresh attempt
 
 ---
 
@@ -138,8 +144,9 @@ all while preserving the same owner-loop discipline as the server side.
   verifies repeated owner and non-owner stop() calls on an active retry-enabled
   client are idempotent and prevent peer close from resurrecting the client
 - `tests/contract/tcp_client/test_tcp_client_repeated_connect.cpp`
-  verifies repeated owner and non-owner connect() calls are idempotent and
-  still create at most one active client/server connection pair
+  verifies repeated owner and non-owner connect() calls are idempotent, create
+  at most one active client/server connection pair, and do not prevent a fresh
+  explicit connect after a terminal no-retry failure
 - `tests/contract/tcp_client/test_tcp_client_cross_thread_connect.cpp`
   verifies non-owner connect() marshals Connector startup to the owner loop and
   publishes connection callbacks on that loop

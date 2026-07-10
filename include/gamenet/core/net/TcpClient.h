@@ -9,6 +9,7 @@
 #include "gamenet/core/net/SocketTypes.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -17,12 +18,15 @@ namespace gamenet::net {
 
 class Connector;
 class EventLoop;
+enum class ConnectorEvent;
 
 class TcpClient : private gamenet::base::noncopyable {
 public:
     TcpClient(EventLoop* loop, const InetAddress& serverAddr, std::string name);
     ~TcpClient();
 
+    // Repeated calls for the same pending or active connection lifecycle are
+    // coalesced before work is marshaled to the owner loop.
     void connect();
     void disconnect();
     void stop();
@@ -40,11 +44,13 @@ public:
     void setWriteCompleteCallback(WriteCompleteCallback cb);
 
 private:
-    void connectInLoop();
+    void connectInLoop(std::uint64_t requestId);
     void disconnectInLoop();
     void stopInLoop();
     void setRetry(bool enabled);
     void setRetryInLoop(bool enabled) noexcept;
+    void handleConnectorEvent(ConnectorEvent event);
+    void finishTerminalConnectFailure(std::uint64_t requestId);
     void newConnection(SocketFd sockfd);
     void removeConnection(const TcpConnectionPtr& conn);
 
@@ -55,7 +61,12 @@ private:
     MessageCallback messageCallback_;
     WriteCompleteCallback writeCompleteCallback_;
     std::atomic<bool> retry_{false};
+    std::atomic<std::uint64_t> nextConnectRequestId_{1};
+    std::atomic<std::uint64_t> activeConnectRequestId_{0};
     bool connect_{false};
+    std::uint64_t connectorRequestId_{0};
+    std::uint64_t connectionRequestId_{0};
+    std::uint64_t pendingTerminalConnectRequestId_{0};
     int nextConnId_{1};
     std::shared_ptr<void> lifetimeToken_{std::make_shared<int>(0)};
     mutable std::mutex mutex_;
