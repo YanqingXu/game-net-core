@@ -28,13 +28,19 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
 - Test: `ctest --test-dir build --output-on-failure`
-- Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`.
-- CI workflow run id: `29076601085` (`ci` #27, PR #2).
+- Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
+- CI workflow run id: `29079836593` (`ci` #29, `main`).
 - Validation date: 2026-07-10.
 - Result: all five jobs passed:
   `Linux CMake build and tests`, `Linux ASan/UBSan build and tests`,
   `Linux TSan race-oriented build and tests`, `Linux Release build`, and
   `Windows MSVC IOCP build and tests`.
+- Release: annotated tag `v0.1.0-core-preview` peels to the validated commit.
+- Focused candidate commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`
+  passed PR `ci` run `29076601085` (#27) and is preserved as a parent of the
+  release merge commit. It owns the same-SHA long-soak and benchmark evidence
+  recorded below; merge commit `c4818d4` combines it with evidence documentation
+  without rewriting either commit.
 - The preceding audited candidate, commit
   `d1474b5f32e609a7d2e2648af31b45635595d304`, failed in `ci` run id
   `29073362905` (#26) on
@@ -64,8 +70,8 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   repeated TcpConnection shutdown idempotence contracts,
   worker-owned active-write stop contracts, worker-callback TcpServer stop
   contracts, and repeated TcpServer stop idempotence contracts.
-  Latest recorded race-oriented CI remote green evidence is `ci` #27 on
-  commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`.
+  Latest recorded race-oriented CI remote green evidence is `ci` #29 on
+  release commit `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
@@ -233,8 +239,8 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   `tests/cmake/install_consumer` fixture configures, builds, and runs through
   `find_package(GameNetCore)` and `GameNet::core`. The Windows workflow uses
   the Visual Studio generator, Debug CTest, install, and external package
-  consumer gates. The latest recorded green Windows job is `ci` #27, run
-  `29076601085`, on commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`;
+  consumer gates. The latest recorded green Windows job is `ci` #29, run
+  `29079836593`, on release commit `c4818d4b3956c85830e04d4a1f32df4ad701d453`;
   all four Linux jobs in the same workflow also passed.
   The IOCP data-path design and implementation plan are recorded in
   `docs/superpowers/specs/2026-07-07-windows-iocp-data-path-design.md` and
@@ -243,9 +249,11 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
 
 ## Phase 4 Readiness Gate
 
-Phase 4 remains deferred until PR #2 is merged and the Core Preview tag is
-published. Every technical evidence item below is current for candidate
-`a7fd77cbd2140041cebb3f900d5c609fafc2adad`:
+The Phase 4 entry evidence gate is satisfied by release
+`v0.1.0-core-preview`. Candidate `a7fd77cbd2140041cebb3f900d5c609fafc2adad`
+owns the repeat-soak and benchmark artifacts, while release commit
+`c4818d4b3956c85830e04d4a1f32df4ad701d453` owns the final main-branch CI and
+tag:
 
 - [x] Fresh candidate-SHA remote CI evidence is recorded for Linux CMake, Linux ASan/UBSan, Linux TSan, Linux Release, and Windows MSVC IOCP.
 - [x] The remote `long-soak` workflow has a green run recorded with run id, commit sha, repeat count, timeout, date, result, and duration.
@@ -255,7 +263,7 @@ published. Every technical evidence item below is current for candidate
 - [x] Matching Release `gamenet.core_benchmark.v1` evidence is recorded for Linux
   epoll and Windows IOCP with commands, scenario parameters, backend, and
   completion mode.
-- [ ] Merge PR #2 and publish `v0.1.0-core-preview` before Phase 4 work begins.
+- [x] PR #2 is merged and `v0.1.0-core-preview` is published from the validated release commit.
 - [ ] The first Phase 4 design-only PR should target protocol framing / PacketFramer.
 - [ ] HTTP, RPC, and game pipeline modules must stay deferred until protocol framing has its own approved intent, invariants, contracts, and tests.
 
