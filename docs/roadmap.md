@@ -52,20 +52,25 @@ Completed in the current worktree:
 - pass remote `long-soak` run `29077148022` with all 46 threading tests at
   repeat 50 and a 60-second per-test timeout;
 - retain same-SHA Linux epoll and Windows IOCP Release JSON artifacts from
-  `core-benchmark` run `29077151229`.
+  `core-benchmark` run `29077151229`;
+- merge PR #2 without rewriting the validated candidate, pass all five jobs in
+  main `ci` run `29079836593`, and publish annotated tag
+  `v0.1.0-core-preview` at release commit
+  `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
 
-Remaining gates, in order:
+Phase 3.5 has no remaining gates. The release evidence chain is:
 
-1. Merge PR #2 after its evidence-documentation follow-up passes the ordinary
-   five-job CI gate.
-2. Publish `v0.1.0-core-preview` from the frozen core candidate.
-3. Keep Phase 4 deferred until the tag is present; then begin with a design-only
-   PacketFramer change.
+1. code candidate `a7fd77cbd2140041cebb3f900d5c609fafc2adad`;
+2. PR five-job CI run `29076601085`, long-soak run `29077148022`, and
+   benchmark run `29077151229`;
+3. release merge commit `c4818d4b3956c85830e04d4a1f32df4ad701d453`,
+   main five-job CI run `29079836593`, and tag `v0.1.0-core-preview`.
 
 ## Phase 4: Higher-level Modules
 
-Phase 4 must not begin until the Phase 4 readiness gate in
-`docs/migration_status.md` is satisfied with current evidence.
+The Phase 4 readiness gate in `docs/migration_status.md` is satisfied. Start
+Phase 4 with a design-only PacketFramer change and keep all later modules behind
+their own intent, invariant, contract, and test gates.
 
 - Add protocol framing.
 - Add transport abstraction.

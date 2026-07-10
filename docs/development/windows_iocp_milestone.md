@@ -24,9 +24,13 @@ D:\VS2026\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe `
 
 Full Windows CTest is now part of the Windows MSVC workflow gate. A local
 VS2026 Debug run with a 10-second per-test timeout also passes 67/67 tests with
-0 failing tests on 2026-07-10. Remote `ci` run `29076601085` (#27) validates
-commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`; its Windows MSVC IOCP job
-`86309502342` passed alongside all four Linux jobs on the same SHA.
+0 failing tests on 2026-07-10. PR `ci` run `29076601085` (#27) validates
+candidate `a7fd77cbd2140041cebb3f900d5c609fafc2adad`; its Windows MSVC IOCP job
+`86309502342` passed alongside all four Linux jobs on the same SHA. PR #2 then
+merged without rewriting the candidate. Main `ci` run `29079836593` (#29)
+passed all five jobs on release commit
+`c4818d4b3956c85830e04d4a1f32df4ad701d453`, which is published as annotated
+tag `v0.1.0-core-preview`.
 
 The first opt-in Windows MSVC Release performance baseline now records the
 current `single_get_queued_completion_status` mode explicitly. Four loopback

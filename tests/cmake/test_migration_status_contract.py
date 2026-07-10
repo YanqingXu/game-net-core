@@ -33,9 +33,12 @@ def main() -> None:
         f"{unit_count} unit tests, {contract_count} contract tests, and {integration_count} integration test",
         migration_status,
     )
-    require(status_text, "Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`", migration_status)
-    require(status_text, "CI workflow run id: `29076601085` (`ci` #27, PR #2)", migration_status)
+    require(status_text, "Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`", migration_status)
+    require(status_text, "CI workflow run id: `29079836593` (`ci` #29, `main`)", migration_status)
     require(status_text, "Validation date: 2026-07-10", migration_status)
+    require(status_text, "Release: annotated tag `v0.1.0-core-preview`", migration_status)
+    require(status_text, "Focused candidate commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`", migration_status)
+    require(status_text, "`29076601085` (#27)", migration_status)
     require(status_text, "preceding audited candidate", migration_status)
     require(status_text, "`d1474b5f32e609a7d2e2648af31b45635595d304`", migration_status)
     require(status_text, "`29073362905` (#26)", migration_status)
@@ -48,7 +51,7 @@ def main() -> None:
     require(status_text, "GAMENET_ENABLE_TSAN=ON", migration_status)
     require(status_text, "threading` label", migration_status)
     require(status_text, "pending read/write forceClose cancel-close", migration_status)
-    require(status_text, "Latest recorded race-oriented CI remote green evidence is `ci` #27", migration_status)
+    require(status_text, "Latest recorded race-oriented CI remote green evidence is `ci` #29", migration_status)
     require(status_text, "intent consistency guard", migration_status)
     require(status_text, "intent metadata contract guard", migration_status)
     require(status_text, "all 52 formal `*.intent.md` documents", migration_status)
@@ -72,7 +75,7 @@ def main() -> None:
     require(status_text, "Windows install/package consumer gate also passes locally", migration_status)
     require(status_text, "find_package(GameNetCore)", migration_status)
     require(status_text, "GameNet::core", migration_status)
-    require(status_text, "latest recorded green Windows job is `ci` #27", migration_status)
+    require(status_text, "latest recorded green Windows job is `ci` #29", migration_status)
     require(status_text, "contract.timer_queue.test_timer_queue", migration_status)
     require(status_text, "server stop with active connections", migration_status)
     require(status_text, "server stop during active write", migration_status)
@@ -205,7 +208,7 @@ def main() -> None:
     require(status_text, "## Phase 4 Readiness Gate", migration_status)
     require(
         status_text,
-        "Phase 4 remains deferred until PR #2 is merged and the Core Preview tag is",
+        "The Phase 4 entry evidence gate is satisfied by release",
         migration_status,
     )
     require(
@@ -241,6 +244,11 @@ def main() -> None:
     require(
         status_text,
         "The first Phase 4 design-only PR should target protocol framing / PacketFramer",
+        migration_status,
+    )
+    require(
+        status_text,
+        "PR #2 is merged and `v0.1.0-core-preview` is published from the validated release commit",
         migration_status,
     )
     require(
@@ -297,8 +305,10 @@ def main() -> None:
 
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, "## Remote Evidence Boundary", ci_docs)
-    require(ci_docs_text, "Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`", ci_docs)
-    require(ci_docs_text, "CI workflow run id: `29076601085` (`ci` #27, PR #2)", ci_docs)
+    require(ci_docs_text, "Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`", ci_docs)
+    require(ci_docs_text, "CI workflow run id: `29079836593` (`ci` #29, `main`)", ci_docs)
+    require(ci_docs_text, "Release tag: `v0.1.0-core-preview`", ci_docs)
+    require(ci_docs_text, "run `29076601085` (#27)", ci_docs)
     require(ci_docs_text, "run id `29073362905`", ci_docs)
     require(ci_docs_text, "contract.tcp_client.test_tcp_client_repeated_connect", ci_docs)
     require(ci_docs_text, "run `29077148022`", ci_docs)

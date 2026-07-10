@@ -97,10 +97,17 @@ update the active scope and migration status in the same change.
 
 Record immutable validation evidence instead of a self-referential current HEAD:
 
-- Last fully validated commit: `a7fd77cbd2140041cebb3f900d5c609fafc2adad`.
-- CI workflow run id: `29076601085` (`ci` #27, PR #2).
+- Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
+- CI workflow run id: `29079836593` (`ci` #29, `main`).
 - Validation date: 2026-07-10.
 - Result: Linux Debug, ASan/UBSan, TSan, Release, and Windows MSVC IOCP passed.
+- Release tag: `v0.1.0-core-preview`, annotated and peeled to the validated commit.
+
+The focused code candidate
+`a7fd77cbd2140041cebb3f900d5c609fafc2adad` was first validated by PR `ci`
+run `29076601085` (#27), then preserved as a parent of the release merge commit.
+The same candidate owns the repeat-50 and cross-platform benchmark evidence
+recorded below; the merge commit only adds its evidence-documentation parent.
 
 The preceding audited candidate,
 `d1474b5f32e609a7d2e2648af31b45635595d304`, failed in run id `29073362905`
