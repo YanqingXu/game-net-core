@@ -28,7 +28,7 @@ SHA-256 又使用仓库 verifier 独立复验通过。
 | 主 CI / sanitizer / fuzz | 通过 | run `29160903594`，六 producer + aggregate 7/7；五个全量 job 85/85、TSan 61/61、fuzz 1000、三个 consumer 各 1/1 |
 | repeat-50 | 通过 | run `29161167423`：threading 3,050/3,050；Pipeline/Broadcast 400/400 |
 | Phase 4 benchmark | 通过 | run `29161168417`：Linux epoll、Windows IOCP producer 与 pair gate 3/3 |
-| draft PR #4 | 技术门禁通过，流程未完成 | open/draft、mergeable/CLEAN、11/11 check-runs success；尚未 review/merge |
+| draft PR #4 | 功能候选技术门禁通过，流程未完成 | `5ebad2c1...` 候选曾有 11/11 check-runs success；evidence-only descendant 以其自己的新 CI 为准；PR 尚未 review/merge |
 | `v0.2.0-phase4-preview` | 未发布 | tag 与 GitHub Release 均不存在，不得宣称 Preview 已发布 |
 
 因此，当前可宣称：

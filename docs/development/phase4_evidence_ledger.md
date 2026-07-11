@@ -12,7 +12,7 @@
 | 本地分支 | `agent/phase-4-foundation` | 信息 |
 | 已验证功能 candidate SHA | `5ebad2c1a4a9487437340935e21f7468140c7e8d` | 不可变提交；候选形成时本地/origin/PR head 一致且工作树干净 |
 | candidate tree status | clean | 代码、intent、rules、tests、workflow 与候选内文档均已提交 |
-| draft PR | [#4](https://github.com/YanqingXu/game-net-core/pull/4)，open/draft | mergeable/CLEAN；11/11 checks success；尚未 review/merge |
+| draft PR | [#4](https://github.com/YanqingXu/game-net-core/pull/4)，open/draft | `5ebad2c1...` 候选曾有 11/11 checks success；evidence-only descendant 以其自己的新 CI 为准；尚未 review/merge |
 | PR #4 head（候选运行时） | `5ebad2c1a4a9487437340935e21f7468140c7e8d` | candidate identity |
 | PR #4 merge-ref（主 CI） | `e461b597f2642e000717f536f3b430b804ba26ad` | `pull_request` run 的实际 checkout/test identity |
 | 当前 `main` | `83d0e5405efe83357059b7e341f1fbb23db67582` | 尚不含 Phase 4 candidate |

@@ -11,8 +11,8 @@ Pull-request `ci` run
 `29160903594` checked GitHub merge-ref
 `e461b597f2642e000717f536f3b430b804ba26ad` while binding both candidate and
 PR-head identity to `5ebad2c1a4a9487437340935e21f7468140c7e8d`; the six producer
-jobs and aggregation-only evidence gate passed 7/7. Commit check-runs also
-include successful manual `long-soak` run `29161167423`, which verified exactly
+jobs and aggregation-only evidence gate passed 7/7. The same functional candidate
+also owns successful manual `long-soak` run `29161167423`, which verified exactly
 3,050/3,050 threading and 400/400 Pipeline/Broadcast executions, and successful
 benchmark run `29161168417`, whose Linux/epoll and Windows/IOCP producers fed a
 green paired evidence gate.
