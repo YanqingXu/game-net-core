@@ -99,8 +99,8 @@ each module behind its own intent, invariant, contract, and test gate:
   with repeated disconnect/reconnect windows.
 - [ ] Keep UDP/KCP work experimental and independently gated.
 
-The frozen `final-v4` dirty worktree passes 85/85 configured tests in Windows
-Debug (36.47 seconds), Windows Release (36.97 seconds), and Linux Clang Release
+Before candidate freeze, the local `final-v4` preflight passed 85/85 configured
+tests in Windows Debug (36.47 seconds), Windows Release (36.97 seconds), and Linux Clang Release
 (34.76 seconds), all 27 Python guards, and exact-version external Release
 package consumers on Linux Clang and Windows MSVC for all six exported targets.
 Full Windows MSVC Debug AddressSanitizer passes 85/85 in 43.19 seconds and Linux
@@ -113,10 +113,12 @@ Pipeline/Broadcast slice passes repeat 50 (400 executions, zero failures, 54.16
 seconds). Both structured `gamenet.ctest_repeat_evidence.v1` manifests report
 success against inventory SHA-256
 `37ee7fb3572c911fa771ba42ce1fcb91a252bc2c78c56b98b280f5305c77a09a`.
-The Linux and Windows Release install consumers each pass 1/1. Both platforms
-also produce all three fixed Release Phase 4 benchmark scenarios with
-`status: ok` and pass the shared validator. Every `final-v4` result remains
-dirty-worktree local preflight, not immutable remote same-SHA evidence.
+The Linux and Windows Release install consumers each passed 1/1. Both platforms
+also produced all three fixed Release Phase 4 benchmark scenarios with
+`status: ok` and passed the shared validator. These local results supported the
+functional candidate subsequently committed and pushed as
+`5ebad2c1a4a9487437340935e21f7468140c7e8d`; they are not substituted for the
+remote evidence below.
 
 Intent governance now resolves all 25 active targets and 74 explicit
 verification paths. Seven enriched Phase 4 intents require artifact kind,
@@ -134,20 +136,28 @@ writes `gamenet.ctest_repeat_evidence.v1` summaries for every selected test and
 exact repeat count. The Phase 4 benchmark workflow uses two platform producers
 and a third aggregation-only gate whose
 `gamenet.phase4_benchmark_pair_evidence.v1` requires one Linux/epoll and one
-Windows/IOCP result from the same run with identical scenario parameters. These
-contracts are implemented locally, but no immutable Phase 4 candidate has been
-committed or pushed and none has a current-candidate remote same-SHA run.
+Windows/IOCP result from the same run with identical scenario parameters.
+
+Functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` is committed and
+pushed, and was the Draft PR #4 head when candidate evidence was produced.
+Pull-request `ci` run
+`29160903594` validated GitHub merge-ref
+`e461b597f2642e000717f536f3b430b804ba26ad` while binding candidate and PR-head
+identity to `5ebad2c1a4a9487437340935e21f7468140c7e8d`; all six producers and the
+aggregate evidence gate passed 7/7. Manual `long-soak` run `29161167423`
+completed the exact 3,050/3,050 threading and 400/400 Pipeline/Broadcast
+executions and uploaded the verified evidence bundle. Manual benchmark run
+`29161168417` completed both platform producers and the paired evidence gate
+successfully.
 
 Draft PR #4 head `0d62054e148a1c95793799eb88856363ac6843d3` and five-job `ci`
 run `29147391402` (#32) are retained only as pre-hardening history. They do not
-validate the current remediation changes.
+validate candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` or replace its
+current evidence chain.
 
-Phase 4 remains evidence-gated rather than implementation-blocked. Before a
-preview tag, commit and push an immutable candidate and record all six same-SHA CI
-producer artifacts plus their aggregate evidence set, Linux TSan and actual
-libFuzzer evidence, structured repeat-50 threading plus Pipeline/Broadcast soak
-manifests, the same-run Linux/Windows Phase 4 benchmark pair manifest, and a
-formal preview release. Draft PR #4 still points at the older pre-hardening
-candidate; it has not been updated to the current worktree. Experimental HTTP,
-RPC, UDP/KCP, TLS, and coroutine work remains deferred behind separate intent
-promotion.
+Phase 4 now has a verified functional candidate and remains publication-gated
+rather than implementation-blocked. PR #4 is still Draft and unmerged;
+`v0.2.0-phase4-preview` and its GitHub Release do not exist. Review/merge,
+post-merge identity checks, the annotated preview tag, and the formal Preview
+Release remain explicit later actions. Experimental HTTP, RPC, UDP/KCP, TLS,
+and coroutine work remains deferred behind separate intent promotion.

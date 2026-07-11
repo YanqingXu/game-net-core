@@ -2,17 +2,16 @@
 
 **Goal:** Close the audit blockers in draft PR #4 and produce a mergeable, verifiable Phase 4 preview without expanding deferred protocol/transport scope.
 
-**Architecture:** Preserve `GameNet::core → protocol/transport → game_session/game_logic/broadcast → example` as a one-way dependency graph. Each module follows Intent → invariants → threading → ownership → contracts/tests → implementation. The current remote PR #4 is still an umbrella feature PR; the intended next step is to convert it into a tracking PR and review the local hardening as dependency-ordered merge units. That remote/commit-history conversion has not happened yet.
+**Architecture:** Preserve `GameNet::core → protocol/transport → game_session/game_logic/broadcast → example` as a one-way dependency graph. Each module follows Intent → invariants → threading → ownership → contracts/tests → implementation. Remote PR #4 remains an umbrella feature PR rather than dependency-ordered stacked review units. The final artifacts follow the intent method, but the two large commits cannot retrospectively prove intent/test-first chronology; this remains a review-process limitation rather than a code-contract blocker.
 
-**Baseline:** Core tag `v0.1.0-core-preview` (`c4818d4`), Phase 4 head `0d62054`, audit report `docs/development/phase4_audit_2026-07-11.md`.
+**Baseline:** Core tag `v0.1.0-core-preview` (`c4818d4`); validated Phase 4 functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d`; PR merge-ref `e461b597f2642e000717f536f3b430b804ba26ad`; audit report `docs/development/phase4_audit_2026-07-11.md`.
 
 **Non-goals:** HTTP, WebSocket, RPC, TLS, coroutine, UDP, KCP, AOI/room/business state, production-readiness claims, and an installed all-in-one Pipeline library.
 
-**Status convention (2026-07-12):** `[x]` means the implementation and its named
-local contract/guard exist in the current worktree. `[ ]` means either behavior
-is still missing or immutable evidence must still be produced for the final
-candidate SHA. The older `0d62054` CI run is historical entry evidence; it does
-not validate the hardening worktree or authorize a Phase 4 release.
+**Status convention (2026-07-12):** `[x]` means the implementation or named
+candidate evidence now exists and has been checked against its recorded identity.
+`[ ]` means the review/merge/main/tag/Release publication action is still absent.
+The older `0d62054` CI run remains historical entry evidence only.
 
 Evidence is deliberately layered. Local preflight establishes that the
 worktree is a viable candidate; producer manifests bind files to a checkout,
@@ -90,7 +89,7 @@ the Phase 4 performance-baseline intent, `rules/review_rules.md`, and
 - [x] Implement incremental bounded parsing, ring-buffered unread storage, and explicit result/failure statuses.
 - [x] Keep deterministic valid-frame/chunk property smoke as a normal contract with accurate naming.
 - [x] Add an optional libFuzzer target with `LLVMFuzzerTestOneInput`, malformed input, bounded continuation, reset checks, and one-shot/chunked differential decoding.
-- [ ] Execute the real libFuzzer target under ASan/UBSan for the final candidate SHA and preserve the command/result.
+- [x] Execute the real libFuzzer target under ASan/UBSan for the final candidate SHA and preserve the command/result. Main CI run `29160903594` records 1,000 units in the Linux ASan/UBSan producer manifest and aggregate evidence set.
 - [x] Add framing throughput snapshot support without a performance threshold.
 - Deferred non-gate: an allocation-specific framing profile may be added later;
   current Phase 4 performance intent requires throughput, while process RSS is
@@ -252,13 +251,13 @@ the Phase 4 performance-baseline intent, `rules/review_rules.md`, and
   and inventory.
 - [x] Refresh the complete 61-test threading inventory and focused 8-test
   Pipeline/Broadcast slice at repeat 50 after the final Pipeline
-  callback/lifetime fixes. The current dirty worktree passed 3,050 executions
+  callback/lifetime fixes. The pre-freeze worktree passed 3,050 executions
   in 1,777.76s and 400 executions in 54.16s respectively, and both
   `gamenet.ctest_repeat_evidence.v1` summaries validated successfully.
-- [ ] Re-run the complete 61-test threading inventory and focused 8-test
+- [x] Re-run the complete 61-test threading inventory and focused 8-test
   Pipeline/Broadcast slice at repeat 50 on the immutable final candidate, then
   preserve the remote manifest, raw logs, structured repeat summaries, and run
-  metadata.
+  metadata. Run `29161167423` records 3,050/3,050 and 400/400 exact executions.
 - [x] Produce local Linux/Windows Phase 4 benchmark artifacts for framing, logic
   queue lag/high-water, and broadcast fanout latency/memory; paired same-SHA
   remote artifacts remain separately gated.
@@ -267,32 +266,40 @@ the Phase 4 performance-baseline intent, `rules/review_rules.md`, and
   `gamenet.phase4_benchmark_pair_evidence.v1` gate that verifies the exact Linux
   epoll/Windows IOCP job pair, common run/SHA identity, raw hashes, scenario
   order, runner/platform identity, and identical parameters.
-- [ ] Produce and preserve the paired Linux/Windows benchmark artifacts from the
-  same immutable final candidate SHA.
+- [x] Produce and preserve the paired Linux/Windows benchmark artifacts from the
+  same immutable final candidate SHA. Run `29161168417` produced Linux/epoll,
+  Windows/IOCP, and a successful `gamenet.phase4_benchmark_pair_evidence.v1`.
 - [x] Add six canonical main-CI producer artifacts and an aggregation-only
   `ci-evidence-set` job. `gamenet.ci_evidence_set.v1` accepts exactly
   `linux-cmake`, `linux-asan-ubsan`, `linux-tsan`, `linux-release`,
   `windows-msvc`, and `windows-msvc-release` from one run/attempt/SHA identity,
   rehashes every declared file, and checks exact CTest/JUnit inventories.
-- [ ] Commit and push an immutable Phase 4 candidate, then record candidate SHA,
+- [x] Commit and push an immutable Phase 4 candidate, then record candidate SHA,
   PR head SHA, merge-ref SHA, run/job IDs, test labels/counts, artifact names,
-  dates, durations, and conclusions.
+  dates, durations, and conclusions. The functional candidate is `5ebad2c1...`;
+  the authoritative details are in `docs/development/phase4_evidence_ledger.md`.
 - [x] Complete current-worktree single-run Debug/Release, ASan/UBSan, TSan,
   repository-guard, install-consumer, and dependency-direction preflight. This
   remains mutable local evidence and does not satisfy the final-candidate gate.
-- [ ] Run the corresponding clean final-candidate jobs remotely and preserve the
-  six-producer aggregate manifest.
+- [x] Run the corresponding clean final-candidate jobs remotely and preserve the
+  six-producer aggregate manifest. PR run `29160903594` tested merge-ref
+  `e461b597...`, bound candidate/PR head `5ebad2c1...`, and passed all six
+  producers plus the aggregate gate.
 - [x] Set the locally frozen Phase 4 project/package version to `0.2.0`; tag and
   publication identity remain gated by the immutable final candidate.
 - [ ] Merge the validated candidate without rewriting it, rerun required main-branch gates, then create annotated tag and formal GitHub Release `v0.2.0-phase4-preview`.
 - [ ] Include known limitations, unstable API list, validation links, benchmark/soak artifacts, and downstream upgrade notes in the Release.
 
-**Gate:** All required evidence belongs to the final candidate/merge commit; branch-local or Phase 3.5 evidence cannot substitute for Phase 4 validation.
+**Gate:** Functional evidence belongs to the recorded candidate or its explicitly
+bound PR merge-ref; branch-local or Phase 3.5 evidence cannot substitute for
+Phase 4 validation. An evidence-documentation descendant must be proven
+non-functional and pass the necessary PR/main gates before release; identity is
+never inferred merely from ancestry.
 
-## Current local evidence boundary
+## Current evidence boundary
 
-The worktree currently configures 85 CTest tests. The frozen dirty-worktree
-`final-v4` evidence set includes:
+The local `final-v4` evidence below was the preflight used to freeze the
+functional candidate. It remains useful diagnostic history:
 
 - Windows MSVC Debug passing 85/85 in 36.47s and Release passing 85/85 in
   36.97s;
@@ -316,10 +323,16 @@ The worktree currently configures 85 CTest tests. The frozen dirty-worktree
   Release `gamenet.phase4_benchmark.v1` scenarios with `status: ok` and passing
   the shared semantic/count-invariant validator.
 
-Every `final-v4` result is mutable dirty-worktree preflight. It establishes that
-the frozen local fixes have been exercised, but checkout HEAD `0d62054` is only
-the base object: no immutable Phase 4 candidate has been committed or pushed,
-and no remote same-SHA run or release evidence exists for this worktree content.
+The immutable functional candidate is now
+`5ebad2c1a4a9487437340935e21f7468140c7e8d`. Its authoritative remote evidence
+is layered as follows:
+
+- PR main CI run `29160903594`: candidate/PR head `5ebad2c1...`, tested merge-ref
+  `e461b597...`, six producers plus aggregate 7/7 success;
+- long-soak run `29161167423`: direct candidate checkout, 61×50 and 8×50 exact
+  repeat manifests success;
+- benchmark run `29161168417`: direct candidate checkout, Linux/epoll and
+  Windows/IOCP pair manifest success.
 
 The evidence contracts themselves are locally implemented and guarded:
 
@@ -331,11 +344,15 @@ The evidence contracts themselves are locally implemented and guarded:
 - core-benchmark has two platform producers plus a paired-evidence gate whose
   output is `gamenet.phase4_benchmark_pair_evidence.v1`.
 
-This is useful preflight evidence, not release evidence. The following remain
-open and must be tied to the final immutable candidate SHA: full required CI,
-remote Linux TSan and sanitizer-backed libFuzzer artifacts, the complete remote
-repeat-50 long-soak inventory, paired remote Linux/Windows benchmark artifacts,
-main-branch verification, annotated tag, and formal GitHub Release.
+The candidate-level CI, TSan, sanitizer-backed libFuzzer, repeat-50, and paired
+benchmark gates are therefore closed. The remaining open publication work is:
+
+- complete review and move PR #4 out of Draft;
+- merge without rewriting functional content, then run/record the required
+  main-branch gates or prove any release descendant is documentation-only;
+- create and verify the annotated `v0.2.0-phase4-preview` tag;
+- publish the formal GitHub Preview Release with evidence links, known
+  limitations, unstable APIs, downstream notes, and source/archive checksums.
 
 ## Standard verification commands
 

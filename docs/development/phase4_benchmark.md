@@ -167,7 +167,7 @@ all move the measurements materially.
 Local Windows MSVC and Linux Clang Release snapshots are stored under
 `docs/development/benchmark_results/2026-07-11-windows-msvc-release-phase4/`
 and `docs/development/benchmark_results/2026-07-11-linux-clang-release-phase4/`.
-They were refreshed as final-v4 dirty-worktree preflight and passed semantic
+They were refreshed as final-v4 pre-freeze local preflight and passed semantic
 validation:
 
 | Environment | Framing | Logic queue | Broadcast fanout |
@@ -176,6 +176,17 @@ validation:
 | Linux Clang / epoll Release | 38,087,693.105 operations/s; 9,444.046 MiB/s | 452,934.439 operations/s; P99 37,832.501 us | 5,036,891.294 operations/s; completion P99 262.500 us |
 
 These rows came from different execution environments. They prove both harness
-backends locally but must not be compared as cross-machine performance scores
-and do not replace the still-unproduced paired immutable remote workflow
-artifact.
+backends locally but must not be compared as cross-machine performance scores.
+
+The authoritative paired candidate evidence is manual workflow run
+[`29161168417`](https://github.com/YanqingXu/game-net-core/actions/runs/29161168417),
+attempt 1, on commit
+`5ebad2c1a4a9487437340935e21f7468140c7e8d`. Linux/epoll, Windows/IOCP, and
+the aggregation gate all succeeded. The pair artifact
+`phase4-benchmark-pair-5ebad2c1a4a9487437340935e21f7468140c7e8d-29161168417-1`
+has ZIP SHA-256
+`a4ce4eda074928c1ca97fdb6171752fcf33028f684bd75e3b733a5e7734ce9a8`.
+Its `gamenet.phase4_benchmark_pair_evidence.v1` manifest binds both producers to
+the same candidate/run/attempt and parameters; downloading the producer and pair
+artifacts and rerunning the repository verifier reproduced the same manifest
+content except for `generated_at_utc`.

@@ -10,15 +10,21 @@
 | 字段 | 当前值 | 状态 |
 | --- | --- | --- |
 | 本地分支 | `agent/phase-4-foundation` | 信息 |
-| 本地整改基线 | `0d62054e148a1c95793799eb88856363ac6843d3` 加未提交内容 | dirty worktree，非候选 |
-| 不可变 candidate SHA | 待生成 | 未完成 |
-| candidate tree status | 待生成 | 必须为干净提交 |
-| draft PR | #4，open/draft | 仍指向旧快照 |
-| PR #4 head | `0d62054e148a1c95793799eb88856363ac6843d3` | 历史远端身份 |
-| PR #4 merge-ref | `31107e8964a0f206087fe2f029a39a15107f6bda` | 历史远端身份 |
-| 旧 CI run | `29147391402` | 旧五 producer/74-test 形态，不可复用 |
+| 已验证功能 candidate SHA | `5ebad2c1a4a9487437340935e21f7468140c7e8d` | 不可变提交；候选形成时本地/origin/PR head 一致且工作树干净 |
+| candidate tree status | clean | 代码、intent、rules、tests、workflow 与候选内文档均已提交 |
+| draft PR | [#4](https://github.com/YanqingXu/game-net-core/pull/4)，open/draft | mergeable/CLEAN；11/11 checks success；尚未 review/merge |
+| PR #4 head（候选运行时） | `5ebad2c1a4a9487437340935e21f7468140c7e8d` | candidate identity |
+| PR #4 merge-ref（主 CI） | `e461b597f2642e000717f536f3b430b804ba26ad` | `pull_request` run 的实际 checkout/test identity |
+| 当前 `main` | `83d0e5405efe83357059b7e341f1fbb23db67582` | 尚不含 Phase 4 candidate |
+| 主 CI run | [`29160903594`](https://github.com/YanqingXu/game-net-core/actions/runs/29160903594)，attempt 1 | 六 producer + aggregate，7/7 success |
+| long-soak run | [`29161167423`](https://github.com/YanqingXu/game-net-core/actions/runs/29161167423)，attempt 1 | direct candidate checkout，success |
+| benchmark run | [`29161168417`](https://github.com/YanqingXu/game-net-core/actions/runs/29161168417)，attempt 1 | direct candidate checkout，3/3 success |
 | `v0.2.0-phase4-preview` tag | 待创建 | 未完成 |
 | GitHub Release | 无 | 未完成 |
+
+本台账是在上述候选运行完成后补录的 evidence-only 文档。后续提交若改变 PR head，
+不得把新 head 自动写成“同 SHA 已验证”；发布前必须证明它相对 `5ebad2c1...` 仅有
+文档差异并重新通过必要 PR/main 门禁，或让 tag 明确指向已验证候选。
 
 ## 当前本地预检账本
 
@@ -53,20 +59,22 @@
 
 ## 候选 SHA 远端证据账本
 
-以下字段必须来自同一个不可变 candidate SHA。当前全部为待生成。
+主 CI 是 PR 事件：candidate/PR head 为 `5ebad2c1...`，实际 checkout 为 merge-ref
+`e461b597...`，aggregate manifest 同时绑定两者。手动 long-soak 与 benchmark 直接
+checkout candidate，因此其 checkout/candidate/GitHub/current SHA 均为 `5ebad2c1...`。
 
 | 门禁 | 要求的权威证据 | Candidate SHA | Run/attempt | Artifact | 结论 |
 | --- | --- | --- | --- | --- | --- |
-| 主 CI | 六 producer manifest + `gamenet.ci_evidence_set.v1` | 待填 | 待填 | `ci-evidence-set-<sha>-<run>-<attempt>` | 未运行 |
-| Linux Debug + consumer | `gamenet.ci_evidence.v1`、85-test inventory/JUnit/log、consumer 1/1 | 待填 | 待填 | canonical name 待填 | 未运行 |
-| Linux ASan/UBSan + fuzz | 85-test evidence、fuzz log/dict/corpus/crash artifacts | 待填 | 待填 | canonical name 待填 | 未运行 |
-| Linux TSan | 85-test inventory 中精确选择 threading 61 | 待填 | 待填 | canonical name 待填 | 未运行 |
-| Linux Release | `gamenet.ci_evidence.v1`、85-test inventory/JUnit/log | 待填 | 待填 | canonical name 待填 | 未运行 |
-| Windows Debug IOCP + consumer | 85-test evidence + install consumer 1/1 | 待填 | 待填 | canonical name 待填 | 未运行 |
-| Windows Release IOCP + consumer | 85-test evidence + install consumer 1/1 | 待填 | 待填 | canonical name 待填 | 未运行 |
-| Long-soak | 两份 `gamenet.ctest_repeat_evidence.v1` + raw logs/inventory | 待填 | 待填 | `long-soak-<job>-<sha>-<run>-<attempt>` | 未运行 |
-| Phase 4 benchmark pair | 两个 producer manifest + `gamenet.phase4_benchmark_pair_evidence.v1` | 待填 | 待填 | `phase4-benchmark-pair-<sha>-<run>-<attempt>` | 未运行 |
-| GitHub Release | annotated tag、Release URL、notes、evidence links | 待填 | 不适用 | Release URL 待填 | 未创建 |
+| 主 CI | 六 producer manifest + `gamenet.ci_evidence_set.v1` | candidate `5ebad2c1...`；checkout `e461b597...` | `29160903594` / 1 | `ci-evidence-set-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP SHA-256 `408398ea5fdcf05675c819136a1ab5665d4dbe1fbcc5a537f45e5832d10cbf3a` | **通过**；下载六 producer 后由仓库 verifier 独立重算通过 |
+| Linux Debug + consumer | 85/85 + consumer 1/1 | 同上 | `29160903594` / 1 | `ci-evidence-linux-cmake-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `df14c0617c2eb7753a9d57ba45f05f3b260fc4c838277cd40e2f3c77374b8510` | **通过** |
+| Linux ASan/UBSan + fuzz | 85/85；真实 libFuzzer 1000 units；corpus/dictionary/log | 同上 | `29160903594` / 1 | `ci-evidence-linux-asan-ubsan-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `dc4a8177b33df5de707ccfa4927d372925058bc8d4c402f9b44c9e552b9048e6` | **通过** |
+| Linux TSan | 85-test inventory 中精确选择 threading 61/61 | 同上 | `29160903594` / 1 | `ci-evidence-linux-tsan-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `545ff700b819ff8daf80a20930d27c6e6616874282cfb4b9d70f88330a9677c5` | **通过** |
+| Linux Release | 85/85 | 同上 | `29160903594` / 1 | `ci-evidence-linux-release-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `2850e10fd2768e1213ea240532cdaf651d810070ac1ff5b892176d5d122e34e0` | **通过** |
+| Windows Debug IOCP + consumer | 85/85 + consumer 1/1 | 同上 | `29160903594` / 1 | `ci-evidence-windows-msvc-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `af853a7a6d98ec5581bc2e7924beff34560abdbac286c87361a38b1b5c46d69f` | **通过** |
+| Windows Release IOCP + consumer | 85/85 + consumer 1/1 | 同上 | `29160903594` / 1 | `ci-evidence-windows-msvc-release-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `f0aa6858e30cd52f47fc624ec6b2ab77eee1c4aa018f1a3bc3e46fbb4f8b8073` | **通过** |
+| Long-soak | 两份 `gamenet.ctest_repeat_evidence.v1` + raw logs/inventory | `5ebad2c1...` direct checkout | `29161167423` / 1 | `long-soak-linux-long-soak-5ebad2c1a4a9487437340935e21f7468140c7e8d-29161167423-1`；ZIP `1e54b26681e39ff72dfb3dec3b9fddd2f0caa180871b4aa7f21051672c57b8c4` | **通过**；3,050/3,050 与 400/400，raw logs 独立复验 |
+| Phase 4 benchmark pair | 两个 producer manifest + `gamenet.phase4_benchmark_pair_evidence.v1` | `5ebad2c1...` direct checkout | `29161168417` / 1 | Linux ZIP `0a7ebecff8889a19688da57e3f44f6726e4e9e9731f69e5d8a545bcc75344978`；Windows ZIP `cc77f51a94649afdd3e616f816cf7014effed7a8d7dceb28185dd90e43809e8b`；pair ZIP `a4ce4eda074928c1ca97fdb6171752fcf33028f684bd75e3b733a5e7734ce9a8` | **通过**；pair manifest 本地重算一致 |
+| GitHub Release | annotated tag、Release URL、notes、evidence links | 尚无 release commit | 不适用 | Release URL 待填 | **未创建** |
 
 ## 完成规则
 

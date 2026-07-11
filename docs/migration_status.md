@@ -2,6 +2,8 @@
 
 Last checked: 2026-07-11
 
+Phase 4 candidate evidence refreshed: 2026-07-12
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -19,7 +21,7 @@ UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 | 1 | Initialize the `game-net-core` project skeleton | Present: top-level CMake, README, AGENTS, docs, intents, rules, include/src/tests/examples layout |
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
-| 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation implemented locally: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
+| 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation implemented and verified as candidate `5ebad2c1`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; PR #4 remains Draft and experimental transports remain deferred |
 
 ## Verification State
 
@@ -27,7 +29,8 @@ The current worktree configures 85 configured CTest tests: 7 unit tests, 72 cont
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, four Pipeline integrations, and four Broadcast contracts/integrations.
 
-Local Phase 4 hardening `final-v4` validation on the frozen dirty worktree:
+Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
+`5ebad2c1a4a9487437340935e21f7468140c7e8d`:
 
 - Windows MSVC Debug: 85/85 configured tests passed in 36.47 seconds.
 - Windows MSVC Release: 85/85 configured tests passed in 36.97 seconds.
@@ -38,8 +41,9 @@ Local Phase 4 hardening `final-v4` validation on the frozen dirty worktree:
   also completed exactly 1000 local Clang 19 ASan/UBSan runs with 6 binary
   seeds, its dictionary, fixed seed `424242`, `max_len=8192`, and a 2-second
   input timeout. The command did not use `max_total_time`; the saved mutated
-  corpus contains 90 files and no crash artifact. Final-candidate remote logs
-  and artifacts remain a release gate.
+  corpus contains 90 files and no crash artifact. Candidate main-CI run
+  `29160903594` repeated the sanitizer-backed fuzz gate successfully and
+  retained its SHA-bound log, corpus, dictionary, and artifact evidence.
 - The current Debug inventory includes 61 threading-labeled tests and eight
   Pipeline/Broadcast tests. On the latest tree, the complete threading slice
   passed repeat 50: 61 x 50 = 3,050 executions with zero failures in 1,777.76
@@ -48,8 +52,10 @@ Local Phase 4 hardening `final-v4` validation on the frozen dirty worktree:
   `gamenet.ctest_repeat_evidence.v1` manifests report `result: success` and bind
   to the same `final-v4` inventory SHA-256
   `37ee7fb3572c911fa771ba42ce1fcb91a252bc2c78c56b98b280f5305c77a09a`.
-  These remain dirty-worktree local preflight results, not immutable remote
-  same-SHA soak evidence; the remote soak gate remains open.
+  Candidate `long-soak` run `29161167423` then completed the same exact
+  selections remotely: 3,050/3,050 threading and 400/400 Pipeline/Broadcast
+  executions, with both structured verifiers, the job manifest, and artifact
+  upload successful.
 - Release install/export for package version `0.2.0` installs
   `GameNet::core`, `GameNet::protocol`, `GameNet::transport`,
   `GameNet::game_session`, `GameNet::game_logic`, and `GameNet::broadcast`.
@@ -75,8 +81,10 @@ Local Phase 4 hardening `final-v4` validation on the frozen dirty worktree:
 - The `final-v4` Linux Clang/epoll and Windows MSVC/IOCP Release Phase 4 benchmark
   executables each report `status: ok` for framing, logic-queue, and broadcast-
   fanout. Both raw three-file sets pass the shared semantic/count-invariant
-  validator. They are dirty-worktree local snapshots from different execution
-  environments, not performance thresholds, direct scores, or remote artifacts.
+  validator. They are local snapshots from different execution environments,
+  not performance thresholds or direct cross-host scores. Candidate benchmark
+  run `29161168417` subsequently completed both remote producers and the
+  aggregation-only `gamenet.phase4_benchmark_pair_evidence.v1` gate successfully.
   Linux framing/logic-queue/broadcast-fanout recorded 9444.046 MiB/s,
   452934.439 ops/s, and 5036891.294 ops/s; Windows recorded 2575.474 MiB/s,
   32475.926 ops/s, and 4535488.872 ops/s respectively.
@@ -113,11 +121,16 @@ Local Phase 4 hardening `final-v4` validation on the frozen dirty worktree:
   producers feed an aggregation-only pair gate that emits
   `gamenet.phase4_benchmark_pair_evidence.v1` for one Linux/epoll and one
   Windows/IOCP result with identical scenario parameters.
-  No immutable Phase 4 candidate has been committed or pushed for the
-  `final-v4` dirty hardening worktree, and no remote same-SHA run exists for its
-  content. None of these configured jobs is claimed as current-candidate remote
-  evidence; checkout HEAD `0d62054e148a1c95793799eb88856363ac6843d3`
-  identifies the base object only, not the uncommitted worktree content.
+  Functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` is committed and
+  pushed, and was the Draft PR #4 head when candidate evidence was produced.
+  Pull-request `ci` run
+  `29160903594` checked GitHub merge-ref
+  `e461b597f2642e000717f536f3b430b804ba26ad`, bound candidate and PR-head
+  identity to `5ebad2c1a4a9487437340935e21f7468140c7e8d`, and passed all six
+  producers plus the aggregate gate, 7/7. The same candidate owns successful
+  `long-soak` run `29161167423` and paired benchmark run `29161168417`.
+  PR #4 remains Draft and unmerged; `v0.2.0-phase4-preview` and its GitHub
+  Release do not yet exist.
 
 Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 
@@ -139,13 +152,15 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 - That historical run predates the current remediation and did not include the
   sixth Windows Release job, real libFuzzer execution, repeat-50 Phase 4 soak,
   Phase 4 benchmark artifacts, or formal preview-release evidence. It cannot
-  certify the current dirty worktree. The immutable Phase 3.5 Core Preview
-  evidence remains recorded separately below.
+  certify candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d`. The immutable
+  Phase 3.5 Core Preview evidence remains recorded separately below.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
 - Test: `ctest --test-dir build --output-on-failure`
-- Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
+- Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`
+  (this fixed label belongs to the Phase 3.5 release record; the verified
+  Phase 4 functional candidate and runs are recorded above).
 - CI workflow run id: `29079836593` (`ci` #29, `main`).
 - Validation date: 2026-07-10.
 - Result: all five jobs passed:
@@ -190,8 +205,10 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   repeated TcpConnection shutdown idempotence contracts,
   worker-owned active-write stop contracts, worker-callback TcpServer stop
   contracts, and repeated TcpServer stop idempotence contracts.
-  Latest recorded race-oriented CI remote green evidence is `ci` #29 on
-  release commit `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
+  Phase 4 candidate race-oriented remote evidence is the successful Linux TSan
+  producer in `ci` run `29160903594`. Latest recorded race-oriented CI remote green evidence is `ci` #29 on release commit
+  `c4818d4b3956c85830e04d4a1f32df4ad701d453` only within the preserved Phase
+  3.5 Core history; it is not the current Phase 4 evidence.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
@@ -412,7 +429,8 @@ tag:
 - [x] The pre-hardening local baseline recorded Windows Debug/Release pass
   74/74 and a downstream consumer linking all six exported targets; this line
   is historical and does not describe the current test inventory.
-- [x] The current `final-v4` dirty hardening worktree passes 85/85 in Windows Debug,
+- [x] The `final-v4` local hardening preflight frozen into candidate `5ebad2c1`
+  passes 85/85 in Windows Debug,
   Windows Release, and Linux Clang Release, passes all 27 Python guards, and
   passes executable Linux/Windows Release package consumers against exact
   version `0.2.0`.
@@ -444,13 +462,15 @@ tag:
 - [x] Pre-hardening PR #4 head `0d62054e148a1c95793799eb88856363ac6843d3`
   has historical five-job evidence in successful `ci` run `29147391402` (#32).
   It is not current-candidate evidence after the remediation changes.
-- [ ] Commit and push an immutable Phase 4 candidate, then record a green same-SHA run
-  from all six CI producers plus `gamenet.ci_evidence_set.v1`, Linux TSan and
-  actual libFuzzer evidence, structured repeat-50 threading plus
-  Pipeline/Broadcast soak manifests, a same-run
-  `gamenet.phase4_benchmark_pair_evidence.v1`, and a formal preview release.
-  Draft PR #4 still points at the older pre-hardening candidate, and the current
-  dirty worktree has none of this immutable remote evidence.
+- [x] Commit and push functional candidate
+  `5ebad2c1a4a9487437340935e21f7468140c7e8d`; validate it through six main-CI
+  producers plus `gamenet.ci_evidence_set.v1` in run `29160903594`, exact
+  repeat-50 evidence in `29161167423`, and the paired Phase 4 benchmark gate in
+  `29161168417`.
+- [ ] Complete review and merge PR #4 without replacing the verified candidate,
+  then perform the required post-merge identity checks and publish the annotated
+  `v0.2.0-phase4-preview` tag and formal GitHub Preview Release. PR #4 remains
+  Draft and unmerged; the target tag and Release do not exist.
 - [ ] HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library
   remain deferred until separately promoted.
 

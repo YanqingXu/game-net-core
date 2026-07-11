@@ -3,6 +3,24 @@
 The CI gate keeps the migration focused on the frozen Reactor/TCP foundation
 plus the explicitly active Phase 4 foundations.
 
+## Current Phase 4 Candidate Evidence
+
+Functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` is committed and
+pushed, and was the Draft PR #4 head when candidate evidence was produced.
+Pull-request `ci` run
+`29160903594` checked GitHub merge-ref
+`e461b597f2642e000717f536f3b430b804ba26ad` while binding both candidate and
+PR-head identity to `5ebad2c1a4a9487437340935e21f7468140c7e8d`; the six producer
+jobs and aggregation-only evidence gate passed 7/7. Commit check-runs also
+include successful manual `long-soak` run `29161167423`, which verified exactly
+3,050/3,050 threading and 400/400 Pipeline/Broadcast executions, and successful
+benchmark run `29161168417`, whose Linux/epoll and Windows/IOCP producers fed a
+green paired evidence gate.
+
+PR #4 remains Draft and unmerged. The `v0.2.0-phase4-preview` tag and GitHub
+Release do not exist; the successful candidate evidence does not imply those
+publication actions have occurred.
+
 ## Scope
 
 The `ci` workflow validates:
@@ -224,7 +242,13 @@ scope, intent metadata, dependency rules, tests, and migration status together.
 
 Record immutable validation evidence instead of a self-referential current HEAD:
 
-- Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`.
+The current Phase 4 candidate evidence is recorded at the start of this
+document. The following entries preserve the completed Phase 3.5 Core Preview
+chain and earlier candidate history:
+
+- Last fully validated commit: `c4818d4b3956c85830e04d4a1f32df4ad701d453`
+  (the fixed label belongs to the Phase 3.5 Core release record; current Phase
+  4 candidate evidence is recorded above).
 - CI workflow run id: `29079836593` (`ci` #29, `main`).
 - Validation date: 2026-07-10.
 - Result: Linux Debug, ASan/UBSan, TSan, Release, and Windows MSVC IOCP passed.
@@ -247,8 +271,9 @@ TcpConnection and restarted Connector. The validated fix admits one
 generation-tagged connect request per pending/active lifecycle and releases
 that admission after terminal no-retry failure or connection removal. Local
 Debug and Release pass 67/67 tests, and the repaired contract passes 50 repeats.
-No later commit may be described as validated until a new run id, commit,
-date, and complete job result are recorded here.
+At that point, no later commit could be described as validated without a new
+run id, commit, date, and complete job result. Phase 4 candidate `5ebad2c1`
+now satisfies that requirement through the current evidence chain above.
 
 The ASan/UBSan job uses:
 
@@ -313,9 +338,9 @@ cmake --build build-windows-release-install-consumer --config Release --parallel
 ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
 ```
 
-The historical core-preview run predates this Windows Release main-CI job. A
-new remote run is required before the expanded six-job gate can be described as
-validated.
+The historical core-preview run predates this Windows Release main-CI job.
+Phase 4 candidate run `29160903594` now validates the expanded six-producer plus
+aggregate gate; the older Core run remains historical evidence only.
 
 The C++ tests use the `tests/support/TestAssert.h` helper instead of standard
 `assert`, so contract checks remain active when Release builds define `NDEBUG`.
@@ -389,8 +414,10 @@ ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until
 ```
 
 That 46-test run does not validate the current 61-test threading inventory or
-the separate 8-test Pipeline/Broadcast repeat. Their remote evidence remains
-pending until a new SHA-bound `long-soak` run completes.
+the separate 8-test Pipeline/Broadcast repeat. Candidate SHA-bound `long-soak`
+run `29161167423` now supplies that evidence: 3,050/3,050 and 400/400 exact
+executions, followed by successful structured verification, manifest creation,
+and artifact upload.
 
 Earlier evidence remains useful as history but no longer defines the gate:
 run `28986707243`, job `86017363504`, commit
@@ -419,15 +446,15 @@ The Release install plus external `find_package(GameNetCore)` / `GameNet::core`
 consumer also configures, builds, and exits successfully. These local results
 belong to the earlier Core inventory and no longer define the Phase 4 gate.
 
-Latest dirty-worktree Windows Debug preflight on 2026-07-11 uses the current
+The final local Windows Debug preflight before candidate freeze uses the current
 85-test inventory. The `threading=61` selection passed repeat 50 for exactly
-3,050 executions in 1,762.52 seconds, and the separate
-`game_pipeline|broadcast` selection passed 8 x 50 = 400 executions in 41.65
+3,050 executions in 1,777.76 seconds, and the separate
+`game_pipeline|broadcast` selection passed 8 x 50 = 400 executions in 54.16
 seconds. Both raw logs passed `tools/verify_ctest_repeat_evidence.py`; their
 `gamenet.ctest_repeat_evidence.v1` summaries share inventory SHA-256
-`d2c39202a05022516a65ec5cf3d2bede9a951aba44810fc89da7bdd2928d4172`.
-These are current local preflight results, not immutable candidate-SHA remote
-artifacts.
+`37ee7fb3572c911fa771ba42ce1fcb91a252bc2c78c56b98b280f5305c77a09a`.
+These local results are supporting preflight; remote run `29161167423` is the
+authoritative exact-repeat evidence for candidate `5ebad2c1`.
 
 ## Remote Core Benchmark Evidence
 
@@ -495,11 +522,12 @@ phase4-benchmark-pair-${{ github.sha }}-${{ github.run_id }}-${{ github.run_atte
 The aggregate is the cross-platform evidence gate; it is not a third benchmark
 producer and does not compare throughput values across different hosts.
 
-No immutable same-SHA Linux/Windows Phase 4 workflow run is recorded yet.
-Local Release execution proves the harness is runnable, but it does not close
-the cross-platform evidence gate. Record the run id, both canonical producer
-artifacts, and the paired aggregate artifact here only after the manual
-workflow succeeds for the immutable merge candidate.
+Candidate benchmark run `29161168417` completed successfully for
+`5ebad2c1a4a9487437340935e21f7468140c7e8d`. Both canonical Linux/epoll and
+Windows/IOCP producer jobs passed, and the aggregation-only job verified and
+uploaded `gamenet.phase4_benchmark_pair_evidence.v1`. This closes the functional
+candidate's cross-platform benchmark evidence gate without treating throughput
+values from different hosts as directly comparable.
 
 ## Install Package Gate
 
