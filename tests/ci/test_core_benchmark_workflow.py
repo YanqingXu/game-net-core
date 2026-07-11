@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
 def require(text: str, needle: str, source: Path) -> None:
     assert needle in text, f"missing core benchmark workflow fragment in {source}: {needle}"
+
+
+def job_block(workflow: str, job_name: str) -> str:
+    match = re.search(
+        rf"(?ms)^  {re.escape(job_name)}:\n(?P<body>.*?)(?=^  [a-z0-9_-]+:\n|\Z)",
+        workflow,
+    )
+    assert match is not None, f"missing benchmark workflow job: {job_name}"
+    return match.group(0)
+
+
+def step_block(job: str, step_name: str) -> str:
+    match = re.search(
+        rf"(?ms)^      - name: {re.escape(step_name)}\n(?P<body>.*?)(?=^      - name: |\Z)",
+        job,
+    )
+    assert match is not None, f"missing benchmark workflow step: {step_name}"
+    return match.group(0)
 
 
 def main() -> None:
@@ -32,8 +51,28 @@ def main() -> None:
     require(text, "--scenario slow-client", workflow)
     require(text, "gamenet.core_benchmark.v1", workflow)
     require(text, "actions/upload-artifact@v4", workflow)
-    require(text, "core-benchmark-linux-release-${{ github.sha }}", workflow)
-    require(text, "core-benchmark-windows-release-${{ github.sha }}", workflow)
+    canonical_artifact_name = (
+        "core-benchmark-${{ github.job }}-${{ github.sha }}-"
+        "${{ github.run_id }}-${{ github.run_attempt }}"
+    )
+    linux_upload = step_block(
+        job_block(text, "linux-release-benchmark"), "Upload Linux raw JSON"
+    )
+    windows_upload = step_block(
+        job_block(text, "windows-release-benchmark"), "Upload Windows raw JSON"
+    )
+    for upload in (linux_upload, windows_upload):
+        require(upload, f"name: {canonical_artifact_name}", workflow)
+        require(upload, "uses: actions/upload-artifact@v4", workflow)
+        require(upload, "path: benchmark-results/*.json", workflow)
+        require(upload, "if-no-files-found: error", workflow)
+        require(upload, "retention-days: 90", workflow)
+    assert "name: core-benchmark-linux-release-${{ github.sha }}" not in text, (
+        "SHA-only Linux Core artifacts collide when a workflow run is rerun"
+    )
+    assert "name: core-benchmark-windows-release-${{ github.sha }}" not in text, (
+        "SHA-only Windows Core artifacts collide when a workflow run is rerun"
+    )
     assert "throughput_mib_per_second" not in text, (
         "manual workflow must validate schema/status, not enforce performance thresholds"
     )
@@ -46,6 +85,7 @@ def main() -> None:
     require(docs_text, "core-benchmark", docs)
     require(docs_text, "same commit", docs)
     require(docs_text, "raw JSON artifacts", docs)
+    require(docs_text, "run attempt", docs)
 
 
 if __name__ == "__main__":

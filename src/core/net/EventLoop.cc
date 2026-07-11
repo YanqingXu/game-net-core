@@ -9,6 +9,7 @@
 #include "gamenet/core/base/Logger.h"
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -20,8 +21,50 @@ namespace gamenet::net {
 namespace {
 
 thread_local EventLoop* t_loopInThisThread = nullptr;
+std::atomic<std::uint64_t> nextExecutorId{1};
 
 }  // namespace
+
+struct EventLoopExecutor::State {
+    explicit State(EventLoop* loopValue)
+        : loop(loopValue), id(nextExecutorId.fetch_add(1, std::memory_order_relaxed)) {}
+
+    mutable std::mutex mutex;
+    EventLoop* loop;
+    std::uint64_t id;
+    bool accepting{true};
+    bool drainingAccepted{false};
+};
+
+EventLoopExecutor::EventLoopExecutor(const std::shared_ptr<State>& state) noexcept
+    : state_(state), id_(state ? state->id : 0) {}
+
+bool EventLoopExecutor::tryQueue(Functor callback) const {
+    if (!callback) return false;
+    const auto state = state_.lock();
+    if (!state) return false;
+    std::lock_guard lock(state->mutex);
+    if (!state->accepting || state->loop == nullptr) return false;
+    state->loop->queueInLoop(std::move(callback));
+    return true;
+}
+
+bool EventLoopExecutor::available() const noexcept {
+    const auto state = state_.lock();
+    if (!state) return false;
+    std::lock_guard lock(state->mutex);
+    return state->accepting && state->loop != nullptr;
+}
+
+bool EventLoopExecutor::isInOwnerThread() const noexcept {
+    const auto state = state_.lock();
+    if (!state) return false;
+    std::lock_guard lock(state->mutex);
+    return (state->accepting || state->drainingAccepted) && state->loop != nullptr &&
+           state->loop->isInLoopThread();
+}
+
+std::uint64_t EventLoopExecutor::id() const noexcept { return id_; }
 
 EventLoop::EventLoop()
     : looping_(false),
@@ -29,6 +72,7 @@ EventLoop::EventLoop()
       eventHandling_(false),
       callingPendingFunctors_(false),
       threadId_(std::this_thread::get_id()),
+      executorState_(std::make_shared<EventLoopExecutor::State>(this)),
       poller_(Poller::newDefaultPoller(this)),
       timerQueue_(std::make_unique<TimerQueue>(this)),
       wakeupFds_(platform::createWakeupFds()),
@@ -51,6 +95,11 @@ EventLoop::~EventLoop() {
     }
     if (looping_) {
         LOG_FATAL << "EventLoop destroyed while loop() is still running";
+    }
+    {
+        std::lock_guard lock(executorState_->mutex);
+        executorState_->accepting = false;
+        executorState_->loop = nullptr;
     }
     wakeupChannel_->disableAll();
     wakeupChannel_->remove();
@@ -76,6 +125,12 @@ void EventLoop::loop() {
         doPendingFunctors();
     }
 
+    {
+        std::lock_guard lock(executorState_->mutex);
+        executorState_->accepting = false;
+        executorState_->drainingAccepted = true;
+    }
+
     while (true) {
         bool hasPending = false;
         {
@@ -86,6 +141,11 @@ void EventLoop::loop() {
             break;
         }
         doPendingFunctors();
+    }
+
+    {
+        std::lock_guard lock(executorState_->mutex);
+        executorState_->drainingAccepted = false;
     }
 
     looping_ = false;
@@ -129,6 +189,10 @@ void EventLoop::queueInLoop(Functor cb) {
     if (!isInLoopThread() || callingPendingFunctors_.load(std::memory_order_relaxed)) {
         wakeup();
     }
+}
+
+EventLoopExecutor EventLoop::executor() const noexcept {
+    return EventLoopExecutor(executorState_);
 }
 
 void EventLoop::setEventLoopMetricCallback(EventLoopMetricCallback cb) {
@@ -180,6 +244,11 @@ void EventLoop::removeChannel(Channel* channel) {
 void EventLoop::preserveSocketAssociation(SocketFd sockfd) {
     assertInLoopThread();
     poller_->preserveSocketAssociation(sockfd);
+}
+
+void EventLoop::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
+    assertInLoopThread();
+    poller_->retainCompletionOperation(operation, std::move(lifetime));
 }
 
 bool EventLoop::hasChannel(Channel* channel) {

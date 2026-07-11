@@ -43,7 +43,7 @@ private:
     NewConnectionCallback newConnectionCallback_;
 #ifdef _WIN32
     struct IocpAcceptState;
-    std::unique_ptr<IocpAcceptState> iocpAccept_;
+    std::shared_ptr<IocpAcceptState> iocpAccept_;
 #endif
     bool listening_;
 };

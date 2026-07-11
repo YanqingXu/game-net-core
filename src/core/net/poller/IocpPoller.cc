@@ -83,9 +83,16 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
     }
 
     auto* operation = reinterpret_cast<IocpOperation*>(overlapped);
-    if (operation == nullptr || operation->channel == nullptr) {
+    if (operation == nullptr) {
         return now;
     }
+    std::shared_ptr<void> completionLifetime;
+    const auto retained = retainedOperations_.find(operation);
+    if (retained != retainedOperations_.end()) {
+        completionLifetime = std::move(retained->second);
+        retainedOperations_.erase(retained);
+    }
+    if (operation->channel == nullptr) return now;
 
     operation->bytesTransferred = bytesTransferred;
     operation->error = ok ? 0 : ::GetLastError();
@@ -97,6 +104,12 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         activeChannels->push_back(channel);
     }
     return now;
+}
+
+void IocpPoller::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
+    if (operation != nullptr && lifetime) {
+        retainedOperations_[operation] = std::move(lifetime);
+    }
 }
 
 void IocpPoller::updateChannel(Channel* channel) {

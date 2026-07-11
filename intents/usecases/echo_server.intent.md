@@ -1,8 +1,9 @@
 ---
 status: active
-target: GameNet::core
+target: gamenet_echo_server
 migration_source: mini_trantor
 promote_gate: none
+artifact_kind: example
 ---
 
 # Usecase Intent: Echo Server

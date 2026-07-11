@@ -89,7 +89,7 @@ private:
     std::unique_ptr<Channel> channel_;
 #ifdef _WIN32
     struct IocpConnectState;
-    std::unique_ptr<IocpConnectState> iocpConnect_;
+    std::shared_ptr<IocpConnectState> iocpConnect_;
     std::shared_ptr<Connector> connectStopGuard_;
 #endif
     Duration retryDelayMs_;

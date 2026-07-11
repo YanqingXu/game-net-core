@@ -20,7 +20,9 @@ The overall migration is staged:
 4. Gradually migrate protocol, transport, game foundation, and experimental
    modules.
 
-The current active target remains the Reactor / TCP foundation.
+The Reactor / TCP foundation is frozen at `v0.1.0-core-preview`. Phase 4 now
+adds independently targeted protocol, transport, session, logic, and broadcast
+foundations without changing the core dependency direction.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 
@@ -43,14 +45,19 @@ Stable / Core:
 - TcpClient
 - EventLoopThreadPool
 
-Planned Modules:
+Phase 4 Foundations:
 
-- protocol framing
-- transport abstraction
-- session foundation
-- logic loop
-- broadcast foundation
+- `GameNet::protocol`: length-delimited PacketFramer
+- `GameNet::transport`: TransportEndpoint and TCP adapter
+- `GameNet::game_session`: PlayerSession and SessionManager
+- `GameNet::game_logic`: bounded GameCommandQueue and LogicLoop
+- `GameNet::broadcast`: owner-loop routing, bounded dispatch, and backpressure reasons
+
+Planned / Deferred Modules:
+
+- game packet headers and serialization codecs
 - UDP/KCP experimental transport
+- coroutine, TLS, HTTP, WebSocket, and RPC adapters
 
 ## Non-goals
 
@@ -78,6 +85,9 @@ rules/             Engineering rules for core behavior
 
 - `echo_server`: minimal raw TCP echo server built on `TcpServer` and `TcpConnection`.
 - `echo_client`: minimal raw TCP echo client built on `TcpClient`.
+- `game_server_pipeline_demo`: Phase 4 composition from framed TCP authentication
+  through session/logic handling to a framed response. It is an example target,
+  not an installed all-in-one pipeline library.
 
 ```bash
 echo_server 7000
@@ -98,7 +108,6 @@ but they do not expand the current implementation scope by themselves.
 
 ## Continuous Integration
 
-The initial CI gate builds and tests the current Reactor/TCP foundation,
-examples, Release configuration, and install/package consumer path on Linux
-with deferred modules disabled. See
+The CI gate builds and tests the Reactor/TCP core plus active Phase 4 targets,
+examples, Release configuration, and install/package consumer path. See
 `docs/development/ci.md` for the workflow scope and local equivalent commands.

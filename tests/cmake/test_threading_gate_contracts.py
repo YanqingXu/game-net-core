@@ -38,6 +38,7 @@ def main() -> None:
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     migration_status = repo_root / "docs" / "migration_status.md"
+    player_session = repo_root / "include" / "gamenet" / "game_session" / "PlayerSession.h"
 
     tests = parse_gamenet_tests(tests_cmake.read_text(encoding="utf-8"))
 
@@ -93,8 +94,21 @@ def main() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "linux-tsan:", workflow)
     require(workflow_text, "GAMENET_ENABLE_TSAN=ON", workflow)
-    require(workflow_text, "ctest --test-dir build-tsan --output-on-failure -L threading --timeout 30", workflow)
+    require(workflow_text, "ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60", workflow)
+    require(workflow_text, "--expect-label threading=61", workflow)
     require(workflow_text, "python3 tests/cmake/test_threading_gate_contracts.py", workflow)
+
+    player_session_text = player_session.read_text(encoding="utf-8")
+    require(
+        player_session_text,
+        "All PlayerSession accessors and mutations are management-loop-only",
+        player_session,
+    )
+    require(
+        player_session_text,
+        "do not form\n// a cross-thread snapshot",
+        player_session,
+    )
 
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, "test_threading_gate_contracts.py", ci_docs)

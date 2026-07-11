@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ACTIVE_COMPONENTS = {"core"}
+ACTIVE_COMPONENTS = {"core", "protocol", "transport", "game_session", "game_logic", "broadcast"}
 DEFERRED_COMPONENTS = {"protocol", "transport", "game", "experimental"}
 DEFERRED_SRC_DIRS = {"protocol", "transport", "experimental", "broadcast", "game_logic", "game_session"}
 SCAN_ENTRIES = ("include", "src", "tests", "examples", "benchmarks", "cmake", ".github", "CMakeLists.txt")
@@ -49,22 +49,37 @@ TEXT_PATTERNS = (
     ("legacy mini include", re.compile(r'#\s*include\s*[<"]mini/')),
     ("legacy mini namespace", re.compile(r"\bmini::|\bnamespace\s+mini\b")),
     (
-        "deferred namespace",
-        re.compile(r"\bnamespace\s+gamenet::(?:protocol|transport|game|experimental)\b"),
-    ),
-    (
-        "deferred target",
-        re.compile(r"\b(?:gamenet_|GameNet::)(?:protocol|transport|game|experimental)\b"),
-    ),
-    (
         "deferred high-level module",
         re.compile(
             r"\b(?:HttpServer|HttpClient|WebSocket|Rpc[A-Z]\w*|Kcp[A-Z]\w*|"
-            r"Tls[A-Z]\w*|UdpSocket|GameServerPipeline|SessionManager|LogicLoop|"
-            r"BroadcastRouter|MetricsExporter|DnsResolver)\b"
+            r"Tls[A-Z]\w*|UdpSocket|"
+            r"MetricsExporter|DnsResolver)\b"
         ),
     ),
 )
+
+COMPONENT_REFERENCE = re.compile(
+    r"\b(?:namespace\s+gamenet::|gamenet_|GameNet::|gamenet/)"
+    r"(protocol|transport|game_session|game_logic|broadcast|game|experimental)\b"
+)
+
+LAYER_ALLOWED_COMPONENTS = {
+    "core": set(),
+    "protocol": {"protocol"},
+    "transport": {"transport"},
+    "game_session": {"game_session", "transport"},
+    "game_logic": {"game_logic", "game_session", "transport"},
+    "broadcast": {"broadcast", "game_session", "transport"},
+}
+
+
+def source_layer(rel: str) -> str | None:
+    parts = Path(rel).parts
+    if len(parts) >= 3 and parts[0] == "include" and parts[1] == "gamenet":
+        return parts[2] if parts[2] in LAYER_ALLOWED_COMPONENTS else None
+    if len(parts) >= 2 and parts[0] == "src":
+        return parts[1] if parts[1] in LAYER_ALLOWED_COMPONENTS else None
+    return None
 
 
 def is_text_file(path: Path) -> bool:
@@ -118,7 +133,16 @@ def check_text(root: Path, path: Path) -> list[Violation]:
         text = path.read_text(encoding="utf-8", errors="replace")
 
     violations: list[Violation] = []
+    layer = source_layer(rel)
     for line_number, line in enumerate(text.splitlines(), start=1):
+        for match in COMPONENT_REFERENCE.finditer(line):
+            component = match.group(1)
+            if component not in ACTIVE_COMPONENTS:
+                violations.append(Violation(rel, line_number, "deferred component", match.group(0)))
+            if layer is not None and component not in LAYER_ALLOWED_COMPONENTS[layer]:
+                violations.append(
+                    Violation(rel, line_number, "layer references disallowed component", match.group(0))
+                )
         for kind, pattern in TEXT_PATTERNS:
             match = pattern.search(line)
             if match is not None:

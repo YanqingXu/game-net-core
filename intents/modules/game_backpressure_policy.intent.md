@@ -7,6 +7,23 @@ promote_gate: phase-4-game-foundation
 
 # Module Intent: Game Backpressure Policy
 
+## Partial Supersession Record
+
+This document remains deferred only for the end-to-end policy that coordinates
+input, logic, output, and broadcast pressure as one system. The following
+sections already have narrower active authorization and must be reviewed there:
+
+- Logic admission: `intents/modules/logic_loop.intent.md`.
+- Broadcast fanout/task admission: `intents/modules/broadcast.intent.md`.
+- Packet framing work/buffer admission: `intents/modules/packet_framer.intent.md`;
+  its hardening contract and tests are active.
+- Pipeline pending-auth frame/byte admission:
+  `intents/usecases/game_server_pipeline_demo.intent.md`; only the example's
+  bounded pre-authentication queue is active, not an end-to-end policy.
+
+Those active intents do not promote the remaining output-send/adaptive policy
+in this file. Implementations must not cite this deferred document as authority.
+
 ## 1. Intent
 Game backpressure policy defines how the game-server network path reacts when
 input frames, logic commands, outbound connection buffers, or broadcast fanout

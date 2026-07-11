@@ -89,7 +89,7 @@ void Acceptor::listen() {
     acceptChannel_.enableReading();
 #ifdef _WIN32
     if (!iocpAccept_) {
-        iocpAccept_ = std::make_unique<IocpAcceptState>();
+        iocpAccept_ = std::make_shared<IocpAcceptState>();
         iocpAccept_->acceptEx = platform::loadAcceptEx(acceptSocket_.fd());
         iocpAccept_->getAcceptExSockaddrs = platform::loadGetAcceptExSockaddrs(acceptSocket_.fd());
     }
@@ -207,6 +207,7 @@ void Acceptor::postAccept() {
         iocpAccept_->accepted = kInvalidSocket;
         LOG_SYSFATAL << "AcceptEx: " << sockets::errorMessage(sockets::lastError());
     }
+    loop_->retainCompletionOperation(&iocpAccept_->operation, iocpAccept_);
 }
 
 void Acceptor::closePendingAccept() noexcept {
@@ -214,6 +215,7 @@ void Acceptor::closePendingAccept() noexcept {
         return;
     }
     iocpAccept_->pending = false;
+    iocpAccept_->operation.channel = nullptr;
     if (sockets::isValid(iocpAccept_->accepted)) {
         sockets::close(iocpAccept_->accepted);
         iocpAccept_->accepted = kInvalidSocket;

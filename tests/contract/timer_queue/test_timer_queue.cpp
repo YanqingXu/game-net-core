@@ -101,18 +101,20 @@ int main() {
 
         std::promise<int> firedCount;
         auto firedCountFuture = firedCount.get_future();
-        int count = 0;
-        gamenet::net::TimerId repeating;
+        auto repeating = std::make_shared<gamenet::net::TimerId>();
 
-        repeating = loop->runEvery(10ms, [loop, &count, &firedCount, &repeating] {
-            ++count;
-            if (count == 3) {
-                loop->cancel(repeating);
-                loop->runAfter(30ms, [loop, &firedCount, &count] {
-                    firedCount.set_value(count);
-                    loop->quit();
-                });
-            }
+        loop->runInLoop([loop, repeating, &firedCount] {
+            auto count = std::make_shared<int>(0);
+            *repeating = loop->runEvery(10ms, [loop, repeating, count, &firedCount] {
+                ++*count;
+                if (*count == 3) {
+                    loop->cancel(*repeating);
+                    loop->runAfter(30ms, [loop, count, &firedCount] {
+                        firedCount.set_value(*count);
+                        loop->quit();
+                    });
+                }
+            });
         });
 
         gamenet::test::waitUntilReady(firedCountFuture, 1s, "repeating timer did not reach cancellation count");

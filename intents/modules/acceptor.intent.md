@@ -36,6 +36,8 @@ hands them upward through a narrow callback boundary.
 - listen Channel mutation happens only on owner loop thread
 - accepted fds are either handed upward or closed explicitly
 - destruction must not mutate Poller state from the wrong thread
+- on IOCP, pending AcceptEx operation storage outlives the cancellation
+  completion; stop clears its Channel observer before Acceptor destruction
 
 ---
 
@@ -60,6 +62,8 @@ hands them upward through a narrow callback boundary.
 - no callback means accepted fd is closed explicitly
 - destroy-before-listen path is safe
 - stop() disables listening and removes Channel; idempotent when not listening
+- destroying a stopped Acceptor while its EventLoop continues polling cannot
+  expose freed operation or Channel storage to a late IOCP completion
 
 ---
 

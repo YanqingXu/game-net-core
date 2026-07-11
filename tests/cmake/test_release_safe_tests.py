@@ -28,6 +28,7 @@ def main() -> None:
         path
         for path in (repo_root / "tests").rglob("*.cpp")
         if "install_consumer" not in path.relative_to(repo_root).parts
+        and "fuzz" not in path.relative_to(repo_root).parts
     )
     assert cpp_files, "no C++ tests found"
     for path in cpp_files:

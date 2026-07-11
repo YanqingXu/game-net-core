@@ -1,8 +1,9 @@
 ---
 status: active
-target: GameNet::core
+target: gamenet_core_benchmark
 migration_source: native
 promote_gate: none
+artifact_kind: benchmark
 ---
 
 # Use-Case Intent: Core Performance Baseline

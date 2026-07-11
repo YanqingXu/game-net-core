@@ -28,6 +28,8 @@ public:
     virtual void removeChannel(Channel* channel) = 0;
     // Preserve backend socket-handle association across fd ownership transfer.
     virtual void preserveSocketAssociation(SocketFd sockfd);
+    // Keep backend operation storage alive until its completion is observed.
+    virtual void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime);
     virtual bool wakeup();
 
     bool hasChannel(Channel* channel) const;
