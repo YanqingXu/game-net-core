@@ -17,7 +17,7 @@ Every `*.intent.md` document starts with this authoritative front matter:
 ```yaml
 ---
 status: active | deferred | legacy
-target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game | GameNet::experimental | historical
+target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | historical
 migration_source: mini_trantor | native
 promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundation | post-core-preview | post-phase-4-protocol | experimental-only | never
 ---
@@ -25,8 +25,8 @@ promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundat
 
 Status semantics:
 
-- `active` is current implementation authorization. It must target
-  `GameNet::core`, use `promote_gate: none`, and appear in Active Intents.
+- `active` is current implementation authorization. It must target an implemented
+  `GameNet::*` component, use `promote_gate: none`, and appear in Active Intents.
 - `deferred` is a future design asset only. Its body may preserve source-project
   names, options, test paths, or historical sequencing, but none of those are
   current repository facts. Promotion requires its named gate, a body rewrite
@@ -79,6 +79,12 @@ These intents apply to the current migrated core:
 - `intents/architecture/lifetime_rules.intent.md`
 - `intents/architecture/threading_model.intent.md`
 - `intents/usecases/echo_server.intent.md`
+- `intents/modules/packet_framer.intent.md`
+- `intents/modules/transport_endpoint.intent.md`
+- `intents/modules/player_session.intent.md`
+- `intents/modules/logic_loop.intent.md`
+- `intents/usecases/game_server_pipeline_demo.intent.md`
+- `intents/modules/broadcast.intent.md`
 
 ## Deferred Intent Catalog
 

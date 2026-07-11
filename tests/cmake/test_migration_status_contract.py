@@ -17,7 +17,11 @@ def main() -> None:
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
-    configured_tests = re.findall(r"^add_gamenet_test\((unit|contract|integration)\s", tests_cmake_text, re.MULTILINE)
+    configured_tests = re.findall(
+        r"^add_gamenet_(?:component_)?test\((unit|contract|integration)\s",
+        tests_cmake_text,
+        re.MULTILINE,
+    )
     configured_test_count = len(configured_tests)
     unit_count = configured_tests.count("unit")
     contract_count = configured_tests.count("contract")
@@ -26,7 +30,7 @@ def main() -> None:
 
     status_text = migration_status.read_text(encoding="utf-8")
     normalized_status_text = " ".join(status_text.split())
-    require(status_text, "Last checked: 2026-07-10", migration_status)
+    require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, f"{configured_test_count} configured CTest tests", migration_status)
     require(
         status_text,
@@ -54,8 +58,8 @@ def main() -> None:
     require(status_text, "Latest recorded race-oriented CI remote green evidence is `ci` #29", migration_status)
     require(status_text, "intent consistency guard", migration_status)
     require(status_text, "intent metadata contract guard", migration_status)
-    require(status_text, "all 52 formal `*.intent.md` documents", migration_status)
-    require(status_text, "18 active `GameNet::core` contracts", migration_status)
+    require(status_text, "all 58 formal `*.intent.md` documents", migration_status)
+    require(status_text, "24 active contracts", migration_status)
     require(status_text, "23 deferred design assets", migration_status)
     require(status_text, "11 legacy source-project stage documents", migration_status)
     require(status_text, "promote_gate: never", migration_status)
@@ -203,12 +207,12 @@ def main() -> None:
     require(status_text, "install/package consumer also passes locally", migration_status)
     require(status_text, "build-release/_install", migration_status)
     require(status_text, "build-release-install-consumer", migration_status)
-    require(status_text, "67/67 configured tests with 0 failing tests", migration_status)
-    require(status_text, "43.57 seconds", migration_status)
-    require(status_text, "## Phase 4 Readiness Gate", migration_status)
+    require(status_text, "74/74 passed in 34.67 seconds", migration_status)
+    require(status_text, "74/74 passed in 34.41 seconds", migration_status)
+    require(status_text, "## Phase 4 Implementation State", migration_status)
     require(
         status_text,
-        "The Phase 4 entry evidence gate is satisfied by release",
+        "The Phase 4 entry evidence gate was satisfied by release",
         migration_status,
     )
     require(
@@ -243,7 +247,7 @@ def main() -> None:
     )
     require(
         status_text,
-        "The first Phase 4 design-only PR should target protocol framing / PacketFramer",
+        "PacketFramer has an approved active intent",
         migration_status,
     )
     require(
@@ -253,7 +257,7 @@ def main() -> None:
     )
     require(
         status_text,
-        "HTTP, RPC, and game pipeline modules must stay deferred until protocol framing has its own approved intent, invariants, contracts, and tests",
+        "HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library",
         migration_status,
     )
     assert "Result: 21/21 tests passed" not in status_text, (

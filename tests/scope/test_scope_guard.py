@@ -61,17 +61,34 @@ def main() -> None:
         "auto* p = mini::net::currentLoop();\n",
         "legacy mini namespace",
     )
-    assert_violation(
+    assert_clean(
         repo_root,
         "include/gamenet/protocol/PacketFramer.h",
         "namespace gamenet::protocol { class PacketFramer {}; }\n",
+    )
+    assert_clean(
+        repo_root,
+        "include/gamenet/game_session/SessionManager.h",
+        '#include "gamenet/transport/TransportEndpoint.h"\n'
+        "namespace gamenet::game_session { class SessionManager {}; }\n",
+    )
+    assert_violation(
+        repo_root,
+        "include/gamenet/protocol/BadDependency.h",
+        '#include "gamenet/game_session/SessionManager.h"\n',
+        "layer references disallowed component",
+    )
+    assert_violation(
+        repo_root,
+        "include/gamenet/experimental/Udp.h",
+        "namespace gamenet::experimental { class Udp {}; }\n",
         "deferred path",
     )
     assert_violation(
         repo_root,
         "src/core/CMakeLists.txt",
         "add_library(gamenet_protocol protocol/PacketFramer.cc)\n",
-        "deferred target",
+        "layer references disallowed component",
     )
 
 

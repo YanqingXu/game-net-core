@@ -68,11 +68,17 @@ Phase 3.5 has no remaining gates. The release evidence chain is:
 
 ## Phase 4: Higher-level Modules
 
-The Phase 4 readiness gate in `docs/migration_status.md` is satisfied. Start
-Phase 4 with a design-only PacketFramer change and keep all later modules behind
-their own intent, invariant, contract, and test gates.
+The Phase 4 foundation is implemented locally with each module behind its own
+intent, invariant, contract, and test gate:
 
-- Add protocol framing.
-- Add transport abstraction.
-- Add game foundation pieces such as session, logic-loop, and broadcast support.
-- Keep UDP/KCP work under experimental until the stable core is proven.
+- [x] Add length-delimited PacketFramer and fuzz smoke coverage.
+- [x] Add TransportEndpoint and a TCP adapter without changing core lifecycle.
+- [x] Add network-only PlayerSession/SessionManager lifecycle state.
+- [x] Add a bounded GameCommandQueue and fixed-tick LogicLoop.
+- [x] Add a non-installed pipeline demo with real TCP integration coverage.
+- [x] Add broadcast owner-loop grouping, task budgets, and backpressure reasons.
+- [ ] Keep UDP/KCP work experimental and independently gated.
+
+The current Phase 4 evidence is local Windows Debug/Release and install-consumer
+validation. Remote Linux/sanitizer CI evidence must be recorded separately and
+must not be inferred from the Phase 3.5 Core Preview runs.

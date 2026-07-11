@@ -38,8 +38,8 @@ The `ci` workflow validates:
   JSON artifacts without push/PR triggers or performance thresholds.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
-- Core library build.
-- Minimal examples build.
+- Core and active Phase 4 target builds.
+- Echo and game-server-pipeline examples build.
 - Unit, contract, and integration tests through CTest.
 - Install and `find_package(GameNetCore)` consumer verification.
 - ASan/UBSan Debug build and CTest suite on Linux.
@@ -48,14 +48,16 @@ The `ci` workflow validates:
 - Windows MSVC Debug build, CTest suite, and install/package consumer
   verification through the IOCP backend.
 
-It keeps deferred modules disabled:
+It keeps post-Phase-4/experimental modules disabled:
 
 - TLS
 - experimental transport
-- HTTP, WebSocket, RPC, UDP, KCP, PMTU/FEC, metrics, and game pipeline modules
+- HTTP, WebSocket, RPC, UDP, KCP, PMTU/FEC, metrics, coroutine, and a formal
+  all-in-one game pipeline library
 
-Those deferred intents remain design assets until the core target has stable
-builds, tests, and examples.
+Those deferred intents remain design assets until separately promoted. Active
+Phase 4 targets are protocol, transport, game_session, game_logic, and broadcast;
+the pipeline remains non-installed example support.
 
 The scope guard runs before CMake configure:
 
@@ -86,12 +88,11 @@ python3 tests/ci/test_long_soak_workflow.py
 python3 tests/ci/test_core_benchmark_workflow.py
 ```
 
-It fails the workflow if active intents use legacy `mini/net` paths, or if
-`mini/` includes, `mini::` namespaces, inactive
-`gamenet::protocol` / `gamenet::transport` / `gamenet::game` /
-`gamenet::experimental` paths, or deferred high-level module names appear in
-the active implementation and test surface. Promoting a Phase 4 component must
-update the active scope and migration status in the same change.
+It fails the workflow if active intents use legacy `mini/net` paths, if source
+uses `mini/` includes or `mini::` namespaces, if inactive component paths or
+targets appear, or if an installed layer references a component outside the
+allowed one-way dependency matrix. Promoting a component must update active
+scope, intent metadata, dependency rules, tests, and migration status together.
 
 ## Remote Evidence Boundary
 

@@ -25,6 +25,11 @@ set(GAMENET_INSTALL_CMAKEDIR
 )
 
 add_subdirectory(src/core)
+add_subdirectory(src/protocol)
+add_subdirectory(src/transport)
+add_subdirectory(src/game_session)
+add_subdirectory(src/game_logic)
+add_subdirectory(src/broadcast)
 add_subdirectory(examples)
 
 if(GAMENET_BUILD_BENCHMARKS)
@@ -37,6 +42,26 @@ if(GAMENET_BUILD_TESTING)
 endif()
 
 install(DIRECTORY include/gamenet/core
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
+)
+
+install(DIRECTORY include/gamenet/protocol
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
+)
+
+install(DIRECTORY include/gamenet/transport
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
+)
+
+install(DIRECTORY include/gamenet/game_session
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
+)
+
+install(DIRECTORY include/gamenet/game_logic
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
+)
+
+install(DIRECTORY include/gamenet/broadcast
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
 )
 

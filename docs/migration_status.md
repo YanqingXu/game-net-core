@@ -1,15 +1,16 @@
 # Migration Status
 
-Last checked: 2026-07-10
+Last checked: 2026-07-11
 
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project.
 
-The active execution target is still the Reactor / TCP foundation. Higher-level
-protocol, transport, game foundation, and experimental modules remain deferred
-until the current core has stable targets, tests, and examples.
+The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
+protocol, transport, session, logic-loop, pipeline-example, and broadcast
+foundations are now implemented as one-way upper layers. Experimental
+UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
 ## Phase Status
 
@@ -18,12 +19,28 @@ until the current core has stable targets, tests, and examples.
 | 1 | Initialize the `game-net-core` project skeleton | Present: top-level CMake, README, AGENTS, docs, intents, rules, include/src/tests/examples layout |
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
-| 4 | Gradually migrate protocol / transport / game foundation / experimental | Deferred: intent files are preserved as design assets only |
+| 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation implemented locally: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 
 ## Verification State
 
-The current worktree configures 67 configured CTest tests for the Reactor / TCP
-foundation: 7 unit tests, 59 contract tests, and 1 integration test.
+The current worktree configures 74 configured CTest tests: 7 unit tests, 65 contract tests, and 2 integration tests. The seven Phase 4 additions cover two
+PacketFramer contracts plus transport, session, logic, pipeline, and broadcast.
+
+Local Phase 4 validation on 2026-07-11:
+
+- Windows MSVC Debug: 74/74 passed in 34.67 seconds.
+- Windows MSVC Release: 74/74 passed in 34.41 seconds.
+- PacketFramer contract and fuzz smoke also compile and run with GNU g++ C++23
+  under `-Wall -Wextra -Wpedantic -Werror`.
+- Windows MSVC Debug threading slice: 51/51 passed across repeat-5 (255 test
+  executions) in 170.00 seconds with a 30-second per-test timeout.
+- Install/export: `GameNet::core`, `GameNet::protocol`, `GameNet::transport`,
+  `GameNet::game_session`, `GameNet::game_logic`, and `GameNet::broadcast` were
+  installed, discovered with `find_package(GameNetCore)`, linked by the
+  downstream install consumer, and executed successfully.
+- These are local results. The last remote CI/TSan/soak/benchmark evidence below
+  continues to describe the immutable Phase 3.5 Core Preview baseline; it is
+  not presented as remote Phase 4 evidence.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
@@ -75,16 +92,16 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
-- Intent governance: all 52 formal `*.intent.md` documents now carry ordered
+- Intent governance: all 58 formal `*.intent.md` documents now carry ordered
   `status`, `target`, `migration_source`, and `promote_gate` front matter and
-  appear exactly once in the intent index: 18 active `GameNet::core` contracts,
-  23 deferred design assets, and 11 legacy source-project stage documents.
+  appear exactly once in the intent index: 24 active contracts, 23 deferred design assets, and 11 legacy source-project stage documents.
   Active bodies reject stale `MINI_ENABLE_*`, `mini::`, `mini/net`, and
   `mini-trantor` contracts. Deferred bodies require an explicit future gate;
   legacy v1/v2/v3/v5/v6 and M1-M32 documents target `historical` with
   `promote_gate: never`, so their old options, test counts, and phase claims are
-  not current repository evidence. The implemented echo use case is migrated
-  to `GameNet::core` and names its integration contract.
+  not current repository evidence. Six new active Phase 4 intents target
+  protocol, transport, game_session, game_logic, broadcast, and the pipeline
+  example; the echo use case remains an active `GameNet::core` contract.
 - Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, concurrent Logger runtime-configuration coverage (`contract.base.test_logger_thread_safety`), EventLoop cross-thread pending-functor execution-state atomicity guard, cross-thread TcpConnection state observation (`contract.tcp_connection.test_tcp_connection_cross_thread_state`), Connector completed-Channel member release guarded by the repeated-connect contract, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, server repeated stop idempotence (`contract.tcp_server.test_tcp_server_repeated_stop`), client retry stop race, client retry-stop soak, direct Connector retry-stop cancellation (`contract.connector.test_connector_retry_stop`), client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client repeated active disconnect idempotence, client repeated active stop idempotence (`contract.tcp_client.test_tcp_client_repeated_stop`), client repeated active connect idempotence (`contract.tcp_client.test_tcp_client_repeated_connect`), client cross-thread active connect, client cross-thread retry configuration (`contract.tcp_client.test_tcp_client_cross_thread_retry_config`), peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, post-close TcpConnection send ignore (`contract.tcp_connection.test_tcp_connection_send_after_close`), write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, repeated TcpConnection shutdown idempotence (`contract.tcp_connection.test_tcp_connection_repeated_shutdown`), high-water mark notification, repeated forceClose idempotence, repeated connectDestroyed stale-registration cleanup (`contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`), cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
 - The repeated-connect contract now also covers generation-gated request
   admission and a fresh explicit connect after terminal no-retry failure.
@@ -247,9 +264,9 @@ foundation: 7 unit tests, 59 contract tests, and 1 integration test.
   `docs/superpowers/plans/2026-07-07-windows-iocp-data-path.md`. See
   `docs/development/windows_iocp_milestone.md`.
 
-## Phase 4 Readiness Gate
+## Phase 4 Implementation State
 
-The Phase 4 entry evidence gate is satisfied by release
+The Phase 4 entry evidence gate was satisfied by release
 `v0.1.0-core-preview`. Candidate `a7fd77cbd2140041cebb3f900d5c609fafc2adad`
 owns the repeat-soak and benchmark artifacts, while release commit
 `c4818d4b3956c85830e04d4a1f32df4ad701d453` owns the final main-branch CI and
@@ -264,9 +281,20 @@ tag:
   epoll and Windows IOCP with commands, scenario parameters, backend, and
   completion mode.
 - [x] PR #2 is merged and `v0.1.0-core-preview` is published from the validated release commit.
-- [ ] The first Phase 4 design-only PR should target protocol framing / PacketFramer.
-- [ ] HTTP, RPC, and game pipeline modules must stay deferred until protocol framing has its own approved intent, invariants, contracts, and tests.
+- [x] PacketFramer has an approved active intent, independent target, invariants,
+  contracts, segmented-input coverage, and deterministic fuzz smoke.
+- [x] TransportEndpoint/TCP adapter, SessionManager, bounded LogicLoop queue,
+  pipeline example/integration, and BroadcastRouter/Dispatcher are implemented
+  behind independent targets and contracts.
+- [x] Core remains free of reverse dependencies; the scope guard enforces the
+  allowed component matrix for core and every installed Phase 4 layer.
+- [x] Local Windows Debug/Release pass 74/74 and the downstream install consumer
+  links all six exported targets.
+- [ ] Record fresh remote Linux, sanitizer/TSan, and Windows CI evidence for the
+  Phase 4 worktree before assigning a release tag.
+- [ ] HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library
+  remain deferred until separately promoted.
 
-Before promoting Phase 4 work, keep the Linux and Windows CI gates green and
-add any missing local, soak, race-oriented, or platform-specific verification as
-its own focused migration step.
+Before publishing a Phase 4 preview, keep the Linux and Windows CI gates green
+and record any missing soak, race-oriented, or platform-specific verification as
+its own immutable validation step.

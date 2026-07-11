@@ -16,6 +16,9 @@ ALLOWED_TARGETS = {
     "GameNet::core",
     "GameNet::protocol",
     "GameNet::transport",
+    "GameNet::game_session",
+    "GameNet::game_logic",
+    "GameNet::broadcast",
     "GameNet::game",
     "GameNet::experimental",
     "historical",
@@ -105,7 +108,7 @@ def validate_status_contract(path: str, metadata: IntentMetadata) -> None:
     require(metadata.promote_gate in ALLOWED_GATES, f"invalid promote_gate in {path}: {metadata.promote_gate}")
 
     if metadata.status == "active":
-        require(metadata.target == "GameNet::core", f"active intent must target GameNet::core: {path}")
+        require(metadata.target != "historical", f"active intent cannot target historical: {path}")
         require(metadata.promote_gate == "none", f"active intent must use promote_gate none: {path}")
     elif metadata.status == "deferred":
         require(metadata.target != "historical", f"deferred intent cannot target historical: {path}")
