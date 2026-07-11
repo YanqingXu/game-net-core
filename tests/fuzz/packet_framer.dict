@@ -1,0 +1,5 @@
+empty_frame="\x00\x00\x00\x00"
+one_byte_frame="\x00\x00\x00\x01A"
+partial_prefix="\x00\x00\x00"
+maximum_test_frame="\x00\x00\x10\x00"
+oversized_length="\xff\xff\xff\xff"

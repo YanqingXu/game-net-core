@@ -13,6 +13,11 @@ void Poller::preserveSocketAssociation(SocketFd sockfd) {
     (void)sockfd;
 }
 
+void Poller::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
+    (void)operation;
+    (void)lifetime;
+}
+
 bool Poller::wakeup() {
     return false;
 }

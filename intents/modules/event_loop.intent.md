@@ -23,6 +23,8 @@ EventLoop is the heart of reactor execution in game-net-core.
 - execute pending functors submitted from same thread or other threads
 - maintain thread-affinity discipline
 - provide runInLoop / queueInLoop API
+- provide a copyable, non-owning `EventLoopExecutor` that can reject queued work
+  after loop admission closes without exposing a dereferenceable raw loop
 - support wakeup mechanism for cross-thread responsiveness
 - provide safe extension point for timers and coroutine resume
 
@@ -46,6 +48,12 @@ EventLoop is the heart of reactor execution in game-net-core.
 - wakeup is used to interrupt blocking poll when needed
 - channel update/remove must respect EventLoop ownership
 - Poller lifetime does not exceed EventLoop lifetime
+- EventLoop exclusively owns executor admission state; executor handles neither
+  own nor extend EventLoop lifetime
+- executor admission closes before the final pending-functor drain so a
+  successful `tryQueue` is either in that drain set or a normal loop iteration
+- owner-thread identity remains usable only while accepting work or executing
+  that final accepted-work drain; it becomes unavailable after the drain ends
 
 ---
 
@@ -78,6 +86,7 @@ Typical API direction:
 - quit()
 - runInLoop(Functor)
 - queueInLoop(Functor)
+- executor() -> EventLoopExecutor
 - runAt(Timestamp, Functor)
 - runAfter(Duration, Functor)
 - runEvery(Duration, Functor)
@@ -123,6 +132,8 @@ EventLoop should explicitly handle:
 - callback exceptions if exception policy exists
 - quit request while processing current iteration
 - queued functors that were already accepted before loop exit
+- executor `tryQueue` after admission close or destruction returns false and
+  never dereferences the expired EventLoop
 
 v1 should prefer predictable behavior over over-complicated generic error models.
 
@@ -145,6 +156,10 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - quit causes safe loop exit
 - pending functors preserve expected execution semantics
 - quit still drains already-queued nested functors before loop exit
+- executor identity is stable, cross-thread queueing executes on the owner
+  thread, and copied handles become unavailable after loop teardown
+- work accepted before executor admission closes can still perform owner-only
+  operations during the final drain, while new submissions are rejected
 - update/remove channel routes through correct Poller interaction path
 
 ---

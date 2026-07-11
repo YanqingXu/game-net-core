@@ -64,9 +64,11 @@ def main() -> None:
     require(acceptor_source_text, "platform::createOverlappedTcpOrDie", acceptor_source)
     require(acceptor_source_text, "platform::updateAcceptContextOrDie", acceptor_source)
     require(acceptor_source_text, "IocpOperationKind::Accept", acceptor_source)
+    require(acceptor_source_text, "retainCompletionOperation", acceptor_source)
 
     connector_header_text = connector_header.read_text(encoding="utf-8")
     require(connector_header_text, "IocpConnectState", connector_header)
+    require(connector_header_text, "std::shared_ptr<IocpConnectState>", connector_header)
 
     connector_source_text = connector_source.read_text(encoding="utf-8")
     require(connector_source_text, "platform::loadConnectEx", connector_source)
@@ -74,6 +76,9 @@ def main() -> None:
     require(connector_source_text, "platform::updateConnectContextOrDie", connector_source)
     require(connector_source_text, "IocpOperationKind::Connect", connector_source)
     require(connector_source_text, "preserveSocketAssociation", connector_source)
+    require(connector_source_text, "retainCompletionOperation", connector_source)
+    require(connector_source_text, "retryAfterCancel", connector_source)
+    require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
 
     tcp_connection_header_text = tcp_connection_header.read_text(encoding="utf-8")
     require(tcp_connection_header_text, "IocpTcpTransport", tcp_connection_header)

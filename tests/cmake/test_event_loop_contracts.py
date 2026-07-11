@@ -48,12 +48,15 @@ def main() -> None:
         event_loop_intent,
     )
     require(event_loop_intent_text, "quit still drains already-queued nested functors", event_loop_intent)
+    require(event_loop_intent_text, "final accepted-work drain", event_loop_intent)
     require(event_loop_thread_intent_text, "explicit stop drains accepted work", event_loop_thread_intent)
 
     require(event_loop_test_text, '#include "support/FutureTest.h"', event_loop_test)
     require(event_loop_test_text, "gamenet::test::waitUntilReady", event_loop_test)
     require(event_loop_test_text, "queueInLoop", event_loop_test)
     require(event_loop_test_text, "loop->quit();", event_loop_test)
+    require(event_loop_test_text, "GAMENET_TEST_ASSERT(executor.isInOwnerThread())", event_loop_test)
+    require(event_loop_test_text, "GAMENET_TEST_ASSERT(!executor.available())", event_loop_test)
     require(event_loop_test_text, "GAMENET_TEST_ASSERT(future.get() != callerThread)", event_loop_test)
     require(event_loop_thread_test_text, '#include "support/FutureTest.h"', event_loop_thread_test)
     require(event_loop_thread_test_text, "gamenet::test::waitUntilReady", event_loop_thread_test)
@@ -73,6 +76,8 @@ def main() -> None:
     require(event_loop_source_text, "callingPendingFunctors_.load(std::memory_order_relaxed)", event_loop_source)
     require(event_loop_source_text, "callingPendingFunctors_.store(true, std::memory_order_relaxed)", event_loop_source)
     require(event_loop_source_text, "callingPendingFunctors_.store(false, std::memory_order_relaxed)", event_loop_source)
+    require(event_loop_source_text, "bool drainingAccepted{false}", event_loop_source)
+    require(event_loop_source_text, "state->accepting || state->drainingAccepted", event_loop_source)
     require(tests_cmake_text, "test_event_loop.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread.cpp threading lifecycle", tests_cmake)
     require(

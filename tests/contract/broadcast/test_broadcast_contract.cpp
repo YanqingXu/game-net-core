@@ -23,7 +23,9 @@ public:
     RecordingEndpoint(std::uint64_t id, gamenet::net::EventLoop* loop) : id_{id}, loop_(loop) {}
 
     gamenet::transport::TransportSessionId id() const noexcept override { return id_; }
-    gamenet::net::EventLoop* ownerLoop() const noexcept override { return loop_; }
+    gamenet::net::EventLoopExecutor ownerExecutor() const noexcept override {
+        return loop_->executor();
+    }
     gamenet::transport::EndpointResult send(std::string_view bytes) override {
         GAMENET_TEST_ASSERT(loop_->isInLoopThread());
         std::lock_guard lock(mutex_);
@@ -48,7 +50,7 @@ private:
     std::vector<std::string> payloads_;
 };
 
-std::shared_ptr<gamenet::game_session::PlayerSession> makeSession(
+std::shared_ptr<const gamenet::game_session::PlayerSession> makeSession(
     std::uint64_t id,
     const std::shared_ptr<RecordingEndpoint>& endpoint,
     bool online = true) {
@@ -90,14 +92,14 @@ int main() {
         &managementLoop,
         {.softFanout = 2, .hardFanout = 3, .softBytes = 8, .hardBytes = 12},
         metricCallback);
-    std::vector<std::shared_ptr<gamenet::game_session::PlayerSession>> targets{
+    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> targets{
         s1, s1, offline, s2, s3, s4};
     auto payload = std::make_shared<const std::string>("data");
     auto plan = router.route(payload, targets, gamenet::broadcast::BroadcastPriority::Normal);
-    GAMENET_TEST_ASSERT(plan.payload == payload);
-    GAMENET_TEST_ASSERT(plan.accepted == 3);
-    GAMENET_TEST_ASSERT(plan.dropped == 3);
-    GAMENET_TEST_ASSERT(plan.batches.size() == 2);
+    GAMENET_TEST_ASSERT(plan.payload() == payload);
+    GAMENET_TEST_ASSERT(plan.accepted() == 3);
+    GAMENET_TEST_ASSERT(plan.dropped() == 3);
+    GAMENET_TEST_ASSERT(plan.batchCount() == 2);
 
     std::promise<void> sentPromise;
     auto sentFuture = sentPromise.get_future();
@@ -122,10 +124,10 @@ int main() {
 
     auto lowPlan = router.route(payload, std::span(targets).subspan(3),
                                 gamenet::broadcast::BroadcastPriority::Low);
-    GAMENET_TEST_ASSERT(lowPlan.accepted == 2);
-    GAMENET_TEST_ASSERT(lowPlan.dropped == 1);
+    GAMENET_TEST_ASSERT(lowPlan.accepted() == 2);
+    GAMENET_TEST_ASSERT(lowPlan.dropped() == 1);
 
-    std::vector<std::shared_ptr<gamenet::game_session::PlayerSession>> oneTarget{s4};
+    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> oneTarget{s4};
     auto oversizedPlan = router.route(payload, oneTarget);
     gamenet::broadcast::BroadcastDispatcher tinyDispatcher(
         {.maxEndpointsPerTask = 1, .maxBytesPerTask = 3}, metricCallback);

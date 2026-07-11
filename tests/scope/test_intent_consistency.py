@@ -44,7 +44,17 @@ def legacy_violations(repo_root: Path, intent_paths: set[str]) -> list[str]:
     for relative_path in sorted(intent_paths):
         path = repo_root / relative_path
         require(path.exists(), f"active intent is missing: {relative_path}")
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        require(lines and lines[0] == "---", f"active intent metadata is missing: {relative_path}")
+        try:
+            metadata_end = lines.index("---", 1)
+        except ValueError as error:
+            raise AssertionError(f"active intent metadata is unterminated: {relative_path}") from error
+
+        # Provenance metadata names preserved source paths by design. Legacy
+        # public paths and namespaces remain forbidden in the active contract
+        # body where they could be mistaken for current APIs.
+        for line_number, line in enumerate(lines[metadata_end + 1 :], start=metadata_end + 2):
             for kind, pattern in LEGACY_ACTIVE_INTENT_PATTERNS:
                 match = pattern.search(line)
                 if match is not None:

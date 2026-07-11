@@ -120,6 +120,9 @@ Transitions:
 - stop() during pending connect closes socket and removes Channel
 - stop() during pending Windows ConnectEx cancels and drains the completion
   before releasing connector-owned Channel / operation storage
+- Windows ConnectEx operation storage is retained by the IOCP Poller until its
+  completion packet is dequeued. Timeout/stop cancellation keeps the Channel
+  alive even when `CancelIoEx` reports that completion already won the race.
 - stop() during pending retry cancels timer
 - `tests/contract/connector/test_connector_retry_stop.cpp` verifies stop()
   after retry scheduling prevents a later listener from receiving a stale retry

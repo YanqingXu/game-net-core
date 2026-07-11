@@ -20,8 +20,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Record Phase 4 benchmark toolchain evidence
+        run: |
+          set -euo pipefail
+          mkdir -p phase4-benchmark-results
+          {
+            cmake --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee phase4-benchmark-results/toolchain.txt
+
       - name: Check benchmark contract
-        run: python3 tests/cmake/test_core_benchmark_contract.py
+        run: |
+          python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
 
       - name: Configure
         run: >
@@ -33,7 +45,9 @@ jobs:
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
       - name: Build
-        run: cmake --build build-benchmark --target gamenet_core_benchmark --parallel
+        run: >
+          cmake --build build-benchmark
+          --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
 
       - name: Run fixed scenario set
         shell: bash
@@ -73,12 +87,72 @@ jobs:
               assert document["build_type"] == "Release", path
           PY
 
+      - name: Run Phase 4 scenario set
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase4-benchmark-results
+          exe=./build-benchmark/benchmarks/gamenet_phase4_benchmark
+
+          "$exe" --scenario framing --messages 250000 --payload 256 \
+            --threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000 \
+            > phase4-benchmark-results/framing.json
+          "$exe" --scenario logic-queue --messages 20000 --payload 64 \
+            --threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000 \
+            > phase4-benchmark-results/logic-queue.json
+          "$exe" --scenario broadcast-fanout --messages 32 --payload 256 \
+            --threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000 \
+            > phase4-benchmark-results/broadcast-fanout.json
+
+      - name: Validate Phase 4 JSON artifacts
+        run: |
+          set -euo pipefail
+          python3 tools/validate_phase4_benchmark.py \
+            --input-dir phase4-benchmark-results \
+            --platform linux \
+            --backend epoll \
+            --build-type Release \
+            --commit-sha "${GITHUB_SHA}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --job "${GITHUB_JOB}" \
+            --artifact-name "phase4-benchmark-${GITHUB_JOB}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --manifest-output phase4-benchmark-results/evidence-manifest.json
+
+      - name: Write Linux Phase 4 benchmark job evidence
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root phase4-benchmark-results \
+            --output phase4-benchmark-results/job-manifest.json \
+            --artifact-name 'phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build-benchmark -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'cmake --build build-benchmark --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' \
+            --command 'gamenet_phase4_benchmark --scenario framing --messages 250000 --payload 256 --threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000' \
+            --command 'gamenet_phase4_benchmark --scenario logic-queue --messages 20000 --payload 64 --threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000' \
+            --command 'gamenet_phase4_benchmark --scenario broadcast-fanout --messages 32 --payload 256 --threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000' \
+            --command 'python3 tools/validate_phase4_benchmark.py --platform linux --backend epoll --build-type Release'
+
       - name: Upload Linux raw JSON
         uses: actions/upload-artifact@v4
         with:
-          name: core-benchmark-linux-release-${{ github.sha }}
+          name: core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/*.json
           if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload Linux Phase 4 raw JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: phase4-benchmark-results/
+          if-no-files-found: error
+          retention-days: 90
 
   windows-release-benchmark:
     name: Windows Release IOCP benchmark
@@ -89,9 +163,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Record Phase 4 benchmark toolchain evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force phase4-benchmark-results | Out-Null
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $toolchain = @(
+            cmake --version
+            python --version
+            "Visual Studio installation: $installationPath"
+            "MSVC tools version:"
+            Get-Content (Join-Path $installationPath "VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt")
+          )
+          $toolchain | Tee-Object -FilePath phase4-benchmark-results/toolchain.txt
+
       - name: Check benchmark contract
         shell: pwsh
-        run: python tests/cmake/test_core_benchmark_contract.py
+        run: |
+          python tests/cmake/test_core_benchmark_contract.py
+          python tests/cmake/test_phase4_benchmark_contract.py
 
       - name: Configure
         shell: pwsh
@@ -108,7 +200,7 @@ jobs:
         shell: pwsh
         run: >
           cmake --build build-benchmark-windows --config Release
-          --target gamenet_core_benchmark --parallel
+          --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
 
       - name: Run fixed scenario set
         shell: pwsh
@@ -146,9 +238,125 @@ jobs:
             '--slow-bytes', '8388608', '--high-water', '65536',
             '--settle-ms', '1000', '--timeout-ms', '30000')
 
+      - name: Run Phase 4 scenario set
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force phase4-benchmark-results | Out-Null
+          $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_phase4_benchmark.exe
+
+          function Invoke-Phase4Benchmark([string]$name, [string[]]$arguments) {
+            $json = (& $exe @arguments | Out-String)
+            if ($LASTEXITCODE -ne 0) {
+              throw "Phase 4 benchmark failed: $name"
+            }
+            Set-Content -LiteralPath "phase4-benchmark-results/$name.json" -Value $json -Encoding utf8 -NoNewline
+          }
+
+          Invoke-Phase4Benchmark 'framing' @(
+            '--scenario', 'framing', '--messages', '250000', '--payload', '256',
+            '--threads', '1', '--batch', '64', '--fanout', '1', '--tick-us', '1000',
+            '--timeout-ms', '30000')
+          Invoke-Phase4Benchmark 'logic-queue' @(
+            '--scenario', 'logic-queue', '--messages', '20000', '--payload', '64',
+            '--threads', '4', '--batch', '512', '--fanout', '1', '--tick-us', '1000',
+            '--timeout-ms', '30000')
+          Invoke-Phase4Benchmark 'broadcast-fanout' @(
+            '--scenario', 'broadcast-fanout', '--messages', '32', '--payload', '256',
+            '--threads', '2', '--batch', '64', '--fanout', '1024', '--tick-us', '1000',
+            '--timeout-ms', '30000')
+
+      - name: Validate Phase 4 JSON artifacts
+        shell: pwsh
+        run: |
+          python tools/validate_phase4_benchmark.py `
+            --input-dir phase4-benchmark-results `
+            --platform windows `
+            --backend iocp `
+            --build-type Release `
+            --commit-sha "$env:GITHUB_SHA" `
+            --run-id "$env:GITHUB_RUN_ID" `
+            --job "$env:GITHUB_JOB" `
+            --artifact-name "phase4-benchmark-$($env:GITHUB_JOB)-$($env:GITHUB_SHA)-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)" `
+            --manifest-output phase4-benchmark-results/evidence-manifest.json
+
+      - name: Write Windows Phase 4 benchmark job evidence
+        if: always()
+        shell: pwsh
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python tools/write_ci_evidence.py `
+            --evidence-root phase4-benchmark-results `
+            --output phase4-benchmark-results/job-manifest.json `
+            --artifact-name 'phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
+            --require-canonical-artifact-name `
+            --command 'cmake -S . -B build-benchmark-windows -G Visual Studio 18 2026 -A x64 -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
+            --command 'cmake --build build-benchmark-windows --config Release --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' `
+            --command 'gamenet_phase4_benchmark --scenario framing --messages 250000 --payload 256 --threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000' `
+            --command 'gamenet_phase4_benchmark --scenario logic-queue --messages 20000 --payload 64 --threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000' `
+            --command 'gamenet_phase4_benchmark --scenario broadcast-fanout --messages 32 --payload 256 --threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000' `
+            --command 'python tools/validate_phase4_benchmark.py --platform windows --backend iocp --build-type Release'
+
       - name: Upload Windows raw JSON
         uses: actions/upload-artifact@v4
         with:
-          name: core-benchmark-windows-release-${{ github.sha }}
+          name: core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/*.json
           if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload Windows Phase 4 raw JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: phase4-benchmark-results/
+          if-no-files-found: error
+          retention-days: 90
+
+  phase4-benchmark-evidence:
+    name: Verify paired Phase 4 benchmark evidence
+    needs:
+      - linux-release-benchmark
+      - windows-release-benchmark
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Require successful benchmark producers
+        env:
+          LINUX_PRODUCER_RESULT: ${{ needs['linux-release-benchmark'].result }}
+          WINDOWS_PRODUCER_RESULT: ${{ needs['windows-release-benchmark'].result }}
+        run: |
+          if [ "$LINUX_PRODUCER_RESULT" != "success" ] || [ "$WINDOWS_PRODUCER_RESULT" != "success" ]; then
+            echo "benchmark producers must both finish successfully: linux=$LINUX_PRODUCER_RESULT windows=$WINDOWS_PRODUCER_RESULT" >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Phase 4 benchmark job evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase4-benchmark-*-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: phase4-benchmark-evidence-set
+          merge-multiple: false
+
+      - name: Verify paired Phase 4 benchmark evidence
+        run: |
+          python3 tools/verify_phase4_benchmark_evidence_set.py \
+            --input-root phase4-benchmark-evidence-set \
+            --output phase4-benchmark-evidence-set/pair-manifest.json
+
+      - name: Upload paired Phase 4 benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-benchmark-pair-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: phase4-benchmark-evidence-set/pair-manifest.json
+          if-no-files-found: error
+          retention-days: 90

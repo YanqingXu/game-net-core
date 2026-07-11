@@ -36,6 +36,13 @@ int main() {
     GAMENET_TEST_ASSERT(result.frames[1] == "x");
 
     const std::string malicious{"\x00\x00\x00\x09", 4};
+    PacketFramer failClosed(8);
+    auto failClosedResult = failClosed.push(*shortFrame + malicious);
+    GAMENET_TEST_ASSERT(failClosedResult.status == FrameStatus::FrameTooLarge);
+    GAMENET_TEST_ASSERT(failClosedResult.frames.empty());
+    GAMENET_TEST_ASSERT(failClosed.faulted());
+    GAMENET_TEST_ASSERT(failClosed.bufferedBytes() == 0);
+
     result = framer.push(malicious);
     GAMENET_TEST_ASSERT(result.status == FrameStatus::FrameTooLarge);
     GAMENET_TEST_ASSERT(result.frames.empty());

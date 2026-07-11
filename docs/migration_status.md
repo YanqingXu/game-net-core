@@ -23,24 +23,124 @@ UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
 ## Verification State
 
-The current worktree configures 74 configured CTest tests: 7 unit tests, 65 contract tests, and 2 integration tests. The seven Phase 4 additions cover two
-PacketFramer contracts plus transport, session, logic, pipeline, and broadcast.
+The current worktree configures 85 configured CTest tests: 7 unit tests, 72 contract tests, and 6 integration tests. Phase 4 coverage now includes bounded
+PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
+contracts, four Pipeline integrations, and four Broadcast contracts/integrations.
 
-Local Phase 4 validation on 2026-07-11:
+Local Phase 4 hardening `final-v4` validation on the frozen dirty worktree:
+
+- Windows MSVC Debug: 85/85 configured tests passed in 36.47 seconds.
+- Windows MSVC Release: 85/85 configured tests passed in 36.97 seconds.
+- Linux Clang 19 Release: 85/85 configured tests passed in 34.76 seconds.
+- All 27 Python scope, intent, CI, and CMake guards passed locally.
+- PacketFramer contracts and deterministic round-trip harness compile under GNU
+  g++ C++23 with `-Wall -Wextra -Wpedantic -Werror`. The real libFuzzer target
+  also completed exactly 1000 local Clang 19 ASan/UBSan runs with 6 binary
+  seeds, its dictionary, fixed seed `424242`, `max_len=8192`, and a 2-second
+  input timeout. The command did not use `max_total_time`; the saved mutated
+  corpus contains 90 files and no crash artifact. Final-candidate remote logs
+  and artifacts remain a release gate.
+- The current Debug inventory includes 61 threading-labeled tests and eight
+  Pipeline/Broadcast tests. On the latest tree, the complete threading slice
+  passed repeat 50: 61 x 50 = 3,050 executions with zero failures in 1,777.76
+  seconds. The focused Pipeline/Broadcast slice also passed repeat 50: 8 x 50 =
+  400 executions with zero failures in 54.16 seconds. Both
+  `gamenet.ctest_repeat_evidence.v1` manifests report `result: success` and bind
+  to the same `final-v4` inventory SHA-256
+  `37ee7fb3572c911fa771ba42ce1fcb91a252bc2c78c56b98b280f5305c77a09a`.
+  These remain dirty-worktree local preflight results, not immutable remote
+  same-SHA soak evidence; the remote soak gate remains open.
+- Release install/export for package version `0.2.0` installs
+  `GameNet::core`, `GameNet::protocol`, `GameNet::transport`,
+  `GameNet::game_session`, `GameNet::game_logic`, and `GameNet::broadcast`.
+  Clean Linux Clang and Windows MSVC Release external consumers discovered the
+  exact version with `find_package(GameNetCore 0.2.0 EXACT)`, linked all six
+  targets, exercised transport/session API, and each passed executable CTest
+  1/1. In `final-v4`, the Linux consumer completed 1/1 in 0.02 seconds and the
+  Windows consumer reported a 0.02-second test case (0.03 seconds total CTest
+  time).
+- A full Windows MSVC Debug AddressSanitizer checkpoint passed all 85/85 CTests
+  in 43.19 seconds.
+  Its first full run exposed a Connector ConnectEx timeout/cancel late-
+  completion Channel use-after-free; Poller-retained operation state and
+  completion-drain lifetime fixed it before the green rerun.
+- Linux Clang 19 ASan/UBSan also passed the full current 85/85 CTest inventory
+  in 36.18 seconds in the Docker validation environment.
+- Linux Clang 19 TSan passed the complete 61/61 `threading` inventory after a
+  genuine test-fixture race was fixed: the repeating TimerQueue cancellation
+  handle is now initialized, read, and canceled on its owner loop. Docker's
+  default seccomp had to be relaxed for TSan's `ADDR_NO_RANDOMIZE` personality
+  syscall; the container was not run privileged. The `final-v4` threading run
+  completed in 35.63 seconds.
+- The `final-v4` Linux Clang/epoll and Windows MSVC/IOCP Release Phase 4 benchmark
+  executables each report `status: ok` for framing, logic-queue, and broadcast-
+  fanout. Both raw three-file sets pass the shared semantic/count-invariant
+  validator. They are dirty-worktree local snapshots from different execution
+  environments, not performance thresholds, direct scores, or remote artifacts.
+  Linux framing/logic-queue/broadcast-fanout recorded 9444.046 MiB/s,
+  452934.439 ops/s, and 5036891.294 ops/s; Windows recorded 2575.474 MiB/s,
+  32475.926 ops/s, and 4535488.872 ops/s respectively.
+- Pipeline lifecycle tests now prove that a strong callback-state reference does
+  not preserve execution permission after atomic revocation. They cover
+  synchronous `stop()` from a Logic-stage callback when management and logic
+  share one loop, an endpoint observer spanning revocation with no later send,
+  and one exact frame batch containing authentication plus an early command.
+  Session lifecycle coverage keeps live heartbeat and offline producers
+  overlapping the management-loop drain and uses per-producer sentinels to prove
+  final Offline state and empty indexes only after all posts drain.
+- Intent semantics now resolve all 25 active targets and 74 explicit
+  verification paths. The 16 frozen Core library intents retain only their
+  documented metadata exemption; seven enriched Phase 4 intents still require
+  artifact kind, provenance, and non-empty verification. The dependency guard
+  derives the six production library edges from an actual configured CMake
+  target graph and rejects direct and transitive reverse dependencies through
+  negative fixtures.
+- Clean-checkout CI no longer relies on the ignored local `mini_trantor/` tree:
+  all semantic-guard jobs checkout `YanqingXu/mini_trantor` at immutable commit
+  `3eba368475a68f677aae920d4f299b155db23d57`, then verify 20 declared source
+  paths directly against that Git object before intent semantics run.
+- The repository now configures six CI producer jobs: Linux Debug, Linux
+  ASan/UBSan plus real fuzz, Linux TSan, Linux Release, Windows Debug IOCP, and
+  Windows Release. Each producer locks the 85-test inventory (TSan also locks
+  `threading=61`), executed consumers lock one test, and 90-day evidence bundles
+  contain JUnit/raw logs plus a SHA/run/attempt-bound `gamenet.ci_evidence.v1`
+  manifest; ASan also preserves the fuzz dictionary, mutated corpus, log, and
+  artifacts. A seventh aggregation-only gate validates exact job identities,
+  selected/executed tests, shared candidate/run identity, bytes, and hashes, then
+  emits `gamenet.ci_evidence_set.v1`. It is not a seventh platform producer.
+  The manual long-soak workflow emits `gamenet.ctest_repeat_evidence.v1` for the
+  exact selected tests and repeat count, while the two Phase 4 benchmark
+  producers feed an aggregation-only pair gate that emits
+  `gamenet.phase4_benchmark_pair_evidence.v1` for one Linux/epoll and one
+  Windows/IOCP result with identical scenario parameters.
+  No immutable Phase 4 candidate has been committed or pushed for the
+  `final-v4` dirty hardening worktree, and no remote same-SHA run exists for its
+  content. None of these configured jobs is claimed as current-candidate remote
+  evidence; checkout HEAD `0d62054e148a1c95793799eb88856363ac6843d3`
+  identifies the base object only, not the uncommitted worktree content.
+
+Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 
 - Windows MSVC Debug: 74/74 passed in 34.67 seconds.
 - Windows MSVC Release: 74/74 passed in 34.41 seconds.
-- PacketFramer contract and fuzz smoke also compile and run with GNU g++ C++23
+- PacketFramer contract and deterministic round-trip smoke also compiled and ran with GNU g++ C++23
   under `-Wall -Wextra -Wpedantic -Werror`.
 - Windows MSVC Debug threading slice: 51/51 passed across repeat-5 (255 test
   executions) in 170.00 seconds with a 30-second per-test timeout.
-- Install/export: `GameNet::core`, `GameNet::protocol`, `GameNet::transport`,
-  `GameNet::game_session`, `GameNet::game_logic`, and `GameNet::broadcast` were
-  installed, discovered with `find_package(GameNetCore)`, linked by the
-  downstream install consumer, and executed successfully.
-- These are local results. The last remote CI/TSan/soak/benchmark evidence below
-  continues to describe the immutable Phase 3.5 Core Preview baseline; it is
-  not presented as remote Phase 4 evidence.
+- The six exported targets were installed, discovered, linked, and executed by
+  the downstream install consumer.
+- Pre-hardening PR #4 head `0d62054e148a1c95793799eb88856363ac6843d3`
+  was associated with five-job `ci` run `29147391402` (#32) on 2026-07-11;
+  that run actually checked out and tested GitHub merge-ref
+  `31107e8964a0f206087fe2f029a39a15107f6bda`, not the head object itself.
+- The TSan job in that historical run selected the then-current `threading`
+  label inventory and passed 51/51 tests. That count belongs to the old
+  74-test tree; it is not the current 61-test threading inventory.
+- That historical run predates the current remediation and did not include the
+  sixth Windows Release job, real libFuzzer execution, repeat-50 Phase 4 soak,
+  Phase 4 benchmark artifacts, or formal preview-release evidence. It cannot
+  certify the current dirty worktree. The immutable Phase 3.5 Core Preview
+  evidence remains recorded separately below.
 
 - Configure: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON`
 - Build: `cmake --build build --parallel`
@@ -53,6 +153,9 @@ Local Phase 4 validation on 2026-07-11:
   `Linux TSan race-oriented build and tests`, `Linux Release build`, and
   `Windows MSVC IOCP build and tests`.
 - Release: annotated tag `v0.1.0-core-preview` peels to the validated commit.
+  Its tag-only release record and known limitations are documented in
+  `docs/development/releases/v0.1.0-core-preview.md`; no GitHub Release assets
+  or historical checksum manifest existed.
 - Focused candidate commit `a7fd77cbd2140041cebb3f900d5c609fafc2adad`
   passed PR `ci` run `29076601085` (#27) and is preserved as a parent of the
   release merge commit. It owns the same-SHA long-soak and benchmark evidence
@@ -92,16 +195,25 @@ Local Phase 4 validation on 2026-07-11:
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
-- Intent governance: all 58 formal `*.intent.md` documents now carry ordered
+- Intent governance: all 59 formal `*.intent.md` documents now carry ordered
   `status`, `target`, `migration_source`, and `promote_gate` front matter and
-  appear exactly once in the intent index: 24 active contracts, 23 deferred design assets, and 11 legacy source-project stage documents.
+  appear exactly once in the intent index: 25 active contracts, 23 deferred design assets, and 11 legacy source-project stage documents.
   Active bodies reject stale `MINI_ENABLE_*`, `mini::`, `mini/net`, and
   `mini-trantor` contracts. Deferred bodies require an explicit future gate;
   legacy v1/v2/v3/v5/v6 and M1-M32 documents target `historical` with
   `promote_gate: never`, so their old options, test counts, and phase claims are
-  not current repository evidence. Six new active Phase 4 intents target
+  not current repository evidence. The semantic guard dynamically resolves all
+  25 active targets and their 74 explicit verification paths: 69 regular C++
+  CTest sources, one libFuzzer target, and four Python governance tests executed
+  by the workflow. Six new active Phase 4 component/use-case intents target
   protocol, transport, game_session, game_logic, broadcast, and the pipeline
-  example; the echo use case remains an active `GameNet::core` contract.
+  example; a seventh active Phase 4 intent defines the opt-in performance
+  baseline, and the echo use case remains an active example contract. The 16
+  frozen Core library intents must still resolve to the real installed
+  `GameNet::core` target but retain the documented artifact-kind, provenance,
+  and non-empty-verification metadata exemption. Production dependency
+  direction is checked from a configured CMake target graph, including
+  transitive reachability and direct/transitive reverse-dependency fixtures.
 - Added lifecycle and base coverage in this worktree: coost-compatible Logger unit and contract coverage, concurrent Logger runtime-configuration coverage (`contract.base.test_logger_thread_safety`), EventLoop cross-thread pending-functor execution-state atomicity guard, cross-thread TcpConnection state observation (`contract.tcp_connection.test_tcp_connection_cross_thread_state`), Connector completed-Channel member release guarded by the repeated-connect contract, server stop with active connections, server stop during active write, server stop soak for worker-owned connections, server multi-worker stop from the base loop, server worker-owned active-write stop, server worker-callback TcpServer stop soak, server repeated stop idempotence (`contract.tcp_server.test_tcp_server_repeated_stop`), client retry stop race, client retry-stop soak, direct Connector retry-stop cancellation (`contract.connector.test_connector_retry_stop`), client stop during pending ConnectEx, client pending ConnectEx stop soak, client cross-thread stop during pending ConnectEx, client mixed-timing pending ConnectEx stop soak, client destruction during pending ConnectEx, client destruction with active TcpConnection, client mixed-timing active-connection stop soak, client cross-thread active disconnect, client repeated active disconnect idempotence, client repeated active stop idempotence (`contract.tcp_client.test_tcp_client_repeated_stop`), client repeated active connect idempotence (`contract.tcp_client.test_tcp_client_repeated_connect`), client cross-thread active connect, client cross-thread retry configuration (`contract.tcp_client.test_tcp_client_cross_thread_retry_config`), peer close convergence, peer reset convergence, error-triggered teardown idempotence, cross-thread send delivery, post-close TcpConnection send ignore (`contract.tcp_connection.test_tcp_connection_send_after_close`), write-complete callback ordering, shutdown while output pending, cross-thread shutdown draining, repeated TcpConnection shutdown idempotence (`contract.tcp_connection.test_tcp_connection_repeated_shutdown`), high-water mark notification, repeated forceClose idempotence, repeated connectDestroyed stale-registration cleanup (`contract.tcp_connection.test_tcp_connection_repeated_connect_destroyed`), cross-thread forceClose soak, cross-thread pending-read forceClose, cross-thread pending-write forceClose, pending-read forceClose cancellation before connection destruction, mixed-timing pending-read forceClose soak, pending-write forceClose soak before connection destruction, mixed-timing pending-write forceClose soak, TimerQueue ready-timer cancellation race coverage, EventLoopThreadPool queued-work soak coverage, and EventLoopThreadPool restart-stop soak coverage.
 - The repeated-connect contract now also covers generation-gated request
   admission and a fresh explicit connect after terminal no-retry failure.
@@ -131,7 +243,13 @@ Local Phase 4 validation on 2026-07-11:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. Local Windows Debug long-soak evidence also covers the previous
+  timeout. The workflow locks the 85-test inventory, `threading=61`,
+  `game_pipeline=4`, and `broadcast=4`, then verifies the raw result lines for
+  every selected test and exact repeat count. Its two
+  `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,
+  elapsed time, command, inventory hash, and raw-log hash; the enclosing
+  canonical SHA/run/attempt artifact also carries `gamenet.ci_evidence.v1`.
+  Local Windows Debug long-soak evidence also covers the previous
   43-test threading slice before the cross-thread TcpClient retry configuration
   contract expanded the threading label to 44 tests. That earlier local run used:
   `ctest --test-dir build -C Debug --output-on-failure -L threading --repeat until-fail:20 --timeout 60`;
@@ -139,12 +257,13 @@ Local Phase 4 validation on 2026-07-11:
   and CTest reported total test time was 637.56 seconds. The then-expanded
   44-test threading slice was covered once by the full Windows Debug and Release
   CTest checkpoint. The new cross-thread TcpConnection state contract expands the
-  threading slice to 45 tests. The Logger concurrency contract expands the current
-  threading slice to 46 tests.
-  Current Windows Debug preflight passes all 46 threading tests across 5
+  threading slice to 45 tests. The Logger concurrency contract expanded the
+  then-current threading slice to 46 tests.
+  The 2026-07-10 Windows Debug preflight passed all 46 threading tests across 5
   repeats with `--timeout 15`; CTest reported 176.90 seconds on 2026-07-10.
   The repaired repeated-connect contract separately passes 50 repeats in
-  32.41 seconds. Current remote GitHub `long-soak` evidence is recorded in run
+  32.41 seconds. The corresponding historical remote GitHub `long-soak`
+  evidence is recorded in run
   `29077148022`, job `86311227712`, commit
   `a7fd77cbd2140041cebb3f900d5c609fafc2adad`, repeat 50, timeout 60 seconds,
   completed successfully at 2026-07-10T08:04:12Z. The log records
@@ -160,7 +279,7 @@ Local Phase 4 validation on 2026-07-11:
   to keep MSBuild `.tlog` paths below Windows path-length limits:
   `cmake --build build-release --config Release --parallel` succeeds, and
   `ctest --test-dir build-release -C Release --output-on-failure --timeout 10`
-  reports 67/67 Release tests passed for the current worktree in 37.38 seconds
+  reports 67/67 Release tests passed for the then-current Core worktree in 37.38 seconds
   on 2026-07-10.
 - Core benchmark: `GAMENET_BUILD_BENCHMARKS` defaults to `OFF`; when enabled it
   builds the non-installed, non-CTest `gamenet_core_benchmark` executable. Its
@@ -266,8 +385,9 @@ Local Phase 4 validation on 2026-07-11:
 
 ## Phase 4 Implementation State
 
-The Phase 4 entry evidence gate was satisfied by release
-`v0.1.0-core-preview`. Candidate `a7fd77cbd2140041cebb3f900d5c609fafc2adad`
+The Phase 4 entry evidence gate was satisfied by the annotated preview tag
+`v0.1.0-core-preview`; no GitHub Release was published for that tag. Candidate
+`a7fd77cbd2140041cebb3f900d5c609fafc2adad`
 owns the repeat-soak and benchmark artifacts, while release commit
 `c4818d4b3956c85830e04d4a1f32df4ad701d453` owns the final main-branch CI and
 tag:
@@ -280,18 +400,57 @@ tag:
 - [x] Matching Release `gamenet.core_benchmark.v1` evidence is recorded for Linux
   epoll and Windows IOCP with commands, scenario parameters, backend, and
   completion mode.
-- [x] PR #2 is merged and `v0.1.0-core-preview` is published from the validated release commit.
+- [x] PR #2 is merged and annotated tag `v0.1.0-core-preview` points at the
+  validated release commit; this was a tag-only preview, not a GitHub Release.
 - [x] PacketFramer has an approved active intent, independent target, invariants,
-  contracts, segmented-input coverage, and deterministic fuzz smoke.
+  contracts, segmented-input coverage, and deterministic round-trip smoke.
 - [x] TransportEndpoint/TCP adapter, SessionManager, bounded LogicLoop queue,
   pipeline example/integration, and BroadcastRouter/Dispatcher are implemented
   behind independent targets and contracts.
 - [x] Core remains free of reverse dependencies; the scope guard enforces the
   allowed component matrix for core and every installed Phase 4 layer.
-- [x] Local Windows Debug/Release pass 74/74 and the downstream install consumer
-  links all six exported targets.
-- [ ] Record fresh remote Linux, sanitizer/TSan, and Windows CI evidence for the
-  Phase 4 worktree before assigning a release tag.
+- [x] The pre-hardening local baseline recorded Windows Debug/Release pass
+  74/74 and a downstream consumer linking all six exported targets; this line
+  is historical and does not describe the current test inventory.
+- [x] The current `final-v4` dirty hardening worktree passes 85/85 in Windows Debug,
+  Windows Release, and Linux Clang Release, passes all 27 Python guards, and
+  passes executable Linux/Windows Release package consumers against exact
+  version `0.2.0`.
+- [x] Full Windows MSVC ASan and Linux Clang ASan/UBSan pass 85/85 after the
+  IOCP lifetime repairs; Linux TSan passes 61/61 after the TimerQueue fixture
+  repair; real libFuzzer completes 1000 runs; and both local platform sets of
+  fixed Release Phase 4 benchmarks report `status: ok` and validate.
+- [x] The audited lifecycle and implementation blockers are closed locally:
+  session
+  transport identity and management-loop-only access, callback/timer execution
+  admission, PacketFramer budgets and a real fuzz target, LogicLoop
+  concurrency/lifecycle, and Pipeline authentication with physical
+  IO/management/logic loop handoffs. Pipeline revocation now wins even when a
+  callback retains state, synchronous Logic-stage stop cannot destroy an active
+  handler, and deterministic tests cover one exact AUTH-plus-command batch and
+  a SessionManager submit/drain overlap with two live producers.
+- [x] Intent semantics resolve all 25 active targets and 74 explicit
+  verification paths while preserving 16 documented frozen Core metadata
+  exemptions. Configured-CMake dependency analysis proves the one-way
+  production graph and rejects direct and transitive reverse edges.
+- [x] Broadcast routing now enforces Router-only immutable plans, owner
+  availability, exact rejection metrics/order, bounded fanout, and real
+  multi-loop TCP integration contracts across eight reconnect cycles.
+- [x] The repository CI definition contains six producer jobs, including Linux
+  sanitizer/fuzz/TSan gates and both Windows Debug IOCP and Windows Release
+  package execution gates, plus one aggregation-only evidence-set gate. The
+  long-soak workflow writes structured exact-repeat manifests and the Phase 4
+  benchmark workflow requires a paired Linux/epoll plus Windows/IOCP manifest.
+- [x] Pre-hardening PR #4 head `0d62054e148a1c95793799eb88856363ac6843d3`
+  has historical five-job evidence in successful `ci` run `29147391402` (#32).
+  It is not current-candidate evidence after the remediation changes.
+- [ ] Commit and push an immutable Phase 4 candidate, then record a green same-SHA run
+  from all six CI producers plus `gamenet.ci_evidence_set.v1`, Linux TSan and
+  actual libFuzzer evidence, structured repeat-50 threading plus
+  Pipeline/Broadcast soak manifests, a same-run
+  `gamenet.phase4_benchmark_pair_evidence.v1`, and a formal preview release.
+  Draft PR #4 still points at the older pre-hardening candidate, and the current
+  dirty worktree has none of this immutable remote evidence.
 - [ ] HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library
   remain deferred until separately promoted.
 

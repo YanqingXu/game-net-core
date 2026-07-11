@@ -24,6 +24,7 @@ public:
     void updateChannel(Channel* channel) override;
     void removeChannel(Channel* channel) override;
     void preserveSocketAssociation(SocketFd sockfd) override;
+    void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) override;
     bool wakeup() override;
 
 private:
@@ -36,6 +37,7 @@ private:
 
     HANDLE iocp_;
     std::unordered_set<SocketFd> associatedFds_;
+    std::unordered_map<void*, std::shared_ptr<void>> retainedOperations_;
 };
 
 }  // namespace gamenet::net

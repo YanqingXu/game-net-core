@@ -18,6 +18,10 @@ enum class SessionState {
     Offline,
 };
 
+// SessionManager owns every PlayerSession on its management EventLoop.
+// All PlayerSession accessors and mutations are management-loop-only; const access and a
+// shared_ptr<const PlayerSession> prevent unauthorized mutation but do not form
+// a cross-thread snapshot. Copy value data before handing it to another loop.
 class PlayerSession {
 public:
     using Clock = std::chrono::steady_clock;

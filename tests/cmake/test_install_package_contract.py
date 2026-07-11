@@ -48,22 +48,67 @@ def main() -> None:
 
     assert consumer_cmake.exists(), f"missing install consumer CMake fixture: {consumer_cmake}"
     consumer_cmake_text = consumer_cmake.read_text(encoding="utf-8")
-    require(consumer_cmake_text, "find_package(GameNetCore REQUIRED)", consumer_cmake)
+    require(consumer_cmake_text, "find_package(GameNetCore 0.2.0 EXACT REQUIRED)", consumer_cmake)
     require(consumer_cmake_text, "target_link_libraries(gamenet_install_consumer", consumer_cmake)
     for target in ("core", "protocol", "transport", "game_session", "game_logic", "broadcast"):
         require(consumer_cmake_text, f"GameNet::{target}", consumer_cmake)
+    require(consumer_cmake_text, "enable_testing()", consumer_cmake)
+    require(
+        consumer_cmake_text,
+        "add_test(NAME gamenet.install_consumer COMMAND gamenet_install_consumer)",
+        consumer_cmake,
+    )
 
     assert consumer_main.exists(), f"missing install consumer source fixture: {consumer_main}"
     consumer_main_text = consumer_main.read_text(encoding="utf-8")
     require(consumer_main_text, "#include <gamenet/core/net/Buffer.h>", consumer_main)
     require(consumer_main_text, "gamenet::net::Buffer", consumer_main)
     require(consumer_main_text, "#include <gamenet/protocol/PacketFramer.h>", consumer_main)
+    require(consumer_main_text, "#include <gamenet/transport/TcpTransportEndpoint.h>", consumer_main)
+    require(consumer_main_text, "gamenet::transport::TcpTransportEndpoint", consumer_main)
+    require(consumer_main_text, "#include <gamenet/game_session/PlayerSession.h>", consumer_main)
+    require(consumer_main_text, "gamenet::game_session::PlayerSession", consumer_main)
     require(consumer_main_text, "gamenet::game_logic::GameCommandQueue", consumer_main)
     require(consumer_main_text, "gamenet::broadcast::BroadcastMetric", consumer_main)
 
     require(workflow_text, "cmake --install build --prefix \"$PWD/build/_install\"", workflow)
     require(workflow_text, "-DCMAKE_PREFIX_PATH=\"$PWD/build/_install\"", workflow)
     require(workflow_text, "cmake -S tests/cmake/install_consumer", workflow)
+    require(
+        workflow_text,
+        "ctest --test-dir build-install-consumer --output-on-failure",
+        workflow,
+    )
+    require(
+        workflow_text,
+        "ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure",
+        workflow,
+    )
+    require(
+        workflow_text,
+        'cmake --install build-windows-release --config Release --prefix "$pwd/build-windows-release/_install"',
+        workflow,
+    )
+    require(
+        workflow_text,
+        "cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer",
+        workflow,
+    )
+    require(
+        workflow_text,
+        'DCMAKE_PREFIX_PATH="$pwd/build-windows-release/_install"',
+        workflow,
+    )
+    require(
+        workflow_text,
+        "cmake --build build-windows-release-install-consumer --config Release --parallel",
+        workflow,
+    )
+    require(
+        workflow_text,
+        "ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure",
+        workflow,
+    )
 
 
 if __name__ == "__main__":

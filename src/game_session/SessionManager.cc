@@ -1,6 +1,7 @@
 #include "gamenet/game_session/SessionManager.h"
 
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/base/Logger.h"
 
 #include <stdexcept>
 #include <utility>
@@ -12,10 +13,20 @@ SessionManager::SessionManager(gamenet::net::EventLoop* ownerLoop)
     : SessionManager(ownerLoop, Options{}) {}
 
 SessionManager::SessionManager(gamenet::net::EventLoop* ownerLoop, Options options)
-    : ownerLoop_(ownerLoop), options_(options) {
+    : ownerLoop_(ownerLoop),
+      ownerExecutor_(ownerLoop ? ownerLoop->executor() : gamenet::net::EventLoopExecutor{}),
+      lifetimeState_(std::make_shared<LifetimeState>()),
+      options_(options) {
     if (!ownerLoop_) {
         throw std::invalid_argument("SessionManager requires an owner loop");
     }
+}
+
+SessionManager::~SessionManager() {
+    if (!ownerLoop_->isInLoopThread()) {
+        LOG_FATAL << "SessionManager destroyed outside its management EventLoop";
+    }
+    lifetimeState_->revoke();
 }
 
 gamenet::net::EventLoop* SessionManager::ownerLoop() const noexcept { return ownerLoop_; }
@@ -25,8 +36,24 @@ AuthenticateResult SessionManager::authenticate(
     std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint,
     Clock::time_point now) {
     assertOwner();
+    if (lifecycleState_ != LifecycleState::Running) {
+        return {};
+    }
     if (playerId.empty() || !endpoint) {
         return {};
+    }
+
+    const auto transportOwner = byTransport_.find(endpoint->id().value);
+    if (transportOwner != byTransport_.end()) {
+        const auto& boundSession = transportOwner->second;
+        const bool sameBinding =
+            boundSession->playerId() == playerId && boundSession->endpoint() == endpoint;
+        if (!sameBinding) {
+            if (boundSession->endpoint() != endpoint) {
+                closeEndpoint(endpoint, gamenet::transport::CloseReason::ProtocolError);
+            }
+            return {.status = AuthenticateStatus::Rejected, .session = nullptr};
+        }
     }
 
     const auto existing = byPlayer_.find(playerId);
@@ -58,6 +85,9 @@ AuthenticateResult SessionManager::authenticate(
 
 bool SessionManager::offline(gamenet::transport::TransportSessionId transportId) {
     assertOwner();
+    if (lifecycleState_ != LifecycleState::Running) {
+        return false;
+    }
     const auto found = byTransport_.find(transportId.value);
     if (found == byTransport_.end()) {
         return false;
@@ -74,7 +104,10 @@ bool SessionManager::heartbeat(
     gamenet::transport::TransportSessionId transportId,
     Clock::time_point now) {
     assertOwner();
-    auto session = findByTransport(transportId);
+    if (lifecycleState_ != LifecycleState::Running) {
+        return false;
+    }
+    auto session = findMutableByTransport(transportId);
     if (!session || session->transportId() != transportId) {
         return false;
     }
@@ -84,6 +117,9 @@ bool SessionManager::heartbeat(
 
 std::size_t SessionManager::expireIdle(Clock::time_point now) {
     assertOwner();
+    if (lifecycleState_ != LifecycleState::Running) {
+        return 0;
+    }
     std::vector<std::shared_ptr<PlayerSession>> expired;
     for (const auto& [playerId, session] : byPlayer_) {
         (void)playerId;
@@ -99,13 +135,18 @@ std::size_t SessionManager::expireIdle(Clock::time_point now) {
     return expired.size();
 }
 
-std::shared_ptr<PlayerSession> SessionManager::findByPlayer(const PlayerId& playerId) const {
+std::shared_ptr<const PlayerSession> SessionManager::findByPlayer(const PlayerId& playerId) const {
     assertOwner();
     const auto found = byPlayer_.find(playerId);
     return found == byPlayer_.end() ? nullptr : found->second;
 }
 
-std::shared_ptr<PlayerSession> SessionManager::findByTransport(
+std::shared_ptr<const PlayerSession> SessionManager::findByTransport(
+    gamenet::transport::TransportSessionId transportId) const {
+    return findMutableByTransport(transportId);
+}
+
+std::shared_ptr<PlayerSession> SessionManager::findMutableByTransport(
     gamenet::transport::TransportSessionId transportId) const {
     assertOwner();
     const auto found = byTransport_.find(transportId.value);
@@ -117,15 +158,44 @@ std::size_t SessionManager::size() const {
     return byPlayer_.size();
 }
 
+void SessionManager::shutdown() {
+    assertOwner();
+    if (lifecycleState_ == LifecycleState::Shutdown) {
+        return;
+    }
+    lifetimeState_->revoke();
+    lifecycleState_ = LifecycleState::Shutdown;
+
+    std::vector<std::shared_ptr<gamenet::transport::TransportEndpoint>> endpoints;
+    endpoints.reserve(byPlayer_.size());
+    for (const auto& [playerId, session] : byPlayer_) {
+        (void)playerId;
+        endpoints.push_back(session->endpoint());
+        session->markOffline();
+    }
+    byTransport_.clear();
+    byPlayer_.clear();
+
+    for (auto& endpoint : endpoints) {
+        closeEndpoint(std::move(endpoint), gamenet::transport::CloseReason::GoingAway);
+    }
+}
+
 void SessionManager::postAuthenticate(
     PlayerId playerId,
     std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint,
     AuthenticateCallback callback) {
-    ownerLoop_->queueInLoop([
+    const std::weak_ptr<LifetimeState> lifetime = lifetimeState_;
+    const auto state = lifetime.lock();
+    if (!state || !state->active()) return;
+    (void)ownerExecutor_.tryQueue([
         this,
+        lifetime,
         playerId = std::move(playerId),
         endpoint = std::move(endpoint),
         callback = std::move(callback)]() mutable {
+        const auto state = lifetime.lock();
+        if (!state || !state->active()) return;
         auto result = authenticate(std::move(playerId), std::move(endpoint));
         if (callback) {
             callback(std::move(result));
@@ -134,11 +204,25 @@ void SessionManager::postAuthenticate(
 }
 
 void SessionManager::postOffline(gamenet::transport::TransportSessionId transportId) {
-    ownerLoop_->queueInLoop([this, transportId] { offline(transportId); });
+    const std::weak_ptr<LifetimeState> lifetime = lifetimeState_;
+    const auto state = lifetime.lock();
+    if (!state || !state->active()) return;
+    (void)ownerExecutor_.tryQueue([this, lifetime, transportId] {
+        const auto state = lifetime.lock();
+        if (!state || !state->active()) return;
+        offline(transportId);
+    });
 }
 
 void SessionManager::postHeartbeat(gamenet::transport::TransportSessionId transportId) {
-    ownerLoop_->queueInLoop([this, transportId] { heartbeat(transportId); });
+    const std::weak_ptr<LifetimeState> lifetime = lifetimeState_;
+    const auto state = lifetime.lock();
+    if (!state || !state->active()) return;
+    (void)ownerExecutor_.tryQueue([this, lifetime, transportId] {
+        const auto state = lifetime.lock();
+        if (!state || !state->active()) return;
+        heartbeat(transportId);
+    });
 }
 
 void SessionManager::assertOwner() const { ownerLoop_->assertInLoopThread(); }
@@ -146,10 +230,11 @@ void SessionManager::assertOwner() const { ownerLoop_->assertInLoopThread(); }
 void SessionManager::closeEndpoint(
     std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint,
     gamenet::transport::CloseReason reason) {
-    if (!endpoint || !endpoint->ownerLoop()) {
+    if (!endpoint) {
         return;
     }
-    endpoint->ownerLoop()->queueInLoop(
+    const auto executor = endpoint->ownerExecutor();
+    (void)executor.tryQueue(
         [endpoint = std::move(endpoint), reason] { endpoint->close(reason); });
 }
 

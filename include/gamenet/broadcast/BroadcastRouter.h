@@ -25,7 +25,7 @@ public:
 
     BroadcastPlan route(
         std::shared_ptr<const std::string> payload,
-        std::span<const std::shared_ptr<gamenet::game_session::PlayerSession>> targets,
+        std::span<const std::shared_ptr<const gamenet::game_session::PlayerSession>> targets,
         BroadcastPriority priority = BroadcastPriority::Normal) const;
 
 private:

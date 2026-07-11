@@ -34,8 +34,13 @@ int main() {
             static_cast<std::size_t>(chunkDistribution(generator)), stream.size() - offset);
         auto result = decoder.push(std::string_view(stream).substr(offset, chunk));
         GAMENET_TEST_ASSERT(result.status != gamenet::protocol::FrameStatus::FrameTooLarge);
+        GAMENET_TEST_ASSERT(result.status != gamenet::protocol::FrameStatus::BufferLimitExceeded);
         GAMENET_TEST_ASSERT(result.status != gamenet::protocol::FrameStatus::Faulted);
         actual.insert(actual.end(), result.frames.begin(), result.frames.end());
+        while (result.needsContinuation) {
+            result = decoder.push({});
+            actual.insert(actual.end(), result.frames.begin(), result.frames.end());
+        }
         offset += chunk;
     }
 

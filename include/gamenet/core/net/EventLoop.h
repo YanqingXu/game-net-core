@@ -6,6 +6,7 @@
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/base/noncopyable.h"
 #include "gamenet/core/net/EventLoopMetrics.h"
+#include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/core/net/TimerId.h"
 #include "gamenet/core/net/platform/Wakeup.h"
 
@@ -38,6 +39,7 @@ public:
 
     void runInLoop(Functor cb);
     void queueInLoop(Functor cb);
+    EventLoopExecutor executor() const noexcept;
     void setEventLoopMetricCallback(EventLoopMetricCallback cb);
     TimerId runAt(gamenet::base::Timestamp time, Functor cb);
     TimerId runAfter(TimerDuration delay, Functor cb);
@@ -49,6 +51,7 @@ public:
     void removeChannel(Channel* channel);
     // Used when a connected socket fd moves from Connector to TcpConnection.
     void preserveSocketAssociation(SocketFd sockfd);
+    void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime);
     bool hasChannel(Channel* channel);
 
     bool isInLoopThread() const noexcept;
@@ -71,6 +74,7 @@ private:
     bool eventHandling_;
     std::atomic<bool> callingPendingFunctors_;
     const std::thread::id threadId_;
+    std::shared_ptr<EventLoopExecutor::State> executorState_;
     gamenet::base::Timestamp pollReturnTime_;
     std::unique_ptr<Poller> poller_;
     std::unique_ptr<TimerQueue> timerQueue_;

@@ -37,7 +37,7 @@ def main() -> None:
 
     require(
         top_text,
-        'option(GAMENET_BUILD_BENCHMARKS "Build core performance benchmarks" OFF)',
+        'option(GAMENET_BUILD_BENCHMARKS "Build opt-in performance benchmarks" OFF)',
         top_cmake,
     )
     require(top_text, "if(GAMENET_BUILD_BENCHMARKS)", top_cmake)

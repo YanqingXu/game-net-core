@@ -26,6 +26,7 @@ struct Connector::IocpConnectState {
     LPFN_CONNECTEX connectEx{nullptr};
     bool pending{false};
     bool canceling{false};
+    bool retryAfterCancel{false};
 
     IocpConnectState() {
         operation.kind = IocpOperationKind::Connect;
@@ -162,7 +163,7 @@ void Connector::connect() {
     platform::bindUnspecifiedOrDie(sockfd, serverAddr_.family());
     connecting(sockfd);
 
-    iocpConnect_ = std::make_unique<IocpConnectState>();
+    iocpConnect_ = std::make_shared<IocpConnectState>();
     iocpConnect_->operation.channel = channel_.get();
     iocpConnect_->connectEx = platform::loadConnectEx(sockfd);
 
@@ -176,11 +177,14 @@ void Connector::connect() {
         0,
         &bytes,
         &iocpConnect_->operation.overlapped);
-    if (!ok && sockets::lastError() != ERROR_IO_PENDING) {
+    const int connectError = ok ? 0 : sockets::lastError();
+    if (!ok && connectError != ERROR_IO_PENDING) {
         iocpConnect_->pending = false;
-        iocpConnect_->operation.error = static_cast<DWORD>(sockets::lastError());
+        iocpConnect_->operation.error = static_cast<DWORD>(connectError);
         handleError();
+        return;
     }
+    loop_->retainCompletionOperation(&iocpConnect_->operation, iocpConnect_);
     return;
 #else
     const SocketFd sockfd = sockets::createNonblockingOrDie(serverAddr_.family());
@@ -359,6 +363,14 @@ void Connector::handleConnectTimeout() {
     }
 
     // Close the connecting socket and retry or fail.
+#ifdef _WIN32
+    if (channel_ && iocpConnect_ && iocpConnect_->pending) {
+        iocpConnect_->retryAfterCancel = connect_ && retryEnabled_;
+        if (cancelPendingConnectInLoop(channel_->fd())) {
+            return;
+        }
+    }
+#endif
     const SocketFd sockfd = removeAndReleaseChannel();
     sockets::close(sockfd);
     state_ = kDisconnected;
@@ -405,10 +417,9 @@ bool Connector::cancelPendingConnectInLoop(SocketFd sockfd) noexcept {
 
     const DWORD error = ::GetLastError();
     if (error == ERROR_NOT_FOUND || error == ERROR_INVALID_HANDLE) {
-        iocpConnect_->pending = false;
-        iocpConnect_->canceling = false;
-        connectStopGuard_.reset();
-        return false;
+        // The operation may already be complete with its IOCP packet still
+        // queued. Keep the Channel/state alive until that packet is dequeued.
+        return true;
     }
 
     return true;
@@ -422,6 +433,8 @@ void Connector::finishCancelInLoop() {
         connectTimeoutTimerId_ = {};
     }
 
+    const bool retryAfterCancel =
+        iocpConnect_ && iocpConnect_->retryAfterCancel && connect_ && retryEnabled_;
     if (state_ == kConnecting && channel_) {
         const SocketFd sockfd = removeAndReleaseChannel();
         sockets::close(sockfd);
@@ -431,13 +444,22 @@ void Connector::finishCancelInLoop() {
     if (iocpConnect_) {
         iocpConnect_->pending = false;
         iocpConnect_->canceling = false;
+        iocpConnect_->retryAfterCancel = false;
     }
     connectStopGuard_.reset();
+    if (retryAfterCancel) {
+        retry(kInvalidSocket);
+    }
 }
 
 #endif
 
 SocketFd Connector::removeAndReleaseChannel() {
+#ifdef _WIN32
+    if (iocpConnect_ && !iocpConnect_->pending) {
+        iocpConnect_->operation.channel = nullptr;
+    }
+#endif
     channel_->disableAll();
     channel_->remove();
     const SocketFd sockfd = channel_->fd();

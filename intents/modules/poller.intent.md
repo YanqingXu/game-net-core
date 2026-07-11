@@ -24,11 +24,15 @@ Poller is not channel owner.
 - fill active channel collection for EventLoop
 - keep registration bookkeeping consistent
 - hide backend-specific details behind stable interface
+- retain opaque completion-operation storage when an async backend can deliver
+  a cancellation packet after its upper adapter has removed the Channel
 
 ---
 
 ## 3. Non-Responsibilities
 - does not own Channel
+- does not use retained operation storage to extend Channel or application
+  object lifetime; canceled operations clear their Channel observer first
 - does not own EventLoop
 - does not invoke business callbacks directly
 - does not define connection lifecycle
@@ -41,6 +45,8 @@ Poller is not channel owner.
 - Poller is only used by owner EventLoop thread
 - backend registration state must be consistent with internal channel bookkeeping
 - removed channels must not continue appearing as valid active channels
+- IOCP completion metadata remains allocated until the completion is dequeued
+  or the owning Poller closes; late canceled completions observe no Channel
 - backend errors must not silently corrupt Poller internal state
 
 ---
@@ -112,6 +118,11 @@ High-risk mistakes:
 - poll returns active channels accurately
 - invalid path is guarded or diagnosed
 - internal bookkeeping remains consistent after repeated updates
+- `tests/contract/acceptor/test_acceptor_contract.cpp` destroys a stopped
+  Acceptor while the EventLoop continues polling and guards late IOCP completion
+- `tests/contract/connector/test_connector_retry_stop.cpp` covers ConnectEx
+  timeout/cancel with a delayed completion packet; full MSVC ASan verifies the
+  retained operation cannot observe a released Channel
 
 ---
 

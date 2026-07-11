@@ -105,6 +105,20 @@ cross-platform PR-0C evidence gate can be called complete.
 The manual-only `core-benchmark` workflow runs the fixed scenario set in Linux
 Release and Windows MSVC Release jobs for the same commit. Each job validates
 schema, status, platform, backend, and build type without imposing timing
-thresholds, then uploads four raw JSON artifacts whose names include the commit
-SHA. Record the workflow run id and copy both artifact sets into the evidence
+thresholds, then uploads the four raw JSON artifacts as one bundle. The
+canonical artifact name binds the producer job, commit SHA, workflow run id,
+and run attempt:
+
+```text
+core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+```
+
+Including the run attempt keeps an immutable `upload-artifact@v4` bundle from
+colliding with an earlier attempt when the same workflow run is rerun. Record
+the workflow run id and attempt, then copy both artifact sets into the evidence
 ledger before declaring the cross-platform baseline complete.
+
+The workflow also builds and captures the separate Phase 4 scenario set. Those
+documents use `gamenet.phase4_benchmark.v1` and distinct artifact names; see
+`docs/development/phase4_benchmark.md`. They do not change this Core schema or
+the four-file Core artifact contract.

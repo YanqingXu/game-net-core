@@ -17,16 +17,35 @@ Every `*.intent.md` document starts with this authoritative front matter:
 ```yaml
 ---
 status: active | deferred | legacy
-target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | historical
+target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | gamenet_echo_server | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | historical
 migration_source: mini_trantor | native
 promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundation | post-core-preview | post-phase-4-protocol | experimental-only | never
 ---
 ```
 
+Active Phase 4 and later artifacts also carry semantic provenance fields:
+
+```yaml
+artifact_kind: installed-library | example | benchmark
+migration_mode: adapt | redesign | native
+source_commit: <40-character source commit> | none
+source_paths: <semicolon-separated repository-relative source paths> | none
+```
+
+These fields are intentionally progressive: frozen Reactor/TCP library intents
+may keep their already-audited provenance metadata, while every example and
+benchmark names its concrete artifact kind/target and every promoted or
+materially redesigned upper-layer intent identifies the source design assets
+from which its invariants were kept, deferred, or dropped.
+
 Status semantics:
 
 - `active` is current implementation authorization. It must target an implemented
-  `GameNet::*` component, use `promote_gate: none`, and appear in Active Intents.
+  CMake artifact, use `promote_gate: none`, and appear in Active Intents.
+  Installed libraries use their exported `GameNet::*` alias; examples use the
+  concrete non-installed CMake target and `artifact_kind: example`.
+- Benchmarks use their concrete non-installed CMake target and
+  `artifact_kind: benchmark`; they remain opt-in and outside CTest/install.
 - `deferred` is a future design asset only. Its body may preserve source-project
   names, options, test paths, or historical sequencing, but none of those are
   current repository facts. Promotion requires its named gate, a body rewrite
@@ -38,6 +57,15 @@ Status semantics:
 The catalogs below must contain every formal intent exactly once and must agree
 with front matter. Files named `*.intent.template.md` are scaffolding rather
 than formal intents and are intentionally outside the catalogs.
+
+Semantic validation covers every active intent rather than a fixed allowlist:
+its target must exist with the declared or frozen-library artifact semantics,
+and every explicit verification path named in the body must exist. C++ tests
+must be registered with CTest, an optional libFuzzer entry must be registered
+with its fuzz target, and Python governance tests must be invoked by a checked-in
+workflow. Enriched Phase 4 artifacts additionally require at least one explicit
+verification path and every `source_paths` entry must exist under the preserved
+source tree.
 
 ## Required Workflow
 
@@ -85,6 +113,7 @@ These intents apply to the current migrated core:
 - `intents/modules/logic_loop.intent.md`
 - `intents/usecases/game_server_pipeline_demo.intent.md`
 - `intents/modules/broadcast.intent.md`
+- `intents/usecases/phase4_performance_baseline.intent.md`
 
 ## Deferred Intent Catalog
 

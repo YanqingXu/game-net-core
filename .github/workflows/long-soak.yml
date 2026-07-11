@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       repeat:
-        description: CTest repeat count for threading contracts
+        description: CTest repeat count for threading and Pipeline/Broadcast contracts
         required: true
         default: "50"
       timeout_seconds:
@@ -29,20 +29,67 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
         run: |
-          cmake --version
-          c++ --version
+          set -euo pipefail
+          mkdir -p long-soak-evidence
+          {
+            cmake --version
+            ctest --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee long-soak-evidence/toolchain.txt
+
+      - name: Validate long-soak inputs
+        env:
+          GAMENET_SOAK_REPEAT_INPUT: "${{ inputs.repeat }}"
+          GAMENET_SOAK_TIMEOUT_INPUT: "${{ inputs.timeout_seconds }}"
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          inputs = {
+              "GAMENET_SOAK_REPEAT_INPUT": ("GAMENET_SOAK_REPEAT", 50),
+              "GAMENET_SOAK_TIMEOUT_INPUT": ("GAMENET_SOAK_TIMEOUT_SECONDS", 60),
+          }
+          validated = {}
+          for source_name, (output_name, minimum) in inputs.items():
+              raw = os.environ[source_name]
+              if re.fullmatch(r"[0-9]+", raw) is None:
+                  raise SystemExit(f"{source_name} must be an unsigned decimal integer")
+              value = int(raw, 10)
+              if value < minimum:
+                  raise SystemExit(f"{source_name} must be at least {minimum}")
+              validated[output_name] = value
+
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as environment:
+              for name, value in validated.items():
+                  environment.write(f"{name}={value}\n")
+          PY
 
       - name: Check repository guards
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_packet_framer_fuzz_contract.py
           python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -60,6 +107,7 @@ jobs:
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
           python3 tests/ci/test_core_benchmark_workflow.py
+          python3 tests/ci/test_phase4_benchmark_workflow.py
 
       - name: Configure
         run: >
@@ -72,9 +120,88 @@ jobs:
       - name: Build
         run: cmake --build build-long-soak --parallel
 
+      - name: Verify long-soak test inventory
+        run: |
+          set -euo pipefail
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-long-soak \
+            --expected-total 85 \
+            --expect-label threading=61 \
+            --expect-label game_pipeline=4 \
+            --expect-label broadcast=4 \
+            --output long-soak-evidence/ctest-inventory.json
+
       - name: Repeated threading CTest
-        run: >
-          ctest --test-dir build-long-soak --output-on-failure
-          -L threading
-          --repeat until-fail:${{ inputs.repeat }}
-          --timeout ${{ inputs.timeout_seconds }}
+        run: |
+          set -euo pipefail
+          ctest --test-dir build-long-soak --output-on-failure \
+            -L threading \
+            --repeat "until-fail:${GAMENET_SOAK_REPEAT}" \
+            --timeout "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            2>&1 | tee long-soak-evidence/threading-repeat.log
+
+      - name: Repeated Pipeline and Broadcast CTest
+        run: |
+          set -euo pipefail
+          ctest --test-dir build-long-soak --output-on-failure \
+            -L "game_pipeline|broadcast" \
+            --repeat "until-fail:${GAMENET_SOAK_REPEAT}" \
+            --timeout "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            2>&1 | tee long-soak-evidence/phase4-repeat.log
+
+      - name: Verify repeated execution evidence
+        run: |
+          set -euo pipefail
+          python3 tools/verify_ctest_repeat_evidence.py \
+            --inventory long-soak-evidence/ctest-inventory.json \
+            --log long-soak-evidence/threading-repeat.log \
+            --selection-label threading \
+            --expected-selected 61 \
+            --repeat "${GAMENET_SOAK_REPEAT}" \
+            --timeout-seconds "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            --output long-soak-evidence/threading-repeat-evidence.json
+          python3 tools/verify_ctest_repeat_evidence.py \
+            --inventory long-soak-evidence/ctest-inventory.json \
+            --log long-soak-evidence/phase4-repeat.log \
+            --selection-label game_pipeline \
+            --selection-label broadcast \
+            --expected-selected 8 \
+            --repeat "${GAMENET_SOAK_REPEAT}" \
+            --timeout-seconds "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            --command "ctest --test-dir build-long-soak --output-on-failure -L game_pipeline|broadcast --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            --output long-soak-evidence/phase4-repeat-evidence.json
+
+      - name: Write long-soak evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root long-soak-evidence \
+            --output long-soak-evidence/manifest.json \
+            --artifact-name 'long-soak-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'cmake --build build-long-soak --parallel' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 85 --expect-label threading=61 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json' \
+            --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
+            --command "ctest --test-dir build-long-soak --output-on-failure -L game_pipeline|broadcast --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}"
+
+      - name: Upload long-soak evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-soak-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            long-soak-evidence/toolchain.txt
+            long-soak-evidence/ctest-inventory.json
+            long-soak-evidence/threading-repeat.log
+            long-soak-evidence/phase4-repeat.log
+            long-soak-evidence/threading-repeat-evidence.json
+            long-soak-evidence/phase4-repeat-evidence.json
+            long-soak-evidence/manifest.json
+          if-no-files-found: error
+          retention-days: 90

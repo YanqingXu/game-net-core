@@ -20,25 +20,44 @@ jobs:
   linux-cmake:
     name: Linux CMake build and tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
         run: |
-          cmake --version
-          c++ --version
+          set -euo pipefail
+          mkdir -p ci-evidence
+          {
+            cmake --version
+            ctest --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee ci-evidence/toolchain.txt
 
       - name: Check repository guards
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_packet_framer_fuzz_contract.py
           python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -56,6 +75,7 @@ jobs:
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
           python3 tests/ci/test_core_benchmark_workflow.py
+          python3 tests/ci/test_phase4_benchmark_workflow.py
 
       - name: Configure
         run: >
@@ -65,11 +85,21 @@ jobs:
           -DGAMENET_ENABLE_TLS=OFF
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
+      - name: Verify CTest inventory
+        run: |
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build \
+            --expected-total 85 \
+            --output ci-evidence/ctest-inventory.json
+
       - name: Build
         run: cmake --build build --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: >
+          ctest --test-dir build --output-on-failure --timeout 60
+          --output-junit "$PWD/ci-evidence/ctest-junit.xml"
+          --output-log "$PWD/ci-evidence/ctest.log"
 
       - name: Install and verify package consumer
         run: |
@@ -77,30 +107,90 @@ jobs:
           cmake -S tests/cmake/install_consumer -B build-install-consumer \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_PREFIX_PATH="$PWD/build/_install"
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-install-consumer \
+            --expected-total 1 \
+            --output ci-evidence/install-consumer-inventory.json
           cmake --build build-install-consumer --parallel
+          ctest --test-dir build-install-consumer --output-on-failure --timeout 60 \
+            --output-junit "$PWD/ci-evidence/install-consumer-junit.xml" \
+            --output-log "$PWD/ci-evidence/install-consumer-ctest.log"
+
+      - name: Write CI evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || '' }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root ci-evidence \
+            --output ci-evidence/manifest.json \
+            --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 85 --output ci-evidence/ctest-inventory.json' \
+            --command 'cmake --build build --parallel' \
+            --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
+            --command 'cmake --install build --prefix $PWD/build/_install' \
+            --command 'cmake -S tests/cmake/install_consumer -B build-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 1 --output ci-evidence/install-consumer-inventory.json' \
+            --command 'cmake --build build-install-consumer --parallel' \
+            --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log'
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90
 
   linux-asan-ubsan:
     name: Linux ASan/UBSan build and tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
         run: |
-          cmake --version
-          c++ --version
+          set -euo pipefail
+          mkdir -p ci-evidence
+          {
+            cmake --version
+            ctest --version
+            c++ --version
+            clang --version
+            clang++ --version
+            python3 --version
+          } 2>&1 | tee ci-evidence/toolchain.txt
 
       - name: Check repository guards
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_packet_framer_fuzz_contract.py
           python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -127,34 +217,131 @@ jobs:
           -DGAMENET_ENABLE_TLS=OFF
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
+      - name: Verify CTest inventory
+        run: |
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-asan \
+            --expected-total 85 \
+            --output ci-evidence/ctest-inventory.json
+
       - name: Build
         run: cmake --build build-asan --parallel
 
       - name: Test
-        run: ctest --test-dir build-asan --output-on-failure
+        run: >
+          ctest --test-dir build-asan --output-on-failure --timeout 60
+          --output-junit "$PWD/ci-evidence/ctest-junit.xml"
+          --output-log "$PWD/ci-evidence/ctest.log"
+
+      - name: Configure PacketFramer libFuzzer smoke
+        env:
+          CC: clang
+          CXX: clang++
+        run: >
+          cmake -S . -B build-fuzz
+          -DCMAKE_BUILD_TYPE=Debug
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_FUZZING=ON
+          -DGAMENET_ENABLE_ASAN_UBSAN=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build PacketFramer libFuzzer target
+        run: cmake --build build-fuzz --target gamenet_fuzz_packet_framer --parallel
+
+      - name: Run PacketFramer libFuzzer smoke
+        run: |
+          set -euo pipefail
+          cmake -E make_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus ci-evidence/fuzz/artifacts
+          cmake -E copy_directory tests/fuzz/corpus/packet_framer build-fuzz/corpus/packet_framer
+          cmake -E copy_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus
+          cmake -E copy_if_different tests/fuzz/packet_framer.dict ci-evidence/fuzz/packet_framer.dict
+          ./build-fuzz/tests/fuzz/gamenet_fuzz_packet_framer \
+            ci-evidence/fuzz/corpus \
+            -dict=ci-evidence/fuzz/packet_framer.dict \
+            -artifact_prefix=ci-evidence/fuzz/artifacts/ \
+            -seed=424242 \
+            -print_final_stats=1 \
+            -runs=1000 \
+            -max_len=8192 \
+            -timeout=2 \
+            2>&1 | tee ci-evidence/fuzz/fuzzer.log
+
+      - name: Write CI evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || '' }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root ci-evidence \
+            --output ci-evidence/manifest.json \
+            --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 85 --output ci-evidence/ctest-inventory.json' \
+            --command 'cmake --build build-asan --parallel' \
+            --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
+            --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'cmake --build build-fuzz --target gamenet_fuzz_packet_framer --parallel' \
+            --command 'cmake -E make_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus ci-evidence/fuzz/artifacts' \
+            --command 'cmake -E copy_directory tests/fuzz/corpus/packet_framer build-fuzz/corpus/packet_framer' \
+            --command 'cmake -E copy_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus' \
+            --command 'cmake -E copy_if_different tests/fuzz/packet_framer.dict ci-evidence/fuzz/packet_framer.dict' \
+            --command './build-fuzz/tests/fuzz/gamenet_fuzz_packet_framer ci-evidence/fuzz/corpus -dict=ci-evidence/fuzz/packet_framer.dict -artifact_prefix=ci-evidence/fuzz/artifacts/ -seed=424242 -print_final_stats=1 -runs=1000 -max_len=8192 -timeout=2'
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90
 
   linux-tsan:
     name: Linux TSan race-oriented build and tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
         run: |
-          cmake --version
-          c++ --version
+          set -euo pipefail
+          mkdir -p ci-evidence
+          {
+            cmake --version
+            ctest --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee ci-evidence/toolchain.txt
 
       - name: Check repository guards
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_packet_framer_fuzz_contract.py
           python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -181,34 +368,91 @@ jobs:
           -DGAMENET_ENABLE_TLS=OFF
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
+      - name: Verify CTest inventory
+        run: |
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-tsan \
+            --expected-total 85 \
+            --expect-label threading=61 \
+            --output ci-evidence/ctest-inventory.json
+
       - name: Build
         run: cmake --build build-tsan --parallel
 
       - name: Test
-        run: ctest --test-dir build-tsan --output-on-failure -L threading --timeout 30
+        run: >
+          ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60
+          --output-junit "$PWD/ci-evidence/ctest-junit.xml"
+          --output-log "$PWD/ci-evidence/ctest.log"
+
+      - name: Write CI evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || '' }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root ci-evidence \
+            --output ci-evidence/manifest.json \
+            --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 85 --expect-label threading=61 --output ci-evidence/ctest-inventory.json' \
+            --command 'cmake --build build-tsan --parallel' \
+            --command 'ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90
 
   linux-release:
     name: Linux Release build
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
         run: |
-          cmake --version
-          c++ --version
+          set -euo pipefail
+          mkdir -p ci-evidence
+          {
+            cmake --version
+            ctest --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee ci-evidence/toolchain.txt
 
       - name: Check repository guards
         run: |
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_packet_framer_fuzz_contract.py
           python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
           python3 tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -234,25 +478,82 @@ jobs:
           -DGAMENET_ENABLE_TLS=OFF
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
+      - name: Verify CTest inventory
+        run: |
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-release \
+            --expected-total 85 \
+            --output ci-evidence/ctest-inventory.json
+
       - name: Build
         run: cmake --build build-release --parallel
 
       - name: Test
-        run: ctest --test-dir build-release --output-on-failure
+        run: >
+          ctest --test-dir build-release --output-on-failure --timeout 60
+          --output-junit "$PWD/ci-evidence/ctest-junit.xml"
+          --output-log "$PWD/ci-evidence/ctest.log"
+
+      - name: Write CI evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || '' }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root ci-evidence \
+            --output ci-evidence/manifest.json \
+            --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 85 --output ci-evidence/ctest-inventory.json' \
+            --command 'cmake --build build-release --parallel' \
+            --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90
 
   windows-msvc:
     name: Windows MSVC IOCP build and tests
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show toolchain
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
         shell: pwsh
         run: |
-          cmake --version
-          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force ci-evidence | Out-Null
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $toolchain = @(
+            cmake --version
+            ctest --version
+            python --version
+            "Visual Studio installation: $installationPath"
+            "MSVC tools version:"
+            Get-Content (Join-Path $installationPath "VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt")
+          )
+          $toolchain | Tee-Object -FilePath ci-evidence/toolchain.txt
 
       - name: Check repository guards
         shell: pwsh
@@ -260,10 +561,14 @@ jobs:
           python tests/scope/test_scope_guard.py
           python tests/scope/test_intent_consistency.py
           python tests/scope/test_intent_metadata.py
+          python tools/verify_migration_provenance.py
+          python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
+          python tests/cmake/test_packet_framer_fuzz_contract.py
           python tests/cmake/test_core_benchmark_contract.py
+          python tests/cmake/test_phase4_benchmark_contract.py
           python tests/cmake/test_logger_thread_contract.py
           python tests/cmake/test_event_loop_contracts.py
           python tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -281,6 +586,7 @@ jobs:
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py
           python tests/ci/test_core_benchmark_workflow.py
+          python tests/ci/test_phase4_benchmark_workflow.py
 
       - name: Configure
         shell: pwsh
@@ -292,13 +598,25 @@ jobs:
           -DGAMENET_ENABLE_TLS=OFF
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
+      - name: Verify CTest inventory
+        shell: pwsh
+        run: |
+          python tools/verify_ctest_inventory.py `
+            --test-dir build-windows `
+            --config Debug `
+            --expected-total 85 `
+            --output ci-evidence/ctest-inventory.json
+
       - name: Build
         shell: pwsh
         run: cmake --build build-windows --config Debug --parallel
 
       - name: Test
         shell: pwsh
-        run: ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10
+        run: >
+          ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10
+          --output-junit "$pwd/ci-evidence/ctest-junit.xml"
+          --output-log "$pwd/ci-evidence/ctest.log"
 
       - name: Install and verify package consumer
         shell: pwsh
@@ -308,4 +626,232 @@ jobs:
             -G "Visual Studio 18 2026" `
             -A x64 `
             -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
+          python tools/verify_ctest_inventory.py `
+            --test-dir build-windows-install-consumer `
+            --config Debug `
+            --expected-total 1 `
+            --output ci-evidence/install-consumer-inventory.json
           cmake --build build-windows-install-consumer --config Debug --parallel
+          ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 `
+            --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" `
+            --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
+
+      - name: Write CI evidence manifest
+        if: always()
+        shell: pwsh
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || '' }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python tools/write_ci_evidence.py `
+            --evidence-root ci-evidence `
+            --output ci-evidence/manifest.json `
+            --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
+            --require-canonical-artifact-name `
+            --command 'cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 85 --output ci-evidence/ctest-inventory.json' `
+            --command 'cmake --build build-windows --config Debug --parallel' `
+            --command 'ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
+            --command 'cmake --install build-windows --config Debug --prefix $pwd/build-windows/_install' `
+            --command 'cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=$pwd/build-windows/_install' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-install-consumer --config Debug --expected-total 1 --output ci-evidence/install-consumer-inventory.json' `
+            --command 'cmake --build build-windows-install-consumer --config Debug --parallel' `
+            --command 'ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  windows-msvc-release:
+    name: Windows MSVC IOCP Release build and tests
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force ci-evidence | Out-Null
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $toolchain = @(
+            cmake --version
+            ctest --version
+            python --version
+            "Visual Studio installation: $installationPath"
+            "MSVC tools version:"
+            Get-Content (Join-Path $installationPath "VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt")
+          )
+          $toolchain | Tee-Object -FilePath ci-evidence/toolchain.txt
+
+      - name: Check repository guards
+        shell: pwsh
+        run: |
+          python tests/scope/test_scope_guard.py
+          python tests/scope/test_intent_consistency.py
+          python tests/scope/test_intent_metadata.py
+          python tools/verify_migration_provenance.py
+          python tests/scope/test_intent_semantics.py
+          python tools/check_scope_boundaries.py
+          python tests/cmake/test_sanitizer_flags.py
+          python tests/cmake/test_install_package_contract.py
+          python tests/cmake/test_packet_framer_fuzz_contract.py
+          python tests/cmake/test_core_benchmark_contract.py
+          python tests/cmake/test_phase4_benchmark_contract.py
+          python tests/cmake/test_logger_thread_contract.py
+          python tests/cmake/test_event_loop_contracts.py
+          python tests/cmake/test_event_loop_thread_pool_contracts.py
+          python tests/cmake/test_migration_status_contract.py
+          python tests/cmake/test_msvc_utf8_contract.py
+          python tests/cmake/test_platform_backend_contract.py
+          python tests/cmake/test_tcp_lifecycle_contracts.py
+          python tests/cmake/test_tcp_connection_context_contract.py
+          python tests/cmake/test_tcp_connection_thread_contract.py
+          python tests/cmake/test_timer_queue_contracts.py
+          python tests/cmake/test_threading_gate_contracts.py
+          python tests/cmake/test_windows_iocp_milestone_contract.py
+          python tests/cmake/test_windows_iocp_data_path_contract.py
+          python tests/cmake/test_release_safe_tests.py
+          python tests/ci/test_workflow_jobs.py
+          python tests/ci/test_long_soak_workflow.py
+          python tests/ci/test_core_benchmark_workflow.py
+          python tests/ci/test_phase4_benchmark_workflow.py
+
+      - name: Configure Release
+        shell: pwsh
+        run: >
+          cmake -S . -B build-windows-release
+          -G "Visual Studio 18 2026"
+          -A x64
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Verify CTest inventory
+        shell: pwsh
+        run: |
+          python tools/verify_ctest_inventory.py `
+            --test-dir build-windows-release `
+            --config Release `
+            --expected-total 85 `
+            --output ci-evidence/ctest-inventory.json
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build build-windows-release --config Release --parallel
+
+      - name: Test Release
+        shell: pwsh
+        run: >
+          ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 10
+          --output-junit "$pwd/ci-evidence/ctest-junit.xml"
+          --output-log "$pwd/ci-evidence/ctest.log"
+
+      - name: Install and verify Release package consumer
+        shell: pwsh
+        run: |
+          cmake --install build-windows-release --config Release --prefix "$pwd/build-windows-release/_install"
+          cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer `
+            -G "Visual Studio 18 2026" `
+            -A x64 `
+            -DCMAKE_PREFIX_PATH="$pwd/build-windows-release/_install"
+          python tools/verify_ctest_inventory.py `
+            --test-dir build-windows-release-install-consumer `
+            --config Release `
+            --expected-total 1 `
+            --output ci-evidence/install-consumer-inventory.json
+          cmake --build build-windows-release-install-consumer --config Release --parallel
+          ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 `
+            --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" `
+            --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
+
+      - name: Write CI evidence manifest
+        if: always()
+        shell: pwsh
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha || '' }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python tools/write_ci_evidence.py `
+            --evidence-root ci-evidence `
+            --output ci-evidence/manifest.json `
+            --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
+            --require-canonical-artifact-name `
+            --command 'cmake -S . -B build-windows-release -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 85 --output ci-evidence/ctest-inventory.json' `
+            --command 'cmake --build build-windows-release --config Release --parallel' `
+            --command 'ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 10 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
+            --command 'cmake --install build-windows-release --config Release --prefix $pwd/build-windows-release/_install' `
+            --command 'cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=$pwd/build-windows-release/_install' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 1 --output ci-evidence/install-consumer-inventory.json' `
+            --command 'cmake --build build-windows-release-install-consumer --config Release --parallel' `
+            --command 'ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  ci-evidence-set:
+    name: Aggregate six-job CI evidence
+    if: always()
+    needs:
+      - linux-cmake
+      - linux-asan-ubsan
+      - linux-tsan
+      - linux-release
+      - windows-msvc
+      - windows-msvc-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download six producer evidence artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-evidence-*-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence-producers
+          merge-multiple: false
+
+      - name: Verify and aggregate six-job evidence
+        run: >
+          python3 tools/verify_ci_evidence_set.py
+          --input-root ci-evidence-producers
+          --output ci-evidence-aggregate/manifest.json
+
+      - name: Upload aggregate CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-set-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence-aggregate/
+          if-no-files-found: error
+          retention-days: 90

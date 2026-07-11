@@ -31,7 +31,14 @@ struct QueueSnapshot {
     std::size_t rejectedFull{};
     std::size_t rejectedPayload{};
     std::size_t rejectedStopped{};
+    std::size_t droppedOnStop{};
+    std::size_t droppedBytesOnStop{};
     bool accepting{};
+};
+
+struct QueueDiscardSummary {
+    std::size_t droppedCommands{};
+    std::size_t droppedBytes{};
 };
 
 class GameCommandQueue {
@@ -42,6 +49,7 @@ public:
     std::vector<GameCommand> drain(std::size_t maxCommands);
     QueueSnapshot snapshot() const;
     void close();
+    QueueDiscardSummary closeAndDiscard();
 
 private:
     QueueLimits limits_;
@@ -54,6 +62,8 @@ private:
     std::size_t rejectedFull_{};
     std::size_t rejectedPayload_{};
     std::size_t rejectedStopped_{};
+    std::size_t droppedOnStop_{};
+    std::size_t droppedBytesOnStop_{};
     bool accepting_{true};
 };
 
