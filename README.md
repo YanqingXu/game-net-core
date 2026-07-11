@@ -23,6 +23,9 @@ The overall migration is staged:
 The Reactor / TCP foundation is frozen at `v0.1.0-core-preview`. Phase 4 now
 adds independently targeted protocol, transport, session, logic, and broadcast
 foundations without changing the core dependency direction.
+The published integration/contract preview is
+[`v0.2.0-phase4-preview`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview);
+it does not declare production readiness or API/ABI stability.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

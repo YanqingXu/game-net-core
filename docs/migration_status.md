@@ -1,8 +1,8 @@
 # Migration Status
 
-Last checked: 2026-07-11
+Historical audit field preserved by contract — Last checked: 2026-07-11
 
-Phase 4 candidate evidence refreshed: 2026-07-12
+Phase 4 Preview publication checked: 2026-07-12
 
 ## Current Task Goal
 
@@ -21,7 +21,7 @@ UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 | 1 | Initialize the `game-net-core` project skeleton | Present: top-level CMake, README, AGENTS, docs, intents, rules, include/src/tests/examples layout |
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
-| 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation implemented and verified as candidate `5ebad2c1`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; PR #4 remains Draft and experimental transports remain deferred |
+| 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 
 ## Verification State
 
@@ -122,15 +122,21 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   `gamenet.phase4_benchmark_pair_evidence.v1` for one Linux/epoll and one
   Windows/IOCP result with identical scenario parameters.
   Functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` is committed and
-  pushed, and was the Draft PR #4 head when candidate evidence was produced.
+  pushed, and was the PR #4 head when candidate evidence was produced.
   Pull-request `ci` run
   `29160903594` checked GitHub merge-ref
   `e461b597f2642e000717f536f3b430b804ba26ad`, bound candidate and PR-head
   identity to `5ebad2c1a4a9487437340935e21f7468140c7e8d`, and passed all six
   producers plus the aggregate gate, 7/7. The same candidate owns successful
   `long-soak` run `29161167423` and paired benchmark run `29161168417`.
-  PR #4 remains Draft and unmerged; `v0.2.0-phase4-preview` and its GitHub
-  Release do not yet exist.
+  Final PR-head run `29162961320` passed 7/7 before PR #4 was owner-authorized
+  and merged with merge commit `7668d6b82a0d815ccd79f83c572bc0a36bcceea0`.
+  Main push run `29168786199` validated that exact commit with six producers
+  plus aggregate, 7/7. Annotated tag `v0.2.0-phase4-preview` (tag object
+  `b76077f839230fb99f5e570ef623174747f04249`) and the
+  [formal GitHub prerelease](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview)
+  are published. PR #4 had zero submitted GitHub reviews; that process
+  limitation is retained rather than described as completed review.
 
 Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 
@@ -467,13 +473,14 @@ tag:
   producers plus `gamenet.ci_evidence_set.v1` in run `29160903594`, exact
   repeat-50 evidence in `29161167423`, and the paired Phase 4 benchmark gate in
   `29161168417`.
-- [ ] Complete review and merge PR #4 without replacing the verified candidate,
-  then perform the required post-merge identity checks and publish the annotated
-  `v0.2.0-phase4-preview` tag and formal GitHub Preview Release. PR #4 remains
-  Draft and unmerged; the target tag and Release do not exist.
+- [x] Move PR #4 to Ready and merge under explicit owner authorization without
+  replacing the verified candidate; verify the merge tree, pass exact-commit
+  main CI `29168786199`, and publish annotated tag `v0.2.0-phase4-preview`,
+  checksums, and the formal GitHub Preview Release. Independent submitted review
+  remained absent and is recorded as a process limitation.
 - [ ] HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library
   remain deferred until separately promoted.
 
-Before publishing a Phase 4 preview, keep the Linux and Windows CI gates green
-and record any missing soak, race-oriented, or platform-specific verification as
-its own immutable validation step.
+Before promoting a later Preview or stable release, keep the Linux and Windows
+CI gates green and record any missing soak, race-oriented, or platform-specific
+verification as its own immutable validation step.

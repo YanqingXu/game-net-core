@@ -2,16 +2,16 @@
 
 **Goal:** Close the audit blockers in draft PR #4 and produce a mergeable, verifiable Phase 4 preview without expanding deferred protocol/transport scope.
 
-**Architecture:** Preserve `GameNet::core → protocol/transport → game_session/game_logic/broadcast → example` as a one-way dependency graph. Each module follows Intent → invariants → threading → ownership → contracts/tests → implementation. Remote PR #4 remains an umbrella feature PR rather than dependency-ordered stacked review units. The final artifacts follow the intent method, but the two large commits cannot retrospectively prove intent/test-first chronology; this remains a review-process limitation rather than a code-contract blocker.
+**Architecture:** Preserve `GameNet::core → protocol/transport → game_session/game_logic/broadcast → example` as a one-way dependency graph. Each module follows Intent → invariants → threading → ownership → contracts/tests → implementation. PR #4 remained an umbrella feature PR rather than dependency-ordered stacked review units. The final artifacts follow the intent method, but the two large commits cannot retrospectively prove intent/test-first chronology; this remains a review-process limitation rather than a code-contract blocker.
 
-**Baseline:** Core tag `v0.1.0-core-preview` (`c4818d4`); validated Phase 4 functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d`; PR merge-ref `e461b597f2642e000717f536f3b430b804ba26ad`; audit report `docs/development/phase4_audit_2026-07-11.md`.
+**Baseline:** Core tag `v0.1.0-core-preview` (`c4818d4`); validated Phase 4 functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d`; release commit `7668d6b82a0d815ccd79f83c572bc0a36bcceea0`; tag `v0.2.0-phase4-preview`; audit report `docs/development/phase4_audit_2026-07-11.md`.
 
 **Non-goals:** HTTP, WebSocket, RPC, TLS, coroutine, UDP, KCP, AOI/room/business state, production-readiness claims, and an installed all-in-one Pipeline library.
 
-**Status convention (2026-07-12):** `[x]` means the implementation or named
-candidate evidence now exists and has been checked against its recorded identity.
-`[ ]` means the review/merge/main/tag/Release publication action is still absent.
-The older `0d62054` CI run remains historical entry evidence only.
+**Status convention (2026-07-12):** `[x]` means the implementation, evidence,
+or publication action exists and has been checked against its recorded identity.
+`[ ]` identifies work intentionally left deferred beyond this Preview. The older
+`0d62054` CI run remains historical entry evidence only.
 
 Evidence is deliberately layered. Local preflight establishes that the
 worktree is a viable candidate; producer manifests bind files to a checkout,
@@ -287,8 +287,12 @@ the Phase 4 performance-baseline intent, `rules/review_rules.md`, and
   producers plus the aggregate gate.
 - [x] Set the locally frozen Phase 4 project/package version to `0.2.0`; tag and
   publication identity remain gated by the immutable final candidate.
-- [ ] Merge the validated candidate without rewriting it, rerun required main-branch gates, then create annotated tag and formal GitHub Release `v0.2.0-phase4-preview`.
-- [ ] Include known limitations, unstable API list, validation links, benchmark/soak artifacts, and downstream upgrade notes in the Release.
+- [x] Merge the validated candidate without rewriting its final PR-head tree,
+  pass main-branch run `29168786199`, then create annotated tag and formal
+  GitHub Release `v0.2.0-phase4-preview`.
+- [x] Include known limitations, unstable API list, validation links,
+  benchmark/soak artifacts, downstream upgrade notes, and canonical archive
+  checksums in the Release.
 
 **Gate:** Functional evidence belongs to the recorded candidate or its explicitly
 bound PR merge-ref; branch-local or Phase 3.5 evidence cannot substitute for
@@ -345,14 +349,13 @@ The evidence contracts themselves are locally implemented and guarded:
   output is `gamenet.phase4_benchmark_pair_evidence.v1`.
 
 The candidate-level CI, TSan, sanitizer-backed libFuzzer, repeat-50, and paired
-benchmark gates are therefore closed. The remaining open publication work is:
-
-- complete review and move PR #4 out of Draft;
-- merge without rewriting functional content, then run/record the required
-  main-branch gates or prove any release descendant is documentation-only;
-- create and verify the annotated `v0.2.0-phase4-preview` tag;
-- publish the formal GitHub Preview Release with evidence links, known
-  limitations, unstable APIs, downstream notes, and source/archive checksums.
+benchmark gates are closed. Publication closure is also complete: PR #4 was
+moved to Ready and merged under explicit owner authorization, main CI
+`29168786199` validated exact commit `7668d6b8...`, annotated tag object
+`b76077f...` peels to that commit, and the formal GitHub Preview Release carries
+the required evidence links, limitations, unstable APIs, downstream notes, and
+verified source/archive checksums. GitHub recorded zero submitted reviews; this
+is retained as a process limitation and is not represented as completed review.
 
 ## Standard verification commands
 
