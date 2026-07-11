@@ -9,22 +9,24 @@
 
 | 字段 | 当前值 | 状态 |
 | --- | --- | --- |
-| 本地分支 | `agent/phase-4-foundation` | 信息 |
+| 发布记录基线 | `main@7668d6b82a0d815ccd79f83c572bc0a36bcceea0` | `v0.2.0-phase4-preview` 的 peeled commit |
 | 已验证功能 candidate SHA | `5ebad2c1a4a9487437340935e21f7468140c7e8d` | 不可变提交；候选形成时本地/origin/PR head 一致且工作树干净 |
 | candidate tree status | clean | 代码、intent、rules、tests、workflow 与候选内文档均已提交 |
-| draft PR | [#4](https://github.com/YanqingXu/game-net-core/pull/4)，open/draft | `5ebad2c1...` 候选曾有 11/11 checks success；evidence-only descendant 以其自己的新 CI 为准；尚未 review/merge |
+| PR | [#4](https://github.com/YanqingXu/game-net-core/pull/4)，merged | explicit owner authorization；merge commit `7668d6b8...`；GitHub submitted reviews 为 0 |
 | PR #4 head（候选运行时） | `5ebad2c1a4a9487437340935e21f7468140c7e8d` | candidate identity |
-| PR #4 merge-ref（主 CI） | `e461b597f2642e000717f536f3b430b804ba26ad` | `pull_request` run 的实际 checkout/test identity |
-| 当前 `main` | `83d0e5405efe83357059b7e341f1fbb23db67582` | 尚不含 Phase 4 candidate |
-| 主 CI run | [`29160903594`](https://github.com/YanqingXu/game-net-core/actions/runs/29160903594)，attempt 1 | 六 producer + aggregate，7/7 success |
+| PR #4 merge-ref（候选 CI） | `e461b597f2642e000717f536f3b430b804ba26ad` | candidate `pull_request` run 的实际 checkout/test identity |
+| PR #4 最终 evidence-only head / merge-ref | `4abd5960ec9d2d0bdc5cead9c3f4769949288c51` / `7132faa1334f311cd30aa08e6f41b31726b82a21` | run `29162961320`，六 producer + aggregate 7/7 success |
+| 当前发布 `main` | `7668d6b82a0d815ccd79f83c572bc0a36bcceea0` | merge tree 与最终 PR-head tree `f88cdda7e9d93f10de4d58ca8040292afe991c73` 相同 |
+| candidate CI run | [`29160903594`](https://github.com/YanqingXu/game-net-core/actions/runs/29160903594)，attempt 1 | 六 producer + aggregate，7/7 success |
+| release-commit main CI | [`29168786199`](https://github.com/YanqingXu/game-net-core/actions/runs/29168786199)，attempt 1 | exact checkout `7668d6b8...`；六 producer + aggregate，7/7 success |
 | long-soak run | [`29161167423`](https://github.com/YanqingXu/game-net-core/actions/runs/29161167423)，attempt 1 | direct candidate checkout，success |
 | benchmark run | [`29161168417`](https://github.com/YanqingXu/game-net-core/actions/runs/29161168417)，attempt 1 | direct candidate checkout，3/3 success |
-| `v0.2.0-phase4-preview` tag | 待创建 | 未完成 |
-| GitHub Release | 无 | 未完成 |
+| `v0.2.0-phase4-preview` tag | annotated object `b76077f839230fb99f5e570ef623174747f04249` | remote peel 精确指向 `7668d6b8...`；annotated but unsigned |
+| GitHub Release | [v0.2.0 Phase 4 Preview](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview) | published prerelease；`isDraft=false`、`isPrerelease=true` |
 
-本台账是在上述候选运行完成后补录的 evidence-only 文档。后续提交若改变 PR head，
-不得把新 head 自动写成“同 SHA 已验证”；发布前必须证明它相对 `5ebad2c1...` 仅有
-文档差异并重新通过必要 PR/main 门禁，或让 tag 明确指向已验证候选。
+候选之后的 evidence-only descendant 已逐路径证明只改变 8 个 `docs/` 文件，并在
+最终 PR head 和合并后 main 上重新通过必要 CI。发布 tag 保持指向已验证 merge commit；
+本次 tag 后发布记录提交不属于已发布源码归档，也不会移动或重写该 tag。
 
 ## 当前本地预检账本
 
@@ -74,7 +76,9 @@ checkout candidate，因此其 checkout/candidate/GitHub/current SHA 均为 `5eb
 | Windows Release IOCP + consumer | 85/85 + consumer 1/1 | 同上 | `29160903594` / 1 | `ci-evidence-windows-msvc-release-e461b597f2642e000717f536f3b430b804ba26ad-29160903594-1`；ZIP `f0aa6858e30cd52f47fc624ec6b2ab77eee1c4aa018f1a3bc3e46fbb4f8b8073` | **通过** |
 | Long-soak | 两份 `gamenet.ctest_repeat_evidence.v1` + raw logs/inventory | `5ebad2c1...` direct checkout | `29161167423` / 1 | `long-soak-linux-long-soak-5ebad2c1a4a9487437340935e21f7468140c7e8d-29161167423-1`；ZIP `1e54b26681e39ff72dfb3dec3b9fddd2f0caa180871b4aa7f21051672c57b8c4` | **通过**；3,050/3,050 与 400/400，raw logs 独立复验 |
 | Phase 4 benchmark pair | 两个 producer manifest + `gamenet.phase4_benchmark_pair_evidence.v1` | `5ebad2c1...` direct checkout | `29161168417` / 1 | Linux ZIP `0a7ebecff8889a19688da57e3f44f6726e4e9e9731f69e5d8a545bcc75344978`；Windows ZIP `cc77f51a94649afdd3e616f816cf7014effed7a8d7dceb28185dd90e43809e8b`；pair ZIP `a4ce4eda074928c1ca97fdb6171752fcf33028f684bd75e3b733a5e7734ce9a8` | **通过**；pair manifest 本地重算一致 |
-| GitHub Release | annotated tag、Release URL、notes、evidence links | 尚无 release commit | 不适用 | Release URL 待填 | **未创建** |
+| 最终 PR-head CI | 六 producer manifest + aggregate | head `4abd5960...`；checkout `7132faa1...` | `29162961320` / 1 | aggregate ZIP SHA-256 `6ab25ed3432de1778ec1d3a0ea17f2e2124fc9ac7c5f2a5b7662186a3d82580c` | **通过** |
+| release-commit main CI | 六 producer manifest + `gamenet.ci_evidence_set.v1` | exact `7668d6b8...` | `29168786199` / 1 | `ci-evidence-set-7668d6b82a0d815ccd79f83c572bc0a36bcceea0-29168786199-1`；ZIP SHA-256 `2bd08a1bcb1c502ef5b6a79cd3a6cd79f0e687e6ce3bc2faeddfdcecda0aa9e3` | **通过**；六 producer 下载后由仓库 verifier 独立重算通过 |
+| GitHub Release | annotated tag、Release URL、notes、evidence links | release commit `7668d6b8...` | published `2026-07-11T21:38:05Z` | tar.gz `c2f5f2ec...`；zip `4a75373a...`；`SHA256SUMS` asset `4df5d440...` | **通过**；三资产从正式 Release 重下载并复验 |
 
 ## 完成规则
 

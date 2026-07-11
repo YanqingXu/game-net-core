@@ -155,9 +155,14 @@ run `29147391402` (#32) are retained only as pre-hardening history. They do not
 validate candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` or replace its
 current evidence chain.
 
-Phase 4 now has a verified functional candidate and remains publication-gated
-rather than implementation-blocked. PR #4 is still Draft and unmerged;
-`v0.2.0-phase4-preview` and its GitHub Release do not exist. Review/merge,
-post-merge identity checks, the annotated preview tag, and the formal Preview
-Release remain explicit later actions. Experimental HTTP, RPC, UDP/KCP, TLS,
-and coroutine work remains deferred behind separate intent promotion.
+PR #4 advanced through final evidence-only head `4abd5960...`, whose run
+`29162961320` passed all six producers plus aggregate. It was then moved to Ready
+and owner-authorized for a merge commit. Merge/release commit `7668d6b8...` has
+the same tree as that PR head, and main push run `29168786199` passed 7/7 against
+the exact release commit. Annotated tag `v0.2.0-phase4-preview` and the
+[formal GitHub prerelease](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview)
+are published with canonical archives and `SHA256SUMS`. This closes the Phase 4
+Preview publication plan, not production readiness or API/ABI stability. PR #4
+had zero submitted GitHub reviews, which remains a process limitation.
+Experimental HTTP, RPC, UDP/KCP, TLS, and coroutine work remains deferred behind
+separate intent promotion.

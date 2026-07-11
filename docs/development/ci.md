@@ -3,7 +3,7 @@
 The CI gate keeps the migration focused on the frozen Reactor/TCP foundation
 plus the explicitly active Phase 4 foundations.
 
-## Current Phase 4 Candidate Evidence
+## Phase 4 Preview Evidence
 
 Functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` is committed and
 pushed, and was the Draft PR #4 head when candidate evidence was produced.
@@ -17,9 +17,19 @@ also owns successful manual `long-soak` run `29161167423`, which verified exactl
 benchmark run `29161168417`, whose Linux/epoll and Windows/IOCP producers fed a
 green paired evidence gate.
 
-PR #4 remains Draft and unmerged. The `v0.2.0-phase4-preview` tag and GitHub
-Release do not exist; the successful candidate evidence does not imply those
-publication actions have occurred.
+Final evidence-only PR head `4abd5960...` also passed six producers plus the
+aggregate gate in run `29162961320`. PR #4 was subsequently owner-authorized and
+merged as `7668d6b82a0d815ccd79f83c572bc0a36bcceea0`; its tree equals the final
+PR-head tree. Main push run
+[`29168786199`](https://github.com/YanqingXu/game-net-core/actions/runs/29168786199)
+validated that exact release commit 7/7. Its aggregate artifact
+`ci-evidence-set-7668d6b82a0d815ccd79f83c572bc0a36bcceea0-29168786199-1`
+has ZIP SHA-256
+`2bd08a1bcb1c502ef5b6a79cd3a6cd79f0e687e6ce3bc2faeddfdcecda0aa9e3`.
+The annotated tag and
+[formal Preview Release](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview)
+are published. PR #4 recorded no submitted GitHub review; this remains a process
+limitation rather than a CI claim.
 
 ## Scope
 

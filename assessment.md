@@ -1,5 +1,11 @@
 # 审计结论
 
+> **历史输入快照。** 本文记录 2026-07-11 的初始审计，因此正文中的 Draft PR、
+> Request changes 与未发布判断不应被当作当前状态。整改后的最新审计见
+> [`docs/development/phase4_audit_2026-07-11.md`](docs/development/phase4_audit_2026-07-11.md)，
+> 已发布 Preview 的身份、证据与校验和见
+> [`docs/development/releases/v0.2.0-phase4-preview.md`](docs/development/releases/v0.2.0-phase4-preview.md)。
+
 截至 **2026 年 7 月 11 日**，应把项目状态严格拆成两个基线：
 
 1. **`main` / 已发布基线**：Phase 1～3.5 的 Reactor/TCP Core 已收口，代码树仍以 `GameNet::core` 为主；仓库 README 也仍把 Reactor/TCP 定义为当前 active target。([github.com][1])
