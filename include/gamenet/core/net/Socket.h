@@ -21,7 +21,9 @@ public:
     SocketFd releaseFd() noexcept;
 
     void bindAddress(const InetAddress& localAddr);
+    bool tryBindAddress(const InetAddress& localAddr, int* error = nullptr);
     void listen();
+    bool tryListen(int* error = nullptr);
     SocketFd accept(InetAddress* peerAddr);
     void shutdownWrite();
 

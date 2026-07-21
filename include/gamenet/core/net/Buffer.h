@@ -4,6 +4,7 @@
 // 它不解析协议，也不做线程同步，默认由所属连接的 loop 线程独占修改。
 
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,7 +41,12 @@ public:
     void ensureWritableBytes(std::size_t len);
     void hasWritten(std::size_t len);
 
-    ssize_t readFd(SocketFd fd, int* savedErrno);
+    // Reads at most maxReadBytes so connection-level admission can bound
+    // memory growth without teaching Buffer about connection policy.
+    ssize_t readFd(
+        SocketFd fd,
+        int* savedErrno,
+        std::size_t maxReadBytes = std::numeric_limits<std::size_t>::max());
     ssize_t writeFd(SocketFd fd, int* savedErrno);
 
 private:

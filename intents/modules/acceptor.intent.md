@@ -19,6 +19,8 @@ hands them upward through a narrow callback boundary.
 - own listen Channel registration
 - accept as many ready connections as possible per readable event
 - deliver accepted fds to upper layer on the loop thread
+- report runtime accept/accepted-socket failures through an owner-loop policy
+  callback with explicit Retry or Stop action
 - stop accepting on explicit request (stop())
 
 ---
@@ -45,13 +47,20 @@ hands them upward through a narrow callback boundary.
 - listen() is owner-thread only
 - stop() is owner-thread only
 - handleRead() runs on owner loop thread
+- error policy callbacks and retry timer callbacks run on the owner loop thread
 - destructor must respect owner-thread teardown discipline
 
 ---
 
 ## 6. Failure Semantics
 - accept interruption and would-block are handled explicitly
-- unexpected accept failure should not silently corrupt registration state
+- listener construction/bind/listen failures throw a recoverable
+  `std::system_error` to the caller instead of terminating the process
+- unexpected accept, accepted-socket creation, and accepted-socket setup
+  failures identify their stage and platform error code
+- the default runtime action is a delayed retry; an installed policy may stop
+  the Acceptor, and Retry disables readable interest until the retry timer to
+  avoid an error spin loop
 - teardown should not rely on accidental destructor side effects
 
 ---
@@ -64,6 +73,9 @@ hands them upward through a narrow callback boundary.
 - stop() disables listening and removes Channel; idempotent when not listening
 - destroying a stopped Acceptor while its EventLoop continues polling cannot
   expose freed operation or Channel storage to a late IOCP completion
+- `tests/contract/acceptor/test_acceptor_contract.cpp` verifies unavailable
+  listener bind is reported by exception without process termination and the
+  normal accept path does not spuriously invoke the runtime error policy
 
 ---
 

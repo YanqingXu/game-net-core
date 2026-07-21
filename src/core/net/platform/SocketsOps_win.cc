@@ -33,9 +33,13 @@ struct WinsockRuntime {
     }
 };
 
-void setNonBlockingOrDie(SocketFd sockfd) {
+bool setNonBlocking(SocketFd sockfd) {
     u_long on = 1;
-    if (::ioctlsocket(sockfd, FIONBIO, &on) == SOCKET_ERROR) {
+    return ::ioctlsocket(sockfd, FIONBIO, &on) != SOCKET_ERROR;
+}
+
+void setNonBlockingOrDie(SocketFd sockfd) {
+    if (!setNonBlocking(sockfd)) {
         die("ioctlsocket(FIONBIO)");
     }
 }
@@ -48,35 +52,72 @@ void ensureInitialized() {
 }
 
 SocketFd createNonblockingOrDie(sa_family_t family) {
-    const SocketFd sockfd = platform::createOverlappedTcpOrDie(family);
-    setNonBlockingOrDie(sockfd);
+    const SocketFd sockfd = createNonblocking(family);
+    if (!isValid(sockfd)) {
+        die("WSASocketW/ioctlsocket(FIONBIO)");
+    }
+    return sockfd;
+}
+
+SocketFd createNonblocking(sa_family_t family) {
+    const SocketFd sockfd = platform::createOverlappedTcp(family);
+    if (!isValid(sockfd)) {
+        return kInvalidSocket;
+    }
+    if (!setNonBlocking(sockfd)) {
+        const int error = lastError();
+        close(sockfd);
+        setLastError(error);
+        return kInvalidSocket;
+    }
     return sockfd;
 }
 
 SocketFd createNonblockingDatagramOrDie(sa_family_t family) {
-    ensureInitialized();
-    const SocketFd sockfd = ::socket(family, SOCK_DGRAM, IPPROTO_UDP);
+    const SocketFd sockfd = createNonblockingDatagram(family);
     if (!isValid(sockfd)) {
-        die("socket");
+        die("socket/ioctlsocket(FIONBIO)");
     }
-    setNonBlockingOrDie(sockfd);
     return sockfd;
 }
 
-void bindOrDie(SocketFd sockfd, const sockaddr_storage& addr) {
+SocketFd createNonblockingDatagram(sa_family_t family) {
+    ensureInitialized();
+    const SocketFd sockfd = ::socket(family, SOCK_DGRAM, IPPROTO_UDP);
+    if (!isValid(sockfd)) {
+        return kInvalidSocket;
+    }
+    if (!setNonBlocking(sockfd)) {
+        const int error = lastError();
+        close(sockfd);
+        setLastError(error);
+        return kInvalidSocket;
+    }
+    return sockfd;
+}
+
+int bind(SocketFd sockfd, const sockaddr_storage& addr) {
     socklen_t addrLen = 0;
     if (addr.ss_family == AF_INET6) {
         addrLen = static_cast<socklen_t>(sizeof(sockaddr_in6));
     } else {
         addrLen = static_cast<socklen_t>(sizeof(sockaddr_in));
     }
-    if (::bind(sockfd, reinterpret_cast<const sockaddr*>(&addr), addrLen) == SOCKET_ERROR) {
+    return ::bind(sockfd, reinterpret_cast<const sockaddr*>(&addr), addrLen) == SOCKET_ERROR ? -1 : 0;
+}
+
+void bindOrDie(SocketFd sockfd, const sockaddr_storage& addr) {
+    if (bind(sockfd, addr) < 0) {
         die("bind");
     }
 }
 
+int listen(SocketFd sockfd) {
+    return ::listen(sockfd, SOMAXCONN) == SOCKET_ERROR ? -1 : 0;
+}
+
 void listenOrDie(SocketFd sockfd) {
-    if (::listen(sockfd, SOMAXCONN) == SOCKET_ERROR) {
+    if (listen(sockfd) < 0) {
         die("listen");
     }
 }
@@ -84,8 +125,11 @@ void listenOrDie(SocketFd sockfd) {
 SocketFd accept(SocketFd sockfd, sockaddr_storage* addr) {
     socklen_t addrLen = static_cast<socklen_t>(sizeof(sockaddr_storage));
     const SocketFd connfd = ::accept(sockfd, reinterpret_cast<sockaddr*>(addr), &addrLen);
-    if (isValid(connfd)) {
-        setNonBlockingOrDie(connfd);
+    if (isValid(connfd) && !setNonBlocking(connfd)) {
+        const int error = lastError();
+        close(connfd);
+        setLastError(error);
+        return kInvalidSocket;
     }
     return connfd;
 }
@@ -125,20 +169,34 @@ int getSocketError(SocketFd sockfd) {
 
 sockaddr_storage getLocalAddr(SocketFd sockfd) {
     sockaddr_storage localAddr{};
-    socklen_t addrLen = static_cast<socklen_t>(sizeof(localAddr));
-    if (::getsockname(sockfd, reinterpret_cast<sockaddr*>(&localAddr), &addrLen) == SOCKET_ERROR) {
+    if (!tryGetLocalAddr(sockfd, &localAddr)) {
         die("getsockname");
     }
     return localAddr;
 }
 
+bool tryGetLocalAddr(SocketFd sockfd, sockaddr_storage* result) {
+    if (result == nullptr) {
+        setLastError(WSAEINVAL);
+        return false;
+    }
+    socklen_t addrLen = static_cast<socklen_t>(sizeof(*result));
+    return ::getsockname(sockfd, reinterpret_cast<sockaddr*>(result), &addrLen) != SOCKET_ERROR;
+}
+
 sockaddr_storage getPeerAddr(SocketFd sockfd) {
     sockaddr_storage peerAddr{};
-    socklen_t addrLen = static_cast<socklen_t>(sizeof(peerAddr));
-    if (::getpeername(sockfd, reinterpret_cast<sockaddr*>(&peerAddr), &addrLen) == SOCKET_ERROR) {
-        std::memset(&peerAddr, 0, sizeof(peerAddr));
-    }
+    (void)tryGetPeerAddr(sockfd, &peerAddr);
     return peerAddr;
+}
+
+bool tryGetPeerAddr(SocketFd sockfd, sockaddr_storage* result) {
+    if (result == nullptr) {
+        setLastError(WSAEINVAL);
+        return false;
+    }
+    socklen_t addrLen = static_cast<socklen_t>(sizeof(*result));
+    return ::getpeername(sockfd, reinterpret_cast<sockaddr*>(result), &addrLen) != SOCKET_ERROR;
 }
 
 ssize_t read(SocketFd sockfd, void* buffer, std::size_t len) {

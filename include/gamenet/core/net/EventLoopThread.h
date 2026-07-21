@@ -7,6 +7,7 @@
 #include "gamenet/core/net/Callbacks.h"
 
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -30,6 +31,8 @@ private:
     std::jthread thread_;
     std::mutex mutex_;
     std::condition_variable condition_;
+    std::exception_ptr startupException_;
+    bool startupComplete_{false};
     ThreadInitCallback callback_;
     std::string name_;
 };

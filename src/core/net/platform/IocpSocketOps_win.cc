@@ -17,7 +17,7 @@ namespace {
 }
 
 template <typename Fn>
-Fn loadExtension(SocketFd sockfd, GUID guid, const char* name) {
+Fn loadExtension(SocketFd sockfd, GUID guid) {
     Fn fn = nullptr;
     DWORD bytes = 0;
     const int rc = ::WSAIoctl(
@@ -30,62 +30,78 @@ Fn loadExtension(SocketFd sockfd, GUID guid, const char* name) {
         &bytes,
         nullptr,
         nullptr);
-    if (rc == SOCKET_ERROR || fn == nullptr) {
-        die(name);
-    }
-    return fn;
+    return rc == SOCKET_ERROR ? nullptr : fn;
 }
 
 }  // namespace
 
 SocketFd createOverlappedTcpOrDie(sa_family_t family) {
-    sockets::ensureInitialized();
-    const SocketFd sockfd = ::WSASocketW(
-        family,
-        SOCK_STREAM,
-        IPPROTO_TCP,
-        nullptr,
-        0,
-        WSA_FLAG_OVERLAPPED);
+    const SocketFd sockfd = createOverlappedTcp(family);
     if (!sockets::isValid(sockfd)) {
         die("WSASocketW");
     }
     return sockfd;
 }
 
+SocketFd createOverlappedTcp(sa_family_t family) {
+    sockets::ensureInitialized();
+    return ::WSASocketW(
+        family,
+        SOCK_STREAM,
+        IPPROTO_TCP,
+        nullptr,
+        0,
+        WSA_FLAG_OVERLAPPED);
+}
+
 LPFN_ACCEPTEX loadAcceptEx(SocketFd sockfd) {
     GUID guid = WSAID_ACCEPTEX;
-    return loadExtension<LPFN_ACCEPTEX>(sockfd, guid, "AcceptEx");
+    return loadExtension<LPFN_ACCEPTEX>(sockfd, guid);
 }
 
 LPFN_GETACCEPTEXSOCKADDRS loadGetAcceptExSockaddrs(SocketFd sockfd) {
     GUID guid = WSAID_GETACCEPTEXSOCKADDRS;
-    return loadExtension<LPFN_GETACCEPTEXSOCKADDRS>(sockfd, guid, "GetAcceptExSockaddrs");
+    return loadExtension<LPFN_GETACCEPTEXSOCKADDRS>(sockfd, guid);
 }
 
 LPFN_CONNECTEX loadConnectEx(SocketFd sockfd) {
     GUID guid = WSAID_CONNECTEX;
-    return loadExtension<LPFN_CONNECTEX>(sockfd, guid, "ConnectEx");
+    return loadExtension<LPFN_CONNECTEX>(sockfd, guid);
 }
 
 void updateAcceptContextOrDie(SocketFd accepted, SocketFd listener) {
-    if (::setsockopt(
-            accepted,
-            SOL_SOCKET,
-            SO_UPDATE_ACCEPT_CONTEXT,
-            reinterpret_cast<const char*>(&listener),
-            sizeof(listener)) == SOCKET_ERROR) {
+    if (!updateAcceptContext(accepted, listener)) {
         die("SO_UPDATE_ACCEPT_CONTEXT");
     }
 }
 
+bool updateAcceptContext(SocketFd accepted, SocketFd listener) {
+    return ::setsockopt(
+            accepted,
+            SOL_SOCKET,
+            SO_UPDATE_ACCEPT_CONTEXT,
+            reinterpret_cast<const char*>(&listener),
+            sizeof(listener)) != SOCKET_ERROR;
+}
+
 void updateConnectContextOrDie(SocketFd connected) {
-    if (::setsockopt(connected, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, nullptr, 0) == SOCKET_ERROR) {
+    if (!updateConnectContext(connected)) {
         die("SO_UPDATE_CONNECT_CONTEXT");
     }
 }
 
+bool updateConnectContext(SocketFd connected) {
+    return ::setsockopt(connected, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, nullptr, 0) !=
+        SOCKET_ERROR;
+}
+
 void bindUnspecifiedOrDie(SocketFd sockfd, sa_family_t family) {
+    if (!bindUnspecified(sockfd, family)) {
+        die("bind unspecified");
+    }
+}
+
+bool bindUnspecified(SocketFd sockfd, sa_family_t family) {
     sockaddr_storage storage{};
     int len = 0;
     if (family == AF_INET6) {
@@ -99,9 +115,7 @@ void bindUnspecifiedOrDie(SocketFd sockfd, sa_family_t family) {
         len = static_cast<int>(sizeof(sockaddr_in));
     }
 
-    if (::bind(sockfd, reinterpret_cast<sockaddr*>(&storage), len) == SOCKET_ERROR) {
-        die("bind unspecified");
-    }
+    return ::bind(sockfd, reinterpret_cast<sockaddr*>(&storage), len) != SOCKET_ERROR;
 }
 
 }  // namespace gamenet::net::platform

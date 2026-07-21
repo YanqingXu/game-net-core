@@ -7,6 +7,14 @@ promote_gate: post-core-preview
 
 # Module Intent: Backpressure Policy
 
+## Partial Supersession Record
+
+The owner-loop high/low-water enforcement described here is now active through
+`intents/modules/connection_backpressure_controller.intent.md`, while hard
+per-connection output admission is active through
+`intents/modules/tcp_connection.intent.md`. This document remains deferred for
+broader policy variants and must not authorize additional implementation.
+
 ## 1. Intent
 Backpressure policy defines how one TcpConnection reacts when outbound bytes
 accumulate faster than the peer can consume them.

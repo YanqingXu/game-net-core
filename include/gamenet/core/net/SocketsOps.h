@@ -1,7 +1,7 @@
 #pragma once
 
 // SocketsOps 暴露最底层的 socket 系统调用辅助函数。
-// IPv4/IPv6 双栈：createNonblockingOrDie 接受 family 参数，
+// IPv4/IPv6 双栈：createNonblocking/createNonblockingOrDie 接受 family 参数，
 // bind/accept/getLocalAddr/getPeerAddr 统一使用 sockaddr_storage。
 
 #include "gamenet/core/net/SocketTypes.h"
@@ -15,9 +15,13 @@ void ensureInitialized();
 
 /// Create a non-blocking, close-on-exec TCP socket for the given address family.
 /// @param family  AF_INET or AF_INET6
+SocketFd createNonblocking(sa_family_t family);
+SocketFd createNonblockingDatagram(sa_family_t family);
 SocketFd createNonblockingOrDie(sa_family_t family);
 SocketFd createNonblockingDatagramOrDie(sa_family_t family);
 
+int bind(SocketFd sockfd, const sockaddr_storage& addr);
+int listen(SocketFd sockfd);
 void bindOrDie(SocketFd sockfd, const sockaddr_storage& addr);
 void listenOrDie(SocketFd sockfd);
 SocketFd accept(SocketFd sockfd, sockaddr_storage* addr);
@@ -26,7 +30,9 @@ void close(SocketFd sockfd);
 void shutdownWrite(SocketFd sockfd);
 int getSocketError(SocketFd sockfd);
 sockaddr_storage getLocalAddr(SocketFd sockfd);
+bool tryGetLocalAddr(SocketFd sockfd, sockaddr_storage* result);
 sockaddr_storage getPeerAddr(SocketFd sockfd);
+bool tryGetPeerAddr(SocketFd sockfd, sockaddr_storage* result);
 
 ssize_t read(SocketFd sockfd, void* buffer, std::size_t len);
 ssize_t write(SocketFd sockfd, const void* buffer, std::size_t len);

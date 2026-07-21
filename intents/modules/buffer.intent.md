@@ -19,6 +19,8 @@ without owning protocol semantics.
 - expose readable/writable/prependable byte accounting
 - support append/retrieve operations with predictable index movement
 - support scatter-read style growth for efficient socket reads
+- accept a caller-supplied per-read byte ceiling so a connection can enforce
+  input admission before Buffer growth
 
 ---
 
@@ -34,6 +36,7 @@ without owning protocol semantics.
 - append never invalidates existing readable data semantics
 - retrieve moves reader state forward or resets cleanly
 - fd read/write helpers report explicit errno on failure
+- a bounded fd read never appends more than the caller-provided byte ceiling
 
 ---
 
@@ -46,6 +49,7 @@ without owning protocol semantics.
 ## 6. Failure Semantics
 - fd I/O failure is reported to caller via return value and saved errno
 - growth strategy should stay explicit rather than silently dropping bytes
+- a zero per-read ceiling performs no socket read and no Buffer growth
 
 ---
 
@@ -53,6 +57,7 @@ without owning protocol semantics.
 - append/retrieve preserve byte ordering
 - makeSpace keeps unread data intact
 - readFd grows into extra buffer path correctly
+- readFd honors an exact caller-provided maximum without consuming beyond it
 - writeFd exposes explicit error reporting
 
 ---

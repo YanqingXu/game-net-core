@@ -5,6 +5,8 @@
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/SocketsOps.h"
 
+#include <algorithm>
+
 namespace gamenet::net {
 
 IocpTcpTransport::IocpTcpTransport(Channel* channel)
@@ -15,8 +17,8 @@ IocpTcpTransport::IocpTcpTransport(Channel* channel)
     writeOperation_.channel = channel_;
 }
 
-void IocpTcpTransport::startRead() {
-    if (readPending_) {
+void IocpTcpTransport::startRead(std::size_t maxBytes) {
+    if (readPending_ || maxBytes == 0) {
         return;
     }
 
@@ -27,7 +29,7 @@ void IocpTcpTransport::startRead() {
     readOperation_.error = 0;
 
     readBuffer_.buf = readStorage_.data();
-    readBuffer_.len = static_cast<ULONG>(readStorage_.size());
+    readBuffer_.len = static_cast<ULONG>(std::min(readStorage_.size(), maxBytes));
 
     DWORD flags = 0;
     DWORD bytes = 0;

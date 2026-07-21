@@ -44,8 +44,10 @@ def main() -> None:
     socket_ops_text = socket_ops.read_text(encoding="utf-8")
     require(socket_ops_text, "loadAcceptEx", socket_ops)
     require(socket_ops_text, "loadConnectEx", socket_ops)
-    require(socket_ops_text, "createOverlappedTcpOrDie", socket_ops)
-    require(socket_ops_text, "bindUnspecifiedOrDie", socket_ops)
+    require(socket_ops_text, "SocketFd createOverlappedTcp(sa_family_t family);", socket_ops)
+    require(socket_ops_text, "bool bindUnspecified", socket_ops)
+    require(socket_ops_text, "bool updateAcceptContext", socket_ops)
+    require(socket_ops_text, "bool updateConnectContext", socket_ops)
 
     socket_ops_source_text = socket_ops_source.read_text(encoding="utf-8")
     require(socket_ops_source_text, "WSASocketW", socket_ops_source)
@@ -53,7 +55,7 @@ def main() -> None:
     require(socket_ops_source_text, "SIO_GET_EXTENSION_FUNCTION_POINTER", socket_ops_source)
 
     sockets_win_text = sockets_win.read_text(encoding="utf-8")
-    require(sockets_win_text, "createOverlappedTcpOrDie", sockets_win)
+    require(sockets_win_text, "SocketFd createNonblocking(sa_family_t family)", sockets_win)
 
     acceptor_header_text = acceptor_header.read_text(encoding="utf-8")
     require(acceptor_header_text, "IocpAcceptState", acceptor_header)
@@ -61,8 +63,10 @@ def main() -> None:
 
     acceptor_source_text = acceptor_source.read_text(encoding="utf-8")
     require(acceptor_source_text, "platform::loadAcceptEx", acceptor_source)
-    require(acceptor_source_text, "platform::createOverlappedTcpOrDie", acceptor_source)
-    require(acceptor_source_text, "platform::updateAcceptContextOrDie", acceptor_source)
+    require(acceptor_source_text, "platform::createOverlappedTcp", acceptor_source)
+    require(acceptor_source_text, "platform::updateAcceptContext", acceptor_source)
+    assert "platform::createOverlappedTcpOrDie" not in acceptor_source_text
+    assert "platform::updateAcceptContextOrDie" not in acceptor_source_text
     require(acceptor_source_text, "IocpOperationKind::Accept", acceptor_source)
     require(acceptor_source_text, "retainCompletionOperation", acceptor_source)
 
@@ -72,8 +76,10 @@ def main() -> None:
 
     connector_source_text = connector_source.read_text(encoding="utf-8")
     require(connector_source_text, "platform::loadConnectEx", connector_source)
-    require(connector_source_text, "platform::bindUnspecifiedOrDie", connector_source)
-    require(connector_source_text, "platform::updateConnectContextOrDie", connector_source)
+    require(connector_source_text, "platform::bindUnspecified", connector_source)
+    require(connector_source_text, "platform::updateConnectContext", connector_source)
+    assert "platform::bindUnspecifiedOrDie" not in connector_source_text
+    assert "platform::updateConnectContextOrDie" not in connector_source_text
     require(connector_source_text, "IocpOperationKind::Connect", connector_source)
     require(connector_source_text, "preserveSocketAssociation", connector_source)
     require(connector_source_text, "retainCompletionOperation", connector_source)

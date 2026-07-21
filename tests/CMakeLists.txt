@@ -1,3 +1,24 @@
+set(GAMENET_TEST_RUNTIME_ENVIRONMENT "")
+if(MSVC AND GAMENET_ENABLE_ASAN_UBSAN)
+    get_filename_component(
+        GAMENET_MSVC_ASAN_RUNTIME_DIR
+        "${CMAKE_CXX_COMPILER}"
+        DIRECTORY
+    )
+    set(GAMENET_MSVC_ASAN_PATH "${GAMENET_MSVC_ASAN_RUNTIME_DIR};$ENV{PATH}")
+    string(REPLACE ";" "\\;" GAMENET_MSVC_ASAN_PATH "${GAMENET_MSVC_ASAN_PATH}")
+    set(GAMENET_TEST_RUNTIME_ENVIRONMENT "PATH=${GAMENET_MSVC_ASAN_PATH}")
+endif()
+
+function(gamenet_configure_test_runtime test_id)
+    if(GAMENET_TEST_RUNTIME_ENVIRONMENT)
+        set_tests_properties(
+            "${test_id}"
+            PROPERTIES ENVIRONMENT "${GAMENET_TEST_RUNTIME_ENVIRONMENT}"
+        )
+    endif()
+endfunction()
+
 function(add_gamenet_test layer module source)
     get_filename_component(test_name "${source}" NAME_WE)
     string(REPLACE "/" "_" module_id "${module}")
@@ -12,6 +33,7 @@ function(add_gamenet_test layer module source)
     target_link_libraries(${target} PRIVATE GameNet::core)
     add_test(NAME "${test_id}" COMMAND ${target})
     set_tests_properties("${test_id}" PROPERTIES LABELS "${test_labels}")
+    gamenet_configure_test_runtime("${test_id}")
 endfunction()
 
 function(add_gamenet_component_test layer module component source)
@@ -27,6 +49,7 @@ function(add_gamenet_component_test layer module component source)
     target_link_libraries(${target} PRIVATE ${component})
     add_test(NAME "${test_id}" COMMAND ${target})
     set_tests_properties("${test_id}" PROPERTIES LABELS "${layer};${module};${ARGN}")
+    gamenet_configure_test_runtime("${test_id}")
 endfunction()
 
 add_gamenet_test(unit channel ${CMAKE_CURRENT_SOURCE_DIR}/unit/channel/test_channel.cpp)

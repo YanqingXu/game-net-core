@@ -5,8 +5,10 @@ function(gamenet_configure_sanitizers target_name)
 
     if(MSVC)
         if(GAMENET_ENABLE_ASAN_UBSAN)
+            # MSVC's compiler switch both instruments objects and emits the
+            # ASan runtime-link directives. Passing the compiler switch
+            # directly to link.exe only produces LNK4044 and has no effect.
             target_compile_options(${target_name} PUBLIC /fsanitize=address)
-            target_link_options(${target_name} PUBLIC /fsanitize=address)
         endif()
         return()
     endif()

@@ -166,3 +166,24 @@ Preview publication plan, not production readiness or API/ABI stability. PR #4
 had zero submitted GitHub reviews, which remains a process limitation.
 Experimental HTTP, RPC, UDP/KCP, TLS, and coroutine work remains deferred behind
 separate intent promotion.
+
+## Phase 5: Production Hardening
+
+In progress after the Phase 4 Preview:
+
+- [x] Suppress Linux per-write `SIGPIPE` without changing process-global signal
+  disposition; peer-close write failure remains an explicit connection error.
+- [x] Bound per-connection input buffers and admitted output bytes across
+  owner-loop buffering and accepted cross-thread sends, expose overload
+  results, and pause/resume reads with owner-loop high/low-water hysteresis.
+- [x] Bound EventLoop cross-thread task admission and drain work per iteration,
+  with explicit rejection and a bounded legacy/control reserve.
+- [x] Add completion-aware graceful server drain with timeout and forced-close
+  fallback.
+- [x] Replace recoverable runtime socket/accept failures with explicit results
+  and policy hooks.
+- [x] Define callback exception containment and connection/server failure policy.
+- [x] Add connection admission limits, unauthenticated timeout, and basic abuse
+  controls.
+- [ ] Re-run the full Linux/Windows sanitizer, long-soak, benchmark, package,
+  and evidence gates for one frozen production-hardening candidate.

@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <exception>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -61,7 +62,7 @@ private:
     void addTimerInLoop(TimerPtr timer);
     void cancelInLoop(TimerId timerId);
     int pollTimeoutMs(int defaultTimeoutMs) const;
-    void handleExpired(gamenet::base::Timestamp now);
+    std::vector<std::exception_ptr> handleExpired(gamenet::base::Timestamp now);
 
     bool insert(TimerPtr timer);
     std::vector<TimerPtr> getExpired(gamenet::base::Timestamp now);

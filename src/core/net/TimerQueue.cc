@@ -104,19 +104,27 @@ int TimerQueue::pollTimeoutMs(int defaultTimeoutMs) const {
     return std::min(defaultTimeoutMs, nextTimerMs);
 }
 
-void TimerQueue::handleExpired(gamenet::base::Timestamp now) {
+std::vector<std::exception_ptr> TimerQueue::handleExpired(gamenet::base::Timestamp now) {
     loop_->assertInLoopThread();
     if (timers_.empty() || timers_.begin()->second->expiration > now) {
-        return;
+        return {};
     }
 
     auto expired = getExpired(now);
+    std::vector<std::exception_ptr> exceptions;
+    exceptions.reserve(expired.size());
     for (const auto& timer : expired) {
         if (!timer->canceled) {
-            timer->callback();
+            try {
+                timer->callback();
+            } catch (...) {
+                timer->canceled = true;
+                exceptions.push_back(std::current_exception());
+            }
         }
     }
     reset(expired, gamenet::base::now());
+    return exceptions;
 }
 
 bool TimerQueue::insert(TimerPtr timer) {

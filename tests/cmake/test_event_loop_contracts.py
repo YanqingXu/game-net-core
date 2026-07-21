@@ -16,6 +16,9 @@ def main() -> None:
     future_test_helper = repo_root / "tests" / "support" / "FutureTest.h"
     event_loop_header = repo_root / "include" / "gamenet" / "core" / "net" / "EventLoop.h"
     event_loop_source = repo_root / "src" / "core" / "net" / "EventLoop.cc"
+    channel_source = repo_root / "src" / "core" / "net" / "Channel.cc"
+    timer_queue_source = repo_root / "src" / "core" / "net" / "TimerQueue.cc"
+    event_loop_thread_source = repo_root / "src" / "core" / "net" / "EventLoopThread.cc"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     event_loop_intent = repo_root / "intents" / "modules" / "event_loop.intent.md"
     event_loop_thread_intent = repo_root / "intents" / "modules" / "event_loop_thread.intent.md"
@@ -33,6 +36,9 @@ def main() -> None:
     future_test_helper_text = future_test_helper.read_text(encoding="utf-8")
     event_loop_header_text = event_loop_header.read_text(encoding="utf-8")
     event_loop_source_text = event_loop_source.read_text(encoding="utf-8")
+    channel_source_text = channel_source.read_text(encoding="utf-8")
+    timer_queue_source_text = timer_queue_source.read_text(encoding="utf-8")
+    event_loop_thread_source_text = event_loop_thread_source.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     event_loop_intent_text = event_loop_intent.read_text(encoding="utf-8")
     event_loop_thread_intent_text = event_loop_thread_intent.read_text(encoding="utf-8")
@@ -50,6 +56,8 @@ def main() -> None:
     require(event_loop_intent_text, "quit still drains already-queued nested functors", event_loop_intent)
     require(event_loop_intent_text, "final accepted-work drain", event_loop_intent)
     require(event_loop_thread_intent_text, "explicit stop drains accepted work", event_loop_thread_intent)
+    require(event_loop_intent_text, "asynchronous callback exceptions are counted", event_loop_intent)
+    require(event_loop_thread_intent_text, "must not call `std::terminate`", event_loop_thread_intent)
 
     require(event_loop_test_text, '#include "support/FutureTest.h"', event_loop_test)
     require(event_loop_test_text, "gamenet::test::waitUntilReady", event_loop_test)
@@ -58,6 +66,14 @@ def main() -> None:
     require(event_loop_test_text, "GAMENET_TEST_ASSERT(executor.isInOwnerThread())", event_loop_test)
     require(event_loop_test_text, "GAMENET_TEST_ASSERT(!executor.available())", event_loop_test)
     require(event_loop_test_text, "GAMENET_TEST_ASSERT(future.get() != callerThread)", event_loop_test)
+    require(event_loop_test_text, "EventLoopCallbackExceptionAction::Continue", event_loop_test)
+    require(event_loop_test_text, "EventLoopCallbackExceptionAction::Quit", event_loop_test)
+    require(event_loop_test_text, "channel callback failure", event_loop_test)
+    require(event_loop_test_text, "timer callback failure", event_loop_test)
+    require(event_loop_test_text, "pending callback failure", event_loop_test)
+    require(event_loop_test_text, "metric callback failure", event_loop_test)
+    require(event_loop_test_text, "thread init failure", event_loop_test)
+    require(event_loop_test_text, "second worker init failure", event_loop_test)
     require(event_loop_thread_test_text, '#include "support/FutureTest.h"', event_loop_thread_test)
     require(event_loop_thread_test_text, "gamenet::test::waitUntilReady", event_loop_thread_test)
     require(event_loop_thread_test_text, "loop->queueInLoop", event_loop_thread_test)
@@ -78,6 +94,16 @@ def main() -> None:
     require(event_loop_source_text, "callingPendingFunctors_.store(false, std::memory_order_relaxed)", event_loop_source)
     require(event_loop_source_text, "bool drainingAccepted{false}", event_loop_source)
     require(event_loop_source_text, "state->accepting || state->drainingAccepted", event_loop_source)
+    require(event_loop_header_text, "void setCallbackExceptionHandler", event_loop_header)
+    require(event_loop_header_text, "callbackExceptionCount()", event_loop_header)
+    require(event_loop_source_text, "EventLoopCallbackSource::ChannelEvent", event_loop_source)
+    require(event_loop_source_text, "EventLoopCallbackSource::PendingFunctor", event_loop_source)
+    require(event_loop_source_text, "EventLoopCallbackSource::Metric", event_loop_source)
+    require(channel_source_text, "eventHandling_ = false;\n        throw;", channel_source)
+    require(timer_queue_source_text, "std::vector<std::exception_ptr>", timer_queue_source)
+    require(timer_queue_source_text, "timer->canceled = true", timer_queue_source)
+    require(event_loop_thread_source_text, "startupException_ = std::current_exception()", event_loop_thread_source)
+    require(event_loop_thread_source_text, "std::rethrow_exception(startupException)", event_loop_thread_source)
     require(tests_cmake_text, "test_event_loop.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread.cpp threading lifecycle", tests_cmake)
     require(

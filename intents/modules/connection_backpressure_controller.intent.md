@@ -1,8 +1,12 @@
 ---
-status: deferred
+status: active
 target: GameNet::core
 migration_source: mini_trantor
-promote_gate: post-core-preview
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: adapt
+source_commit: 3eba368475a68f677aae920d4f299b155db23d57
+source_paths: mini/net/detail/ConnectionBackpressureController.h;mini/net/detail/ConnectionBackpressureController.cc
 ---
 
 # Module Intent: ConnectionBackpressureController
@@ -83,11 +87,18 @@ all of that logic inline.
 ---
 
 ## 10. Test Contracts
-- crossing high-water pauses read processing for that connection
-- draining to low-water resumes read processing on the owner loop
-- disabling the policy restores normal read interest
-- teardown does not leave the connection stuck in paused-read state
-- cross-thread policy configuration still mutates behavior on the owner loop only
+- `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
+  proves that crossing high-water pauses read processing, input remains
+  undispatched while paused, draining to low-water resumes on the owner loop,
+  and the connection-wide hard byte limit rejects before buffer growth.
+- `tests/contract/tcp_server/test_tcp_server_contract.cpp` proves that
+  TcpServer installs its configured connection hard limit before establishment.
+- TcpConnection separately enforces the input-buffer hard limit carried by the
+  same immutable setup options; that input limit does not add mutable state to
+  this output-hysteresis controller.
+- invalid or non-hysteretic threshold triples are rejected before connection
+  state changes
+- teardown clears controller activity through the normal connection close path
 
 ---
 

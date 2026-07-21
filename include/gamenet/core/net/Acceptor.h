@@ -8,6 +8,7 @@
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "gamenet/core/net/TimerId.h"
 
 #include <functional>
 #include <memory>
@@ -15,6 +16,24 @@
 namespace gamenet::net {
 
 class EventLoop;
+
+enum class AcceptorErrorStage {
+    Accept,
+    AcceptedSocketCreate,
+    AcceptedSocketSetup,
+};
+
+struct AcceptorError {
+    AcceptorErrorStage stage{AcceptorErrorStage::Accept};
+    int errorCode{0};
+};
+
+enum class AcceptorErrorAction {
+    Retry,
+    Stop,
+};
+
+using AcceptorErrorCallback = std::function<AcceptorErrorAction(const AcceptorError&)>;
 
 class Acceptor : private gamenet::base::noncopyable {
 public:
@@ -24,6 +43,7 @@ public:
     ~Acceptor();
 
     void setNewConnectionCallback(NewConnectionCallback cb);
+    void setErrorCallback(AcceptorErrorCallback cb);
     bool listening() const noexcept;
     const InetAddress& listenAddress() const noexcept;
     void listen();
@@ -31,6 +51,9 @@ public:
 
 private:
     void handleRead(gamenet::base::Timestamp receiveTime);
+    void handleAcceptError(AcceptorErrorStage stage, int error);
+    void scheduleAcceptRetry();
+    void resumeAccept();
 #ifdef _WIN32
     void postAccept();
     void closePendingAccept() noexcept;
@@ -41,6 +64,8 @@ private:
     Channel acceptChannel_;
     InetAddress listenAddr_;
     NewConnectionCallback newConnectionCallback_;
+    AcceptorErrorCallback errorCallback_;
+    TimerId retryTimer_;
 #ifdef _WIN32
     struct IocpAcceptState;
     std::shared_ptr<IocpAcceptState> iocpAccept_;

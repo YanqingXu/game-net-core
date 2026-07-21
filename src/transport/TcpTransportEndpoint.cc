@@ -40,8 +40,17 @@ EndpointResult TcpTransportEndpoint::send(std::string_view bytes) {
     if (!connection->connected()) {
         return EndpointResult::Closed;
     }
-    connection->send(bytes);
-    return EndpointResult::Accepted;
+    switch (connection->trySend(bytes)) {
+    case gamenet::net::TcpSendResult::Accepted:
+        return EndpointResult::Accepted;
+    case gamenet::net::TcpSendResult::Closed:
+        return EndpointResult::Closed;
+    case gamenet::net::TcpSendResult::Overloaded:
+        return EndpointResult::Overloaded;
+    case gamenet::net::TcpSendResult::OwnerUnavailable:
+        return EndpointResult::OwnerUnavailable;
+    }
+    return EndpointResult::Closed;
 }
 
 EndpointResult TcpTransportEndpoint::close(CloseReason reason) {

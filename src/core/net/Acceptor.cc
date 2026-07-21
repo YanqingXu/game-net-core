@@ -13,9 +13,29 @@
 #endif
 
 #include <cerrno>
+#include <chrono>
+#include <system_error>
 #include <utility>
 
 namespace gamenet::net {
+
+namespace {
+
+[[noreturn]] void throwSocketError(const char* operation, int error) {
+    throw std::system_error(
+        std::error_code(error, std::system_category()),
+        std::string(operation) + ": " + sockets::errorMessage(error));
+}
+
+SocketFd createAcceptSocket(sa_family_t family) {
+    const SocketFd fd = sockets::createNonblocking(family);
+    if (!sockets::isValid(fd)) {
+        throwSocketError("accept socket creation", sockets::lastError());
+    }
+    return fd;
+}
+
+}  // namespace
 
 #ifdef _WIN32
 
@@ -42,7 +62,7 @@ struct Acceptor::IocpAcceptState {
 
 Acceptor::Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reusePort)
     : loop_(loop),
-      acceptSocket_(sockets::createNonblockingOrDie(listenAddr.family())),
+      acceptSocket_(createAcceptSocket(listenAddr.family())),
       acceptChannel_(loop, acceptSocket_.fd()),
       listening_(false) {
     acceptSocket_.setReuseAddr(true);
@@ -53,13 +73,21 @@ Acceptor::Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reusePor
         acceptSocket_.setIpv6Only(false);
     }
     acceptSocket_.bindAddress(listenAddr);
-    listenAddr_ = InetAddress(sockets::getLocalAddr(acceptSocket_.fd()));
+    sockaddr_storage localStorage{};
+    if (!sockets::tryGetLocalAddr(acceptSocket_.fd(), &localStorage)) {
+        throwSocketError("getsockname", sockets::lastError());
+    }
+    listenAddr_ = InetAddress(localStorage);
     acceptChannel_.setReadCallback([this](gamenet::base::Timestamp receiveTime) { handleRead(receiveTime); });
 }
 
 Acceptor::~Acceptor() {
     if (!loop_->isInLoopThread()) {
         LOG_FATAL << "Acceptor destroyed from non-owner thread";
+    }
+    if (retryTimer_.valid()) {
+        loop_->cancel(retryTimer_);
+        retryTimer_ = {};
     }
 #ifdef _WIN32
     closePendingAccept();
@@ -74,6 +102,10 @@ void Acceptor::setNewConnectionCallback(NewConnectionCallback cb) {
     newConnectionCallback_ = std::move(cb);
 }
 
+void Acceptor::setErrorCallback(AcceptorErrorCallback cb) {
+    errorCallback_ = std::move(cb);
+}
+
 bool Acceptor::listening() const noexcept {
     return listening_;
 }
@@ -84,16 +116,24 @@ const InetAddress& Acceptor::listenAddress() const noexcept {
 
 void Acceptor::listen() {
     loop_->assertInLoopThread();
-    listening_ = true;
     acceptSocket_.listen();
-    acceptChannel_.enableReading();
 #ifdef _WIN32
     if (!iocpAccept_) {
         iocpAccept_ = std::make_shared<IocpAcceptState>();
         iocpAccept_->acceptEx = platform::loadAcceptEx(acceptSocket_.fd());
+        if (iocpAccept_->acceptEx == nullptr) {
+            throwSocketError("load AcceptEx", sockets::lastError());
+        }
         iocpAccept_->getAcceptExSockaddrs = platform::loadGetAcceptExSockaddrs(acceptSocket_.fd());
+        if (iocpAccept_->getAcceptExSockaddrs == nullptr) {
+            throwSocketError("load GetAcceptExSockaddrs", sockets::lastError());
+        }
     }
     iocpAccept_->operation.channel = &acceptChannel_;
+#endif
+    listening_ = true;
+    acceptChannel_.enableReading();
+#ifdef _WIN32
     postAccept();
 #endif
 }
@@ -104,6 +144,10 @@ void Acceptor::stop() {
         return;
     }
     listening_ = false;
+    if (retryTimer_.valid()) {
+        loop_->cancel(retryTimer_);
+        retryTimer_ = {};
+    }
 #ifdef _WIN32
     closePendingAccept();
 #endif
@@ -127,16 +171,29 @@ void Acceptor::handleRead(gamenet::base::Timestamp receiveTime) {
     }
     iocpAccept_->pending = false;
     if (iocpAccept_->operation.error != 0) {
+        const int error = static_cast<int>(iocpAccept_->operation.error);
         sockets::close(iocpAccept_->accepted);
         iocpAccept_->accepted = kInvalidSocket;
-        if (listening_) {
-            postAccept();
-        }
+        handleAcceptError(AcceptorErrorStage::Accept, error);
         return;
     }
 
-    platform::updateAcceptContextOrDie(iocpAccept_->accepted, acceptSocket_.fd());
-    InetAddress peerAddr(sockets::getPeerAddr(iocpAccept_->accepted));
+    if (!platform::updateAcceptContext(iocpAccept_->accepted, acceptSocket_.fd())) {
+        const int error = sockets::lastError();
+        sockets::close(iocpAccept_->accepted);
+        iocpAccept_->accepted = kInvalidSocket;
+        handleAcceptError(AcceptorErrorStage::AcceptedSocketSetup, error);
+        return;
+    }
+    sockaddr_storage peerStorage{};
+    if (!sockets::tryGetPeerAddr(iocpAccept_->accepted, &peerStorage)) {
+        const int error = sockets::lastError();
+        sockets::close(iocpAccept_->accepted);
+        iocpAccept_->accepted = kInvalidSocket;
+        handleAcceptError(AcceptorErrorStage::AcceptedSocketSetup, error);
+        return;
+    }
+    InetAddress peerAddr(peerStorage);
     const SocketFd connfd = iocpAccept_->accepted;
     iocpAccept_->accepted = kInvalidSocket;
 
@@ -170,8 +227,59 @@ void Acceptor::handleRead(gamenet::base::Timestamp receiveTime) {
         if (sockets::isInterrupted(error)) {
             continue;
         }
+        handleAcceptError(AcceptorErrorStage::Accept, error);
         break;
     }
+#endif
+}
+
+void Acceptor::handleAcceptError(AcceptorErrorStage stage, int error) {
+    loop_->assertInLoopThread();
+    if (!listening_) {
+        return;
+    }
+    LOG_WARN << "Acceptor runtime error: " << error << " " << sockets::errorMessage(error);
+    AcceptorErrorAction action = AcceptorErrorAction::Retry;
+    if (errorCallback_) {
+        try {
+            action = errorCallback_(AcceptorError{.stage = stage, .errorCode = error});
+        } catch (const std::exception& callbackError) {
+            LOG_ERROR << "Acceptor error callback threw: " << callbackError.what();
+            action = AcceptorErrorAction::Stop;
+        } catch (...) {
+            LOG_ERROR << "Acceptor error callback threw a non-standard exception";
+            action = AcceptorErrorAction::Stop;
+        }
+    }
+    if (action == AcceptorErrorAction::Stop) {
+        stop();
+        return;
+    }
+    scheduleAcceptRetry();
+}
+
+void Acceptor::scheduleAcceptRetry() {
+    loop_->assertInLoopThread();
+    if (!listening_ || retryTimer_.valid()) {
+        return;
+    }
+    if (acceptChannel_.isReading()) {
+        acceptChannel_.disableReading();
+    }
+    retryTimer_ = loop_->runAfter(std::chrono::milliseconds(100), [this] { resumeAccept(); });
+}
+
+void Acceptor::resumeAccept() {
+    loop_->assertInLoopThread();
+    retryTimer_ = {};
+    if (!listening_) {
+        return;
+    }
+    if (!acceptChannel_.isReading()) {
+        acceptChannel_.enableReading();
+    }
+#ifdef _WIN32
+    postAccept();
 #endif
 }
 
@@ -183,7 +291,11 @@ void Acceptor::postAccept() {
         return;
     }
 
-    iocpAccept_->accepted = platform::createOverlappedTcpOrDie(listenAddr_.family());
+    iocpAccept_->accepted = platform::createOverlappedTcp(listenAddr_.family());
+    if (!sockets::isValid(iocpAccept_->accepted)) {
+        handleAcceptError(AcceptorErrorStage::AcceptedSocketCreate, sockets::lastError());
+        return;
+    }
     iocpAccept_->operation.overlapped = OVERLAPPED{};
     iocpAccept_->operation.kind = IocpOperationKind::Accept;
     iocpAccept_->operation.channel = &acceptChannel_;
@@ -202,10 +314,12 @@ void Acceptor::postAccept() {
         &bytes,
         &iocpAccept_->operation.overlapped);
     if (!ok && sockets::lastError() != ERROR_IO_PENDING) {
+        const int error = sockets::lastError();
         iocpAccept_->pending = false;
         sockets::close(iocpAccept_->accepted);
         iocpAccept_->accepted = kInvalidSocket;
-        LOG_SYSFATAL << "AcceptEx: " << sockets::errorMessage(sockets::lastError());
+        handleAcceptError(AcceptorErrorStage::Accept, error);
+        return;
     }
     loop_->retainCompletionOperation(&iocpAccept_->operation, iocpAccept_);
 }

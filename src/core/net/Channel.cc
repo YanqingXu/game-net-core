@@ -138,26 +138,30 @@ void Channel::update() {
 
 void Channel::handleEventWithGuard(gamenet::base::Timestamp receiveTime) {
     eventHandling_ = true;
-
-    if ((revents_ & kCloseEvent) && !(revents_ & kReadEvent)) {
-        if (closeCallback_) {
-            closeCallback_();
+    try {
+        if ((revents_ & kCloseEvent) && !(revents_ & kReadEvent)) {
+            if (closeCallback_) {
+                closeCallback_();
+            }
         }
-    }
-    if (revents_ & kErrorEvent) {
-        if (errorCallback_) {
-            errorCallback_();
+        if (revents_ & kErrorEvent) {
+            if (errorCallback_) {
+                errorCallback_();
+            }
         }
-    }
-    if (revents_ & kReadEvent) {
-        if (readCallback_) {
-            readCallback_(receiveTime);
+        if (revents_ & kReadEvent) {
+            if (readCallback_) {
+                readCallback_(receiveTime);
+            }
         }
-    }
-    if (revents_ & kWriteEvent) {
-        if (writeCallback_) {
-            writeCallback_();
+        if (revents_ & kWriteEvent) {
+            if (writeCallback_) {
+                writeCallback_();
+            }
         }
+    } catch (...) {
+        eventHandling_ = false;
+        throw;
     }
 
     eventHandling_ = false;

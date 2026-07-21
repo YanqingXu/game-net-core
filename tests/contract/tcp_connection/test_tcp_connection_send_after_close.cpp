@@ -17,7 +17,7 @@
 
 using namespace std::chrono_literals;
 
-int main() {
+void testSendAfterClose() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair;
     auto connection = gamenet::test::makeTcpConnection(loop, pair, "send-after-close-is-ignored");
@@ -95,5 +95,56 @@ int main() {
     GAMENET_TEST_ASSERT(writeCompleteCallbackCount == 0);
     GAMENET_TEST_ASSERT(connection->disconnected());
 
+}
+
+void testInputBufferLimitClosesUnconsumedConnection() {
+    gamenet::net::EventLoop loop;
+    gamenet::test::ConnectedSocketPair pair;
+    auto connection = gamenet::test::makeTcpConnection(loop, pair, "input-buffer-hard-limit");
+    connection->setBackpressureOptions(
+        gamenet::net::TcpConnectionBackpressureOptions{16, 32, 256, 32});
+
+    gamenet::test::TcpConnectionCallbackCounts callbacks;
+    gamenet::test::setCountingConnectionCallback(connection, loop, callbacks);
+
+    int messageCallbackCount = 0;
+    std::size_t observedInputBytes = 0;
+    connection->setMessageCallback(
+        [&](const gamenet::net::TcpConnectionPtr&, gamenet::net::Buffer* input) {
+            GAMENET_TEST_ASSERT(loop.isInLoopThread());
+            ++messageCallbackCount;
+            observedInputBytes = input->readableBytes();
+            // Intentionally leave all input unconsumed. Reaching the configured
+            // cap must close instead of growing the connection buffer again.
+        });
+    connection->setCloseCallback([&](const gamenet::net::TcpConnectionPtr& conn) {
+        GAMENET_TEST_ASSERT(loop.isInLoopThread());
+        ++callbacks.closed;
+        conn->connectDestroyed();
+        loop.quit();
+    });
+
+    loop.runAfter(0ms, [&] {
+        connection->connectEstablished();
+        const std::string payload(64, 'i');
+        const ssize_t n =
+            gamenet::net::sockets::write(pair.peerFd, payload.data(), payload.size());
+        GAMENET_TEST_ASSERT(n == static_cast<ssize_t>(payload.size()));
+    });
+
+    gamenet::test::runLoopWithTimeout(
+        loop,
+        1s,
+        "timed out waiting for input-buffer hard-limit close");
+
+    GAMENET_TEST_ASSERT(messageCallbackCount == 1);
+    GAMENET_TEST_ASSERT(observedInputBytes == 32);
+    gamenet::test::assertSingleConnectDisconnectClose(callbacks);
+    GAMENET_TEST_ASSERT(connection->disconnected());
+}
+
+int main() {
+    testSendAfterClose();
+    testInputBufferLimitClosesUnconsumedConnection();
     return 0;
 }

@@ -34,17 +34,44 @@ It must not blur these roles.
 - Timer containers own timer metadata
 - Scheduled callbacks do not imply ownership of arbitrary target objects
 - Cancellation semantics must be explicit
+- TcpServer owns its graceful-stop coordination state; returned shared futures
+  observe the terminal result but do not own TcpServer
+- Acceptor owns its retry timer; stop/destruction cancels it before Acceptor
+  storage is released
 
-## 7. Cross-Layer Rule
+## 7. Accepted Socket Failure
+- Acceptor owns an accepted fd until it transfers that fd through the new-
+  connection callback
+- TcpServer owns the transferred fd until TcpConnection construction succeeds
+- Every rejected or failed accepted-socket setup path closes the fd exactly once
+
+## 8. Callback Exception State
+- Exception records borrow no callback-owned storage; `std::exception_ptr`
+  owns the captured exception for the duration of policy observation
+- A callback-exception observer does not own or extend EventLoop lifetime
+- TcpConnection remains owned by its existing shared lifecycle while callback
+  failure converges through close/remove-before-destroy
+
+## 9. TcpServer Admission State
+- TcpServer owns admission counters, active-per-peer bookkeeping, bounded rate
+  buckets, expiry records, and unauthenticated TimerIds
+- A rate bucket owns only a peer address value and finite attempt metadata; it
+  never owns a connection or socket
+- Authentication timers borrow TcpServer through the existing revocable
+  lifetime token and are canceled on authentication, removal, stop, or destroy
+- Rejected accepted sockets remain owned by TcpServer's local Socket guard and
+  are closed exactly once before the callback returns
+
+## 10. Cross-Layer Rule
 - Lower reactor layers do not own higher business objects
 - Higher layers may own reactor-layer wrappers, but their destruction path must respect thread/lifecycle rules
 
-## 8. Destruction Rule
+## 11. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists
 - No object should remain registered in Poller after its effective destruction path begins
 
-## 9. Forbidden
+## 12. Forbidden
 - Implicit transfer through raw pointer handoff with no documented owner
 - Shared ownership used as a substitute for lifecycle design
 - Poller owning Channel

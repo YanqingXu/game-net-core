@@ -5,6 +5,7 @@
 
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/base/noncopyable.h"
+#include "gamenet/core/net/CallbackException.h"
 #include "gamenet/core/net/EventLoopMetrics.h"
 #include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/core/net/TimerId.h"
@@ -12,6 +13,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -24,12 +27,22 @@ class Channel;
 class Poller;
 class TimerQueue;
 
+struct EventLoopOptions {
+    std::size_t maxPendingFunctors{65536};
+    // Legacy/owner-control queueInLoop calls may consume this bounded reserve;
+    // capacity-aware tryQueueInLoop/EventLoopExecutor calls may not.
+    std::size_t reservedPendingFunctors{1024};
+    std::size_t maxFunctorsPerIteration{1024};
+
+    void validate() const;
+};
+
 class EventLoop : private gamenet::base::noncopyable {
 public:
     using Functor = std::function<void()>;
     using TimerDuration = std::chrono::steady_clock::duration;
 
-    EventLoop();
+    explicit EventLoop(EventLoopOptions options = {});
     ~EventLoop();
 
     void loop();
@@ -39,8 +52,15 @@ public:
 
     void runInLoop(Functor cb);
     void queueInLoop(Functor cb);
+    // Non-throwing capacity-aware admission. False means empty callback or
+    // saturation; executor admission closure is handled by EventLoopExecutor.
+    bool tryQueueInLoop(Functor cb);
+    std::size_t pendingFunctorCount() const;
+    std::uint64_t rejectedFunctorCount() const noexcept;
     EventLoopExecutor executor() const noexcept;
     void setEventLoopMetricCallback(EventLoopMetricCallback cb);
+    void setCallbackExceptionHandler(EventLoopCallbackExceptionHandler cb);
+    std::uint64_t callbackExceptionCount() const noexcept;
     TimerId runAt(gamenet::base::Timestamp time, Functor cb);
     TimerId runAfter(TimerDuration delay, Functor cb);
     TimerId runEvery(TimerDuration interval, Functor cb);
@@ -64,8 +84,12 @@ private:
     };
 
     void handleRead(gamenet::base::Timestamp receiveTime);
-    void doPendingFunctors();
+    void doPendingFunctors(std::size_t maxCount);
+    bool tryQueueInLoopImpl(Functor cb, bool allowReserve);
     void emitEventLoopMetric(EventLoopMetricSample sample);
+    void handleCallbackException(
+        EventLoopCallbackSource source,
+        std::exception_ptr exception) noexcept;
 
     using ChannelList = std::vector<Channel*>;
 
@@ -83,10 +107,14 @@ private:
     ChannelList activeChannels_;
     Channel* currentActiveChannel_;
     EventLoopMetricCallback eventLoopMetricCallback_;
+    EventLoopCallbackExceptionHandler callbackExceptionHandler_;
+    EventLoopOptions options_;
     std::atomic<std::size_t> pendingFunctorPeak_;
     std::atomic<std::uint64_t> wakeupCount_;
+    std::atomic<std::uint64_t> rejectedFunctorCount_;
+    std::atomic<std::uint64_t> callbackExceptionCount_;
     mutable std::mutex mutex_;
-    std::vector<PendingFunctor> pendingFunctors_;
+    std::deque<PendingFunctor> pendingFunctors_;
 };
 
 }  // namespace gamenet::net

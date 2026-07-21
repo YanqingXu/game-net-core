@@ -93,6 +93,9 @@ all while preserving the same owner-loop discipline as the server side.
 - repeated disconnect calls are idempotent
 - a terminal connect failure without a scheduled retry releases the admitted
   request so a later explicit `connect()` can start a fresh attempt
+- callback-exception observation is propagated to the active TcpConnection;
+  business callback failure follows the same single-connection close policy as
+  server-owned connections
 
 ---
 

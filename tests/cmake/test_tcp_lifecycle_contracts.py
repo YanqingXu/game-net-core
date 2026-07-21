@@ -15,6 +15,7 @@ def main() -> None:
     tcp_client_intent = repo_root / "intents" / "modules" / "tcp_client.intent.md"
     tcp_server_intent = repo_root / "intents" / "modules" / "tcp_server.intent.md"
     tcp_connection_intent = repo_root / "intents" / "modules" / "tcp_connection.intent.md"
+    acceptor_intent = repo_root / "intents" / "modules" / "acceptor.intent.md"
     server_contract_test = (
         repo_root / "tests" / "contract" / "tcp_server" / "test_tcp_server_contract.cpp"
     )
@@ -139,6 +140,9 @@ def main() -> None:
     socket_contract_test = (
         repo_root / "tests" / "contract" / "socket" / "test_socket_contract.cpp"
     )
+    connector_contract_test = (
+        repo_root / "tests" / "contract" / "connector" / "test_connector_contract.cpp"
+    )
     connector_retry_stop_test = (
         repo_root / "tests" / "contract" / "connector" / "test_connector_retry_stop.cpp"
     )
@@ -232,6 +236,10 @@ def main() -> None:
     tcp_client_source = repo_root / "src" / "core" / "net" / "TcpClient.cc"
     tcp_client_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpClient.h"
     tcp_server_source = repo_root / "src" / "core" / "net" / "TcpServer.cc"
+    tcp_server_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpServer.h"
+    sockets_ops_header = repo_root / "include" / "gamenet" / "core" / "net" / "SocketsOps.h"
+    acceptor_header = repo_root / "include" / "gamenet" / "core" / "net" / "Acceptor.h"
+    acceptor_source = repo_root / "src" / "core" / "net" / "Acceptor.cc"
     connector_header = repo_root / "include" / "gamenet" / "core" / "net" / "Connector.h"
     connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
     iocp_poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
@@ -305,6 +313,7 @@ def main() -> None:
     )
     assert acceptor_contract_test.exists(), f"missing Acceptor contract: {acceptor_contract_test}"
     assert socket_contract_test.exists(), f"missing Socket contract: {socket_contract_test}"
+    assert connector_contract_test.exists(), f"missing Connector contract: {connector_contract_test}"
     assert connector_retry_stop_test.exists(), (
         f"missing Connector retry-stop contract: {connector_retry_stop_test}"
     )
@@ -403,6 +412,10 @@ def main() -> None:
     require(server_stop_active_write_text, "GAMENET_TEST_ASSERT(disconnectedCallbackCount == 1)", server_stop_active_write_test)
     require(server_stop_active_write_text, "GAMENET_TEST_ASSERT(server.connectionCount() == 0)", server_stop_active_write_test)
     require(server_stop_active_write_text, "GAMENET_TEST_ASSERT(loop.isInLoopThread())", server_stop_active_write_test)
+    require(server_stop_active_write_text, "stopGracefully", server_stop_active_write_test)
+    require(server_stop_active_write_text, "TcpServerStopOutcome::Drained", server_stop_active_write_test)
+    require(server_stop_active_write_text, "TcpServerStopOutcome::ForcedAfterTimeout", server_stop_active_write_test)
+    require(server_stop_active_write_text, "forcedConnectionCount == 1", server_stop_active_write_test)
 
     server_stop_soak_text = server_stop_soak_test.read_text(encoding="utf-8")
     require(server_stop_soak_text, "server-stop-soak-contract", server_stop_soak_test)
@@ -1498,6 +1511,13 @@ def main() -> None:
     connector_intent_text = connector_intent.read_text(encoding="utf-8")
     require(connector_intent_text, "stop() during pending retry cancels timer", connector_intent)
     require(connector_intent_text, "test_connector_retry_stop.cpp", connector_intent)
+    require(connector_intent_text, "must not terminate the process", connector_intent)
+    require(connector_intent_text, "connector event observers are diagnostic", connector_intent)
+    require(connector_intent_text, "contained without interrupting", connector_intent)
+
+    acceptor_intent_text = acceptor_intent.read_text(encoding="utf-8")
+    require(acceptor_intent_text, "Retry or Stop action", acceptor_intent)
+    require(acceptor_intent_text, "test_acceptor_contract.cpp", acceptor_intent)
 
     tcp_server_intent_text = tcp_server_intent.read_text(encoding="utf-8")
     require(tcp_server_intent_text, "stop() during active write", tcp_server_intent)
@@ -1507,6 +1527,11 @@ def main() -> None:
     require(tcp_server_intent_text, "test_tcp_server_stop_worker_active_write_soak.cpp", tcp_server_intent)
     require(tcp_server_intent_text, "test_tcp_server_stop_from_worker_callback_soak.cpp", tcp_server_intent)
     require(tcp_server_intent_text, "test_tcp_server_repeated_stop.cpp", tcp_server_intent)
+    require(tcp_server_intent_text, "accept-error policy callbacks run on the base loop thread", tcp_server_intent)
+    require(tcp_server_intent_text, "business callback exception closes only the offending connection", tcp_server_intent)
+    require(tcp_server_intent_text, "finite global/per-peer connection counts", tcp_server_intent)
+    require(tcp_server_intent_text, "peer rate table has an explicit finite capacity", tcp_server_intent)
+    require(tcp_server_intent_text, "authentication completion may originate", tcp_server_intent)
 
     tcp_connection_intent_text = tcp_connection_intent.read_text(encoding="utf-8")
     require(tcp_connection_intent_text, "peer close or reset converges on the normal close path", tcp_connection_intent)
@@ -1535,6 +1560,8 @@ def main() -> None:
     require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_write_soak.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "force-close only the offending connection", tcp_connection_intent)
+    require(tcp_connection_intent_text, "disconnected and close callback exceptions are reported and contained", tcp_connection_intent)
 
     iocp_transport_header_text = iocp_transport_header.read_text(encoding="utf-8")
     require(iocp_transport_header_text, "cancelPendingOperations", iocp_transport_header)
@@ -1566,12 +1593,73 @@ def main() -> None:
     tcp_client_header_text = tcp_client_header.read_text(encoding="utf-8")
     require(tcp_client_header_text, "void setRetryInLoop(bool enabled) noexcept;", tcp_client_header)
     require(tcp_client_header_text, "std::atomic<std::uint64_t> activeConnectRequestId_{0};", tcp_client_header)
+    require(tcp_client_header_text, "void setCallbackExceptionHandler", tcp_client_header)
 
     tcp_server_source_text = tcp_server_source.read_text(encoding="utf-8")
+    tcp_server_header_text = tcp_server_header.read_text(encoding="utf-8")
+    require(tcp_server_header_text, "TcpServerStopFuture stopGracefully", tcp_server_header)
+    require(tcp_server_header_text, "ForcedAfterTimeout", tcp_server_header)
+    require(tcp_server_source_text, "connection->shutdown();", tcp_server_source)
+    require(tcp_server_source_text, "finishGracefulStopInLoop", tcp_server_source)
     require(tcp_server_source_text, "bool TcpServer::forceCloseAllConnections()", tcp_server_source)
     require(tcp_server_source_text, "notifyClosed", tcp_server_source)
     require(tcp_server_source_text, "setCloseCallback([notifyClosed](const TcpConnectionPtr& conn)", tcp_server_source)
     require(tcp_server_source_text, "conn->connectDestroyed();", tcp_server_source)
+    require(tcp_server_header_text, "void setAcceptErrorCallback", tcp_server_header)
+    require(tcp_server_header_text, "void setCallbackExceptionHandler", tcp_server_header)
+    require(tcp_server_source_text, "connection->setCallbackExceptionHandler", tcp_server_source)
+    require(tcp_server_header_text, "struct TcpServerAdmissionOptions", tcp_server_header)
+    require(tcp_server_header_text, "maxConnectionsPerPeer", tcp_server_header)
+    require(tcp_server_header_text, "maxConnectionAttemptsPerPeerPerWindow", tcp_server_header)
+    require(tcp_server_header_text, "maxTrackedPeerAddresses", tcp_server_header)
+    require(tcp_server_header_text, "unauthenticatedTimeout", tcp_server_header)
+    require(tcp_server_header_text, "tryMarkConnectionAuthenticated", tcp_server_header)
+    require(tcp_server_header_text, "TcpServerAdmissionStats admissionStats", tcp_server_header)
+    require(tcp_server_source_text, "prunePeerRateBuckets", tcp_server_source)
+    require(tcp_server_source_text, "RejectedPeerTrackingCapacity", tcp_server_source)
+    require(tcp_server_source_text, "releaseConnectionAdmission", tcp_server_source)
+    require(tcp_server_source_text, "clearConnectionAdmission", tcp_server_source)
+
+    require(tcp_connection_header_text, "void setCallbackExceptionHandler", tcp_connection_header)
+    require(tcp_connection_source_text, "TcpConnectionCallbackSource::Message", tcp_connection_source)
+    require(tcp_connection_source_text, "TcpConnectionCallbackSource::Disconnected", tcp_connection_source)
+    require(tcp_connection_source_text, "TcpConnectionCallbackSource::Close", tcp_connection_source)
+    require(tcp_connection_source_text, "reportCallbackException", tcp_connection_source)
+
+    server_contract_text = server_contract_test.read_text(encoding="utf-8")
+    require(server_contract_text, "observer failure must be contained", server_contract_test)
+    require(server_contract_text, "message callback failure", server_contract_test)
+    require(server_contract_text, "disconnect callback failure", server_contract_test)
+    require(server_contract_text, "callbackServer.connectionCount() == 0", server_contract_test)
+    require(server_contract_text, "global-admission-server", server_contract_test)
+    require(server_contract_text, "peer-auth-admission-server", server_contract_test)
+    require(server_contract_text, "rejectedConnectionLimit == 1", server_contract_test)
+    require(server_contract_text, "rejectedPerPeerLimit == 1", server_contract_test)
+    require(server_contract_text, "rejectedPerPeerRateLimit == 1", server_contract_test)
+    require(server_contract_text, "authenticationTimedOut == 1", server_contract_test)
+    require(server_contract_text, "tryMarkConnectionAuthenticated", server_contract_test)
+    require(server_contract_text, "admission metric failure must be contained", server_contract_test)
+
+    sockets_ops_header_text = sockets_ops_header.read_text(encoding="utf-8")
+    require(sockets_ops_header_text, "SocketFd createNonblocking(sa_family_t family);", sockets_ops_header)
+    require(sockets_ops_header_text, "bool tryGetLocalAddr", sockets_ops_header)
+    require(sockets_ops_header_text, "bool tryGetPeerAddr", sockets_ops_header)
+
+    acceptor_header_text = acceptor_header.read_text(encoding="utf-8")
+    acceptor_source_text = acceptor_source.read_text(encoding="utf-8")
+    require(acceptor_header_text, "enum class AcceptorErrorAction", acceptor_header)
+    require(acceptor_header_text, "void setErrorCallback", acceptor_header)
+    require(acceptor_source_text, "scheduleAcceptRetry", acceptor_source)
+    assert "createNonblockingOrDie" not in acceptor_source_text
+
+    acceptor_contract_text = acceptor_contract_test.read_text(encoding="utf-8")
+    socket_contract_text = socket_contract_test.read_text(encoding="utf-8")
+    require(acceptor_contract_text, "rejectedUnavailableBindAddress", acceptor_contract_test)
+    require(acceptor_contract_text, "AcceptorErrorAction::Stop", acceptor_contract_test)
+    require(socket_contract_text, "sockets::createNonblocking(unsupportedFamily)", socket_contract_test)
+    require(socket_contract_text, "invalid.tryBindAddress", socket_contract_test)
+    require(socket_contract_text, "invalid.tryListen", socket_contract_test)
+    require(socket_contract_text, "sockets::tryGetPeerAddr", socket_contract_test)
 
     connector_header_text = connector_header.read_text(encoding="utf-8")
     require(connector_header_text, "connectStopGuard_", connector_header)
@@ -1584,6 +1672,11 @@ def main() -> None:
     require(connector_source_text, "SocketFd Connector::removeAndReleaseChannel()", connector_source)
     require(connector_source_text, "std::shared_ptr<Channel>(std::move(channel_))", connector_source)
     require(connector_source_text, "loop_->queueInLoop([deferredChannel]", connector_source)
+    require(connector_source_text, "void Connector::emitEvent", connector_source)
+    require(connector_source_text, "Connector event callback threw", connector_source)
+    connector_contract_text = connector_contract_test.read_text(encoding="utf-8")
+    require(connector_contract_text, "connector observer failure", connector_contract_test)
+    require(connector_contract_text, "connectorEvents >= 2", connector_contract_test)
     assert "resetChannel" not in connector_source_text, (
         "Connector must vacate channel_ synchronously instead of leaving the member occupied until a queued reset"
     )

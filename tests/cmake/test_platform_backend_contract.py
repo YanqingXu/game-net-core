@@ -13,6 +13,10 @@ def main() -> None:
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
     poller_intent = repo_root / "intents" / "modules" / "poller.intent.md"
     platform_intent = repo_root / "intents" / "modules" / "platform_runtime.intent.md"
+    sockets_ops = repo_root / "include" / "gamenet" / "core" / "net" / "SocketsOps.h"
+    acceptor_header = repo_root / "include" / "gamenet" / "core" / "net" / "Acceptor.h"
+    acceptor_source = repo_root / "src" / "core" / "net" / "Acceptor.cc"
+    connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     poller_include_dir = repo_root / "include" / "gamenet" / "core" / "net" / "poller"
     poller_source_dir = repo_root / "src" / "core" / "net" / "poller"
@@ -26,7 +30,32 @@ def main() -> None:
     platform_text = platform_intent.read_text(encoding="utf-8")
     require(platform_text, "IOCP-backed Windows backend and `EPollPoller` on Linux", platform_intent)
     require(platform_text, "IOCP completion path", platform_intent)
+    require(platform_text, "`*OrDie` compatibility helpers are not valid", platform_intent)
     assert "SelectPoller path" not in platform_text
+
+    sockets_text = sockets_ops.read_text(encoding="utf-8")
+    require(sockets_text, "SocketFd createNonblocking(sa_family_t family);", sockets_ops)
+    require(sockets_text, "int bind(SocketFd sockfd", sockets_ops)
+    require(sockets_text, "int listen(SocketFd sockfd);", sockets_ops)
+    require(sockets_text, "bool tryGetLocalAddr", sockets_ops)
+    require(sockets_text, "bool tryGetPeerAddr", sockets_ops)
+
+    acceptor_header_text = acceptor_header.read_text(encoding="utf-8")
+    require(acceptor_header_text, "enum class AcceptorErrorAction", acceptor_header)
+    require(acceptor_header_text, "void setErrorCallback", acceptor_header)
+
+    acceptor_source_text = acceptor_source.read_text(encoding="utf-8")
+    require(acceptor_source_text, "AcceptorErrorAction::Retry", acceptor_source)
+    require(acceptor_source_text, "scheduleAcceptRetry", acceptor_source)
+    assert "createNonblockingOrDie" not in acceptor_source_text
+    assert "updateAcceptContextOrDie" not in acceptor_source_text
+
+    connector_source_text = connector_source.read_text(encoding="utf-8")
+    require(connector_source_text, "sockets::createNonblocking", connector_source)
+    require(connector_source_text, "platform::createOverlappedTcp", connector_source)
+    assert "createNonblockingOrDie" not in connector_source_text
+    assert "bindUnspecifiedOrDie" not in connector_source_text
+    assert "updateConnectContextOrDie" not in connector_source_text
 
     docs_text = ci_docs.read_text(encoding="utf-8")
     require(docs_text, "The active CI gate runs on `ubuntu-24.04` and `windows-latest`.", ci_docs)

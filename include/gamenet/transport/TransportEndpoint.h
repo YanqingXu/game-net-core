@@ -32,6 +32,8 @@ enum class EndpointResult {
     // The connection object may still exist, but owner admission and its final
     // accepted-work drain have ended, so no owner operation is permitted.
     OwnerUnavailable,
+    // The endpoint is live, but its bounded output admission is saturated.
+    Overloaded,
 };
 
 class TransportEndpoint {

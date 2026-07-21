@@ -23,14 +23,25 @@ void EventLoopThreadPool::start(const ThreadInitCallback& callback) {
     baseLoop_->assertInLoopThread();
     started_ = true;
 
-    for (int i = 0; i < numThreads_; ++i) {
-        auto thread = std::make_unique<EventLoopThread>(callback, name_ + std::to_string(i));
-        loops_.push_back(thread->startLoop());
-        threads_.push_back(std::move(thread));
-    }
+    try {
+        for (int i = 0; i < numThreads_; ++i) {
+            auto thread = std::make_unique<EventLoopThread>(callback, name_ + std::to_string(i));
+            loops_.push_back(thread->startLoop());
+            threads_.push_back(std::move(thread));
+        }
 
-    if (numThreads_ == 0 && callback) {
-        callback(baseLoop_);
+        if (numThreads_ == 0 && callback) {
+            callback(baseLoop_);
+        }
+    } catch (...) {
+        for (auto& thread : threads_) {
+            thread->stop();
+        }
+        threads_.clear();
+        loops_.clear();
+        started_ = false;
+        next_ = 0;
+        throw;
     }
 }
 

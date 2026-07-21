@@ -23,7 +23,10 @@ No other direct mutation path is allowed for core loop state.
 - Else: enqueue and wakeup loop if needed
 
 ## 5. queueInLoop
-- Always enqueue
+- Enqueue only within the configured normal-plus-reserved hard capacity;
+  saturation is explicit and never silently drops accepted work
+- Capacity-aware callers use `tryQueueInLoop()` / `EventLoopExecutor::tryQueue()`
+  and handle a false result
 - Must ensure wakeup when loop may be blocked in poll
 
 ## 6. Channel
@@ -47,12 +50,44 @@ No other direct mutation path is allowed for core loop state.
 - Callback-owned sinks and captured mutable state require their own synchronization
 - `resetForTesting()` requires a quiescent test boundary
 
-## 9. Wakeup
+## 9. TcpServer Shutdown
+- Graceful-stop requests may originate on any thread
+- Acceptor state, connection-map state, drain timers, and terminal decisions
+  are mutated only on the server base loop
+- Per-connection shutdown and force-close remain marshaled to each connection's
+  owner loop
+- Completion is published only after worker-loop join has converged
+
+## 10. Listener Error Policy
+- Acceptor and TcpServer accept-error policy callbacks execute on the base /
+  Acceptor owner EventLoop
+- Runtime accept retry timers and Channel read-interest changes remain confined
+  to that same owner loop
+- A policy callback may choose Retry or Stop; neither action permits direct
+  worker-loop mutation
+
+## 11. Callback Exceptions
+- EventLoop exception handlers execute on the affected EventLoop owner thread
+- TcpConnection exception observers execute on that connection's owner loop
+- Asynchronous callback exceptions never migrate cleanup to another thread;
+  Continue/Quit and connection close actions reuse normal owner-loop paths
+- Thread-init exceptions cross back to the creator only through the synchronized
+  EventLoopThread startup handshake
+
+## 12. Wakeup
 - Wakeup write can be invoked cross-thread
 - Wakeup read/clear is handled in loop thread
 - Wakeup is a scheduling signal, not business event delivery
 
-## 10. Forbidden
+## 13. TcpServer Admission
+- Global/per-peer active counts, per-peer rate buckets, peer-table expiry, and
+  unauthenticated timers belong to the server base EventLoop
+- Worker-loop authentication completion is a request marshaled through the
+  base-loop executor; base-loop execution order resolves deadline races
+- Admission metric callbacks execute on the base loop and may not move socket
+  or connection lifecycle work onto an arbitrary caller thread
+
+## 14. Forbidden
 - Direct Poller mutation from non-owner thread
 - Direct Channel mutation that changes registration from non-owner thread
 - User callback execution in ambiguous thread context

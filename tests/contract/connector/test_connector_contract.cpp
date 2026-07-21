@@ -7,6 +7,7 @@
 #include "support/TestAssert.h"
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 
 namespace {
 
@@ -25,6 +26,13 @@ int main() {
 
     bool accepted = false;
     bool connected = false;
+    int connectorEvents = 0;
+
+    connector->setConnectorEventCallback(
+        [&](const gamenet::net::InetAddress&, gamenet::net::ConnectorEvent) {
+            ++connectorEvents;
+            throw std::runtime_error("connector observer failure");
+        });
 
     acceptor.setNewConnectionCallback([&](gamenet::net::SocketFd sockfd, const gamenet::net::InetAddress&) {
         GAMENET_TEST_ASSERT(loop.isInLoopThread());
@@ -55,6 +63,7 @@ int main() {
 
     GAMENET_TEST_ASSERT(accepted);
     GAMENET_TEST_ASSERT(connected);
+    GAMENET_TEST_ASSERT(connectorEvents >= 2);
     GAMENET_TEST_ASSERT(connector->state() == gamenet::net::Connector::kConnected);
 
     return 0;
