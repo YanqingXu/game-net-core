@@ -19,6 +19,8 @@
 
 #ifdef _WIN32
 #include "gamenet/core/net/platform/IocpOperation.h"
+#else
+#include <sys/socket.h>
 #endif
 
 using namespace std::chrono_literals;
@@ -30,6 +32,7 @@ struct CallbackReadablePair {
     gamenet::net::SocketFd writeFd{gamenet::net::kInvalidSocket};
 
     CallbackReadablePair() {
+#ifdef _WIN32
         gamenet::net::SocketFd fds[2]{
             gamenet::net::kInvalidSocket,
             gamenet::net::kInvalidSocket,
@@ -37,6 +40,12 @@ struct CallbackReadablePair {
         gamenet::net::sockets::createSocketPairOrDie(fds);
         readFd = fds[0];
         writeFd = fds[1];
+#else
+        int fds[2];
+        GAMENET_TEST_ASSERT(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+        readFd = fds[0];
+        writeFd = fds[1];
+#endif
     }
 
     ~CallbackReadablePair() {
