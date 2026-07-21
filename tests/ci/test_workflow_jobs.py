@@ -668,6 +668,10 @@ def main() -> None:
     require(workflow, "python tests/api/test_public_api_manifest.py")
     assert workflow.count("python3 tests/api/test_public_api_manifest.py") == 4
     assert workflow.count("python tests/api/test_public_api_manifest.py") == 2
+    require(workflow, "python3 tests/ci/test_performance_regression.py")
+    require(workflow, "python tests/ci/test_performance_regression.py")
+    assert workflow.count("python3 tests/ci/test_performance_regression.py") == 4
+    assert workflow.count("python tests/ci/test_performance_regression.py") == 2
     require(workflow, "python3 tests/cmake/test_install_package_contract.py")
     require(workflow, "python3 tests/cmake/test_packet_framer_fuzz_contract.py")
     require(workflow, "python3 tests/cmake/test_core_benchmark_contract.py")

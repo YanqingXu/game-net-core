@@ -150,6 +150,7 @@ def main() -> None:
     require(job, "python3 tests/scope/test_intent_metadata.py", workflow)
     require(job, "python3 tests/scope/test_intent_semantics.py", workflow)
     require(job, "python3 tests/api/test_public_api_manifest.py", workflow)
+    require(job, "python3 tests/ci/test_performance_regression.py", workflow)
     require(job, "python3 tests/cmake/test_core_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_phase4_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_packet_framer_fuzz_contract.py", workflow)

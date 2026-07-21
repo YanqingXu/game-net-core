@@ -46,10 +46,15 @@ def main() -> None:
     require(text, "-DCMAKE_BUILD_TYPE=Release", workflow)
     require(text, 'GAMENET_BUILD_BENCHMARKS=ON', workflow)
     require(text, "--config Release", workflow)
-    require(text, "--scenario echo", workflow)
-    require(text, "--scenario connections", workflow)
-    require(text, "--scenario slow-client", workflow)
-    require(text, "gamenet.core_benchmark.v1", workflow)
+    runner = repo_root / "tools" / "run_performance_matrix.py"
+    runner_text = runner.read_text(encoding="utf-8")
+    require(runner_text, '"--scenario", "echo"', runner)
+    require(runner_text, '"--scenario", "connections"', runner)
+    require(runner_text, '"--scenario", "slow-client"', runner)
+    require(runner_text, "gamenet.core_benchmark.v1", runner)
+    require(runner_text, '"echo-4-workers"', runner)
+    require(runner_text, '"connections-1024"', runner)
+    require(runner_text, '"slow-client-16"', runner)
     require(text, "actions/upload-artifact@v4", workflow)
     canonical_artifact_name = (
         "core-benchmark-${{ github.job }}-${{ github.sha }}-"
@@ -74,7 +79,7 @@ def main() -> None:
         "SHA-only Windows Core artifacts collide when a workflow run is rerun"
     )
     assert "throughput_mib_per_second" not in text, (
-        "manual workflow must validate schema/status, not enforce performance thresholds"
+        "workflow must keep metric budgets in the reviewed JSON contract"
     )
 
     guard = "tests/ci/test_core_benchmark_workflow.py"
@@ -83,7 +88,8 @@ def main() -> None:
 
     docs_text = docs.read_text(encoding="utf-8")
     require(docs_text, "core-benchmark", docs)
-    require(docs_text, "same commit", docs)
+    require(docs_text, "same runner", docs)
+    require(docs_text, "baseline and candidate", docs)
     require(docs_text, "raw JSON artifacts", docs)
     require(docs_text, "run attempt", docs)
 

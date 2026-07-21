@@ -54,6 +54,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -188,6 +189,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -340,6 +342,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -452,6 +455,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -569,6 +573,7 @@ jobs:
           python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
           python tests/api/test_public_api_manifest.py
+          python tests/ci/test_performance_regression.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
           python tests/cmake/test_packet_framer_fuzz_contract.py
@@ -718,6 +723,7 @@ jobs:
           python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
           python tests/api/test_public_api_manifest.py
+          python tests/ci/test_performance_regression.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
           python tests/cmake/test_packet_framer_fuzz_contract.py

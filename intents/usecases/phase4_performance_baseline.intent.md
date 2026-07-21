@@ -14,9 +14,10 @@ source_paths: tests/integration/benchmark/test_game_server_metrics_smoke.cpp;tes
 ## Intent
 
 The Phase 4 performance baseline is a reproducible, opt-in engineering tool for
-measuring protocol framing, logic-queue delay, and broadcast fanout. It records
-raw comparison evidence without converting timing or memory values into
-correctness thresholds and without expanding any installed library API.
+measuring protocol framing, logic-queue delay, and broadcast fanout. The
+executable records raw evidence without embedded thresholds; the Phase 6
+workflow applies reviewed same-runner relative regression budgets without
+expanding any installed library API.
 
 ## Scenario Contracts
 
@@ -77,8 +78,9 @@ correctness thresholds and without expanding any installed library API.
   commit, platform/backend, compiler, parameters, and command match.
 - Working-set high water is process-level sampled RSS, not allocator accounting
   and not a claim that broadcast has a hard memory cap.
-- The manual benchmark workflow captures all three scenarios on Linux epoll and
-  Windows IOCP for the same commit and uploads raw JSON without score thresholds.
+- The manual benchmark workflow runs framing plus two Logic and two Broadcast
+  scales three times for both the fixed baseline and candidate on each Linux
+  epoll and Windows IOCP runner.
 - A shared cross-platform validator rejects missing/non-finite required
   measurements (allowing valid zero latency/RSS delta) and inconsistent
   operation, accepted, rejected, batching, or working-set counts. It writes a
@@ -92,7 +94,9 @@ correctness thresholds and without expanding any installed library API.
   verifies their common identity, successful job status, file hashes, exact
   Linux/epoll plus Windows/IOCP pair, fixed scenario set, and identical
   parameters. It emits one paired evidence manifest. These checks prove
-  provenance and semantic consistency, not a performance threshold.
+  provenance, semantic consistency, matrix sample hashes, and separate
+  same-runner performance-budget success; it never compares Linux scores with
+  Windows scores.
 
 ## Verification
 

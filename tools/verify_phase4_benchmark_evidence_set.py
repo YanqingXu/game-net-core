@@ -13,11 +13,29 @@ from typing import Any
 SCHEMA = "gamenet.phase4_benchmark_pair_evidence.v1"
 JOB_SCHEMA = "gamenet.ci_evidence.v1"
 BENCHMARK_SCHEMA = "gamenet.phase4_benchmark_evidence.v1"
+PERFORMANCE_SCHEMA = "gamenet.performance_regression.v1"
+MATRIX_SCHEMA = "gamenet.performance_matrix.v1"
+PERFORMANCE_BASELINE_SHA = "2b1be4343f7c478eb40542451f30aad8ca474003"
+PERFORMANCE_REPETITIONS = 3
 EXPECTED_JOBS = {
     "linux-release-benchmark": ("linux", "epoll"),
     "windows-release-benchmark": ("windows", "iocp"),
 }
 EXPECTED_SCENARIOS = ("framing", "logic-queue", "broadcast-fanout")
+EXPECTED_PERFORMANCE_SCENARIOS = {
+    "core.connections-256",
+    "core.connections-1024",
+    "core.echo-1-worker",
+    "core.echo-2-workers",
+    "core.echo-4-workers",
+    "core.slow-client-4",
+    "core.slow-client-16",
+    "phase4.broadcast-fanout",
+    "phase4.broadcast-fanout-4096",
+    "phase4.framing",
+    "phase4.logic-queue",
+    "phase4.logic-queue-heavy",
+}
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 
 
@@ -87,6 +105,50 @@ def identity_tuple(manifest: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def verify_matrix_manifest(
+    job_root: Path,
+    relative_root: str,
+    expected_sha: str,
+    platform: str,
+    backend: str,
+    evidence_paths: set[str],
+) -> str:
+    manifest_relative = f"{relative_root}/matrix-manifest.json"
+    require(manifest_relative in evidence_paths, f"performance matrix manifest is not hashed: {manifest_relative}")
+    matrix_root = job_root / relative_root
+    manifest_path = matrix_root / "matrix-manifest.json"
+    matrix = load_json(manifest_path, "performance matrix manifest")
+    require(matrix.get("schema") == MATRIX_SCHEMA, "unexpected performance matrix schema")
+    require(matrix.get("commit_sha") == expected_sha, "performance matrix commit mismatch")
+    require(matrix.get("platform") == platform, "performance matrix platform mismatch")
+    require(matrix.get("backend") == backend, "performance matrix backend mismatch")
+    require(matrix.get("build_type") == "Release", "performance matrix build type mismatch")
+    require(matrix.get("repetitions") == PERFORMANCE_REPETITIONS, "performance matrix repetition mismatch")
+    scenarios = matrix.get("scenarios")
+    require(isinstance(scenarios, list), "performance matrix scenarios must be an array")
+    require(
+        {item.get("key") for item in scenarios if isinstance(item, dict)} == EXPECTED_PERFORMANCE_SCENARIOS,
+        "performance matrix scenario inventory mismatch",
+    )
+    for scenario in scenarios:
+        require(isinstance(scenario, dict), "performance matrix scenario must be an object")
+        samples = scenario.get("samples")
+        require(
+            isinstance(samples, list) and len(samples) == PERFORMANCE_REPETITIONS,
+            f"performance matrix sample count mismatch: {scenario.get('key')}",
+        )
+        for sample in samples:
+            require(isinstance(sample, dict), "performance matrix sample must be an object")
+            relative = sample.get("path")
+            require(isinstance(relative, str) and relative, "performance matrix sample path missing")
+            job_relative = f"{relative_root}/{relative}"
+            require(job_relative in evidence_paths, f"performance sample is not hashed: {job_relative}")
+            sample_path = matrix_root / relative
+            require(sample_path.is_file(), f"performance sample missing: {job_relative}")
+            require(sha256_file(sample_path) == sample.get("sha256"), f"performance sample hash mismatch: {job_relative}")
+    return sha256_file(manifest_path)
+
+
 def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     require(input_root.is_dir(), f"benchmark evidence root does not exist: {input_root}")
     manifest_paths = sorted(input_root.rglob("job-manifest.json"))
@@ -95,7 +157,7 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         f"expected {len(EXPECTED_JOBS)} benchmark job manifests, got {len(manifest_paths)}",
     )
 
-    by_job: dict[str, tuple[Path, dict[str, Any]]] = {}
+    by_job: dict[str, tuple[Path, dict[str, Any], set[str]]] = {}
     for manifest_path in manifest_paths:
         manifest = load_json(manifest_path, "benchmark job manifest")
         require(manifest.get("schema") == JOB_SCHEMA, f"unexpected job manifest schema: {manifest_path}")
@@ -111,16 +173,17 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         require("evidence-manifest.json" in evidence_paths, f"semantic manifest is not hashed: {job}")
         commands = manifest.get("commands")
         require(isinstance(commands, list) and commands, f"benchmark commands are missing: {job}")
-        by_job[job] = (manifest_path.parent, manifest)
+        by_job[job] = (manifest_path.parent, manifest, evidence_paths)
 
     require(set(by_job) == set(EXPECTED_JOBS), f"benchmark job set drift: {sorted(by_job)}")
-    identities = {identity_tuple(manifest) for _, manifest in by_job.values()}
+    identities = {identity_tuple(manifest) for _, manifest, _ in by_job.values()}
     require(len(identities) == 1, "Linux and Windows benchmark job identities do not match")
 
     common = next(iter(by_job.values()))[1]
     platforms: list[dict[str, Any]] = []
     common_parameters: dict[str, Any] | None = None
-    for job, (job_root, job_manifest) in sorted(by_job.items()):
+    common_performance_contract: list[tuple[str, tuple[tuple[Any, ...], ...]]] | None = None
+    for job, (job_root, job_manifest, evidence_paths) in sorted(by_job.items()):
         expected_platform, expected_backend = EXPECTED_JOBS[job]
         runner = job_manifest.get("runner")
         require(isinstance(runner, dict), f"runner identity is missing: {job}")
@@ -160,6 +223,58 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         else:
             require(parameters == common_parameters, "Linux and Windows benchmark parameters do not match")
 
+        performance_relative = "performance-regression.json"
+        require(performance_relative in evidence_paths, f"performance regression evidence is not hashed: {job}")
+        performance_path = job_root / performance_relative
+        performance = load_json(performance_path, "performance regression evidence")
+        require(performance.get("schema") == PERFORMANCE_SCHEMA, f"unexpected performance schema: {job}")
+        require(performance.get("result") == "pass", f"performance regression gate did not pass: {job}")
+        require(performance.get("platform") == expected_platform, f"performance platform mismatch: {job}")
+        require(performance.get("backend") == expected_backend, f"performance backend mismatch: {job}")
+        require(performance.get("baseline_sha") == PERFORMANCE_BASELINE_SHA, f"performance baseline mismatch: {job}")
+        require(performance.get("candidate_sha") == job_manifest.get("checkout_sha"), f"performance candidate mismatch: {job}")
+        require(performance.get("repetitions") == PERFORMANCE_REPETITIONS, f"performance repetitions mismatch: {job}")
+        budget_sha = performance.get("budget_sha256")
+        require(isinstance(budget_sha, str) and re.fullmatch(r"[0-9a-f]{64}", budget_sha) is not None,
+                f"invalid performance budget hash: {job}")
+        comparisons = performance.get("comparisons")
+        require(isinstance(comparisons, list), f"performance comparisons missing: {job}")
+        require({item.get("key") for item in comparisons if isinstance(item, dict)} == EXPECTED_PERFORMANCE_SCENARIOS,
+                f"performance comparison inventory mismatch: {job}")
+        contract = []
+        for comparison in comparisons:
+            require(isinstance(comparison, dict), f"performance comparison must be an object: {job}")
+            require(comparison.get("result") == "pass", f"performance scenario did not pass: {job}")
+            metrics = comparison.get("metrics")
+            require(isinstance(metrics, list) and metrics, f"performance metric results missing: {job}")
+            contract.append((
+                comparison["key"],
+                tuple((metric.get("name"), metric.get("direction"), metric.get("max_regression_ratio"),
+                       metric.get("absolute_slack")) for metric in metrics if isinstance(metric, dict)),
+            ))
+        contract.sort()
+        if common_performance_contract is None:
+            common_performance_contract = contract
+        else:
+            require(contract == common_performance_contract, "Linux and Windows performance budgets differ")
+
+        baseline_matrix_sha = verify_matrix_manifest(
+            job_root,
+            "performance-samples/baseline",
+            PERFORMANCE_BASELINE_SHA,
+            expected_platform,
+            expected_backend,
+            evidence_paths,
+        )
+        candidate_matrix_sha = verify_matrix_manifest(
+            job_root,
+            "performance-samples/candidate",
+            job_manifest["checkout_sha"],
+            expected_platform,
+            expected_backend,
+            evidence_paths,
+        )
+
         platforms.append(
             {
                 "job": job,
@@ -168,6 +283,9 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
                 "artifact_name": job_manifest["artifact_name"],
                 "job_manifest_sha256": sha256_file(job_root / "job-manifest.json"),
                 "semantic_manifest_sha256": sha256_file(semantic_path),
+                "performance_regression_sha256": sha256_file(performance_path),
+                "performance_baseline_matrix_sha256": baseline_matrix_sha,
+                "performance_candidate_matrix_sha256": candidate_matrix_sha,
             }
         )
 
@@ -186,6 +304,8 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         "workflow": common["workflow"],
         "repository": common["repository"],
         "parameters": common_parameters,
+        "performance_baseline_sha": PERFORMANCE_BASELINE_SHA,
+        "performance_comparisons": [item[0] for item in common_performance_contract or []],
         "platforms": platforms,
     }
     return aggregate, platforms

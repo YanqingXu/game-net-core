@@ -34,6 +34,11 @@ Phase 6 production-candidate work is now active. The first gate defines the
 manifest: stable Core declarations are fingerprinted, Phase 4 APIs remain
 provisional, platform backend headers are unsupported interfaces, and ABI
 compatibility remains explicitly out of scope before 1.0.
+MetricsExporter and its producer adapters are now implemented, and the fixed
+Core/Phase-4 Release matrix has a reviewed same-runner regression budget,
+three-repetition medians, and recursively hashed raw-sample evidence. A local
+Windows/IOCP preflight passed all 12 scenarios; it validates the tooling but is
+not a substitute for same-commit retained Linux/Windows release evidence.
 
 ## Phase Status
 
@@ -44,11 +49,11 @@ compatibility remains explicitly out of scope before 1.0.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
-| 6 | Production candidate | In progress: active release intent, 0.3 compatibility policy, exact installed public-header/target inventory, and stable Core declaration fingerprints are implemented; metrics export, regression budgets, fault injection, 24/72-hour endurance, and release evidence remain gated |
+| 6 | Production candidate | In progress: active release intent, 0.3 compatibility policy, exact installed public-header/target inventory, stable Core declaration fingerprints, metrics export, and the same-runner performance regression gate are implemented; fault injection, 24/72-hour endurance, and frozen-candidate release evidence remain gated |
 
 ## Production-Hardening Worktree State
 
-- Intent semantics resolve 29 active targets and 88 explicit verification
+- Intent semantics resolve 29 active targets and 89 explicit verification
   paths, with `connection_backpressure_controller` and `graceful_shutdown`
   promoted from deferred design assets to active `GameNet::core`
   implementation authority.
@@ -58,6 +63,11 @@ compatibility remains explicitly out of scope before 1.0.
   bounded-cardinality metric names. Its unit, concurrency/owner-loop contract,
   and real LogicLoop/Broadcast integration tests pass in the 88-test Debug
   inventory.
+- The Release performance gate builds the reviewed baseline and candidate on
+  the same runner, retains 72 raw samples per platform, compares medians for
+  12 fixed Core/Phase-4 scenarios, and rejects parameter, hash, baseline, or
+  budget drift. The local Windows/IOCP preflight passed 12/12 comparisons;
+  authoritative release evidence remains bound to the later frozen commit.
 - `tests/contract/socket/test_socket_contract.cpp` carries the Linux child-
   process/default-SIGPIPE contract.
 - `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`

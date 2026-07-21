@@ -74,6 +74,9 @@ matrix, and immutable evidence are explicit and machine checked.
 - `tests/api/test_public_api_manifest.py` verifies the installed inventory,
   stability classes, package version, exported targets, and stable-header
   fingerprints and proves that missing or modified declarations are rejected
+- `tests/ci/test_performance_regression.py` verifies the fixed 12-scenario,
+  three-repetition baseline/candidate matrix, reviewed budgets, same-runner
+  workflow wiring, retained evidence, and a real failing-regression fixture
 
 ## 8. Review Checklist
 - Is every release claim backed by structured same-commit evidence?
@@ -81,4 +84,3 @@ matrix, and immutable evidence are explicit and machine checked.
 - Are platform and compiler support boundaries stated precisely?
 - Can any metrics, fault, or endurance path block or mutate a non-owner loop?
 - Are 24-hour and 72-hour results real durations rather than scaled substitutes?
-

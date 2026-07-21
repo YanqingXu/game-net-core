@@ -60,7 +60,7 @@ def main() -> None:
     require(status_text, "intent metadata contract guard", migration_status)
     require(status_text, "all 60 formal `*.intent.md` documents", migration_status)
     require(status_text, "29 active targets", migration_status)
-    require(status_text, "88 explicit verification", migration_status)
+    require(status_text, "89 explicit verification", migration_status)
     require(status_text, "connection_backpressure_controller", migration_status)
     require(status_text, "graceful_shutdown", migration_status)
     require(status_text, "global/per-peer connection limits", migration_status)

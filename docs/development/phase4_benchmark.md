@@ -129,12 +129,15 @@ framing throughput against decoded operations and wire bytes, Logic accepted
 and rejected totals plus queue byte/depth high water, and Broadcast
 messages-by-fanout delivery plus per-owner batching and working-set peak/delta
 relationships. Rejected/dropped counts must be zero for a successful baseline.
-No timing or memory score is compared to a fixed performance threshold.
+The semantic validator does not compare timing or memory scores. Phase 6 keeps
+that schema/count validation separate from the same-runner relative regression
+comparator and its reviewed JSON budget.
 
 ## Raw JSON Evidence
 
-The manual-only `core-benchmark` workflow builds both benchmark executables and
-runs the three Phase 4 commands on Linux epoll and Windows IOCP for the same commit.
+The manual-only `core-benchmark` workflow builds both benchmark executables for
+the fixed baseline and candidate on the same runner in each Linux epoll and
+Windows IOCP producer.
 It validates schema/status/platform/backend/build type, required metrics, and
 count invariants, then uploads three raw JSON documents, toolchain evidence, a
 scenario-aware semantic manifest, and a shared CI job manifest per platform.
@@ -155,8 +158,10 @@ hashes, semantic-manifest identities, exact Linux/epoll and Windows/IOCP pairing
 the three-scenario set, and identical parameters. Its
 `gamenet.phase4_benchmark_pair_evidence.v1` output is the authoritative paired
 artifact; two unrelated green platform runs cannot satisfy this gate.
-It intentionally does not compare timing or memory scores and does not run on
-push or pull requests.
+It also verifies that both platform producers independently passed their
+same-runner three-sample median regression budgets and retained all matrix
+samples. It does not compare Linux scores with Windows scores and does not run
+on push or pull requests.
 
 Keep raw JSON artifacts unchanged. Record workflow run id, commit SHA, date,
 compiler, runner image, commands, and artifact names in the evidence ledger.

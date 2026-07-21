@@ -197,7 +197,7 @@ In progress after production hardening:
 - [x] Add a versioned public API manifest and an automated compatibility guard.
 - [x] Promote and implement MetricsExporter with non-I/O producer adapters,
   deterministic snapshots, and production text export.
-- [ ] Add same-platform performance regression budgets and retained trend
+- [x] Add same-platform performance regression budgets and retained trend
   evidence for the fixed Core and Phase 4 Release scenarios.
 - [ ] Add structured fault-injection coverage plus real 24-hour candidate and
   72-hour release endurance gates.

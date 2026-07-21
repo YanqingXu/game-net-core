@@ -103,9 +103,11 @@ cross-platform PR-0C evidence gate can be called complete.
 ## Manual Cross-Platform Capture
 
 The manual-only `core-benchmark` workflow runs the fixed scenario set in Linux
-Release and Windows MSVC Release jobs for the same commit. Each job validates
-schema, status, platform, backend, and build type without imposing timing
-thresholds, then uploads the four raw JSON artifacts as one bundle. The
+Release and Windows MSVC Release jobs. Each producer builds both the reviewed
+baseline and candidate on the same runner, executes three repetitions of an
+expanded 1/2/4-worker, 256/1,024-connection, and 4/16-slow-client matrix, and
+enforces the reviewed relative budgets. It also preserves the four original
+canonical raw JSON artifacts as one bundle. The
 canonical artifact name binds the producer job, commit SHA, workflow run id,
 and run attempt:
 
@@ -122,3 +124,8 @@ The workflow also builds and captures the separate Phase 4 scenario set. Those
 documents use `gamenet.phase4_benchmark.v1` and distinct artifact names; see
 `docs/development/phase4_benchmark.md`. They do not change this Core schema or
 the four-file Core artifact contract.
+
+The full baseline/candidate sample sets and `gamenet.performance_regression.v1`
+are retained with the Phase 4 producer evidence. See
+`docs/development/performance_regression.md`. These comparisons are same-runner
+regression gates, not cross-platform capacity comparisons.

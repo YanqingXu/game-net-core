@@ -69,8 +69,8 @@ The `ci` workflow validates:
   broadcast fanout latency/process working-set high water, and ownership markers.
 - Long-soak workflow guard for the non-default repeated threading contract gate.
 - Manual core-benchmark workflow guards for paired Core and Phase 4
-  Linux/Windows Release raw JSON artifacts without push/PR triggers or
-  performance thresholds.
+  Linux/Windows Release raw JSON artifacts, same-runner baseline/candidate
+  median regression budgets, and no push/PR triggers.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core and active Phase 4 target builds.
@@ -479,6 +479,14 @@ These local results are supporting preflight; remote run `29161167423` is the
 authoritative exact-repeat evidence for candidate `5ebad2c1`.
 
 ## Remote Core Benchmark Evidence
+
+The current Phase 6 workflow additionally builds fixed baseline
+`2b1be4343f7c478eb40542451f30aad8ca474003` beside the candidate on each runner,
+runs 12 Core/Phase-4 scale scenarios three times per revision, and writes
+`gamenet.performance_regression.v1`. The paired verifier requires both
+platforms to pass independently against the same reviewed budget and rehashes
+all matrix samples. Raw Linux and Windows scores are never compared directly.
+See `docs/development/performance_regression.md`.
 
 Manual `core-benchmark` run `29077151229` completed successfully on commit
 `a7fd77cbd2140041cebb3f900d5c609fafc2adad` at 2026-07-10T07:37:15Z. It
