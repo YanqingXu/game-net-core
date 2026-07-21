@@ -39,6 +39,9 @@ matrix, and immutable evidence are explicit and machine checked.
   documentation assertion
 
 ## 4. Compatibility Contract
+- the frozen candidate declares package version `0.3.0`; the CMake package,
+  public API manifest, exact-version consumer, and candidate baseline label
+  must agree before any long-duration evidence is eligible
 - `api/public_api_manifest.json` is the authoritative installed-surface
   classification for the candidate line
 - stable Core declarations require an intentional manifest update and review;

@@ -2,6 +2,8 @@
 
 `api/public_api_manifest.json` is the machine-readable compatibility boundary
 for the 0.3 production-candidate line.
+The frozen line installs as package version `0.3.0`; its CMake project version,
+manifest package version, exact-version consumer, and baseline label must agree.
 
 ## Compatibility Classes
 
@@ -36,4 +38,3 @@ stable fingerprints.
 A deliberate stable API change must update the public contract, direct tests,
 manifest fingerprint, and release notes in one reviewed change. Updating a
 fingerprint alone is not evidence that the change is compatible.
-

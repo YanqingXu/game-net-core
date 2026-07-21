@@ -127,6 +127,18 @@ def verify_manifest(repo_root: Path, manifest_path: Path) -> list[str]:
         errors.append(
             f"package_version must match CMake ({expected_version}), got {manifest.get('package_version')!r}"
         )
+    baseline = manifest.get("baseline")
+    baseline_match = (
+        re.fullmatch(r"v([0-9]+\.[0-9]+\.[0-9]+)-production-candidate", baseline)
+        if isinstance(baseline, str)
+        else None
+    )
+    if baseline_match is None:
+        errors.append("baseline must identify a versioned production candidate")
+    elif expected_version is not None and baseline_match.group(1) != expected_version:
+        errors.append(
+            f"baseline version must match CMake ({expected_version}), got {baseline!r}"
+        )
     if manifest.get("policy") != POLICY:
         errors.append("compatibility policy changed without updating the verifier contract")
 

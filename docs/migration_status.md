@@ -34,6 +34,9 @@ Phase 6 production-candidate work is now active. The first gate defines the
 manifest: stable Core declarations are fingerprinted, Phase 4 APIs remain
 provisional, platform backend headers are unsupported interfaces, and ABI
 compatibility remains explicitly out of scope before 1.0.
+The candidate package version is now `0.3.0`; the manifest baseline and the
+external exact-version install consumer are locked to that same version before
+the frozen long-duration evidence runs.
 MetricsExporter and its producer adapters are now implemented, and the fixed
 Core/Phase-4 Release matrix has a reviewed same-runner regression budget,
 three-repetition medians, and recursively hashed raw-sample evidence. A local

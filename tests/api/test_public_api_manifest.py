@@ -48,6 +48,12 @@ def main() -> None:
         errors = verifier.verify_manifest(repo_root, temporary)
         assert any("package_version must match CMake" in error for error in errors)
 
+        wrong_baseline = copy.deepcopy(manifest)
+        wrong_baseline["baseline"] = "v9.9.9-production-candidate"
+        temporary.write_text(json.dumps(wrong_baseline), encoding="utf-8")
+        errors = verifier.verify_manifest(repo_root, temporary)
+        assert any("baseline version must match CMake" in error for error in errors)
+
     normalized = verifier.normalize_cpp_public_surface(
         'int value; // comment\nconst char* url = "https://example.invalid/a"; /* block */\n'
     )

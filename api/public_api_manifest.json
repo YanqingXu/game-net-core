@@ -1,6 +1,6 @@
 {
   "schema": "gamenet.public_api_manifest.v1",
-  "package_version": "0.2.0",
+  "package_version": "0.3.0",
   "baseline": "v0.3.0-production-candidate",
   "policy": {
     "stable_core_source_compatibility": "required-within-0.3",
