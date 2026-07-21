@@ -121,6 +121,7 @@ add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tc
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_shutdown_pending_output.cpp lifecycle)
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_write_complete_ordering.cpp lifecycle)
 add_gamenet_test(integration tcp ${CMAKE_CURRENT_SOURCE_DIR}/integration/tcp/test_tcp_server_client_echo.cpp lifecycle)
+add_gamenet_test(integration resilience ${CMAKE_CURRENT_SOURCE_DIR}/integration/resilience/test_fault_injection.cpp threading lifecycle fault_injection endurance)
 add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_contract.cpp)
 add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_budget.cpp)
 add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_round_trip_smoke.cpp round-trip-smoke)

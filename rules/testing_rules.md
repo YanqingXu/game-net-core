@@ -75,3 +75,12 @@ For core modules, the change description must name the specific test file that v
 - test only happy path for lifecycle-heavy module
 - treat coverage as substitute for contract quality
 - no-thread test for cross-thread API
+
+## 11. Production Endurance
+- a normal CTest cycle must exercise every declared fault profile on Linux and
+  Windows before a long-duration claim is eligible
+- production duration evidence must come from one uninterrupted process with
+  monotonic heartbeats, immutable commit identity, executable/log hashes, and
+  independently observed wall time
+- shortened smoke runs and combined shards are orchestration evidence only and
+  cannot substitute for the fixed 24-hour or 72-hour gate

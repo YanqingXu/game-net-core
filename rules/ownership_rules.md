@@ -84,3 +84,10 @@ It must not blur these roles.
 - Shared ownership used as a substitute for lifecycle design
 - Poller owning Channel
 - Channel owning EventLoop
+
+## 14. Fault and Endurance Evidence
+- each fault cycle owns and closes every raw client socket it creates
+- TcpServer retains ownership of accepted sockets and graceful-stop state
+- the endurance supervisor owns the child-process handle, captured log,
+  checkpoint, and final evidence; heartbeats copy values and own no runtime
+  networking object

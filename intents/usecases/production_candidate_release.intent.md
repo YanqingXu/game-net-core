@@ -77,6 +77,11 @@ matrix, and immutable evidence are explicit and machine checked.
 - `tests/ci/test_performance_regression.py` verifies the fixed 12-scenario,
   three-repetition baseline/candidate matrix, reviewed budgets, same-runner
   workflow wiring, retained evidence, and a real failing-regression fixture
+- `tests/integration/resilience/test_fault_injection.cpp` verifies the declared
+  reset, callback, overload, recovery, and forced-shutdown profiles
+- `tests/ci/test_endurance_gate.py` verifies the uninterrupted-process 24/72-
+  hour duration contract, heartbeat/checkpoint evidence, and remote workflow
+  wiring
 
 ## 8. Review Checklist
 - Is every release claim backed by structured same-commit evidence?

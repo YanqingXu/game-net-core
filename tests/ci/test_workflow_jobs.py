@@ -13,8 +13,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 88
-EXPECTED_THREADING_TOTAL = 63
+EXPECTED_CTEST_TOTAL = 89
+EXPECTED_THREADING_TOTAL = 64
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
     "${{ github.run_id }}-${{ github.run_attempt }}"
@@ -672,6 +672,10 @@ def main() -> None:
     require(workflow, "python tests/ci/test_performance_regression.py")
     assert workflow.count("python3 tests/ci/test_performance_regression.py") == 4
     assert workflow.count("python tests/ci/test_performance_regression.py") == 2
+    require(workflow, "python3 tests/ci/test_endurance_gate.py")
+    require(workflow, "python tests/ci/test_endurance_gate.py")
+    assert workflow.count("python3 tests/ci/test_endurance_gate.py") == 4
+    assert workflow.count("python tests/ci/test_endurance_gate.py") == 2
     require(workflow, "python3 tests/cmake/test_install_package_contract.py")
     require(workflow, "python3 tests/cmake/test_packet_framer_fuzz_contract.py")
     require(workflow, "python3 tests/cmake/test_core_benchmark_contract.py")
@@ -806,8 +810,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 88")
-    require(ci_docs, "threading=63")
+    require(ci_docs, "exactly 89")
+    require(ci_docs, "threading=64")
     require(ci_docs, "exactly 1")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")

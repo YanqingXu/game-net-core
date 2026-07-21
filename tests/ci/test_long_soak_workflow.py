@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 63
+EXPECTED_THREADING_TESTS = 64
 EXPECTED_PHASE4_SOAK_TESTS = 8
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -135,8 +135,8 @@ def main() -> None:
     assert "\n  pull_request:" not in workflow_text, "long-soak must not run on pull_request"
     permissions = re.search(r"(?m)^permissions:\n(?P<body>(?:  [^\n]+\n)+)", workflow_text)
     assert permissions is not None, "long-soak workflow needs explicit permissions"
-    assert permissions.group("body") == "  contents: read\n", (
-        "long-soak workflow must retain contents: read as its only repository permission"
+    assert permissions.group("body") == "  actions: read\n  contents: read\n", (
+        "long-soak workflow needs read-only actions and contents permissions"
     )
 
     job = job_block(workflow_text, "linux-long-soak")
@@ -151,6 +151,7 @@ def main() -> None:
     require(job, "python3 tests/scope/test_intent_semantics.py", workflow)
     require(job, "python3 tests/api/test_public_api_manifest.py", workflow)
     require(job, "python3 tests/ci/test_performance_regression.py", workflow)
+    require(job, "python3 tests/ci/test_endurance_gate.py", workflow)
     require(job, "python3 tests/cmake/test_core_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_phase4_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_packet_framer_fuzz_contract.py", workflow)
@@ -197,7 +198,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 88", workflow)
+    require(inventory, "--expected-total 89", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=4", workflow)
     require(inventory, "--expect-label broadcast=4", workflow)
@@ -250,7 +251,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 88",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 89",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -324,7 +325,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "63 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "64 threading-labeled tests", ci_docs)
     require(ci_docs_text, "8 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "Phase 3.5 historical evidence: run `29077148022`", ci_docs)
     require(ci_docs_text, "job `86311227712`", ci_docs)

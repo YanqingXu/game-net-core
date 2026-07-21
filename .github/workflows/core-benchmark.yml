@@ -45,6 +45,7 @@ jobs:
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_endurance_gate.py
 
       - name: Configure
         run: >
@@ -213,6 +214,7 @@ jobs:
           python tests/cmake/test_core_benchmark_contract.py
           python tests/cmake/test_phase4_benchmark_contract.py
           python tests/ci/test_performance_regression.py
+          python tests/ci/test_endurance_gate.py
 
       - name: Configure
         shell: pwsh

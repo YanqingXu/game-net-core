@@ -102,4 +102,12 @@ No other direct mutation path is allowed for core loop state.
 - Direct Poller mutation from non-owner thread
 - Direct Channel mutation that changes registration from non-owner thread
 - User callback execution in ambiguous thread context
+
+## 16. Fault and Endurance Drivers
+- fault clients may own and operate their own raw sockets but must not mutate
+  TcpServer or TcpConnection loop-owned state directly
+- injected callback, overload, reset, and shutdown paths retain the existing
+  base-loop and connection-loop callback affinity
+- the endurance supervisor owns a child process and evidence files only; it has
+  no access path to Reactor mutable state
 - “Occasionally safe” thread behavior without rule support
