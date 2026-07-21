@@ -37,7 +37,7 @@ all are disabled by default and expose distinct cumulative metrics.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
-| 5 | Production hardening | Local implementation complete, frozen-candidate validation pending: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
+| 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
 
 ## Production-Hardening Worktree State
 
@@ -94,10 +94,24 @@ all are disabled by default and expose distinct cumulative metrics.
   labels, repeat count, timeout, command, and result logs.
 - All seven fixed Windows Release IOCP core/Phase-4 benchmark scenarios return
   their expected schema, platform/backend/build identity, and `status: ok`.
-  Linux runtime validation of the new SIGPIPE child-process contract still
-  requires a Linux runner, together with current ASan/UBSan, libFuzzer, TSan,
-  Release/package, long-soak, and epoll benchmark evidence bound to one frozen commit;
-  Windows results are not used as a substitute.
+- Frozen production-hardening candidate
+  `be749adc4bce7e1771b84c77c42bf080625805e9` is pushed on
+  `codex/production-hardening`. Workflow-dispatch `ci` run `29791363106`
+  passed all six producers and the aggregate evidence gate: Linux CMake,
+  ASan/UBSan with 1,000 libFuzzer executions, TSan over all 61 threading
+  tests, Linux Release, Windows Debug IOCP, and Windows Release IOCP. Each
+  full-test producer executed 85/85 tests, and Linux plus both Windows package
+  consumers executed 1/1.
+- The same candidate owns successful `long-soak` run `29791364648`: repository
+  verifiers independently accept 3,050/3,050 threading executions in 1,690.82
+  seconds and 400/400 Pipeline/Broadcast executions in 34.19 seconds, with
+  `repeat=50` and per-test `timeout=60`.
+- The same candidate owns successful `core-benchmark` run `29791365828`.
+  All eight fixed Core Release scenarios report `status: ok`, and the paired
+  Phase 4 evidence gate verifies the three fixed scenarios on both Linux/epoll
+  and Windows/IOCP with identical parameters. All remote sanitizer, package,
+  long-soak, and benchmark evidence is bound to one frozen commit; Windows
+  results are not used as a substitute for Linux execution.
 
 ## Verification State
 

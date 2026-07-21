@@ -185,5 +185,5 @@ In progress after the Phase 4 Preview:
 - [x] Define callback exception containment and connection/server failure policy.
 - [x] Add connection admission limits, unauthenticated timeout, and basic abuse
   controls.
-- [ ] Re-run the full Linux/Windows sanitizer, long-soak, benchmark, package,
+- [x] Re-run the full Linux/Windows sanitizer, long-soak, benchmark, package,
   and evidence gates for one frozen production-hardening candidate.
