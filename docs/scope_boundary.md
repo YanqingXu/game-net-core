@@ -22,6 +22,8 @@ project is split by component boundaries.
 - Network-only PlayerSession and SessionManager lifecycle state
 - Value-type GameCommand, bounded queue, and fixed-tick LogicLoop
 - Owner-loop BroadcastRouter/Dispatcher with explicit fanout/byte budgets
+- Thread-safe MetricsExporter aggregation and non-blocking Core/Logic/Broadcast
+  producer adapters
 - A non-installed GameServerPipeline composition example and integration test
 
 ## Deferred
@@ -35,7 +37,6 @@ project is split by component boundaries.
 - PMTU / FEC
 - TLS
 - A production/all-in-one GameServerPipeline library
-- MetricsExporter
 
 Deferred modules require their own promoted intent, target, contracts, and
 focused tests. Existing Phase 4 foundations do not authorize them implicitly.

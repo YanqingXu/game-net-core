@@ -53,7 +53,7 @@ TEXT_PATTERNS = (
         re.compile(
             r"\b(?:HttpServer|HttpClient|WebSocket|Rpc[A-Z]\w*|Kcp[A-Z]\w*|"
             r"Tls[A-Z]\w*|UdpSocket|"
-            r"MetricsExporter|DnsResolver)\b"
+            r"DnsResolver)\b"
         ),
     ),
 )
