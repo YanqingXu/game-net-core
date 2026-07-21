@@ -44,7 +44,8 @@ smoke run may validate orchestration but is not release evidence.
   its executable hash, immutable candidate SHA, platform, backend, start/end
   timestamps, heartbeat sequence, completed cycles, and final result
 - Linux production evidence samples the same child process RSS after every
-  heartbeat and enforces reviewed 512 MiB maximum / 64 MiB growth budgets
+  heartbeat before acknowledging that heartbeat back to the still-live child,
+  and enforces reviewed 512 MiB maximum / 64 MiB growth budgets
 - heartbeats are monotonic, bounded in silence, and report cumulative counts
   for every declared fault profile
 - the release gate accepts 72-hour evidence only for the same frozen commit
@@ -55,7 +56,8 @@ smoke run may validate orchestration but is not release evidence.
 
 ## 5. Failure Semantics
 - any child exit, malformed or missing heartbeat, non-monotonic counter,
-  profile omission, liveness timeout, or duration shortfall fails closed
+  profile omission, observation-acknowledgment failure, liveness timeout, or
+  duration shortfall fails closed
 - a failure still writes a checkpoint and final structured result for diagnosis
 - runner cancellation or host loss cannot be reported as a passing result
 - restarting the child or combining shorter shards cannot satisfy a production

@@ -81,6 +81,12 @@ int main() {
         "\"result\":\"pass\",\"cycle\":1,"
         "\"elapsed_milliseconds\":" << seconds * 1000 << ',' << profiles << "}\n"
         << std::flush;
+    if (std::getenv("GAMENET_ENDURANCE_OBSERVATION_ACK") != nullptr) {
+        std::string acknowledgment;
+        if (!std::getline(std::cin, acknowledgment) || acknowledgment != "observed") {
+            return 8;
+        }
+    }
     if (mode == "failed") {
         return 7;
     }
@@ -191,6 +197,8 @@ def main() -> None:
         '"release-72h": 72 * 60 * 60',
         '"supervisor observed a duration shortfall"',
         '"Linux child RSS growth exceeded its budget"',
+        '"GAMENET_ENDURANCE_OBSERVATION_ACK"',
+        'process.stdin.write("observed\\n")',
         '"output root already exists; refusing to overwrite evidence"',
     ):
         require(runner_text, fragment, runner)
@@ -222,6 +230,10 @@ def main() -> None:
         assert result["completed_cycles"] == 1
         assert result["child_elapsed_milliseconds"] >= 1000
         assert result["supervisor_elapsed_seconds"] >= 1
+        if HOST_PLATFORM == "linux":
+            assert result["memory"]["supported"] is True
+            assert result["memory"]["samples"] == 1
+            assert result["memory"]["first_rss_bytes"] > 0
 
         malformed_env = os.environ.copy()
         malformed_env["GAMENET_FAKE_MODE"] = "malformed"

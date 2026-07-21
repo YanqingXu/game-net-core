@@ -22,7 +22,10 @@ process exit, child-reported duration, and independently observed wall time.
 It atomically rewrites `checkpoint.json` after each cycle and produces
 `gamenet.production_endurance.v1` with a hashed raw log.
 On Linux it also samples the same child process RSS after every heartbeat and
-fails if maximum RSS exceeds 512 MiB or end-to-first growth exceeds 64 MiB.
+acknowledges the observation before the child may continue. This handshake
+keeps even the final heartbeat's process alive while `/proc` is sampled and
+fails closed if either side disappears. The gate fails if maximum RSS exceeds
+512 MiB or end-to-first growth exceeds 64 MiB.
 
 ## Fixed Modes
 

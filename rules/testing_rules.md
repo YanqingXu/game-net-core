@@ -82,5 +82,8 @@ For core modules, the change description must name the specific test file that v
 - production duration evidence must come from one uninterrupted process with
   monotonic heartbeats, immutable commit identity, executable/log hashes, and
   independently observed wall time
+- the child must remain alive until the supervisor acknowledges each heartbeat,
+  so Linux RSS evidence is sampled from that exact live process after the
+  corresponding cycle
 - shortened smoke runs and combined shards are orchestration evidence only and
   cannot substitute for the fixed 24-hour or 72-hour gate

@@ -311,6 +311,17 @@ void writeHeartbeat(
         << std::flush;
 }
 
+void waitForSupervisorObservation() {
+    const auto* required = std::getenv("GAMENET_ENDURANCE_OBSERVATION_ACK");
+    if (required == nullptr || std::string_view(required) != "1") {
+        return;
+    }
+
+    std::string acknowledgment;
+    GAMENET_TEST_ASSERT(static_cast<bool>(std::getline(std::cin, acknowledgment)));
+    GAMENET_TEST_ASSERT(acknowledgment == "observed");
+}
+
 }  // namespace
 
 int main() {
@@ -325,6 +336,7 @@ int main() {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - started);
         writeHeartbeat(cycle, elapsed, false);
+        waitForSupervisorObservation();
 
         if (targetDuration == 0s || elapsed >= targetDuration) {
             break;

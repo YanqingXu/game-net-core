@@ -266,6 +266,7 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
     environment = os.environ.copy()
     environment["GAMENET_ENDURANCE_SECONDS"] = str(target_seconds)
     environment["GAMENET_ENDURANCE_INTERVAL_MS"] = str(arguments.interval_milliseconds)
+    environment["GAMENET_ENDURANCE_OBSERVATION_ACK"] = "1"
     lines: queue.Queue[str | None] = queue.Queue()
 
     try:
@@ -275,11 +276,13 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
             text=True,
             errors="replace",
             bufsize=1,
         )
         require(process.stdout is not None, "failed to capture fault-injection output")
+        require(process.stdin is not None, "failed to open fault-injection acknowledgment pipe")
 
         def read_output() -> None:
             assert process is not None and process.stdout is not None
@@ -331,6 +334,13 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
                             last_rss - first_rss <= LINUX_MAX_RSS_GROWTH_BYTES,
                             "Linux child RSS growth exceeded its budget",
                         )
+                    try:
+                        process.stdin.write("observed\n")
+                        process.stdin.flush()
+                    except (BrokenPipeError, OSError) as error:
+                        raise EnduranceError(
+                            "fault-injection process exited before heartbeat observation acknowledgment"
+                        ) from error
                     last_heartbeat = time.monotonic()
                     atomic_json(
                         checkpoint_path,
