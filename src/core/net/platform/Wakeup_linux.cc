@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <sys/eventfd.h>
+#include <unistd.h>
 
 namespace gamenet::net::platform {
 
@@ -27,7 +28,9 @@ void closeWakeupFds(WakeupFdPair fds) {
 
 ssize_t writeWakeup(SocketFd fd) {
     const uint64_t one = 1;
-    return sockets::write(fd, &one, sizeof(one));
+    // eventfd is not a socket. Use write(2) directly so this hot cross-thread
+    // path does not first pay for a guaranteed ENOTSOCK send attempt.
+    return ::write(fd, &one, sizeof(one));
 }
 
 bool drainWakeup(SocketFd fd) {

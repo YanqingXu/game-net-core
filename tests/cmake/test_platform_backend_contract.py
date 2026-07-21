@@ -17,6 +17,8 @@ def main() -> None:
     acceptor_header = repo_root / "include" / "gamenet" / "core" / "net" / "Acceptor.h"
     acceptor_source = repo_root / "src" / "core" / "net" / "Acceptor.cc"
     connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
+    linux_sockets_source = repo_root / "src" / "core" / "net" / "platform" / "SocketsOps_linux.cc"
+    linux_wakeup_source = repo_root / "src" / "core" / "net" / "platform" / "Wakeup_linux.cc"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     poller_include_dir = repo_root / "include" / "gamenet" / "core" / "net" / "poller"
     poller_source_dir = repo_root / "src" / "core" / "net" / "poller"
@@ -39,6 +41,14 @@ def main() -> None:
     require(sockets_text, "int listen(SocketFd sockfd);", sockets_ops)
     require(sockets_text, "bool tryGetLocalAddr", sockets_ops)
     require(sockets_text, "bool tryGetPeerAddr", sockets_ops)
+
+    linux_sockets_text = linux_sockets_source.read_text(encoding="utf-8")
+    require(linux_sockets_text, "MSG_NOSIGNAL", linux_sockets_source)
+    require(linux_sockets_text, "errno == ENOTSOCK", linux_sockets_source)
+    require(linux_sockets_text, "return ::write(sockfd, buffer, len);", linux_sockets_source)
+
+    linux_wakeup_text = linux_wakeup_source.read_text(encoding="utf-8")
+    require(linux_wakeup_text, "return ::write(fd, &one, sizeof(one));", linux_wakeup_source)
 
     acceptor_header_text = acceptor_header.read_text(encoding="utf-8")
     require(acceptor_header_text, "enum class AcceptorErrorAction", acceptor_header)

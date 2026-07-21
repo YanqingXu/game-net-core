@@ -164,7 +164,14 @@ ssize_t write(SocketFd sockfd, const void* buffer, std::size_t len) {
     // A peer can close between readiness observation and the actual write.
     // Keep that recoverable socket error local to the connection instead of
     // letting Linux deliver SIGPIPE and terminate the hosting process.
-    return ::send(sockfd, buffer, len, MSG_NOSIGNAL);
+    const ssize_t n = ::send(sockfd, buffer, len, MSG_NOSIGNAL);
+    if (n < 0 && errno == ENOTSOCK) {
+        // This compatibility helper is also used with pipes and other file
+        // descriptors. Preserve write(2) semantics for those callers while
+        // retaining per-call SIGPIPE suppression for sockets.
+        return ::write(sockfd, buffer, len);
+    }
+    return n;
 }
 
 ssize_t recvFrom(SocketFd sockfd, void* buffer, std::size_t len, sockaddr_storage* addr, socklen_t* addrLen) {

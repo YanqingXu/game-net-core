@@ -56,6 +56,9 @@ This module is not business logic.
 - Linux stream writes suppress per-call `SIGPIPE` delivery and report peer-close
   failure through the normal return value / `errno` path without changing the
   embedding process's signal disposition.
+- The shared Linux write helper preserves ordinary descriptor semantics for
+  pipes, while the eventfd wakeup hot path uses `write(2)` directly; socket
+  writes still use per-call `MSG_NOSIGNAL`.
 - Platform-specific code must not leak backend event constants into user-facing APIs.
 - Compatibility headers may forward old include paths, but implementation belongs in
   `platform/` or `poller/`.
