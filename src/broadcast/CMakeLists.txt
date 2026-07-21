@@ -1,6 +1,7 @@
 add_library(gamenet_broadcast
     BroadcastRouter.cc
     BroadcastDispatcher.cc
+    BroadcastMetricsRecorder.cc
 )
 add_library(GameNet::broadcast ALIAS gamenet_broadcast)
 

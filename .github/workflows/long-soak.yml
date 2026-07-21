@@ -85,6 +85,7 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -125,8 +126,8 @@ jobs:
           set -euo pipefail
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-long-soak \
-            --expected-total 85 \
-            --expect-label threading=61 \
+            --expected-total 88 \
+            --expect-label threading=63 \
             --expect-label game_pipeline=4 \
             --expect-label broadcast=4 \
             --output long-soak-evidence/ctest-inventory.json
@@ -156,7 +157,7 @@ jobs:
             --inventory long-soak-evidence/ctest-inventory.json \
             --log long-soak-evidence/threading-repeat.log \
             --selection-label threading \
-            --expected-selected 61 \
+            --expected-selected 63 \
             --repeat "${GAMENET_SOAK_REPEAT}" \
             --timeout-seconds "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
@@ -186,7 +187,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-long-soak --parallel' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 85 --expect-label threading=61 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 88 --expect-label threading=63 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json' \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L game_pipeline|broadcast --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}"
 

@@ -1,5 +1,6 @@
 add_library(gamenet_game_logic
     GameCommandQueue.cc
+    LogicMetricsRecorder.cc
     LogicLoop.cc
 )
 add_library(GameNet::game_logic ALIAS gamenet_game_logic)

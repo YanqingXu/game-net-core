@@ -1,7 +1,10 @@
 #include <gamenet/core/net/Buffer.h>
 #include <gamenet/core/net/InetAddress.h>
+#include <gamenet/core/metrics/MetricsHookRecorder.h>
+#include <gamenet/broadcast/BroadcastMetricsRecorder.h>
 #include <gamenet/broadcast/BroadcastTypes.h>
 #include <gamenet/game_logic/GameCommandQueue.h>
+#include <gamenet/game_logic/LogicMetricsRecorder.h>
 #include <gamenet/game_session/PlayerSession.h>
 #include <gamenet/protocol/PacketFramer.h>
 #include <gamenet/transport/TcpTransportEndpoint.h>
@@ -45,6 +48,13 @@ int main() {
     gamenet::game_logic::GameCommand command;
     command.payload = "command";
     gamenet::broadcast::BroadcastMetric metric;
+    auto metrics = std::make_shared<gamenet::metrics::InMemoryMetricsExporter>();
+    auto connectorMetrics = gamenet::metrics::MetricsHookRecorder(metrics).makeConnectorCallback();
+    connectorMetrics(address, gamenet::net::ConnectorEvent::ConnectSuccess);
+    auto logicMetrics = gamenet::game_logic::makeLogicMetricsCallback(metrics);
+    logicMetrics({});
+    auto broadcastMetrics = gamenet::broadcast::makeBroadcastMetricsCallback(metrics);
+    broadcastMetrics(metric);
     auto endpoint = std::make_shared<InstalledEndpoint>();
     gamenet::game_session::PlayerSession session(
         23,
@@ -67,6 +77,9 @@ int main() {
         session.state() != gamenet::game_session::SessionState::Online ||
         session.transportId().value != 17 ||
         endpoint->send("installed") != gamenet::transport::EndpointResult::Accepted ||
+        metrics->counterValue("gamenet.net.connector.connect_success") != 1 ||
+        metrics->counterValue("gamenet.game_logic.tick_completed") != 1 ||
+        metrics->counterValue("gamenet.broadcast.event.routed") != 1 ||
         !rejectedNullTcpConnection) {
         return 1;
     }

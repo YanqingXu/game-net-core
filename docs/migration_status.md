@@ -29,6 +29,12 @@ TcpServer now optionally enforces global/per-peer connection limits, a bounded
 per-peer fixed-window attempt rate, and base-loop unauthenticated deadlines;
 all are disabled by default and expose distinct cumulative metrics.
 
+Phase 6 production-candidate work is now active. The first gate defines the
+0.3 source-compatibility boundary with a versioned installed-header/target
+manifest: stable Core declarations are fingerprinted, Phase 4 APIs remain
+provisional, platform backend headers are unsupported interfaces, and ABI
+compatibility remains explicitly out of scope before 1.0.
+
 ## Phase Status
 
 | Phase | Scope | Current status |
@@ -38,13 +44,20 @@ all are disabled by default and expose distinct cumulative metrics.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
+| 6 | Production candidate | In progress: active release intent, 0.3 compatibility policy, exact installed public-header/target inventory, and stable Core declaration fingerprints are implemented; metrics export, regression budgets, fault injection, 24/72-hour endurance, and release evidence remain gated |
 
 ## Production-Hardening Worktree State
 
-- Intent semantics resolve 27 active targets and 84 explicit verification
+- Intent semantics resolve 29 active targets and 88 explicit verification
   paths, with `connection_backpressure_controller` and `graceful_shutdown`
   promoted from deferred design assets to active `GameNet::core`
   implementation authority.
+- MetricsExporter is promoted to active Core authority with thread-safe
+  in-memory aggregation, immutable static labels, deterministic Prometheus
+  snapshots, exception-contained Core/Logic/Broadcast recorder adapters, and
+  bounded-cardinality metric names. Its unit, concurrency/owner-loop contract,
+  and real LogicLoop/Broadcast integration tests pass in the 88-test Debug
+  inventory.
 - `tests/contract/socket/test_socket_contract.cpp` carries the Linux child-
   process/default-SIGPIPE contract.
 - `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
@@ -115,7 +128,7 @@ all are disabled by default and expose distinct cumulative metrics.
 
 ## Verification State
 
-The current worktree configures 85 configured CTest tests: 7 unit tests, 72 contract tests, and 6 integration tests. Phase 4 coverage now includes bounded
+The current worktree configures 88 configured CTest tests: 8 unit tests, 73 contract tests, and 7 integration tests. Phase 4 coverage now includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, four Pipeline integrations, and four Broadcast contracts/integrations.
 
@@ -134,7 +147,7 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   corpus contains 90 files and no crash artifact. Candidate main-CI run
   `29160903594` repeated the sanitizer-backed fuzz gate successfully and
   retained its SHA-bound log, corpus, dictionary, and artifact evidence.
-- The current Debug inventory includes 61 threading-labeled tests and eight
+- The current Debug inventory includes 63 threading-labeled tests and eight
   Pipeline/Broadcast tests. On the latest tree, the complete threading slice
   passed repeat 50: 61 x 50 = 3,050 executions with zero failures in 1,777.76
   seconds. The focused Pipeline/Broadcast slice also passed repeat 50: 8 x 50 =
@@ -308,7 +321,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
-- Intent governance: all 59 formal `*.intent.md` documents now carry ordered
+- Intent governance: all 60 formal `*.intent.md` documents now carry ordered
   `status`, `target`, `migration_source`, and `promote_gate` front matter and
   appear exactly once in the intent index: 25 active contracts, 23 deferred design assets, and 11 legacy source-project stage documents.
   Active bodies reject stale `MINI_ENABLE_*`, `mini::`, `mini/net`, and

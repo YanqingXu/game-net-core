@@ -53,6 +53,7 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -89,7 +90,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build \
-            --expected-total 85 \
+            --expected-total 88 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -130,7 +131,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 85 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 88 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build --parallel' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
@@ -186,6 +187,7 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -221,7 +223,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-asan \
-            --expected-total 85 \
+            --expected-total 88 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -281,7 +283,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 85 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 88 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-asan --parallel' \
             --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
@@ -337,6 +339,7 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -372,8 +375,8 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-tsan \
-            --expected-total 85 \
-            --expect-label threading=61 \
+            --expected-total 88 \
+            --expect-label threading=63 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -399,7 +402,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 85 --expect-label threading=61 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 88 --expect-label threading=63 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-tsan --parallel' \
             --command 'ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
@@ -448,6 +451,7 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -482,7 +486,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-release \
-            --expected-total 85 \
+            --expected-total 88 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -508,7 +512,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 85 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 88 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-release --parallel' \
             --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
@@ -564,6 +568,7 @@ jobs:
           python tools/verify_migration_provenance.py
           python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
+          python tests/api/test_public_api_manifest.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
           python tests/cmake/test_packet_framer_fuzz_contract.py
@@ -604,7 +609,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows `
             --config Debug `
-            --expected-total 85 `
+            --expected-total 88 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -651,7 +656,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 85 --output ci-evidence/ctest-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 88 --output ci-evidence/ctest-inventory.json' `
             --command 'cmake --build build-windows --config Debug --parallel' `
             --command 'ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows --config Debug --prefix $pwd/build-windows/_install' `
@@ -712,6 +717,7 @@ jobs:
           python tools/verify_migration_provenance.py
           python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
+          python tests/api/test_public_api_manifest.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
           python tests/cmake/test_packet_framer_fuzz_contract.py
@@ -752,7 +758,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows-release `
             --config Release `
-            --expected-total 85 `
+            --expected-total 88 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build Release
@@ -799,7 +805,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows-release -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 85 --output ci-evidence/ctest-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 88 --output ci-evidence/ctest-inventory.json' `
             --command 'cmake --build build-windows-release --config Release --parallel' `
             --command 'ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 10 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows-release --config Release --prefix $pwd/build-windows-release/_install' `

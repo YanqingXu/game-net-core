@@ -59,6 +59,7 @@ add_gamenet_test(unit net ${CMAKE_CURRENT_SOURCE_DIR}/unit/net/test_inet_address
 add_gamenet_test(unit socket ${CMAKE_CURRENT_SOURCE_DIR}/unit/socket/test_socket.cpp)
 add_gamenet_test(unit acceptor ${CMAKE_CURRENT_SOURCE_DIR}/unit/acceptor/test_acceptor_stop.cpp)
 add_gamenet_test(unit connector ${CMAKE_CURRENT_SOURCE_DIR}/unit/connector/test_connector.cpp)
+add_gamenet_test(unit metrics ${CMAKE_CURRENT_SOURCE_DIR}/unit/metrics/test_metrics_exporter.cpp)
 add_gamenet_test(contract acceptor ${CMAKE_CURRENT_SOURCE_DIR}/contract/acceptor/test_acceptor_contract.cpp threading lifecycle)
 add_gamenet_test(contract base ${CMAKE_CURRENT_SOURCE_DIR}/contract/base/test_logger_contract.cpp)
 add_gamenet_test(contract base ${CMAKE_CURRENT_SOURCE_DIR}/contract/base/test_logger_thread_safety.cpp threading)
@@ -71,6 +72,7 @@ add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp threading lifecycle)
 add_gamenet_test(contract net ${CMAKE_CURRENT_SOURCE_DIR}/contract/net/test_inet_address_contract.cpp)
+add_gamenet_test(contract metrics ${CMAKE_CURRENT_SOURCE_DIR}/contract/metrics/test_metrics_exporter_contract.cpp threading)
 add_gamenet_test(contract poller ${CMAKE_CURRENT_SOURCE_DIR}/contract/poller/test_poller_contract.cpp threading lifecycle)
 add_gamenet_test(contract socket ${CMAKE_CURRENT_SOURCE_DIR}/contract/socket/test_socket_contract.cpp)
 add_gamenet_test(contract tcp_client ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_client/test_tcp_client_contract.cpp threading lifecycle)
@@ -137,3 +139,10 @@ add_gamenet_component_test(contract broadcast GameNet::broadcast ${CMAKE_CURRENT
 add_gamenet_component_test(contract broadcast GameNet::broadcast ${CMAKE_CURRENT_SOURCE_DIR}/contract/broadcast/test_broadcast_rejection_contract.cpp threading backpressure lifecycle)
 add_gamenet_component_test(contract broadcast GameNet::broadcast ${CMAKE_CURRENT_SOURCE_DIR}/contract/broadcast/test_broadcast_large_fanout.cpp threading backpressure soak)
 add_gamenet_component_test(integration broadcast GameNet::broadcast ${CMAKE_CURRENT_SOURCE_DIR}/integration/broadcast/test_broadcast_tcp_multi_loop.cpp threading transport lifecycle)
+
+add_library(gamenet_metrics_integration_dependencies INTERFACE)
+target_link_libraries(
+    gamenet_metrics_integration_dependencies
+    INTERFACE GameNet::broadcast GameNet::game_logic
+)
+add_gamenet_component_test(integration metrics gamenet_metrics_integration_dependencies ${CMAKE_CURRENT_SOURCE_DIR}/integration/metrics/test_game_server_metrics_smoke.cpp threading)

@@ -187,3 +187,19 @@ In progress after the Phase 4 Preview:
   controls.
 - [x] Re-run the full Linux/Windows sanitizer, long-soak, benchmark, package,
   and evidence gates for one frozen production-hardening candidate.
+
+## Phase 6: Production Candidate
+
+In progress after production hardening:
+
+- [x] Define the production-candidate intent, compatibility policy, supported
+  API classes, and release exit gates.
+- [x] Add a versioned public API manifest and an automated compatibility guard.
+- [x] Promote and implement MetricsExporter with non-I/O producer adapters,
+  deterministic snapshots, and production text export.
+- [ ] Add same-platform performance regression budgets and retained trend
+  evidence for the fixed Core and Phase 4 Release scenarios.
+- [ ] Add structured fault-injection coverage plus real 24-hour candidate and
+  72-hour release endurance gates.
+- [ ] Freeze one v0.3.0 production candidate, complete Linux/Windows evidence,
+  publish the release, and merge the validated candidate to `main`.

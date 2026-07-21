@@ -87,7 +87,18 @@ No other direct mutation path is allowed for core loop state.
 - Admission metric callbacks execute on the base loop and may not move socket
   or connection lifecycle work onto an arbitrary caller thread
 
-## 14. Forbidden
+## 14. Metrics Export
+- MetricsExporter has no owner EventLoop and may receive concurrent calls from
+  multiple producer loops
+- recorder callbacks execute synchronously on the original hook thread and do
+  not move producer work to another thread
+- InMemoryMetricsExporter synchronizes only its own aggregate maps; it never
+  mutates reactor or game state
+- snapshot rendering and any future blocking export I/O must run outside hot
+  owner-loop callbacks
+- recorder adapters contain exporter exceptions at the observability boundary
+
+## 15. Forbidden
 - Direct Poller mutation from non-owner thread
 - Direct Channel mutation that changes registration from non-owner thread
 - User callback execution in ambiguous thread context

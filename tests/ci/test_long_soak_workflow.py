@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 61
+EXPECTED_THREADING_TESTS = 63
 EXPECTED_PHASE4_SOAK_TESTS = 8
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -149,6 +149,7 @@ def main() -> None:
     require(job, "python3 tests/cmake/test_event_loop_contracts.py", workflow)
     require(job, "python3 tests/scope/test_intent_metadata.py", workflow)
     require(job, "python3 tests/scope/test_intent_semantics.py", workflow)
+    require(job, "python3 tests/api/test_public_api_manifest.py", workflow)
     require(job, "python3 tests/cmake/test_core_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_phase4_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_packet_framer_fuzz_contract.py", workflow)
@@ -195,7 +196,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 85", workflow)
+    require(inventory, "--expected-total 88", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=4", workflow)
     require(inventory, "--expect-label broadcast=4", workflow)
@@ -248,7 +249,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 85",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 88",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -322,7 +323,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "61 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "63 threading-labeled tests", ci_docs)
     require(ci_docs_text, "8 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "Phase 3.5 historical evidence: run `29077148022`", ci_docs)
     require(ci_docs_text, "job `86311227712`", ci_docs)
