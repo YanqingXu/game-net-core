@@ -348,6 +348,18 @@ cmake --build build-windows-release-install-consumer --config Release --parallel
 ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
 ```
 
+A local Windows MSVC AddressSanitizer checkpoint uses the same inventory. The
+test registration prepends the selected MSVC compiler directory to each test's
+`PATH`, so `clang_rt.asan_dynamic-x86_64.dll` is found without a developer-shell
+side effect:
+
+```powershell
+cmake -S . -B build-asan-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
+python tools/verify_ctest_inventory.py --test-dir build-asan-windows --config Debug --expected-total 85 --expect-label threading=61
+cmake --build build-asan-windows --config Debug --parallel
+ctest --test-dir build-asan-windows -C Debug --output-on-failure --timeout 60
+```
+
 The historical core-preview run predates this Windows Release main-CI job.
 Phase 4 candidate run `29160903594` now validates the expanded six-producer plus
 aggregate gate; the older Core run remains historical evidence only.

@@ -76,6 +76,11 @@ and delivers the connected fd upward through a narrow callback boundary.
 ---
 
 ## 8. Failure Semantics
+- socket creation, Windows unspecified bind/extension lookup, connect-context
+  update, and local/peer-address lookup failures stay on the normal explicit
+  connect-failed/retry path; they must not terminate the process
+- connector event observers are diagnostic; observer exceptions are logged and
+  contained without interrupting the connect/retry state transition
 - connect refused / network unreachable / timeout:
   close the socket, invoke error notification, optionally schedule retry
 - EINTR during connect: retry immediately
@@ -132,6 +137,10 @@ Transitions:
   the completed Connector Channel after the first connection tears down
 - destroy during kConnecting state does not leak fd
 - self-connect is detected and triggers retry
+- recoverable pre-Channel socket setup failures leave no fd/Channel ownership
+  behind and respect the configured retry policy
+- `tests/contract/connector/test_connector_contract.cpp` verifies a throwing
+  connector event observer cannot prevent successful connection establishment
 - no callback fires after destruction
 
 ---

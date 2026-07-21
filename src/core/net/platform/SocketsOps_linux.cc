@@ -31,36 +31,54 @@ void ensureInitialized() {
 }
 
 SocketFd createNonblockingOrDie(sa_family_t family) {
-    const SocketFd sockfd = ::socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
+    const SocketFd sockfd = createNonblocking(family);
     if (!isValid(sockfd)) {
         die("socket");
     }
+    return sockfd;
+}
+
+SocketFd createNonblocking(sa_family_t family) {
+    const SocketFd sockfd = ::socket(family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     return sockfd;
 }
 
 SocketFd createNonblockingDatagramOrDie(sa_family_t family) {
-    const SocketFd sockfd =
-        ::socket(family, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_UDP);
+    const SocketFd sockfd = createNonblockingDatagram(family);
     if (!isValid(sockfd)) {
         die("socket");
     }
     return sockfd;
 }
 
-void bindOrDie(SocketFd sockfd, const sockaddr_storage& addr) {
+SocketFd createNonblockingDatagram(sa_family_t family) {
+    const SocketFd sockfd =
+        ::socket(family, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_UDP);
+    return sockfd;
+}
+
+int bind(SocketFd sockfd, const sockaddr_storage& addr) {
     socklen_t addrLen = 0;
     if (addr.ss_family == AF_INET6) {
         addrLen = static_cast<socklen_t>(sizeof(sockaddr_in6));
     } else {
         addrLen = static_cast<socklen_t>(sizeof(sockaddr_in));
     }
-    if (::bind(sockfd, reinterpret_cast<const sockaddr*>(&addr), addrLen) < 0) {
+    return ::bind(sockfd, reinterpret_cast<const sockaddr*>(&addr), addrLen);
+}
+
+void bindOrDie(SocketFd sockfd, const sockaddr_storage& addr) {
+    if (bind(sockfd, addr) < 0) {
         die("bind");
     }
 }
 
+int listen(SocketFd sockfd) {
+    return ::listen(sockfd, SOMAXCONN);
+}
+
 void listenOrDie(SocketFd sockfd) {
-    if (::listen(sockfd, SOMAXCONN) < 0) {
+    if (listen(sockfd) < 0) {
         die("listen");
     }
 }
@@ -108,20 +126,34 @@ int getSocketError(SocketFd sockfd) {
 
 sockaddr_storage getLocalAddr(SocketFd sockfd) {
     sockaddr_storage localAddr{};
-    socklen_t addrLen = static_cast<socklen_t>(sizeof(localAddr));
-    if (::getsockname(sockfd, reinterpret_cast<sockaddr*>(&localAddr), &addrLen) < 0) {
+    if (!tryGetLocalAddr(sockfd, &localAddr)) {
         die("getsockname");
     }
     return localAddr;
 }
 
+bool tryGetLocalAddr(SocketFd sockfd, sockaddr_storage* result) {
+    if (result == nullptr) {
+        errno = EINVAL;
+        return false;
+    }
+    socklen_t addrLen = static_cast<socklen_t>(sizeof(*result));
+    return ::getsockname(sockfd, reinterpret_cast<sockaddr*>(result), &addrLen) == 0;
+}
+
 sockaddr_storage getPeerAddr(SocketFd sockfd) {
     sockaddr_storage peerAddr{};
-    socklen_t addrLen = static_cast<socklen_t>(sizeof(peerAddr));
-    if (::getpeername(sockfd, reinterpret_cast<sockaddr*>(&peerAddr), &addrLen) < 0) {
-        std::memset(&peerAddr, 0, sizeof(peerAddr));
-    }
+    (void)tryGetPeerAddr(sockfd, &peerAddr);
     return peerAddr;
+}
+
+bool tryGetPeerAddr(SocketFd sockfd, sockaddr_storage* result) {
+    if (result == nullptr) {
+        errno = EINVAL;
+        return false;
+    }
+    socklen_t addrLen = static_cast<socklen_t>(sizeof(*result));
+    return ::getpeername(sockfd, reinterpret_cast<sockaddr*>(result), &addrLen) == 0;
 }
 
 ssize_t read(SocketFd sockfd, void* buffer, std::size_t len) {
@@ -129,7 +161,17 @@ ssize_t read(SocketFd sockfd, void* buffer, std::size_t len) {
 }
 
 ssize_t write(SocketFd sockfd, const void* buffer, std::size_t len) {
-    return ::write(sockfd, buffer, len);
+    // A peer can close between readiness observation and the actual write.
+    // Keep that recoverable socket error local to the connection instead of
+    // letting Linux deliver SIGPIPE and terminate the hosting process.
+    const ssize_t n = ::send(sockfd, buffer, len, MSG_NOSIGNAL);
+    if (n < 0 && errno == ENOTSOCK) {
+        // This compatibility helper is also used with pipes and other file
+        // descriptors. Preserve write(2) semantics for those callers while
+        // retaining per-call SIGPIPE suppression for sockets.
+        return ::write(sockfd, buffer, len);
+    }
+    return n;
 }
 
 ssize_t recvFrom(SocketFd sockfd, void* buffer, std::size_t len, sockaddr_storage* addr, socklen_t* addrLen) {

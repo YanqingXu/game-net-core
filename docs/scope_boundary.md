@@ -10,6 +10,10 @@ project is split by component boundaries.
 - Channel and Poller abstraction
 - TimerQueue and wakeup mechanics
 - TCP accept/connect/connection lifecycle
+- Optional bounded global/per-peer connection admission, per-peer fixed-window
+  attempt limiting, and transport-level unauthenticated deadlines
+- Bounded per-connection input/output admission and owner-loop high/low-water
+  read backpressure
 - Buffer and address utilities
 - Minimal echo-server example
 - Unit, contract, and integration tests for the core path

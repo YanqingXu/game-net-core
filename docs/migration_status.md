@@ -14,6 +14,21 @@ protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
+The post-Preview production-hardening line is now active. Its first completed
+contracts suppress Linux per-write `SIGPIPE`, bound per-connection admitted
+output bytes across owner/cross-thread sends, return explicit overload results,
+cap unread input buffers, apply owner-loop high/low-water read throttling, and
+publish completion-aware graceful server drain results with a forced timeout fallback.
+Recoverable listener/connection socket setup now returns explicit errors, and
+Acceptor/TcpServer expose an owner-loop Retry-or-Stop runtime error policy.
+Asynchronous EventLoop callbacks now have observable Continue/Quit exception
+containment, thread-init failures return through the startup handshake, and a
+throwing TCP business callback closes only its offending connection while
+server bookkeeping and later admission continue.
+TcpServer now optionally enforces global/per-peer connection limits, a bounded
+per-peer fixed-window attempt rate, and base-loop unauthenticated deadlines;
+all are disabled by default and expose distinct cumulative metrics.
+
 ## Phase Status
 
 | Phase | Scope | Current status |
@@ -22,6 +37,81 @@ UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
+| 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
+
+## Production-Hardening Worktree State
+
+- Intent semantics resolve 27 active targets and 84 explicit verification
+  paths, with `connection_backpressure_controller` and `graceful_shutdown`
+  promoted from deferred design assets to active `GameNet::core`
+  implementation authority.
+- `tests/contract/socket/test_socket_contract.cpp` carries the Linux child-
+  process/default-SIGPIPE contract.
+- `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
+  verifies hard-limit rejection plus read pause/resume hysteresis, and
+  `test_tcp_connection_cross_thread_send.cpp` verifies pre-owner-loop byte
+  reservation and overload rejection.
+- `tests/contract/buffer/test_buffer_contract.cpp` verifies exact per-read caps;
+  `test_tcp_connection_send_after_close.cpp` verifies unconsumed input reaches
+  its configured cap and closes without further Buffer growth.
+- `tests/contract/event_loop/test_event_loop.cpp` verifies normal-capacity
+  rejection, explicit reserve exhaustion, accepted-work preservation, and a
+  timer interleaving between bounded functor batches.
+- `tests/contract/tcp_server/test_tcp_server_stop_active_write.cpp` verifies
+  natural output drain, repeated shared completion, timeout force-close with
+  exact counts, and immediate-stop compatibility.
+- `tests/contract/socket/test_socket_contract.cpp` verifies invalid socket
+  creation/bind/listen remain non-fatal, and
+  `tests/contract/acceptor/test_acceptor_contract.cpp` verifies unavailable
+  listener bind is reported by exception while the normal path leaves the
+  error policy untouched.
+- `tests/contract/event_loop/test_event_loop.cpp` verifies Channel, Timer,
+  pending-functor, and metric exception sources, Continue/Quit behavior,
+  throwing-policy containment, thread-init propagation, and partial worker-pool
+  startup rollback.
+- `tests/contract/tcp_server/test_tcp_server_contract.cpp` verifies message and
+  disconnect callback exceptions close only the offending connection, observer
+  exceptions remain contained, cleanup reaches zero connections, and a later
+  client is still served. `tests/contract/connector/test_connector_contract.cpp`
+  verifies a throwing diagnostic observer cannot interrupt connect success.
+- The same TcpServer contract uses real clients to verify global and per-peer
+  limits, bounded fixed-window rate rejection, cross-worker authentication,
+  authentication timer cancellation, unauthenticated close, exact counters,
+  base-loop metric affinity, and metric-callback exception containment.
+- Windows MSVC Debug passes all 85/85 configured tests in 40.69 seconds after
+  the recoverable socket/accept, callback-containment, and TcpServer admission
+  changes; the focused admission contract also passes 20 consecutive runs.
+- Production-hardening worktree Windows MSVC Debug AddressSanitizer passes
+  85/85 in 47.38 seconds. CTest now supplies the selected compiler's ASan
+  runtime directory per test, and the generated executable imports
+  `clang_rt.asan_dynamic-x86_64.dll` without a caller-side `PATH` mutation.
+- A clean Windows MSVC Release tree passes 85/85 in 38.45 seconds; its installed
+  `GameNetCore 0.2.0` package configures, builds, and runs the external
+  `find_package` consumer 1/1.
+- The production-hardening worktree repeat-50 gates pass 3,050/3,050 threading
+  executions in 1,716.27 seconds and 400/400 Pipeline/Broadcast executions in
+  37.88 seconds. Both repository evidence verifiers accept the exact inventory,
+  labels, repeat count, timeout, command, and result logs.
+- All seven fixed Windows Release IOCP core/Phase-4 benchmark scenarios return
+  their expected schema, platform/backend/build identity, and `status: ok`.
+- Frozen production-hardening candidate
+  `be749adc4bce7e1771b84c77c42bf080625805e9` is pushed on
+  `codex/production-hardening`. Workflow-dispatch `ci` run `29791363106`
+  passed all six producers and the aggregate evidence gate: Linux CMake,
+  ASan/UBSan with 1,000 libFuzzer executions, TSan over all 61 threading
+  tests, Linux Release, Windows Debug IOCP, and Windows Release IOCP. Each
+  full-test producer executed 85/85 tests, and Linux plus both Windows package
+  consumers executed 1/1.
+- The same candidate owns successful `long-soak` run `29791364648`: repository
+  verifiers independently accept 3,050/3,050 threading executions in 1,690.82
+  seconds and 400/400 Pipeline/Broadcast executions in 34.19 seconds, with
+  `repeat=50` and per-test `timeout=60`.
+- The same candidate owns successful `core-benchmark` run `29791365828`.
+  All eight fixed Core Release scenarios report `status: ok`, and the paired
+  Phase 4 evidence gate verifies the three fixed scenarios on both Linux/epoll
+  and Windows/IOCP with identical parameters. All remote sanitizer, package,
+  long-soak, and benchmark evidence is bound to one frozen commit; Windows
+  results are not used as a substitute for Linux execution.
 
 ## Verification State
 

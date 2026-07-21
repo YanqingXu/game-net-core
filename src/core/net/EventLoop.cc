@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <exception>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <thread>
@@ -45,8 +47,7 @@ bool EventLoopExecutor::tryQueue(Functor callback) const {
     if (!state) return false;
     std::lock_guard lock(state->mutex);
     if (!state->accepting || state->loop == nullptr) return false;
-    state->loop->queueInLoop(std::move(callback));
-    return true;
+    return state->loop->tryQueueInLoop(std::move(callback));
 }
 
 bool EventLoopExecutor::available() const noexcept {
@@ -66,7 +67,22 @@ bool EventLoopExecutor::isInOwnerThread() const noexcept {
 
 std::uint64_t EventLoopExecutor::id() const noexcept { return id_; }
 
-EventLoop::EventLoop()
+void EventLoopOptions::validate() const {
+    if (maxPendingFunctors == 0) {
+        throw std::invalid_argument("EventLoop max pending functors must be positive");
+    }
+    if (reservedPendingFunctors >
+        (std::numeric_limits<std::size_t>::max)() - maxPendingFunctors) {
+        throw std::invalid_argument("EventLoop pending functor capacity overflows size_t");
+    }
+    if (maxFunctorsPerIteration == 0 ||
+        maxFunctorsPerIteration > maxPendingFunctors) {
+        throw std::invalid_argument(
+            "EventLoop per-iteration functor budget must be within queue capacity");
+    }
+}
+
+EventLoop::EventLoop(EventLoopOptions options)
     : looping_(false),
       quit_(false),
       eventHandling_(false),
@@ -78,8 +94,12 @@ EventLoop::EventLoop()
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
       currentActiveChannel_(nullptr),
+      options_(options),
       pendingFunctorPeak_(0),
-      wakeupCount_(0) {
+      wakeupCount_(0),
+      rejectedFunctorCount_(0),
+      callbackExceptionCount_(0) {
+    options_.validate();
     if (t_loopInThisThread != nullptr) {
         throw std::runtime_error("another EventLoop already exists in this thread");
     }
@@ -117,12 +137,20 @@ void EventLoop::loop() {
         eventHandling_ = true;
         for (Channel* channel : activeChannels_) {
             currentActiveChannel_ = channel;
-            channel->handleEvent(pollReturnTime_);
+            try {
+                channel->handleEvent(pollReturnTime_);
+            } catch (...) {
+                handleCallbackException(
+                    EventLoopCallbackSource::ChannelEvent,
+                    std::current_exception());
+            }
         }
         currentActiveChannel_ = nullptr;
         eventHandling_ = false;
-        timerQueue_->handleExpired(gamenet::base::now());
-        doPendingFunctors();
+        for (auto& exception : timerQueue_->handleExpired(gamenet::base::now())) {
+            handleCallbackException(EventLoopCallbackSource::Timer, exception);
+        }
+        doPendingFunctors(options_.maxFunctorsPerIteration);
     }
 
     {
@@ -140,7 +168,7 @@ void EventLoop::loop() {
         if (!hasPending) {
             break;
         }
-        doPendingFunctors();
+        doPendingFunctors(options_.maxFunctorsPerIteration);
     }
 
     {
@@ -171,9 +199,28 @@ void EventLoop::runInLoop(Functor cb) {
 }
 
 void EventLoop::queueInLoop(Functor cb) {
+    if (!tryQueueInLoopImpl(std::move(cb), true)) {
+        throw std::overflow_error("EventLoop pending functor queue is full");
+    }
+}
+
+bool EventLoop::tryQueueInLoop(Functor cb) {
+    return tryQueueInLoopImpl(std::move(cb), false);
+}
+
+bool EventLoop::tryQueueInLoopImpl(Functor cb, bool allowReserve) {
+    if (!cb) {
+        return false;
+    }
     const auto enqueuedAt = gamenet::base::now();
     {
         std::lock_guard lock(mutex_);
+        const std::size_t capacity = options_.maxPendingFunctors +
+            (allowReserve ? options_.reservedPendingFunctors : 0);
+        if (pendingFunctors_.size() >= capacity) {
+            rejectedFunctorCount_.fetch_add(1, std::memory_order_relaxed);
+            return false;
+        }
         pendingFunctors_.push_back(PendingFunctor{std::move(cb), enqueuedAt});
         const auto pendingSize = pendingFunctors_.size();
         auto observedPeak = pendingFunctorPeak_.load(std::memory_order_relaxed);
@@ -189,6 +236,16 @@ void EventLoop::queueInLoop(Functor cb) {
     if (!isInLoopThread() || callingPendingFunctors_.load(std::memory_order_relaxed)) {
         wakeup();
     }
+    return true;
+}
+
+std::size_t EventLoop::pendingFunctorCount() const {
+    std::lock_guard lock(mutex_);
+    return pendingFunctors_.size();
+}
+
+std::uint64_t EventLoop::rejectedFunctorCount() const noexcept {
+    return rejectedFunctorCount_.load(std::memory_order_relaxed);
 }
 
 EventLoopExecutor EventLoop::executor() const noexcept {
@@ -198,6 +255,15 @@ EventLoopExecutor EventLoop::executor() const noexcept {
 void EventLoop::setEventLoopMetricCallback(EventLoopMetricCallback cb) {
     assertInLoopThread();
     eventLoopMetricCallback_ = std::move(cb);
+}
+
+void EventLoop::setCallbackExceptionHandler(EventLoopCallbackExceptionHandler cb) {
+    assertInLoopThread();
+    callbackExceptionHandler_ = std::move(cb);
+}
+
+std::uint64_t EventLoop::callbackExceptionCount() const noexcept {
+    return callbackExceptionCount_.load(std::memory_order_relaxed);
 }
 
 TimerId EventLoop::runAt(gamenet::base::Timestamp time, Functor cb) {
@@ -278,14 +344,19 @@ void EventLoop::handleRead(gamenet::base::Timestamp receiveTime) {
     emitEventLoopMetric(sample);
 }
 
-void EventLoop::doPendingFunctors() {
+void EventLoop::doPendingFunctors(std::size_t maxCount) {
     std::vector<PendingFunctor> functors;
     std::size_t pendingPeak = 0;
     callingPendingFunctors_.store(true, std::memory_order_relaxed);
 
     {
         std::lock_guard lock(mutex_);
-        functors.swap(pendingFunctors_);
+        const std::size_t count = std::min(maxCount, pendingFunctors_.size());
+        functors.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            functors.push_back(std::move(pendingFunctors_.front()));
+            pendingFunctors_.pop_front();
+        }
         pendingPeak = pendingFunctorPeak_.exchange(0, std::memory_order_relaxed);
     }
 
@@ -297,15 +368,27 @@ void EventLoop::doPendingFunctors() {
         sample.pendingFunctors = functors.size();
         sample.pendingFunctorPeak = std::max(pendingPeak, functors.size());
         sample.wakeupCount = wakeupCount_.load(std::memory_order_relaxed);
+        sample.rejectedFunctors = rejectedFunctorCount_.load(std::memory_order_relaxed);
+        sample.callbackExceptions = callbackExceptionCount_.load(std::memory_order_relaxed);
         sample.oldestPendingLatency = now - functors.front().enqueuedAt;
         emitEventLoopMetric(sample);
     }
 
     for (auto& functor : functors) {
-        functor.functor();
+        try {
+            functor.functor();
+        } catch (...) {
+            handleCallbackException(
+                EventLoopCallbackSource::PendingFunctor,
+                std::current_exception());
+        }
     }
 
     callingPendingFunctors_.store(false, std::memory_order_relaxed);
+
+    if (pendingFunctorCount() > 0) {
+        wakeup();
+    }
 }
 
 void EventLoop::emitEventLoopMetric(EventLoopMetricSample sample) {
@@ -313,7 +396,49 @@ void EventLoop::emitEventLoopMetric(EventLoopMetricSample sample) {
         return;
     }
     sample.loop = this;
-    eventLoopMetricCallback_(sample);
+    sample.callbackExceptions = callbackExceptionCount_.load(std::memory_order_relaxed);
+    try {
+        eventLoopMetricCallback_(sample);
+    } catch (...) {
+        handleCallbackException(
+            EventLoopCallbackSource::Metric,
+            std::current_exception());
+    }
+}
+
+void EventLoop::handleCallbackException(
+    EventLoopCallbackSource source,
+    std::exception_ptr exception) noexcept {
+    callbackExceptionCount_.fetch_add(1, std::memory_order_relaxed);
+    try {
+        if (exception) {
+            std::rethrow_exception(exception);
+        }
+        LOG_ERROR << "EventLoop callback threw an empty exception";
+    } catch (const std::exception& error) {
+        LOG_ERROR << "EventLoop callback exception: " << error.what();
+    } catch (...) {
+        LOG_ERROR << "EventLoop callback threw a non-standard exception";
+    }
+
+    if (!callbackExceptionHandler_) {
+        return;
+    }
+
+    try {
+        if (callbackExceptionHandler_(EventLoopCallbackException{
+                .source = source,
+                .exception = exception,
+            }) == EventLoopCallbackExceptionAction::Quit) {
+            quit_ = true;
+        }
+    } catch (const std::exception& error) {
+        LOG_ERROR << "EventLoop callback exception handler threw: " << error.what();
+        quit_ = true;
+    } catch (...) {
+        LOG_ERROR << "EventLoop callback exception handler threw a non-standard exception";
+        quit_ = true;
+    }
 }
 
 }  // namespace gamenet::net

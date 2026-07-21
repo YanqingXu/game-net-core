@@ -16,7 +16,7 @@ class IocpTcpTransport {
 public:
     explicit IocpTcpTransport(Channel* channel);
 
-    void startRead();
+    void startRead(std::size_t maxBytes);
     ssize_t completeRead(Buffer* input, int* savedErrno);
     bool readPending() const noexcept;
     void startWrite(const char* data, std::size_t len);

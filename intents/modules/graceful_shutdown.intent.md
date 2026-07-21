@@ -1,46 +1,50 @@
 ---
-status: deferred
+status: active
 target: GameNet::core
 migration_source: mini_trantor
-promote_gate: post-core-preview
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: adapt
+source_commit: 3eba368475a68f677aae920d4f299b155db23d57
+source_paths: mini/net/TcpServer.h;mini/net/TcpServer.cc
 ---
 
-# Module Intent: Graceful Shutdown and Signal Integration (v5-beta)
+# Module Intent: Graceful Server Shutdown
 
 ## 1. Intent
 
-Formalize four shutdown paths as library-level contracts:
-- **process shutdown**: SIGINT/SIGTERM triggers coordinated teardown
-- **server shutdown**: TcpServer::stop() orchestrates accept stop → connection drain → loop exit
-- **client shutdown**: TcpClient::disconnect()/stop() already exist; no structural change needed
-- **worker loop shutdown**: EventLoopThreadPool::stop() quits and joins all worker loops
-
-The goal is to make "how a service stops" an explicit, ordered, testable contract
-rather than relying on destructor side effects or ad-hoc application code.
+Make server drain an explicit, completion-aware library contract. A caller can
+stop admission, drain already-admitted connection output, wait for connection
+teardown and worker joins, and receive an explicit result when timeout forces
+remaining connections closed.
 
 ---
 
 ## 2. In Scope
 
-- signals handled: SIGINT, SIGTERM; SIGPIPE globally ignored
-- modules touched: Acceptor, EventLoopThreadPool, TcpServer, EventLoop (SignalWatcher)
-- shutdown ordering defined:
+- modules touched: Acceptor, TcpConnection, EventLoopThreadPool, TcpServer
+- `TcpServer::stopGracefully()` returns a shared completion future
+- shutdown ordering:
   1. stop accepting new connections (Acceptor::stop)
-  2. close or drain existing connections (TcpServer::stop)
-  3. quit worker loops (EventLoopThreadPool::stop)
-  4. quit base loop (EventLoop::quit)
-- drain policy: TcpServer::stop() immediately force-closes all connections.
-  A future drain-aware API (wait for in-flight requests) is deferred to v5-delta.
+  2. call `TcpConnection::shutdown()` so already-admitted output drains before
+     the socket write side closes
+  3. wait for normal connection close/removal
+  4. on timeout, force-close remaining connections on their owner loops
+  5. quit and join worker loops
+  6. publish `TcpServerStopResult`
+- compatibility `TcpServer::stop()` remains immediate force-close and may
+  explicitly escalate an in-progress graceful drain
 
 ---
 
 ## 3. Non-Responsibilities
 
-- does not create hidden global runtime
+- does not install process signal handlers or create a hidden global runtime
 - does not mutate loop-owned state off-thread
 - does not rely on destructor accidents for cleanup
-- does not implement drain-with-timeout policy (deferred)
-- does not handle SIGUSR1/SIGUSR2 or custom signal wiring
+- does not define process-level SIGINT/SIGTERM policy
+- does not wait for application work that was not admitted to TcpConnection
+  output before the drain request
 - does not change TcpClient shutdown (already sufficient)
 
 ---
@@ -51,55 +55,54 @@ rather than relying on destructor side effects or ad-hoc application code.
 - connection shutdown ordering is explicit (map mutation on base loop, destruction on IO loop)
 - pending callbacks do not outlive safe owners (lifetimeToken guards)
 - worker loop exit remains coordinated (quit → drain functors → join)
-- SignalWatcher delivers signal events through normal Channel callback on owner loop
-- SIGPIPE is ignored process-wide; write errors are detected via errno/SSL_error
+- completion becomes ready only after connection teardown and worker-loop join converge
+- repeated graceful-stop calls share the first operation and result
+- a negative timeout is rejected before server state changes
+- timeout force-close and immediate-stop escalation remain single-shot
 
 ---
 
 ## 5. Threading Rules
 
-- which loop receives signal wakeup: the base loop (where SignalWatcher is installed)
-- how shutdown requests cross threads:
-  - TcpServer::stop() runs on base loop thread
+- graceful shutdown coordination and connection-map observation run on base loop
+- shutdown requests may originate on any thread and marshal to the base loop
+- cross-loop operations:
   - EventLoopThreadPool::stop() calls quit() on each worker loop (cross-thread safe via atomic + wakeup)
-  - TcpConnection::forceClose() marshaled to IO loop via runInLoop
-- where final teardown executes: base loop thread, after loop() returns
+  - TcpConnection::shutdown()/forceClose() marshal to the connection owner loop
+- the future may be observed from any thread; result publication is synchronized
 
 ---
 
 ## 6. Failure Semantics
 
-- repeated shutdown request: idempotent — second stop() is a no-op
-- signal during pending close: close callbacks complete; no double-resume
-- forced close fallback: forceClose() always works regardless of write-buffer state
-- shutdown on already-stopped server: safe no-op
+- repeated graceful request returns the same shared future
+- timeout result reports the initial and forcibly-closed connection counts
+- immediate `stop()` during drain reports `ForcedByImmediateStop`
+- a request after an unrelated immediate stop reports `AlreadyStopped`
+- scheduling failure and server destruction publish explicit terminal outcomes
+- forced close fallback reuses normal owner-loop cancellation/teardown
 
 ---
 
 ## 7. Test Contracts
 
-- unit:
-  - Acceptor::stop() disables listening without destroying the Acceptor
-  - EventLoopThreadPool::stop() quits all worker loops
-- contract:
-  - signal wakeup delivers callback on owner loop thread
-  - TcpServer::stop() stops accepting and closes all connections
-  - shutdown ordering: accept stop → connection close → worker loop exit → base loop exit
-  - repeated stop() is idempotent
-- integration:
-  - SIGINT triggers graceful shutdown of a multi-threaded echo server
-  - no pending functors access destroyed objects after shutdown
-
-Suggested files:
-- `tests/contract/signal/test_signal_handling.cpp`
-- `tests/integration/tcp_server/test_graceful_shutdown.cpp`
+- `tests/contract/tcp_server/test_tcp_server_stop_active_write.cpp` verifies:
+  - immediate `stop()` retains force-close compatibility during active output
+  - a worker-originated graceful request drains all accepted output before EOF
+  - repeated calls share one completion result
+  - completion reports `Drained` only after normal connection removal
+  - a peer that remains open is force-closed after the configured timeout and
+    reports the exact forced connection count
+  - negative timeouts are rejected before shutdown begins
+- existing multi-worker stop contracts continue to verify owner-loop teardown
+  and worker join ordering
 
 ---
 
 ## 8. Review Questions
 
-- Is shutdown ordering documented and testable?
+- Is completion published only after connection teardown and worker joins?
 - Can callbacks still target destroyed upper-layer objects?
 - Does threaded shutdown converge cleanly?
-- Is SignalWatcher safe when the loop is not running?
-- Does SIGPIPE ignoring interfere with existing error-detection paths?
+- Does the timeout force only connections still present at expiry?
+- Can repeated or mixed stop requests duplicate close callbacks or completion?

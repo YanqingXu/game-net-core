@@ -14,6 +14,7 @@
 #include <cassert>
 #include <algorithm>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <utility>
 
@@ -72,6 +73,19 @@ void Connector::setNewConnectionCallback(NewConnectionCallback cb) {
 
 void Connector::setConnectorEventCallback(ConnectorEventCallback cb) {
     connectorEventCallback_ = std::move(cb);
+}
+
+void Connector::emitEvent(ConnectorEvent event) noexcept {
+    if (!connectorEventCallback_) {
+        return;
+    }
+    try {
+        connectorEventCallback_(serverAddr_, event);
+    } catch (const std::exception& error) {
+        LOG_ERROR << "Connector event callback threw: " << error.what();
+    } catch (...) {
+        LOG_ERROR << "Connector event callback threw a non-standard exception";
+    }
 }
 
 const InetAddress& Connector::serverAddress() const noexcept {
@@ -154,18 +168,39 @@ void Connector::stopInLoop() {
 }
 
 void Connector::connect() {
-    if (connectorEventCallback_) {
-        connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectAttempt);
-    }
+    emitEvent(ConnectorEvent::ConnectAttempt);
+
+    auto failBeforeChannel = [this](int error) {
+        LOG_ERROR << "Connector socket setup error: " << error << " "
+                  << sockets::errorMessage(error);
+        emitEvent(ConnectorEvent::ConnectFailed);
+        retry(kInvalidSocket);
+    };
 
 #ifdef _WIN32
-    const SocketFd sockfd = platform::createOverlappedTcpOrDie(serverAddr_.family());
-    platform::bindUnspecifiedOrDie(sockfd, serverAddr_.family());
+    const SocketFd sockfd = platform::createOverlappedTcp(serverAddr_.family());
+    if (!sockets::isValid(sockfd)) {
+        failBeforeChannel(sockets::lastError());
+        return;
+    }
+    if (!platform::bindUnspecified(sockfd, serverAddr_.family())) {
+        const int error = sockets::lastError();
+        sockets::close(sockfd);
+        failBeforeChannel(error);
+        return;
+    }
+    const auto connectEx = platform::loadConnectEx(sockfd);
+    if (connectEx == nullptr) {
+        const int error = sockets::lastError();
+        sockets::close(sockfd);
+        failBeforeChannel(error);
+        return;
+    }
     connecting(sockfd);
 
     iocpConnect_ = std::make_shared<IocpConnectState>();
     iocpConnect_->operation.channel = channel_.get();
-    iocpConnect_->connectEx = platform::loadConnectEx(sockfd);
+    iocpConnect_->connectEx = connectEx;
 
     DWORD bytes = 0;
     iocpConnect_->pending = true;
@@ -187,7 +222,11 @@ void Connector::connect() {
     loop_->retainCompletionOperation(&iocpConnect_->operation, iocpConnect_);
     return;
 #else
-    const SocketFd sockfd = sockets::createNonblockingOrDie(serverAddr_.family());
+    const SocketFd sockfd = sockets::createNonblocking(serverAddr_.family());
+    if (!sockets::isValid(sockfd)) {
+        failBeforeChannel(sockets::lastError());
+        return;
+    }
     const int ret = sockets::connect(sockfd, serverAddr_.getSockAddr(), serverAddr_.getSockAddrLen());
     const int savedError = (ret == 0) ? 0 : sockets::lastError();
 
@@ -197,17 +236,13 @@ void Connector::connect() {
     }
 
     if (sockets::isConnectRetryable(savedError)) {
-        if (connectorEventCallback_) {
-            connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectFailed);
-        }
+        emitEvent(ConnectorEvent::ConnectFailed);
         retry(sockfd);
         return;
     }
 
     LOG_ERROR << "Connector::connect error: " << sockets::errorMessage(savedError);
-    if (connectorEventCallback_) {
-        connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectFailed);
-    }
+    emitEvent(ConnectorEvent::ConnectFailed);
     sockets::close(sockfd);
 #endif
 }
@@ -253,7 +288,19 @@ void Connector::handleWrite() {
             handleError();
             return;
         }
-        platform::updateConnectContextOrDie(channel_->fd());
+        if (!platform::updateConnectContext(channel_->fd())) {
+            const int error = sockets::lastError();
+            if (connectTimeoutTimerId_.valid()) {
+                loop_->cancel(connectTimeoutTimerId_);
+                connectTimeoutTimerId_ = {};
+            }
+            const SocketFd sockfd = removeAndReleaseChannel();
+            LOG_ERROR << "Connector::handleWrite update connect context error: "
+                      << error << " " << sockets::errorMessage(error);
+            emitEvent(ConnectorEvent::ConnectFailed);
+            retry(sockfd);
+            return;
+        }
     }
 #endif
 
@@ -269,16 +316,30 @@ void Connector::handleWrite() {
     const int err = sockets::getSocketError(sockfd);
     if (err != 0) {
         LOG_ERROR << "Connector::handleWrite SO_ERROR = " << err << ": " << sockets::errorMessage(err);
-        if (connectorEventCallback_) {
-            connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectFailed);
-        }
+        emitEvent(ConnectorEvent::ConnectFailed);
         retry(sockfd);
         return;
     }
 
     // Self-connect detection: compare local and peer addresses.
-    const sockaddr_storage localStorage = sockets::getLocalAddr(sockfd);
-    const sockaddr_storage peerStorage = sockets::getPeerAddr(sockfd);
+    sockaddr_storage localStorage{};
+    if (!sockets::tryGetLocalAddr(sockfd, &localStorage)) {
+        const int error = sockets::lastError();
+        LOG_ERROR << "Connector::handleWrite getsockname error: " << error << " "
+                  << sockets::errorMessage(error);
+        emitEvent(ConnectorEvent::ConnectFailed);
+        retry(sockfd);
+        return;
+    }
+    sockaddr_storage peerStorage{};
+    if (!sockets::tryGetPeerAddr(sockfd, &peerStorage)) {
+        const int error = sockets::lastError();
+        LOG_ERROR << "Connector::handleWrite getpeername error: " << error << " "
+                  << sockets::errorMessage(error);
+        emitEvent(ConnectorEvent::ConnectFailed);
+        retry(sockfd);
+        return;
+    }
 
     bool selfConnect = false;
     if (localStorage.ss_family == peerStorage.ss_family) {
@@ -297,17 +358,13 @@ void Connector::handleWrite() {
 
     if (selfConnect) {
         LOG_WARN << "Connector::handleWrite self-connect detected, retrying";
-        if (connectorEventCallback_) {
-            connectorEventCallback_(serverAddr_, ConnectorEvent::SelfConnectDetected);
-        }
+        emitEvent(ConnectorEvent::SelfConnectDetected);
         retry(sockfd);
         return;
     }
 
     state_ = kConnected;
-    if (connectorEventCallback_) {
-        connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectSuccess);
-    }
+    emitEvent(ConnectorEvent::ConnectSuccess);
     if (connect_ && newConnectionCallback_) {
 #ifdef _WIN32
         loop_->preserveSocketAssociation(sockfd);
@@ -342,9 +399,7 @@ void Connector::handleError() {
     const SocketFd sockfd = removeAndReleaseChannel();
     const int err = sockets::getSocketError(sockfd);
     LOG_ERROR << "Connector::handleError SO_ERROR = " << err << ": " << sockets::errorMessage(err);
-    if (connectorEventCallback_) {
-        connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectFailed);
-    }
+    emitEvent(ConnectorEvent::ConnectFailed);
     retry(sockfd);
 }
 
@@ -358,9 +413,7 @@ void Connector::handleConnectTimeout() {
     LOG_WARN << "Connector::handleConnectTimeout: connect to "
              << serverAddr_.toIpPort() << " timed out";
 
-    if (connectorEventCallback_) {
-        connectorEventCallback_(serverAddr_, ConnectorEvent::ConnectTimeout);
-    }
+    emitEvent(ConnectorEvent::ConnectTimeout);
 
     // Close the connecting socket and retry or fail.
 #ifdef _WIN32
@@ -386,9 +439,7 @@ void Connector::retry(SocketFd sockfd) {
     }
     state_ = kDisconnected;
     if (connect_ && retryEnabled_) {
-        if (connectorEventCallback_) {
-            connectorEventCallback_(serverAddr_, ConnectorEvent::RetryScheduled);
-        }
+        emitEvent(ConnectorEvent::RetryScheduled);
         // Schedule retry with backoff via EventLoop timer.
         retryTimerId_ = loop_->runAfter(retryDelayMs_, [self = shared_from_this()] {
             self->retryTimerId_ = {};

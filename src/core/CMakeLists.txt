@@ -4,6 +4,7 @@ set(GAMENET_CORE_SOURCES
     base/Logger.cc
     net/Channel.cc
     net/Connector.cc
+    net/detail/ConnectionBackpressureController.cc
     net/EventLoop.cc
     net/EventLoopThread.cc
     net/EventLoopThreadPool.cc

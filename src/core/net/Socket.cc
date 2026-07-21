@@ -3,6 +3,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include <cstring>
+#include <system_error>
 
 #ifdef _WIN32
 #include <mstcpip.h>
@@ -44,13 +45,43 @@ SocketFd Socket::releaseFd() noexcept {
 }
 
 void Socket::bindAddress(const InetAddress& localAddr) {
+    int error = 0;
+    if (!tryBindAddress(localAddr, &error)) {
+        throw std::system_error(
+            std::error_code(error, std::system_category()),
+            "bind: " + sockets::errorMessage(error));
+    }
+}
+
+bool Socket::tryBindAddress(const InetAddress& localAddr, int* error) {
     sockaddr_storage storage{};
     std::memcpy(&storage, localAddr.getSockAddr(), localAddr.getSockAddrLen());
-    sockets::bindOrDie(sockfd_, storage);
+    if (sockets::bind(sockfd_, storage) == 0) {
+        return true;
+    }
+    if (error != nullptr) {
+        *error = sockets::lastError();
+    }
+    return false;
 }
 
 void Socket::listen() {
-    sockets::listenOrDie(sockfd_);
+    int error = 0;
+    if (!tryListen(&error)) {
+        throw std::system_error(
+            std::error_code(error, std::system_category()),
+            "listen: " + sockets::errorMessage(error));
+    }
+}
+
+bool Socket::tryListen(int* error) {
+    if (sockets::listen(sockfd_) == 0) {
+        return true;
+    }
+    if (error != nullptr) {
+        *error = sockets::lastError();
+    }
+    return false;
 }
 
 SocketFd Socket::accept(InetAddress* peerAddr) {

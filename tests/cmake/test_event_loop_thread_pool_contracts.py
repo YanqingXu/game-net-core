@@ -17,6 +17,7 @@ def main() -> None:
         / "event_loop_thread_pool"
         / "test_event_loop_thread_pool_restart_soak.cpp"
     )
+    event_loop_test = repo_root / "tests" / "contract" / "event_loop" / "test_event_loop.cpp"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     pool_intent = repo_root / "intents" / "modules" / "event_loop_thread_pool.intent.md"
     pool_source = repo_root / "src" / "core" / "net" / "EventLoopThreadPool.cc"
@@ -32,6 +33,7 @@ def main() -> None:
 
     pool_test_text = pool_test.read_text(encoding="utf-8")
     pool_restart_soak_text = pool_restart_soak_test.read_text(encoding="utf-8")
+    event_loop_test_text = event_loop_test.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     pool_intent_text = pool_intent.read_text(encoding="utf-8")
     pool_source_text = pool_source.read_text(encoding="utf-8")
@@ -63,6 +65,9 @@ def main() -> None:
     )
     require(pool_source_text, "baseLoop_->assertInLoopThread();", pool_source)
     require(pool_source_text, "thread->stop();", pool_source)
+    require(pool_source_text, "catch (...) {", pool_source)
+    require(pool_source_text, "loops_.clear();", pool_source)
+    require(event_loop_test_text, "second worker init failure", event_loop_test)
     require(tests_cmake_text, "contract event_loop_thread_pool", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread_pool.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_event_loop_thread_pool_restart_soak.cpp threading lifecycle", tests_cmake)

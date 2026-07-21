@@ -92,12 +92,16 @@ void Buffer::hasWritten(std::size_t len) {
     writerIndex_ += len;
 }
 
-ssize_t Buffer::readFd(SocketFd fd, int* savedErrno) {
-#ifdef _WIN32
-    if (writableBytes() < 65536) {
-        makeSpace(65536);
+ssize_t Buffer::readFd(SocketFd fd, int* savedErrno, std::size_t maxReadBytes) {
+    if (maxReadBytes == 0) {
+        return 0;
     }
-    const ssize_t n = sockets::read(fd, beginWrite(), writableBytes());
+#ifdef _WIN32
+    const std::size_t readLimit = std::min<std::size_t>(65536, maxReadBytes);
+    if (writableBytes() < readLimit) {
+        makeSpace(readLimit);
+    }
+    const ssize_t n = sockets::read(fd, beginWrite(), readLimit);
     if (n < 0) {
         *savedErrno = sockets::lastError();
         return n;
@@ -107,14 +111,16 @@ ssize_t Buffer::readFd(SocketFd fd, int* savedErrno) {
 #else
     char extraBuffer[65536];
     struct iovec vec[2];
-    const std::size_t writable = writableBytes();
+    const std::size_t writable = std::min(writableBytes(), maxReadBytes);
+    const std::size_t extra =
+        std::min(sizeof(extraBuffer), maxReadBytes - writable);
 
     vec[0].iov_base = beginWrite();
     vec[0].iov_len = writable;
     vec[1].iov_base = extraBuffer;
-    vec[1].iov_len = sizeof(extraBuffer);
+    vec[1].iov_len = extra;
 
-    const int iovcnt = writable < sizeof(extraBuffer) ? 2 : 1;
+    const int iovcnt = extra > 0 ? 2 : 1;
     const ssize_t n = ::readv(fd, vec, iovcnt);
     if (n < 0) {
         *savedErrno = sockets::lastError();

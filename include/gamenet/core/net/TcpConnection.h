@@ -6,9 +6,11 @@
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/base/noncopyable.h"
 #include "gamenet/core/net/Buffer.h"
+#include "gamenet/core/net/CallbackException.h"
 #include "gamenet/core/net/Callbacks.h"
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "gamenet/core/net/TcpConnectionOptions.h"
 
 #include <any>
 #include <atomic>
@@ -21,6 +23,9 @@ namespace gamenet::net {
 
 class Channel;
 class EventLoop;
+namespace detail {
+class ConnectionBackpressureController;
+}
 #ifdef _WIN32
 class IocpTcpTransport;
 #endif
@@ -50,6 +55,10 @@ public:
 
     void send(std::string_view message);
     void send(const void* data, std::size_t len);
+    // Admission is bounded across both owner-thread buffered bytes and
+    // cross-thread payloads accepted but not yet executed by the owner loop.
+    TcpSendResult trySend(std::string_view message);
+    TcpSendResult trySend(const void* data, std::size_t len);
     void shutdown();
     void forceClose();
 
@@ -57,6 +66,13 @@ public:
     // state. Configure callbacks before connectEstablished(); only teardown
     // code running on the owner loop may replace a callback afterward.
     void setTcpNoDelay(bool on);
+    // Owner-loop setup operation; configure before connectEstablished().
+    void setBackpressureOptions(TcpConnectionBackpressureOptions options);
+
+    // Cross-thread-safe snapshot of admitted bytes not yet written or dropped.
+    std::size_t pendingOutputBytes() const noexcept;
+    // Owner-loop-only diagnostic used by policy/contract integration.
+    bool readingPausedByBackpressure() const;
 
     // Connection context is loop-owned mutable state. Call setContext(), getContext()
     // only from this connection's owner EventLoop thread.
@@ -69,6 +85,7 @@ public:
     void setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t highWaterMark);
     void setWriteCompleteCallback(WriteCompleteCallback cb);
     void setCloseCallback(CloseCallback cb);
+    void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
 
     void connectEstablished();
     void connectDestroyed();
@@ -79,12 +96,24 @@ private:
     void handleClose();
     void handleError(int savedErrno = 0);
 
-    void sendInLoop(const char* data, std::size_t len);
+    void sendReservedInLoop(const char* data, std::size_t len);
     void shutdownInLoop();
     void forceCloseInLoop();
     void finishClose();
     void queueWriteComplete();
     void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen);
+    bool tryReserveOutputBytes(std::size_t bytes) noexcept;
+    void releaseOutputBytes(std::size_t bytes) noexcept;
+    void clearBufferedOutputInLoop();
+    void applyBackpressureInLoop();
+    std::size_t remainingInputCapacity() const noexcept;
+    bool closeOnInputLimitInLoop();
+    void reportCallbackException(
+        TcpConnectionCallbackSource source,
+        std::exception_ptr exception) noexcept;
+#ifdef _WIN32
+    void resumeWindowsReadAfterBackpressure();
+#endif
     void setState(StateE state) noexcept;
 
     EventLoop* loop_;
@@ -92,6 +121,7 @@ private:
     std::atomic<StateE> state_;
     std::unique_ptr<Socket> socket_;
     std::unique_ptr<Channel> channel_;
+    std::unique_ptr<detail::ConnectionBackpressureController> backpressure_;
 #ifdef _WIN32
     std::unique_ptr<IocpTcpTransport> iocpTransport_;
 #endif
@@ -104,7 +134,10 @@ private:
     HighWaterMarkCallback highWaterMarkCallback_;
     WriteCompleteCallback writeCompleteCallback_;
     CloseCallback closeCallback_;
+    TcpConnectionCallbackExceptionHandler callbackExceptionHandler_;
     std::size_t highWaterMark_{0};
+    TcpConnectionBackpressureOptions backpressureOptions_;
+    std::atomic<std::size_t> pendingOutputBytes_{0};
     std::any context_;
     bool channelAdded_{false};
     bool channelRemoved_{false};

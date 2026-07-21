@@ -1,12 +1,15 @@
 #include "gamenet/core/net/TcpClient.h"
 
+#include "gamenet/core/base/Logger.h"
 #include "gamenet/core/net/Connector.h"
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
 
 #include <cassert>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -150,6 +153,21 @@ void TcpClient::setWriteCompleteCallback(WriteCompleteCallback cb) {
     writeCompleteCallback_ = std::move(cb);
 }
 
+void TcpClient::setConnectionBackpressureOptions(
+    TcpConnectionBackpressureOptions options) {
+    options.validate();
+    if (activeConnectRequestId_.load(std::memory_order_relaxed) != 0) {
+        throw std::logic_error(
+            "TcpClient backpressure options must be configured before connect");
+    }
+    backpressureOptions_ = options;
+}
+
+void TcpClient::setCallbackExceptionHandler(
+    TcpConnectionCallbackExceptionHandler cb) {
+    callbackExceptionHandler_ = std::move(cb);
+}
+
 void TcpClient::connectInLoop(std::uint64_t requestId) {
     loop_->assertInLoopThread();
     if (activeConnectRequestId_.load(std::memory_order_relaxed) != requestId) {
@@ -256,22 +274,56 @@ void TcpClient::finishTerminalConnectFailure(std::uint64_t requestId) {
 
 void TcpClient::newConnection(SocketFd sockfd) {
     loop_->assertInLoopThread();
+    Socket pendingSocket(sockfd);
 
     const std::uint64_t requestId = connectorRequestId_;
     if (requestId == 0 ||
         activeConnectRequestId_.load(std::memory_order_relaxed) != requestId) {
-        sockets::close(sockfd);
         return;
     }
 
-    const InetAddress peerAddr(sockets::getPeerAddr(sockfd));
-    const InetAddress localAddr(sockets::getLocalAddr(sockfd));
+    sockaddr_storage peerStorage{};
+    if (!sockets::tryGetPeerAddr(pendingSocket.fd(), &peerStorage)) {
+        LOG_ERROR << "TcpClient::newConnection getpeername error: "
+                  << sockets::errorMessage(sockets::lastError());
+        if (retry_.load(std::memory_order_relaxed) && connect_) {
+            connectorRequestId_ = requestId;
+            connector_->restart();
+        } else {
+            pendingTerminalConnectRequestId_ = requestId;
+            finishTerminalConnectFailure(requestId);
+        }
+        return;
+    }
+    const InetAddress peerAddr(peerStorage);
+    sockaddr_storage localStorage{};
+    if (!sockets::tryGetLocalAddr(pendingSocket.fd(), &localStorage)) {
+        LOG_ERROR << "TcpClient::newConnection getsockname error: "
+                  << sockets::errorMessage(sockets::lastError());
+        if (retry_.load(std::memory_order_relaxed) && connect_) {
+            connectorRequestId_ = requestId;
+            connector_->restart();
+        } else {
+            pendingTerminalConnectRequestId_ = requestId;
+            finishTerminalConnectFailure(requestId);
+        }
+        return;
+    }
+    const InetAddress localAddr(localStorage);
     const std::string connName = name_ + "#" + std::to_string(nextConnId_++);
 
-    auto conn = std::make_shared<TcpConnection>(loop_, connName, sockfd, localAddr, peerAddr);
+    auto conn = std::make_shared<TcpConnection>(
+        loop_,
+        connName,
+        pendingSocket.fd(),
+        localAddr,
+        peerAddr);
+    (void)pendingSocket.releaseFd();
+    conn->setBackpressureOptions(backpressureOptions_);
     conn->setConnectionCallback(connectionCallback_);
     conn->setMessageCallback(messageCallback_);
     conn->setWriteCompleteCallback(writeCompleteCallback_);
+    conn->setCallbackExceptionHandler(callbackExceptionHandler_);
 
     std::weak_ptr<void> lifetime = lifetimeToken_;
     conn->setCloseCallback([this, lifetime](const TcpConnectionPtr& connection) {

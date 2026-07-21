@@ -26,6 +26,11 @@ inline inside TcpConnection.
 - expose cross-thread-safe snapshot observation of the public connection state
 - translate read/write/close/error events into unified connection state changes
 - expose send/shutdown APIs that preserve owner-thread execution
+- bound admitted output bytes across buffered and not-yet-executed cross-thread
+  sends, returning an explicit overload result before additional payload memory
+  is admitted
+- bound unread input bytes and close through the normal lifecycle path when an
+  application callback leaves the input buffer at its configured hard limit
 - expose force-close style teardown entry that still converges on the same close path
 - expose connection context as loop-owned mutable state, not cross-thread storage
 - dispatch user-visible connection/message/write-complete/high-water/close callbacks
@@ -53,6 +58,11 @@ inline inside TcpConnection.
 - channel registration is removed before effective destruction
 - helper component state that mutates connection behavior is still owned by the same loop
 - backpressure-driven read suspend/resume only changes Channel interest on owner loop thread
+- every accepted output byte is reserved exactly once and released exactly once
+  after write completion or close-time discard; the configured hard limit is
+  never exceeded even by concurrent cross-thread send admission
+- each socket read is capped by the input buffer's remaining allowance; the
+  input Buffer never grows past the configured connection limit
 - coroutine resume returns through EventLoop scheduling
 - transport-specific behavior (plain TCP or TLS) must not change callback ordering
   or close-path convergence
@@ -90,6 +100,8 @@ inline inside TcpConnection.
 
 ## 7. Failure Semantics
 - fatal read/write errors should produce explicit teardown
+- peer-close write failure must reach the normal error/close path without a
+  process-wide `SIGPIPE` termination or a global signal-policy side effect
 - repeated close/error handling should be guarded or idempotent
 - error-triggered teardown remains single-shot even if user code re-enters a
   teardown API from the close callback
@@ -104,7 +116,18 @@ inline inside TcpConnection.
   owner-loop half-close, write-complete, disconnected, or close callbacks
 - high-water callback fires once when output crosses the threshold and is
   delivered on the owner loop
+- `trySend()` reports `Overloaded` before queue/buffer growth when the hard
+  output reservation limit would be exceeded; the legacy `send()` API uses the
+  same bounded admission path
+- reaching the configured input hard limit after message dispatch is treated
+  as connection overload and converges on the existing close path
 - helper-component failure must still converge on TcpConnection's existing error/close model
+- connection-established, message, high-water, and write-complete callback
+  exceptions are reported and force-close only the offending connection
+- disconnected and close callback exceptions are reported and contained;
+  remaining lifecycle callbacks and remove-before-destroy cleanup still run
+- an exception observer is diagnostic only: if it throws, the fixed connection
+  close/cleanup policy still applies
 
 ---
 
@@ -144,7 +167,9 @@ inline inside TcpConnection.
   loop, and delivers write-complete on that loop
 - `tests/contract/tcp_connection/test_tcp_connection_send_after_close.cpp`
   verifies owner and non-owner send() calls after disconnection are ignored
-  without writing to the peer or firing write-complete callbacks
+  without writing to the peer or firing write-complete callbacks; it also
+  verifies an unconsumed input stream is read only to the configured cap and
+  then closed through the normal lifecycle path
 - `tests/contract/tcp_connection/test_tcp_connection_shutdown_pending_output.cpp`
   verifies shutdown waits for pending output to drain before peer EOF
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`
@@ -154,7 +179,11 @@ inline inside TcpConnection.
   verifies repeated owner and non-owner shutdown requests drain pending output
   and converge on one owner-loop half-close
 - `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
-  verifies high-water callback threshold delivery on the owner loop
+  verifies high-water callback threshold delivery, hard-limit rejection, and
+  high/low-water read pause/resume on the owner loop
+- `tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp`
+  verifies concurrent-domain admission reserves bytes before owner-loop
+  execution and rejects a second send that would exceed the same hard limit
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_force_close.cpp`
   verifies repeated forceClose teardown remains single-shot
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_connect_destroyed.cpp`
@@ -186,6 +215,11 @@ inline inside TcpConnection.
 - repeated teardown does not leave stale registration behind
 - swapping transport implementation does not change connection callback ordering
   or teardown semantics
+- `tests/contract/tcp_server/test_tcp_server_contract.cpp` verifies
+  a throwing message callback closes only its connection, reports its exact
+  callback source on the connection owner loop, and leaves TcpServer able to
+  accept and serve a later connection; it also verifies a throwing disconnect
+  callback cannot suppress close bookkeeping
 
 ---
 

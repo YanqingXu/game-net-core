@@ -18,6 +18,7 @@ EventLoopThread workers and returning loops for connection assignment.
 - expose base loop when zero worker threads are configured
 - hand out worker loops in a predictable round-robin manner
 - stop all worker loops on explicit request (stop())
+- serve as the final join barrier before TcpServer publishes graceful-stop completion
 
 ---
 
@@ -44,6 +45,8 @@ EventLoopThread workers and returning loops for connection assignment.
 ## 6. Failure Semantics
 - repeated selection must not step outside the worker loop array
 - startup should remain explicit about zero-thread and multi-thread behavior
+- partial worker startup failure stops and joins already-published workers,
+  clears loop selection state, and rethrows the initialization exception
 
 ---
 

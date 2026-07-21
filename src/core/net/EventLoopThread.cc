@@ -27,13 +27,27 @@ EventLoop* EventLoopThread::startLoop() {
         thread_.join();
     }
 
+    {
+        std::lock_guard lock(mutex_);
+        startupException_ = nullptr;
+        startupComplete_ = false;
+    }
+
     thread_ = std::jthread([this] { threadFunc(); });
 
     EventLoop* loop = nullptr;
+    std::exception_ptr startupException;
     {
         std::unique_lock lock(mutex_);
-        condition_.wait(lock, [this] { return loop_ != nullptr; });
+        condition_.wait(lock, [this] { return startupComplete_; });
         loop = loop_;
+        startupException = startupException_;
+    }
+    if (startupException) {
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+        std::rethrow_exception(startupException);
     }
     return loop;
 }
@@ -53,13 +67,22 @@ void EventLoopThread::stop() {
 
 void EventLoopThread::threadFunc() {
     EventLoop loop;
-    if (callback_) {
-        callback_(&loop);
+    try {
+        if (callback_) {
+            callback_(&loop);
+        }
+    } catch (...) {
+        std::lock_guard lock(mutex_);
+        startupException_ = std::current_exception();
+        startupComplete_ = true;
+        condition_.notify_one();
+        return;
     }
 
     {
         std::lock_guard lock(mutex_);
         loop_ = &loop;
+        startupComplete_ = true;
         condition_.notify_one();
     }
 

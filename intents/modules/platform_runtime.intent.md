@@ -50,6 +50,15 @@ This module is not business logic.
 - `EventLoop` owns wakeup descriptors and closes them after removing the wakeup Channel.
 - `Poller` observes `Channel` and never owns it.
 - Platform socket functions never transfer ownership implicitly.
+- Runtime TCP socket creation, bind, listen, and local/peer-address discovery expose
+  non-fatal result APIs; Reactor/TCP owners must not use process-terminating
+  wrappers for failures that can be isolated to one listener or connection.
+- Linux stream writes suppress per-call `SIGPIPE` delivery and report peer-close
+  failure through the normal return value / `errno` path without changing the
+  embedding process's signal disposition.
+- The shared Linux write helper preserves ordinary descriptor semantics for
+  pipes, while the eventfd wakeup hot path uses `write(2)` directly; socket
+  writes still use per-call `MSG_NOSIGNAL`.
 - Platform-specific code must not leak backend event constants into user-facing APIs.
 - Compatibility headers may forward old include paths, but implementation belongs in
   `platform/` or `poller/`.
@@ -92,10 +101,18 @@ This module is not business logic.
 
 ## Failure Semantics
 
-- Fatal socket or poller setup failures fail fast with platform error messages.
+- Process-wide runtime initialization and Poller/wakeup construction may fail
+  fast when no EventLoop can operate safely.
+- Listener and connection socket creation, bind, listen, accepted-socket setup,
+  and connector setup return an invalid handle, status, or captured platform
+  error so the owning module can reject, retry, or stop locally.
+- `*OrDie` compatibility helpers are not valid in the recoverable Reactor/TCP
+  runtime path.
 - Unsupported platform features must be reported as unsupported, not emulated
   silently.
 - Would-block and interrupted errors must normalize to stable helper predicates.
+- A Linux write after peer close returns an explicit socket error; it must not
+  terminate the hosting process through `SIGPIPE`.
 - Wakeup drain failure is logged by `EventLoop` without changing callback ordering.
 
 ---
@@ -108,6 +125,12 @@ This module is not business logic.
   registration behavior when enabled on the platform.
 - TCP client/server/connection contract tests verify socket operation behavior
   through the public path.
+- `tests/contract/socket/test_socket_contract.cpp` runs the Linux peer-close
+  write path in a child with default `SIGPIPE` disposition and verifies an
+  `EPIPE` result plus normal process exit.
+- `tests/contract/socket/test_socket_contract.cpp` also verifies invalid socket
+  creation, bind, and listen failures are returned without terminating the
+  process.
 - Future Windows workflow verifies the Windows source selection and IOCP completion path.
 - `docs/development/windows_iocp_milestone.md` defines the Windows promotion
   gates for IOCP wakeup, overlapped read/write ownership, and cancel/close ordering.

@@ -21,12 +21,17 @@ EventLoop is the heart of reactor execution in game-net-core.
 - perform poll wait loop
 - dispatch active Channel events
 - execute pending functors submitted from same thread or other threads
+- bound pending-functor admission and execute at most a configured batch per
+  normal loop iteration so task floods cannot grow memory without limit or
+  monopolize the owner thread
 - maintain thread-affinity discipline
 - provide runInLoop / queueInLoop API
 - provide a copyable, non-owning `EventLoopExecutor` that can reject queued work
   after loop admission closes without exposing a dereferenceable raw loop
 - support wakeup mechanism for cross-thread responsiveness
 - provide safe extension point for timers and coroutine resume
+- contain exceptions from asynchronously dispatched Channel, Timer, pending-
+  functor, and metric callbacks behind an observable owner-loop policy
 
 ---
 
@@ -54,6 +59,15 @@ EventLoop is the heart of reactor execution in game-net-core.
   successful `tryQueue` is either in that drain set or a normal loop iteration
 - owner-thread identity remains usable only while accepting work or executing
   that final accepted-work drain; it becomes unavailable after the drain ends
+- capacity-aware `tryQueueInLoop` and executor submissions never exceed the
+  normal pending-functor limit; legacy/control `queueInLoop` may use only the
+  separately bounded reserve and throws explicitly when total capacity is full
+- normal iterations execute at most `maxFunctorsPerIteration`; accepted
+  remainder is preserved and the loop is woken for another I/O/timer-aware
+  iteration
+- one asynchronous callback exception never skips later ready timers or
+  already-accepted pending functors, and Channel dispatch always clears its
+  in-callback lifetime guard while unwinding
 
 ---
 
@@ -86,7 +100,11 @@ Typical API direction:
 - quit()
 - runInLoop(Functor)
 - queueInLoop(Functor)
+- tryQueueInLoop(Functor) -> bool
+- pendingFunctorCount() / rejectedFunctorCount() snapshots
 - executor() -> EventLoopExecutor
+- setCallbackExceptionHandler(EventLoopCallbackExceptionHandler)
+- callbackExceptionCount()
 - runAt(Timestamp, Functor)
 - runAfter(Duration, Functor)
 - runEvery(Duration, Functor)
@@ -105,7 +123,9 @@ Additional APIs can be added later for richer timer and coroutine features.
 - EventLoop has owner thread identity
 - same-thread runInLoop executes immediately
 - cross-thread runInLoop behaves like queued scheduling
-- queueInLoop always enqueues
+- queueInLoop enqueues within the normal-plus-reserved hard capacity and throws
+  explicitly at saturation
+- tryQueueInLoop and EventLoopExecutor return false at normal-capacity saturation
 - cross-thread enqueue must ensure wakeup when loop may be blocked
 - pending functor queue flush occurs on owner thread only
 - cross-thread-observed pending functor execution state is atomic or synchronized
@@ -129,11 +149,17 @@ EventLoop should explicitly handle:
 - backend poll errors/interruption
 - wakeup read/write issues
 - invalid non-owner-thread mutation attempts
-- callback exceptions if exception policy exists
+- asynchronous callback exceptions are counted and reported with their source;
+  the default action logs and continues, while an installed policy may request
+  loop quit without abandoning already-accepted pending functors
+- an exception thrown by the exception handler itself is logged and requests
+  loop quit rather than recursing through the same handler
 - quit request while processing current iteration
 - queued functors that were already accepted before loop exit
 - executor `tryQueue` after admission close or destruction returns false and
   never dereferences the expired EventLoop
+- pending-functor saturation is explicit: capacity-aware APIs return false,
+  while the legacy/control API throws `std::overflow_error`
 
 v1 should prefer predictable behavior over over-complicated generic error models.
 
@@ -155,12 +181,21 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - cross-thread queueInLoop wakes blocked poll
 - quit causes safe loop exit
 - pending functors preserve expected execution semantics
+- bounded admission rejects beyond the configured count without losing any
+  already accepted functor
+- a per-iteration batch limit yields back to ready timers/I/O before executing
+  the remaining accepted batch
 - quit still drains already-queued nested functors before loop exit
 - executor identity is stable, cross-thread queueing executes on the owner
   thread, and copied handles become unavailable after loop teardown
 - work accepted before executor admission closes can still perform owner-only
   operations during the final drain, while new submissions are rejected
 - update/remove channel routes through correct Poller interaction path
+- `tests/contract/event_loop/test_event_loop.cpp` verifies
+  Channel, Timer, pending-functor, and metric callback exceptions are observed,
+  later callbacks still run under Continue, Quit still drains accepted work,
+  and a throwing thread-init callback is rethrown to `startLoop()` without a
+  worker `terminate` or publication deadlock
 
 ---
 

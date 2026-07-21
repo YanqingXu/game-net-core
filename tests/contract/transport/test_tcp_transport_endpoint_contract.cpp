@@ -18,6 +18,11 @@ int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair;
     auto connection = gamenet::test::makeTcpConnection(loop, pair, "transport-endpoint");
+    connection->setBackpressureOptions(gamenet::net::TcpConnectionBackpressureOptions{
+        .lowWaterMarkBytes = 128,
+        .highWaterMarkBytes = 256,
+        .hardLimitBytes = 512,
+    });
     auto endpoint = std::make_shared<gamenet::transport::TcpTransportEndpoint>(
         gamenet::transport::TransportSessionId{42}, connection);
 
@@ -47,6 +52,9 @@ int main() {
     });
     connection->connectEstablished();
     GAMENET_TEST_ASSERT(endpoint->isOpen());
+    GAMENET_TEST_ASSERT(
+        endpoint->send(std::string(513, 'o')) ==
+        gamenet::transport::EndpointResult::Overloaded);
 
     std::atomic<bool> observerSawClosed{false};
     std::atomic<bool> stopObserver{false};

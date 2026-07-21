@@ -60,6 +60,8 @@ For lifecycle-sensitive modules, tests should include:
 - callback-after-destroy prevention
 - repeated close/error handling guard
 - registration state consistency
+- finite-limit rejection and accounting release after accepted connection close
+- timeout-versus-success races for deadline-based admission
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

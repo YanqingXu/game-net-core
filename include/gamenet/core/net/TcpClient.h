@@ -5,8 +5,10 @@
 
 #include "gamenet/core/base/noncopyable.h"
 #include "gamenet/core/net/Callbacks.h"
+#include "gamenet/core/net/CallbackException.h"
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "gamenet/core/net/TcpConnectionOptions.h"
 
 #include <atomic>
 #include <cstdint>
@@ -42,6 +44,8 @@ public:
     void setConnectionCallback(ConnectionCallback cb);
     void setMessageCallback(MessageCallback cb);
     void setWriteCompleteCallback(WriteCompleteCallback cb);
+    void setConnectionBackpressureOptions(TcpConnectionBackpressureOptions options);
+    void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
 
 private:
     void connectInLoop(std::uint64_t requestId);
@@ -60,6 +64,7 @@ private:
     ConnectionCallback connectionCallback_;
     MessageCallback messageCallback_;
     WriteCompleteCallback writeCompleteCallback_;
+    TcpConnectionCallbackExceptionHandler callbackExceptionHandler_;
     std::atomic<bool> retry_{false};
     std::atomic<std::uint64_t> nextConnectRequestId_{1};
     std::atomic<std::uint64_t> activeConnectRequestId_{0};
@@ -71,6 +76,7 @@ private:
     std::shared_ptr<void> lifetimeToken_{std::make_shared<int>(0)};
     mutable std::mutex mutex_;
     TcpConnectionPtr connection_;
+    TcpConnectionBackpressureOptions backpressureOptions_;
 };
 
 }  // namespace gamenet::net

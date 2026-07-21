@@ -46,6 +46,9 @@ run, and stop exactly one EventLoop.
 - thread startup must not expose a null loop after successful wait
 - destruction should tolerate already-stopped loop/thread states
 - explicit stop should tolerate already-stopped loop/thread states
+- a thread-init callback exception is captured in the worker, completes the
+  startup handshake, and is rethrown by `startLoop()` on the creator thread;
+  it must not call `std::terminate` or leave the creator waiting forever
 
 ---
 
@@ -54,6 +57,8 @@ run, and stop exactly one EventLoop.
 - queued work executes on the worker loop thread
 - destruction joins the thread cleanly after quit
 - explicit stop drains accepted work, quits the loop, and joins the thread
+- `tests/contract/event_loop/test_event_loop.cpp` verifies
+  thread-init exception propagation and subsequent clean destruction
 
 ---
 

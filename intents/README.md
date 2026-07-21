@@ -96,6 +96,7 @@ These intents apply to the current migrated core:
 - `intents/modules/acceptor.intent.md`
 - `intents/modules/connector.intent.md`
 - `intents/modules/tcp_connection.intent.md`
+- `intents/modules/connection_backpressure_controller.intent.md`
 - `intents/modules/tcp_server.intent.md`
 - `intents/modules/tcp_client.intent.md`
 - `intents/modules/event_loop.intent.md`
@@ -114,6 +115,7 @@ These intents apply to the current migrated core:
 - `intents/usecases/game_server_pipeline_demo.intent.md`
 - `intents/modules/broadcast.intent.md`
 - `intents/usecases/phase4_performance_baseline.intent.md`
+- `intents/modules/graceful_shutdown.intent.md`
 
 ## Deferred Intent Catalog
 
@@ -123,13 +125,11 @@ These design assets do not authorize expanding current scope:
 - `intents/modules/async_timer.intent.md`
 - `intents/modules/backpressure_policy.intent.md`
 - `intents/modules/connection_awaiter_registry.intent.md`
-- `intents/modules/connection_backpressure_controller.intent.md`
 - `intents/modules/connection_transport.intent.md`
 - `intents/modules/coroutine_task.intent.md`
 - `intents/modules/dns_resolver.intent.md`
 - `intents/modules/game_backpressure_policy.intent.md`
 - `intents/modules/game_gateway_security.intent.md`
-- `intents/modules/graceful_shutdown.intent.md`
 - `intents/modules/http.intent.md`
 - `intents/modules/kcp_transport.intent.md`
 - `intents/modules/metrics_exporter.intent.md`

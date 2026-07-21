@@ -72,6 +72,7 @@ private:
     void handleWrite();
     void handleError();
     void handleConnectTimeout();
+    void emitEvent(ConnectorEvent event) noexcept;
     void retry(SocketFd sockfd);
 #ifdef _WIN32
     bool cancelPendingConnectInLoop(SocketFd sockfd) noexcept;

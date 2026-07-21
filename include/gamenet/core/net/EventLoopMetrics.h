@@ -24,6 +24,8 @@ struct EventLoopMetricSample {
     std::size_t pendingFunctors{0};
     std::size_t pendingFunctorPeak{0};
     std::uint64_t wakeupCount{0};
+    std::uint64_t rejectedFunctors{0};
+    std::uint64_t callbackExceptions{0};
     Duration oldestPendingLatency{Duration::zero()};
 };
 

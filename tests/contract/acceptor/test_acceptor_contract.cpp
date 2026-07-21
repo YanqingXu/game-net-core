@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <system_error>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -16,10 +17,30 @@ using namespace std::chrono_literals;
 int main() {
     {
         gamenet::net::EventLoop loop;
+        bool rejectedUnavailableBindAddress = false;
+        try {
+            gamenet::net::Acceptor unavailable(
+                &loop,
+                gamenet::net::InetAddress("203.0.113.1", 0),
+                false);
+        } catch (const std::system_error&) {
+            rejectedUnavailableBindAddress = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedUnavailableBindAddress);
+    }
+
+    {
+        gamenet::net::EventLoop loop;
         gamenet::net::Acceptor acceptor(&loop, gamenet::net::InetAddress(0, true), true);
 
         constexpr std::size_t kClientCount = 3;
         std::size_t accepted = 0;
+        std::size_t acceptErrors = 0;
+
+        acceptor.setErrorCallback([&](const gamenet::net::AcceptorError&) {
+            ++acceptErrors;
+            return gamenet::net::AcceptorErrorAction::Stop;
+        });
 
         acceptor.setNewConnectionCallback(
             [&](gamenet::net::SocketFd sockfd, const gamenet::net::InetAddress& peerAddr) {
@@ -61,6 +82,7 @@ int main() {
         clients.join();
 
         GAMENET_TEST_ASSERT(accepted == kClientCount);
+        GAMENET_TEST_ASSERT(acceptErrors == 0);
         GAMENET_TEST_ASSERT(!acceptor.listening());
     }
 
