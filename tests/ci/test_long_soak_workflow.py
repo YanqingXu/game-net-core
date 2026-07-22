@@ -290,6 +290,63 @@ def main() -> None:
         "long-soak manifest must hash verified repeat evidence before artifact upload"
     )
 
+    production_job = job_block(workflow_text, "linux-production-endurance")
+    require(
+        production_job,
+        "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
+        workflow,
+    )
+
+    production_source_checkout = step_block(
+        production_job, "Checkout migration provenance source"
+    )
+    require(production_source_checkout, "uses: actions/checkout@v4", workflow)
+    require(production_source_checkout, f"repository: {SOURCE_REPOSITORY}", workflow)
+    require(production_source_checkout, f"ref: {SOURCE_COMMIT}", workflow)
+    require(production_source_checkout, "path: mini_trantor", workflow)
+    require(production_source_checkout, "persist-credentials: false", workflow)
+    assert production_job.count("- name: Checkout migration provenance source") == 1
+
+    production_guards = step_block(production_job, "Check repository guards")
+    require(production_guards, verifier, workflow)
+    require(production_guards, semantic_guard, workflow)
+    assert production_guards.index(verifier) < production_guards.index(semantic_guard), (
+        "production endurance must verify immutable migration provenance before "
+        "intent semantics"
+    )
+    assert production_job.index(production_source_checkout) < production_job.index(
+        production_guards
+    ), "production endurance must checkout migration provenance before repository guards"
+
+    production_artifact_name = (
+        "production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-"
+        "${{ github.run_id }}-${{ github.run_attempt }}"
+    )
+    production_manifest = step_block(
+        production_job, "Write endurance evidence manifest"
+    )
+    require(
+        production_manifest,
+        f"--artifact-name '{production_artifact_name}'",
+        workflow,
+    )
+    require(production_manifest, "--require-canonical-artifact-name", workflow)
+
+    production_upload = step_block(
+        production_job, "Upload production endurance evidence"
+    )
+    require(production_upload, f"name: {production_artifact_name}", workflow)
+
+    candidate_download = step_block(
+        production_job, "Download retained candidate-24h evidence"
+    )
+    require(
+        candidate_download,
+        "pattern: production-endurance-candidate-24h-${{ github.job }}-"
+        "${{ github.sha }}-${{ inputs.candidate_run_id }}-*",
+        workflow,
+    )
+
     cmake_calls = re.findall(
         r"^add_gamenet_(?:component_)?test\(([^\n]*)\)$",
         tests_cmake.read_text(encoding="utf-8"),

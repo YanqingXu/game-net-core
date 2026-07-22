@@ -236,6 +236,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
       - name: Validate frozen identity and mode inputs
         env:
           GAMENET_ENDURANCE_MODE: "${{ inputs.mode }}"
@@ -280,6 +288,7 @@ jobs:
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
@@ -316,7 +325,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.candidate_run_id }}
-          pattern: production-endurance-candidate-24h-${{ github.sha }}-${{ inputs.candidate_run_id }}-*
+          pattern: production-endurance-candidate-24h-${{ github.job }}-${{ github.sha }}-${{ inputs.candidate_run_id }}-*
           merge-multiple: true
           path: prior-candidate-evidence
 
@@ -376,7 +385,7 @@ jobs:
           python3 tools/write_ci_evidence.py \
             --evidence-root endurance-evidence \
             --output endurance-evidence/manifest.json \
-            --artifact-name 'production-endurance-${{ inputs.mode }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --artifact-name 'production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-production-endurance -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-production-endurance --parallel' \
@@ -386,7 +395,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-endurance-${{ inputs.mode }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: endurance-evidence/
           if-no-files-found: error
           retention-days: 90
