@@ -318,6 +318,13 @@ def main() -> None:
         production_guards
     ), "production endurance must checkout migration provenance before repository guards"
 
+    production_build = step_block(production_job, "Build Release endurance target")
+    require(
+        production_build,
+        "run: cmake --build build-production-endurance --parallel 1",
+        workflow,
+    )
+
     production_artifact_name = (
         "production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-"
         "${{ github.run_id }}-${{ github.run_attempt }}"
@@ -331,6 +338,11 @@ def main() -> None:
         workflow,
     )
     require(production_manifest, "--require-canonical-artifact-name", workflow)
+    require(
+        production_manifest,
+        "--command 'cmake --build build-production-endurance --parallel 1'",
+        workflow,
+    )
 
     production_upload = step_block(
         production_job, "Upload production endurance evidence"

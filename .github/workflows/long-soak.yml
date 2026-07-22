@@ -306,7 +306,7 @@ jobs:
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
       - name: Build Release endurance target
-        run: cmake --build build-production-endurance --parallel
+        run: cmake --build build-production-endurance --parallel 1
 
       - name: Verify endurance test inventory
         run: |
@@ -388,7 +388,7 @@ jobs:
             --artifact-name 'production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-production-endurance -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'cmake --build build-production-endurance --parallel' \
+            --command 'cmake --build build-production-endurance --parallel 1' \
             --command "python3 tools/run_endurance_gate.py --test-dir build-production-endurance --mode ${{ inputs.mode }} --candidate-sha ${{ github.sha }} --platform linux --backend epoll --interval-milliseconds 1000 --heartbeat-timeout-seconds 120 --output-root endurance-evidence/run"
 
       - name: Upload production endurance evidence
