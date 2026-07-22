@@ -3,6 +3,15 @@ name: long-soak
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: Repeat soak or fixed production endurance mode
+        required: true
+        type: choice
+        options:
+          - repeat
+          - candidate-24h
+          - release-72h
+        default: repeat
       repeat:
         description: CTest repeat count for threading and Pipeline/Broadcast contracts
         required: true
@@ -11,8 +20,13 @@ on:
         description: Per-test timeout in seconds
         required: true
         default: "60"
+      candidate_run_id:
+        description: Successful candidate-24h run id required by release-72h
+        required: false
+        default: ""
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -22,6 +36,7 @@ concurrency:
 jobs:
   linux-long-soak:
     name: Linux long-soak threading contracts
+    if: inputs.mode == 'repeat'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
 
@@ -85,6 +100,9 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_endurance_gate.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
           python3 tests/cmake/test_packet_framer_fuzz_contract.py
@@ -125,8 +143,8 @@ jobs:
           set -euo pipefail
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-long-soak \
-            --expected-total 85 \
-            --expect-label threading=61 \
+            --expected-total 89 \
+            --expect-label threading=64 \
             --expect-label game_pipeline=4 \
             --expect-label broadcast=4 \
             --output long-soak-evidence/ctest-inventory.json
@@ -156,7 +174,7 @@ jobs:
             --inventory long-soak-evidence/ctest-inventory.json \
             --log long-soak-evidence/threading-repeat.log \
             --selection-label threading \
-            --expected-selected 61 \
+            --expected-selected 64 \
             --repeat "${GAMENET_SOAK_REPEAT}" \
             --timeout-seconds "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
@@ -186,7 +204,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-long-soak --parallel' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 85 --expect-label threading=61 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 89 --expect-label threading=64 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json' \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L game_pipeline|broadcast --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}"
 
@@ -203,5 +221,181 @@ jobs:
             long-soak-evidence/threading-repeat-evidence.json
             long-soak-evidence/phase4-repeat-evidence.json
             long-soak-evidence/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  linux-production-endurance:
+    name: Linux production endurance (${{ inputs.mode }})
+    if: inputs.mode == 'candidate-24h' || inputs.mode == 'release-72h'
+    runs-on: [self-hosted, linux, x64, gamenet-endurance]
+    timeout-minutes: 4620
+
+    steps:
+      - name: Checkout frozen candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Validate frozen identity and mode inputs
+        env:
+          GAMENET_ENDURANCE_MODE: "${{ inputs.mode }}"
+          GAMENET_CANDIDATE_RUN_ID: "${{ inputs.candidate_run_id }}"
+          GAMENET_CANDIDATE_SHA: "${{ github.sha }}"
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+
+          mode = os.environ["GAMENET_ENDURANCE_MODE"]
+          run_id = os.environ["GAMENET_CANDIDATE_RUN_ID"]
+          expected_sha = os.environ["GAMENET_CANDIDATE_SHA"]
+          actual_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          if re.fullmatch(r"[0-9a-f]{40}", expected_sha) is None:
+              raise SystemExit("github.sha is not an immutable commit identity")
+          if actual_sha != expected_sha:
+              raise SystemExit(f"checkout identity drift: {actual_sha} != {expected_sha}")
+          if mode == "candidate-24h" and run_id:
+              raise SystemExit("candidate-24h must not name prior candidate evidence")
+          if mode == "release-72h" and re.fullmatch(r"[1-9][0-9]*", run_id) is None:
+              raise SystemExit("release-72h requires a positive candidate_run_id")
+          PY
+
+      - name: Record endurance toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p endurance-evidence
+          {
+            cmake --version
+            ctest --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee endurance-evidence/toolchain.txt
+
+      - name: Check repository guards
+        run: |
+          python3 tests/scope/test_scope_guard.py
+          python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
+          python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_endurance_gate.py
+          python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
+
+      - name: Configure Release endurance target
+        run: >
+          cmake -S . -B build-production-endurance
+          -DCMAKE_BUILD_TYPE=Release
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build Release endurance target
+        run: cmake --build build-production-endurance --parallel 1
+
+      - name: Verify endurance test inventory
+        run: |
+          set -euo pipefail
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-production-endurance \
+            --expected-total 89 \
+            --expect-label threading=64 \
+            --expect-label fault_injection=1 \
+            --expect-label endurance=1 \
+            --output endurance-evidence/ctest-inventory.json
+
+      - name: Download retained candidate-24h evidence
+        if: inputs.mode == 'release-72h'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+          pattern: production-endurance-candidate-24h-${{ github.job }}-${{ github.sha }}-${{ inputs.candidate_run_id }}-*
+          merge-multiple: true
+          path: prior-candidate-evidence
+
+      - name: Verify retained candidate-24h evidence
+        if: inputs.mode == 'release-72h'
+        run: |
+          set -euo pipefail
+          python3 tools/verify_endurance_evidence.py \
+            --evidence prior-candidate-evidence/run/result.json \
+            --mode candidate-24h \
+            --candidate-sha '${{ github.sha }}' \
+            --platform linux \
+            --backend epoll
+
+      - name: Run uninterrupted production endurance
+        run: |
+          set -euo pipefail
+          python3 tools/run_endurance_gate.py \
+            --test-dir build-production-endurance \
+            --mode '${{ inputs.mode }}' \
+            --candidate-sha '${{ github.sha }}' \
+            --platform linux \
+            --backend epoll \
+            --interval-milliseconds 1000 \
+            --heartbeat-timeout-seconds 120 \
+            --output-root endurance-evidence/run
+
+      - name: Verify current endurance result
+        run: |
+          set -euo pipefail
+          python3 tools/verify_endurance_evidence.py \
+            --evidence endurance-evidence/run/result.json \
+            --mode '${{ inputs.mode }}' \
+            --candidate-sha '${{ github.sha }}' \
+            --platform linux \
+            --backend epoll
+
+      - name: Verify same-commit 24/72-hour pair
+        if: inputs.mode == 'release-72h'
+        run: |
+          set -euo pipefail
+          python3 tools/verify_endurance_evidence_pair.py \
+            --candidate-evidence prior-candidate-evidence/run/result.json \
+            --release-evidence endurance-evidence/run/result.json \
+            --candidate-sha '${{ github.sha }}' \
+            --platform linux \
+            --backend epoll \
+            --output endurance-evidence/pair.json
+
+      - name: Write endurance evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root endurance-evidence \
+            --output endurance-evidence/manifest.json \
+            --artifact-name 'production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'cmake -S . -B build-production-endurance -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
+            --command 'cmake --build build-production-endurance --parallel 1' \
+            --command "python3 tools/run_endurance_gate.py --test-dir build-production-endurance --mode ${{ inputs.mode }} --candidate-sha ${{ github.sha }} --platform linux --backend epoll --interval-milliseconds 1000 --heartbeat-timeout-seconds 120 --output-root endurance-evidence/run"
+
+      - name: Upload production endurance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: endurance-evidence/
           if-no-files-found: error
           retention-days: 90

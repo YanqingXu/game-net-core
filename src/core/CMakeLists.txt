@@ -2,6 +2,8 @@ set(GAMENET_CORE_SOURCES
     net/Acceptor.cc
     net/Buffer.cc
     base/Logger.cc
+    metrics/MetricsExporter.cc
+    metrics/MetricsHookRecorder.cc
     net/Channel.cc
     net/Connector.cc
     net/detail/ConnectionBackpressureController.cc

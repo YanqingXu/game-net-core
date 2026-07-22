@@ -1,17 +1,22 @@
 ---
-status: deferred
+status: active
 target: GameNet::core
 migration_source: mini_trantor
-promote_gate: post-core-preview
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: redesign
+source_commit: 3eba368475a68f677aae920d4f299b155db23d57
+source_paths: mini/base/MetricsExporter.h;mini/base/MetricsExporter.cc
 ---
 
 # Module Intent: MetricsExporter
 
 ## Intent
 
-`MetricsExporter` is the optional aggregation layer for `MetricsHook`.
-It turns typed hook samples and control events into stable counter / histogram observations
-without changing where hooks fire or how reactor state is owned.
+`MetricsExporter` is the optional aggregation layer for the typed metric hooks
+already exposed by the current Core, Logic, and Broadcast targets. It turns
+samples and control events into stable counter / histogram observations without
+changing where hooks fire or how reactor state is owned.
 
 This module exists so benchmarks, CI, and future production adapters can consume metrics
 through a replaceable exporter interface instead of hand-written counters in each test.
@@ -24,7 +29,10 @@ through a replaceable exporter interface instead of hand-written counters in eac
 - Provide `InMemoryMetricsExporter` for tests, benchmarks, and local diagnostics.
 - Provide `TaggedMetricsExporter` for static deployment labels without changing hook emission.
 - Provide dependency-free Prometheus text rendering from value snapshots.
-- Provide `MetricsHookRecorder` adapters from existing hook callback types to exporter calls.
+- Provide `MetricsHookRecorder` adapters for EventLoop, Connector, and
+  TcpServer-admission callbacks in Core.
+- Provide Logic and Broadcast adapters in their owning upper-layer targets so
+  Core never imports an upper-layer type.
 - Keep metric names stable and human-readable.
 - Allow callbacks returned by `MetricsHookRecorder` to outlive the recorder object by capturing
   the exporter ownership explicitly.
@@ -50,6 +58,8 @@ through a replaceable exporter interface instead of hand-written counters in eac
 7. `TaggedMetricsExporter` must hold only sink exporter ownership and immutable labels.
 8. Label encoding must be deterministic and safe for text export.
 9. Prometheus text rendering must be a snapshot serialization step, not work done in hook callbacks.
+10. Recorder adapters contain exporter exceptions so observability failure cannot
+    change Connector, EventLoop, admission, Logic, or Broadcast behavior.
 
 ## Threading Rules
 
@@ -73,6 +83,7 @@ through a replaceable exporter interface instead of hand-written counters in eac
 - Constructing `MetricsHookRecorder` with null exporter throws `std::invalid_argument`.
 - Constructing `TaggedMetricsExporter` with null sink throws `std::invalid_argument`.
 - Invalid metric names, invalid label keys, or duplicate label keys throw `std::invalid_argument`.
+- Callback adapters contain exporter exceptions at the observability boundary.
 - Unknown enum values map to an `unknown` counter suffix.
 - `InMemoryMetricsExporter::reset()` clears all aggregate state.
 
@@ -92,13 +103,13 @@ through a replaceable exporter interface instead of hand-written counters in eac
   - static label encoding and validation
   - Prometheus text rendering from snapshots
   - control hook and structured sample mapping
-- `tests/contract/net/test_metrics_exporter_contract.cpp`
+- `tests/contract/metrics/test_metrics_exporter_contract.cpp`
   - recorder callback lifetime
   - concurrent hook recording
   - concurrent tagged exporter recording
   - owner-loop EventLoop metric recording
-- `tests/integration/benchmark/test_game_server_metrics_smoke.cpp`
-  - end-to-end game metrics hook chain recorded through tagged `MetricsHookRecorder`
+- `tests/integration/metrics/test_game_server_metrics_smoke.cpp`
+  - end-to-end game metrics hook chain recorded through tagged recorder adapters
   - rendered snapshot contains tagged Prometheus text samples
 
 ## Review Checklist

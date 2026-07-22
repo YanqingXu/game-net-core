@@ -69,8 +69,8 @@ The `ci` workflow validates:
   broadcast fanout latency/process working-set high water, and ownership markers.
 - Long-soak workflow guard for the non-default repeated threading contract gate.
 - Manual core-benchmark workflow guards for paired Core and Phase 4
-  Linux/Windows Release raw JSON artifacts without push/PR triggers or
-  performance thresholds.
+  Linux/Windows Release raw JSON artifacts, same-runner baseline/candidate
+  median regression budgets, and no push/PR triggers.
 - Sanitizer CMake contract check so ASan/UBSan and TSan flags apply to the
   core target itself as well as dependent tests/examples.
 - Core and active Phase 4 target builds.
@@ -156,9 +156,9 @@ python3 tools/verify_migration_provenance.py
 All six required jobs have bounded job runtimes: Linux Debug and Release use
 30 minutes, while ASan/UBSan, TSan, Windows Debug, and Windows Release use 45
 minutes. Immediately after configure, each job runs
-`tools/verify_ctest_inventory.py`, requires exactly 85 configured tests, and
+`tools/verify_ctest_inventory.py`, requires exactly 89 configured tests, and
 writes `ci-evidence/ctest-inventory.json`. The TSan job additionally requires
-`threading=61` before it builds and executes that labeled slice. Inventory drift
+`threading=64` before it builds and executes that labeled slice. Inventory drift
 therefore fails before compilation or test selection can create a false-green
 result.
 
@@ -289,7 +289,7 @@ The ASan/UBSan job uses:
 
 ```bash
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
-python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 85 --output ci-evidence/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 89 --output ci-evidence/ctest-inventory.json
 cmake --build build-asan --parallel
 ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit "$PWD/ci-evidence/ctest-junit.xml" --output-log "$PWD/ci-evidence/ctest.log"
 ```
@@ -319,7 +319,7 @@ worker-owned active-write `TcpServer::stop()` contracts, worker-callback
 
 ```bash
 cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
-python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 85 --expect-label threading=61 --output ci-evidence/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 89 --expect-label threading=64 --output ci-evidence/ctest-inventory.json
 cmake --build build-tsan --parallel
 ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit "$PWD/ci-evidence/ctest-junit.xml" --output-log "$PWD/ci-evidence/ctest.log"
 ```
@@ -328,7 +328,7 @@ The Linux Release job uses:
 
 ```bash
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
-python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 85 --output ci-evidence/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 89 --output ci-evidence/ctest-inventory.json
 cmake --build build-release --parallel
 ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit "$PWD/ci-evidence/ctest-junit.xml" --output-log "$PWD/ci-evidence/ctest.log"
 ```
@@ -338,7 +338,7 @@ both configurations remain explicit required checks:
 
 ```powershell
 cmake -S . -B build-windows-release -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON
-python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 85 --output ci-evidence/ctest-inventory.json
+python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 89 --output ci-evidence/ctest-inventory.json
 cmake --build build-windows-release --config Release --parallel
 ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 10 --output-junit "$pwd/ci-evidence/ctest-junit.xml" --output-log "$pwd/ci-evidence/ctest.log"
 cmake --install build-windows-release --config Release --prefix "$pwd/build-windows-release/_install"
@@ -355,7 +355,7 @@ side effect:
 
 ```powershell
 cmake -S . -B build-asan-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
-python tools/verify_ctest_inventory.py --test-dir build-asan-windows --config Debug --expected-total 85 --expect-label threading=61
+python tools/verify_ctest_inventory.py --test-dir build-asan-windows --config Debug --expected-total 89 --expect-label threading=64
 cmake --build build-asan-windows --config Debug --parallel
 ctest --test-dir build-asan-windows -C Debug --output-on-failure --timeout 60
 ```
@@ -375,13 +375,13 @@ attached to `push` or `pull_request`. It complements the regular CI and TSan
 jobs by rebuilding the current targets and running two repeat-until-failure
 gates. Its current dispatch input defaults to repeat 50. The 60-second per-test timeout applies to both gates:
 
-- the complete inventory of 61 threading-labeled tests;
+- the complete inventory of 64 threading-labeled tests;
 - the focused inventory of 8 Pipeline/Broadcast tests, repeated separately so
   Phase 4 lifecycle, handoff, ordering, and fanout failures are visible as a
   dedicated result.
 
-After configure, `tools/verify_ctest_inventory.py` records the complete 85-test
-JSON inventory and requires `threading=61`, `game_pipeline=4`, and
+After configure, `tools/verify_ctest_inventory.py` records the complete 89-test
+JSON inventory and requires `threading=64`, `game_pipeline=4`, and
 `broadcast=4` before either repeat begins. Adding or relabeling a test must
 therefore update the workflow contract and this evidence ledger intentionally.
 
@@ -394,7 +394,7 @@ raw result lines against that inventory. It requires every selected test to
 pass the exact dispatch repeat count, rejects missing/extra/non-passing result
 lines, verifies the exact final CTest success summary, and writes separate
 `gamenet.ctest_repeat_evidence.v1` summaries. At the default, they prove
-61 x 50 = 3,050 threading executions and 8 x 50 = 400 focused executions, while
+64 x 50 = 3,200 threading executions and 8 x 50 = 400 focused executions, while
 recording command, timeout, real CTest time, per-test counts, and inventory/log
 SHA-256 hashes.
 
@@ -416,14 +416,22 @@ successful manifest that predates either repeat summary.
 ```bash
 cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 cmake --build build-long-soak --parallel
-python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 85 --expect-label threading=61 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 89 --expect-label threading=64 --expect-label game_pipeline=4 --expect-label broadcast=4 --output long-soak-evidence/ctest-inventory.json
 ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:<repeat> --timeout <timeout_seconds>
 ctest --test-dir build-long-soak --output-on-failure -L "game_pipeline|broadcast" --repeat until-fail:<repeat> --timeout <timeout_seconds>
-python3 tools/verify_ctest_repeat_evidence.py --inventory long-soak-evidence/ctest-inventory.json --log long-soak-evidence/threading-repeat.log --selection-label threading --expected-selected 61 --repeat <repeat> --timeout-seconds <timeout_seconds> --command <exact-command> --output long-soak-evidence/threading-repeat-evidence.json
+python3 tools/verify_ctest_repeat_evidence.py --inventory long-soak-evidence/ctest-inventory.json --log long-soak-evidence/threading-repeat.log --selection-label threading --expected-selected 64 --repeat <repeat> --timeout-seconds <timeout_seconds> --command <exact-command> --output long-soak-evidence/threading-repeat-evidence.json
 ```
 
 Use it for phase hardening evidence when mixed-timing lifecycle contracts need
 more iteration than the ordinary PR gate should spend.
+
+The same manual workflow also exposes fixed `candidate-24h` and `release-72h`
+modes on a dedicated Linux/epoll self-hosted runner. These modes run one
+uninterrupted fault-injection process, retain monotonic heartbeat/checkpoint
+evidence, and reject shortened duration overrides. The 72-hour mode downloads
+and verifies a successful 24-hour artifact from the same candidate SHA before
+starting, then emits a same-commit pair result. See
+`docs/development/production_endurance.md`.
 
 Phase 3.5 historical evidence: run `29077148022`, job `86311227712`, commit
 `a7fd77cbd2140041cebb3f900d5c609fafc2adad`, repeat 50, timeout 60 seconds,
@@ -435,7 +443,7 @@ the complete workflow job took 28m27s. The command recorded in the log was:
 ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:50 --timeout 60
 ```
 
-That 46-test run does not validate the current 61-test threading inventory or
+That 46-test run does not validate the current 64-test threading inventory or
 the separate 8-test Pipeline/Broadcast repeat. Candidate SHA-bound `long-soak`
 run `29161167423` now supplies that evidence: 3,050/3,050 and 400/400 exact
 executions, followed by successful structured verification, manifest creation,
@@ -479,6 +487,14 @@ These local results are supporting preflight; remote run `29161167423` is the
 authoritative exact-repeat evidence for candidate `5ebad2c1`.
 
 ## Remote Core Benchmark Evidence
+
+The current Phase 6 workflow additionally builds fixed baseline
+`2b1be4343f7c478eb40542451f30aad8ca474003` beside the candidate on each runner,
+runs 12 Core/Phase-4 scale scenarios three times per revision, and writes
+`gamenet.performance_regression.v1`. The paired verifier requires both
+platforms to pass independently against the same reviewed budget and rehashes
+all matrix samples. Raw Linux and Windows scores are never compared directly.
+See `docs/development/performance_regression.md`.
 
 Manual `core-benchmark` run `29077151229` completed successfully on commit
 `a7fd77cbd2140041cebb3f900d5c609fafc2adad` at 2026-07-10T07:37:15Z. It
@@ -596,17 +612,17 @@ When a CMake toolchain is available locally, use:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON
-python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 85 --output build/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 89 --output build/ctest-inventory.json
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure --timeout 60 --output-junit "$PWD/build/ctest-junit.xml" --output-log "$PWD/build/ctest.log"
 
 cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
-python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 85 --expect-label threading=61 --output build-tsan/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 89 --expect-label threading=64 --output build-tsan/ctest-inventory.json
 cmake --build build-tsan --parallel
 ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit "$PWD/build-tsan/ctest-junit.xml" --output-log "$PWD/build-tsan/ctest.log"
 
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
-python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 85 --output build-release/ctest-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 89 --output build-release/ctest-inventory.json
 cmake --build build-release --parallel
 ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit "$PWD/build-release/ctest-junit.xml" --output-log "$PWD/build-release/ctest.log"
 ```
@@ -615,7 +631,7 @@ On Windows with Visual Studio installed, the local equivalent is:
 
 ```powershell
 cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
-python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 85 --output build-windows/ctest-inventory.json
+python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 89 --output build-windows/ctest-inventory.json
 cmake --build build-windows --config Debug --parallel
 ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10 --output-junit "$pwd/build-windows/ctest-junit.xml" --output-log "$pwd/build-windows/ctest.log"
 cmake --install build-windows --config Debug --prefix "$pwd/build-windows/_install"
@@ -625,7 +641,7 @@ cmake --build build-windows-install-consumer --config Debug --parallel
 ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 --output-junit "$pwd/build-windows-install-consumer/ctest-junit.xml" --output-log "$pwd/build-windows-install-consumer/ctest.log"
 
 cmake -S . -B build-windows-release -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
-python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 85 --output build-windows-release/ctest-inventory.json
+python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 89 --output build-windows-release/ctest-inventory.json
 cmake --build build-windows-release --config Release --parallel
 ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 10 --output-junit "$pwd/build-windows-release/ctest-junit.xml" --output-log "$pwd/build-windows-release/ctest.log"
 cmake --install build-windows-release --config Release --prefix "$pwd/build-windows-release/_install"

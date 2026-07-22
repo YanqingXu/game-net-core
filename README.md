@@ -26,6 +26,8 @@ foundations without changing the core dependency direction.
 The published integration/contract preview is
 [`v0.2.0-phase4-preview`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview);
 it does not declare production readiness or API/ABI stability.
+The active Phase 6 line installs as `GameNetCore 0.3.0` and remains a production
+candidate until its fixed 24-hour and 72-hour Linux endurance gates complete.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

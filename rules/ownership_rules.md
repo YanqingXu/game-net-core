@@ -66,13 +66,28 @@ It must not blur these roles.
 - Lower reactor layers do not own higher business objects
 - Higher layers may own reactor-layer wrappers, but their destruction path must respect thread/lifecycle rules
 
-## 11. Destruction Rule
+## 11. Metrics Ownership
+- Callers share MetricsExporter ownership with recorder callbacks
+- recorder callbacks own no EventLoop, connection, session, logic, broadcast,
+  or transport object
+- TaggedMetricsExporter owns immutable static label values and shares only its
+  sink exporter
+- MetricsSnapshot owns value copies and may outlive the exporter
+
+## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists
 - No object should remain registered in Poller after its effective destruction path begins
 
-## 12. Forbidden
+## 13. Forbidden
 - Implicit transfer through raw pointer handoff with no documented owner
 - Shared ownership used as a substitute for lifecycle design
 - Poller owning Channel
 - Channel owning EventLoop
+
+## 14. Fault and Endurance Evidence
+- each fault cycle owns and closes every raw client socket it creates
+- TcpServer retains ownership of accepted sockets and graceful-stop state
+- the endurance supervisor owns the child-process handle, captured log,
+  checkpoint, and final evidence; heartbeats copy values and own no runtime
+  networking object

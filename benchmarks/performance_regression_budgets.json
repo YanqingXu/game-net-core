@@ -1,0 +1,88 @@
+{
+  "schema": "gamenet.performance_regression_budget.v1",
+  "baseline_sha": "2b1be4343f7c478eb40542451f30aad8ca474003",
+  "repetitions": 3,
+  "scenarios": [
+    {
+      "key": "core.connections-256",
+      "metrics": [
+        {"name": "working_set_delta_bytes", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 16777216}
+      ]
+    },
+    {
+      "key": "core.connections-1024",
+      "metrics": [
+        {"name": "working_set_delta_bytes", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 33554432}
+      ]
+    },
+    {
+      "key": "core.echo-1-worker",
+      "metrics": [
+        {"name": "throughput_mib_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p99_latency_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 100.0}
+      ]
+    },
+    {
+      "key": "core.echo-2-workers",
+      "metrics": [
+        {"name": "throughput_mib_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p99_latency_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 100.0}
+      ]
+    },
+    {
+      "key": "core.echo-4-workers",
+      "metrics": [
+        {"name": "throughput_mib_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p99_latency_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 150.0}
+      ]
+    },
+    {
+      "key": "core.slow-client-4",
+      "metrics": [
+        {"name": "working_set_delta_bytes", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 16777216}
+      ]
+    },
+    {
+      "key": "core.slow-client-16",
+      "metrics": [
+        {"name": "working_set_delta_bytes", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 33554432}
+      ]
+    },
+    {
+      "key": "phase4.broadcast-fanout",
+      "metrics": [
+        {"name": "operations_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "broadcast_fanout_completion_p99_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 500.0},
+        {"name": "working_set_peak_delta_bytes", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 16777216}
+      ]
+    },
+    {
+      "key": "phase4.broadcast-fanout-4096",
+      "metrics": [
+        {"name": "operations_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "broadcast_fanout_completion_p99_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 1000.0},
+        {"name": "working_set_peak_delta_bytes", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 33554432}
+      ]
+    },
+    {
+      "key": "phase4.framing",
+      "metrics": [
+        {"name": "throughput_mib_per_second", "direction": "higher", "max_regression_ratio": 0.25, "absolute_slack": 0.0}
+      ]
+    },
+    {
+      "key": "phase4.logic-queue",
+      "metrics": [
+        {"name": "operations_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "logic_queue_lag_p99_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 50000.0}
+      ]
+    },
+    {
+      "key": "phase4.logic-queue-heavy",
+      "metrics": [
+        {"name": "operations_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "logic_queue_lag_p99_us", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 100000.0}
+      ]
+    }
+  ]
+}

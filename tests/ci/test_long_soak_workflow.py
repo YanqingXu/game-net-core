@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 61
+EXPECTED_THREADING_TESTS = 64
 EXPECTED_PHASE4_SOAK_TESTS = 8
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -135,8 +135,8 @@ def main() -> None:
     assert "\n  pull_request:" not in workflow_text, "long-soak must not run on pull_request"
     permissions = re.search(r"(?m)^permissions:\n(?P<body>(?:  [^\n]+\n)+)", workflow_text)
     assert permissions is not None, "long-soak workflow needs explicit permissions"
-    assert permissions.group("body") == "  contents: read\n", (
-        "long-soak workflow must retain contents: read as its only repository permission"
+    assert permissions.group("body") == "  actions: read\n  contents: read\n", (
+        "long-soak workflow needs read-only actions and contents permissions"
     )
 
     job = job_block(workflow_text, "linux-long-soak")
@@ -149,6 +149,9 @@ def main() -> None:
     require(job, "python3 tests/cmake/test_event_loop_contracts.py", workflow)
     require(job, "python3 tests/scope/test_intent_metadata.py", workflow)
     require(job, "python3 tests/scope/test_intent_semantics.py", workflow)
+    require(job, "python3 tests/api/test_public_api_manifest.py", workflow)
+    require(job, "python3 tests/ci/test_performance_regression.py", workflow)
+    require(job, "python3 tests/ci/test_endurance_gate.py", workflow)
     require(job, "python3 tests/cmake/test_core_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_phase4_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_packet_framer_fuzz_contract.py", workflow)
@@ -195,7 +198,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 85", workflow)
+    require(inventory, "--expected-total 89", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=4", workflow)
     require(inventory, "--expect-label broadcast=4", workflow)
@@ -248,7 +251,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 85",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 89",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -287,6 +290,75 @@ def main() -> None:
         "long-soak manifest must hash verified repeat evidence before artifact upload"
     )
 
+    production_job = job_block(workflow_text, "linux-production-endurance")
+    require(
+        production_job,
+        "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
+        workflow,
+    )
+
+    production_source_checkout = step_block(
+        production_job, "Checkout migration provenance source"
+    )
+    require(production_source_checkout, "uses: actions/checkout@v4", workflow)
+    require(production_source_checkout, f"repository: {SOURCE_REPOSITORY}", workflow)
+    require(production_source_checkout, f"ref: {SOURCE_COMMIT}", workflow)
+    require(production_source_checkout, "path: mini_trantor", workflow)
+    require(production_source_checkout, "persist-credentials: false", workflow)
+    assert production_job.count("- name: Checkout migration provenance source") == 1
+
+    production_guards = step_block(production_job, "Check repository guards")
+    require(production_guards, verifier, workflow)
+    require(production_guards, semantic_guard, workflow)
+    assert production_guards.index(verifier) < production_guards.index(semantic_guard), (
+        "production endurance must verify immutable migration provenance before "
+        "intent semantics"
+    )
+    assert production_job.index(production_source_checkout) < production_job.index(
+        production_guards
+    ), "production endurance must checkout migration provenance before repository guards"
+
+    production_build = step_block(production_job, "Build Release endurance target")
+    require(
+        production_build,
+        "run: cmake --build build-production-endurance --parallel 1",
+        workflow,
+    )
+
+    production_artifact_name = (
+        "production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-"
+        "${{ github.run_id }}-${{ github.run_attempt }}"
+    )
+    production_manifest = step_block(
+        production_job, "Write endurance evidence manifest"
+    )
+    require(
+        production_manifest,
+        f"--artifact-name '{production_artifact_name}'",
+        workflow,
+    )
+    require(production_manifest, "--require-canonical-artifact-name", workflow)
+    require(
+        production_manifest,
+        "--command 'cmake --build build-production-endurance --parallel 1'",
+        workflow,
+    )
+
+    production_upload = step_block(
+        production_job, "Upload production endurance evidence"
+    )
+    require(production_upload, f"name: {production_artifact_name}", workflow)
+
+    candidate_download = step_block(
+        production_job, "Download retained candidate-24h evidence"
+    )
+    require(
+        candidate_download,
+        "pattern: production-endurance-candidate-24h-${{ github.job }}-"
+        "${{ github.sha }}-${{ inputs.candidate_run_id }}-*",
+        workflow,
+    )
+
     cmake_calls = re.findall(
         r"^add_gamenet_(?:component_)?test\(([^\n]*)\)$",
         tests_cmake.read_text(encoding="utf-8"),
@@ -322,7 +394,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "61 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "64 threading-labeled tests", ci_docs)
     require(ci_docs_text, "8 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "Phase 3.5 historical evidence: run `29077148022`", ci_docs)
     require(ci_docs_text, "job `86311227712`", ci_docs)

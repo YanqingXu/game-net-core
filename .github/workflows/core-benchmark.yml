@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GAMENET_PERFORMANCE_BASELINE_SHA: 2b1be4343f7c478eb40542451f30aad8ca474003
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -14,11 +17,18 @@ jobs:
   linux-release-benchmark:
     name: Linux Release epoll benchmark
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout performance baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 2b1be4343f7c478eb40542451f30aad8ca474003
+          path: performance-baseline
+          persist-credentials: false
 
       - name: Record Phase 4 benchmark toolchain evidence
         run: |
@@ -34,6 +44,8 @@ jobs:
         run: |
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
+          python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_endurance_gate.py
 
       - name: Configure
         run: >
@@ -49,26 +61,30 @@ jobs:
           cmake --build build-benchmark
           --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
 
-      - name: Run fixed scenario set
+      - name: Configure and build performance baseline
+        run: |
+          set -euo pipefail
+          cmake -S performance-baseline -B build-benchmark-baseline \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGAMENET_BUILD_TESTING=OFF \
+            -DGAMENET_BUILD_BENCHMARKS=ON \
+            -DGAMENET_ENABLE_TLS=OFF \
+            -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+          cmake --build build-benchmark-baseline \
+            --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
+
+      - name: Run candidate performance matrix
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p benchmark-results
-          exe=./build-benchmark/benchmarks/gamenet_core_benchmark
-
-          "$exe" --scenario echo --connections 4 --threads 1 \
-            --messages 10000 --payload 256 --settle-ms 500 --timeout-ms 30000 \
-            > benchmark-results/echo-1-worker.json
-          "$exe" --scenario echo --connections 4 --threads 2 \
-            --messages 10000 --payload 256 --settle-ms 500 --timeout-ms 30000 \
-            > benchmark-results/echo-2-workers.json
-          "$exe" --scenario connections --connections 256 --threads 1 \
-            --settle-ms 1000 --timeout-ms 30000 \
-            > benchmark-results/connections-256.json
-          "$exe" --scenario slow-client --connections 4 --threads 1 \
-            --slow-bytes 8388608 --high-water 65536 \
-            --settle-ms 1000 --timeout-ms 30000 \
-            > benchmark-results/slow-client-4.json
+          python3 tools/run_performance_matrix.py \
+            --core-executable build-benchmark/benchmarks/gamenet_core_benchmark \
+            --phase4-executable build-benchmark/benchmarks/gamenet_phase4_benchmark \
+            --output-root phase4-benchmark-results/performance-samples/candidate \
+            --canonical-core-dir benchmark-results \
+            --canonical-phase4-dir phase4-benchmark-results \
+            --platform linux --backend epoll --build-type Release \
+            --commit-sha "${GITHUB_SHA}" --repetitions 3
 
       - name: Validate JSON artifacts
         run: |
@@ -87,22 +103,16 @@ jobs:
               assert document["build_type"] == "Release", path
           PY
 
-      - name: Run Phase 4 scenario set
+      - name: Run baseline performance matrix
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p phase4-benchmark-results
-          exe=./build-benchmark/benchmarks/gamenet_phase4_benchmark
-
-          "$exe" --scenario framing --messages 250000 --payload 256 \
-            --threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000 \
-            > phase4-benchmark-results/framing.json
-          "$exe" --scenario logic-queue --messages 20000 --payload 64 \
-            --threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000 \
-            > phase4-benchmark-results/logic-queue.json
-          "$exe" --scenario broadcast-fanout --messages 32 --payload 256 \
-            --threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000 \
-            > phase4-benchmark-results/broadcast-fanout.json
+          python3 tools/run_performance_matrix.py \
+            --core-executable build-benchmark-baseline/benchmarks/gamenet_core_benchmark \
+            --phase4-executable build-benchmark-baseline/benchmarks/gamenet_phase4_benchmark \
+            --output-root phase4-benchmark-results/performance-samples/baseline \
+            --platform linux --backend epoll --build-type Release \
+            --commit-sha "${GAMENET_PERFORMANCE_BASELINE_SHA}" --repetitions 3
 
       - name: Validate Phase 4 JSON artifacts
         run: |
@@ -118,6 +128,18 @@ jobs:
             --artifact-name "phase4-benchmark-${GITHUB_JOB}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --manifest-output phase4-benchmark-results/evidence-manifest.json
 
+      - name: Enforce same-runner performance budgets
+        run: |
+          set -euo pipefail
+          python3 tools/compare_performance_regression.py \
+            --baseline-root phase4-benchmark-results/performance-samples/baseline \
+            --candidate-root phase4-benchmark-results/performance-samples/candidate \
+            --budget benchmarks/performance_regression_budgets.json \
+            --baseline-sha "${GAMENET_PERFORMANCE_BASELINE_SHA}" \
+            --candidate-sha "${GITHUB_SHA}" \
+            --platform linux --backend epoll \
+            --output phase4-benchmark-results/performance-regression.json
+
       - name: Write Linux Phase 4 benchmark job evidence
         if: always()
         env:
@@ -132,9 +154,9 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-benchmark -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-benchmark --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' \
-            --command 'gamenet_phase4_benchmark --scenario framing --messages 250000 --payload 256 --threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000' \
-            --command 'gamenet_phase4_benchmark --scenario logic-queue --messages 20000 --payload 64 --threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000' \
-            --command 'gamenet_phase4_benchmark --scenario broadcast-fanout --messages 32 --payload 256 --threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000' \
+            --command 'python3 tools/run_performance_matrix.py --candidate --repetitions 3' \
+            --command 'python3 tools/run_performance_matrix.py --baseline 2b1be4343f7c478eb40542451f30aad8ca474003 --repetitions 3' \
+            --command 'python3 tools/compare_performance_regression.py --platform linux --backend epoll' \
             --command 'python3 tools/validate_phase4_benchmark.py --platform linux --backend epoll --build-type Release'
 
       - name: Upload Linux raw JSON
@@ -157,11 +179,18 @@ jobs:
   windows-release-benchmark:
     name: Windows Release IOCP benchmark
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout performance baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 2b1be4343f7c478eb40542451f30aad8ca474003
+          path: performance-baseline
+          persist-credentials: false
 
       - name: Record Phase 4 benchmark toolchain evidence
         shell: pwsh
@@ -184,6 +213,8 @@ jobs:
         run: |
           python tests/cmake/test_core_benchmark_contract.py
           python tests/cmake/test_phase4_benchmark_contract.py
+          python tests/ci/test_performance_regression.py
+          python tests/ci/test_endurance_gate.py
 
       - name: Configure
         shell: pwsh
@@ -202,68 +233,46 @@ jobs:
           cmake --build build-benchmark-windows --config Release
           --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
 
-      - name: Run fixed scenario set
+      - name: Configure and build performance baseline
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force benchmark-results | Out-Null
-          $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benchmark.exe
+          $ErrorActionPreference = "Stop"
+          cmake -S performance-baseline -B build-benchmark-baseline-windows `
+            -G "Visual Studio 18 2026" -A x64 `
+            -DGAMENET_BUILD_TESTING=OFF `
+            -DGAMENET_BUILD_BENCHMARKS=ON `
+            -DGAMENET_ENABLE_TLS=OFF `
+            -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+          if ($LASTEXITCODE -ne 0) { throw "baseline configure failed" }
+          cmake --build build-benchmark-baseline-windows --config Release `
+            --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
+          if ($LASTEXITCODE -ne 0) { throw "baseline build failed" }
 
-          function Invoke-CoreBenchmark([string]$name, [string[]]$arguments) {
-            $json = (& $exe @arguments | Out-String)
-            if ($LASTEXITCODE -ne 0) {
-              throw "benchmark failed: $name"
-            }
-            $document = $json | ConvertFrom-Json
-            if ($document.schema -ne 'gamenet.core_benchmark.v1' -or
-                $document.status -ne 'ok' -or
-                $document.platform -ne 'windows' -or
-                $document.backend -ne 'iocp' -or
-                $document.build_type -ne 'Release') {
-              throw "invalid benchmark JSON: $name"
-            }
-            Set-Content -LiteralPath "benchmark-results/$name.json" -Value $json -Encoding utf8 -NoNewline
-          }
-
-          Invoke-CoreBenchmark 'echo-1-worker' @(
-            '--scenario', 'echo', '--connections', '4', '--threads', '1',
-            '--messages', '10000', '--payload', '256', '--settle-ms', '500', '--timeout-ms', '30000')
-          Invoke-CoreBenchmark 'echo-2-workers' @(
-            '--scenario', 'echo', '--connections', '4', '--threads', '2',
-            '--messages', '10000', '--payload', '256', '--settle-ms', '500', '--timeout-ms', '30000')
-          Invoke-CoreBenchmark 'connections-256' @(
-            '--scenario', 'connections', '--connections', '256', '--threads', '1',
-            '--settle-ms', '1000', '--timeout-ms', '30000')
-          Invoke-CoreBenchmark 'slow-client-4' @(
-            '--scenario', 'slow-client', '--connections', '4', '--threads', '1',
-            '--slow-bytes', '8388608', '--high-water', '65536',
-            '--settle-ms', '1000', '--timeout-ms', '30000')
-
-      - name: Run Phase 4 scenario set
+      - name: Run candidate performance matrix
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force phase4-benchmark-results | Out-Null
-          $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_phase4_benchmark.exe
+          $ErrorActionPreference = "Stop"
+          python tools/run_performance_matrix.py `
+            --core-executable build-benchmark-windows/benchmarks/Release/gamenet_core_benchmark.exe `
+            --phase4-executable build-benchmark-windows/benchmarks/Release/gamenet_phase4_benchmark.exe `
+            --output-root phase4-benchmark-results/performance-samples/candidate `
+            --canonical-core-dir benchmark-results `
+            --canonical-phase4-dir phase4-benchmark-results `
+            --platform windows --backend iocp --build-type Release `
+            --commit-sha "$env:GITHUB_SHA" --repetitions 3
+          if ($LASTEXITCODE -ne 0) { throw "candidate performance matrix failed" }
 
-          function Invoke-Phase4Benchmark([string]$name, [string[]]$arguments) {
-            $json = (& $exe @arguments | Out-String)
-            if ($LASTEXITCODE -ne 0) {
-              throw "Phase 4 benchmark failed: $name"
-            }
-            Set-Content -LiteralPath "phase4-benchmark-results/$name.json" -Value $json -Encoding utf8 -NoNewline
-          }
-
-          Invoke-Phase4Benchmark 'framing' @(
-            '--scenario', 'framing', '--messages', '250000', '--payload', '256',
-            '--threads', '1', '--batch', '64', '--fanout', '1', '--tick-us', '1000',
-            '--timeout-ms', '30000')
-          Invoke-Phase4Benchmark 'logic-queue' @(
-            '--scenario', 'logic-queue', '--messages', '20000', '--payload', '64',
-            '--threads', '4', '--batch', '512', '--fanout', '1', '--tick-us', '1000',
-            '--timeout-ms', '30000')
-          Invoke-Phase4Benchmark 'broadcast-fanout' @(
-            '--scenario', 'broadcast-fanout', '--messages', '32', '--payload', '256',
-            '--threads', '2', '--batch', '64', '--fanout', '1024', '--tick-us', '1000',
-            '--timeout-ms', '30000')
+      - name: Run baseline performance matrix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/run_performance_matrix.py `
+            --core-executable build-benchmark-baseline-windows/benchmarks/Release/gamenet_core_benchmark.exe `
+            --phase4-executable build-benchmark-baseline-windows/benchmarks/Release/gamenet_phase4_benchmark.exe `
+            --output-root phase4-benchmark-results/performance-samples/baseline `
+            --platform windows --backend iocp --build-type Release `
+            --commit-sha "$env:GAMENET_PERFORMANCE_BASELINE_SHA" --repetitions 3
+          if ($LASTEXITCODE -ne 0) { throw "baseline performance matrix failed" }
 
       - name: Validate Phase 4 JSON artifacts
         shell: pwsh
@@ -278,6 +287,20 @@ jobs:
             --job "$env:GITHUB_JOB" `
             --artifact-name "phase4-benchmark-$($env:GITHUB_JOB)-$($env:GITHUB_SHA)-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)" `
             --manifest-output phase4-benchmark-results/evidence-manifest.json
+
+      - name: Enforce same-runner performance budgets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/compare_performance_regression.py `
+            --baseline-root phase4-benchmark-results/performance-samples/baseline `
+            --candidate-root phase4-benchmark-results/performance-samples/candidate `
+            --budget benchmarks/performance_regression_budgets.json `
+            --baseline-sha "$env:GAMENET_PERFORMANCE_BASELINE_SHA" `
+            --candidate-sha "$env:GITHUB_SHA" `
+            --platform windows --backend iocp `
+            --output phase4-benchmark-results/performance-regression.json
+          if ($LASTEXITCODE -ne 0) { throw "performance regression budget failed" }
 
       - name: Write Windows Phase 4 benchmark job evidence
         if: always()
@@ -294,9 +317,9 @@ jobs:
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-benchmark-windows -G Visual Studio 18 2026 -A x64 -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
             --command 'cmake --build build-benchmark-windows --config Release --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' `
-            --command 'gamenet_phase4_benchmark --scenario framing --messages 250000 --payload 256 --threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000' `
-            --command 'gamenet_phase4_benchmark --scenario logic-queue --messages 20000 --payload 64 --threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000' `
-            --command 'gamenet_phase4_benchmark --scenario broadcast-fanout --messages 32 --payload 256 --threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000' `
+            --command 'python tools/run_performance_matrix.py --candidate --repetitions 3' `
+            --command 'python tools/run_performance_matrix.py --baseline 2b1be4343f7c478eb40542451f30aad8ca474003 --repetitions 3' `
+            --command 'python tools/compare_performance_regression.py --platform windows --backend iocp' `
             --command 'python tools/validate_phase4_benchmark.py --platform windows --backend iocp --build-type Release'
 
       - name: Upload Windows raw JSON

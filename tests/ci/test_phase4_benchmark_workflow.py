@@ -86,12 +86,12 @@ def sha256_file(path: Path) -> str:
 
 def write_job_manifest(root: Path, job: str, artifact_name: str, sha: str) -> None:
     files = []
-    for path in sorted(root.iterdir()):
+    for path in sorted(root.rglob("*")):
         if path.name == "job-manifest.json" or not path.is_file():
             continue
         files.append(
             {
-                "path": path.name,
+                "path": path.relative_to(root).as_posix(),
                 "bytes": path.stat().st_size,
                 "sha256": sha256_file(path),
             }
@@ -125,6 +125,72 @@ def write_job_manifest(root: Path, job: str, artifact_name: str, sha: str) -> No
     )
 
 
+def write_performance_fixture(
+    root: Path,
+    candidate_sha: str,
+    platform: str,
+    backend: str,
+    budget: dict,
+) -> None:
+    for identity, commit_sha in (("baseline", budget["baseline_sha"]), ("candidate", candidate_sha)):
+        matrix_root = root / "performance-samples" / identity
+        matrix_root.mkdir(parents=True)
+        scenarios = []
+        for scenario_budget in budget["scenarios"]:
+            key = scenario_budget["key"]
+            group, short_key = key.split(".", 1)
+            samples = []
+            for repetition in range(1, budget["repetitions"] + 1):
+                relative = Path(group) / f"{short_key}-{repetition}.json"
+                sample = matrix_root / relative
+                sample.parent.mkdir(exist_ok=True)
+                sample.write_text(json.dumps({"fixture": key, "repetition": repetition}) + "\n", encoding="utf-8")
+                samples.append({"path": relative.as_posix(), "sha256": sha256_file(sample)})
+            scenarios.append({"key": key, "samples": samples})
+        matrix = {
+            "schema": "gamenet.performance_matrix.v1",
+            "commit_sha": commit_sha,
+            "platform": platform,
+            "backend": backend,
+            "build_type": "Release",
+            "repetitions": budget["repetitions"],
+            "scenarios": scenarios,
+        }
+        (matrix_root / "matrix-manifest.json").write_text(
+            json.dumps(matrix, indent=2) + "\n", encoding="utf-8"
+        )
+
+    comparisons = []
+    for scenario_budget in budget["scenarios"]:
+        metrics = []
+        for metric in scenario_budget["metrics"]:
+            metrics.append({
+                **metric,
+                "baseline_samples": [100.0] * budget["repetitions"],
+                "candidate_samples": [100.0] * budget["repetitions"],
+                "baseline_median": 100.0,
+                "candidate_median": 100.0,
+                "threshold": 100.0,
+                "result": "pass",
+            })
+        comparisons.append({"key": scenario_budget["key"], "metrics": metrics, "result": "pass"})
+    performance = {
+        "schema": "gamenet.performance_regression.v1",
+        "result": "pass",
+        "platform": platform,
+        "backend": backend,
+        "build_type": "Release",
+        "baseline_sha": budget["baseline_sha"],
+        "candidate_sha": candidate_sha,
+        "repetitions": budget["repetitions"],
+        "budget_sha256": "f" * 64,
+        "comparisons": comparisons,
+    }
+    (root / "performance-regression.json").write_text(
+        json.dumps(performance, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def verify_pair_tool(
     repo_root: Path,
     validator: Path,
@@ -134,6 +200,9 @@ def verify_pair_tool(
     pair_verifier = repo_root / "tools" / "verify_phase4_benchmark_evidence_set.py"
     assert pair_verifier.is_file(), f"missing Phase 4 benchmark pair verifier: {pair_verifier}"
     sha = "a" * 40
+    budget = json.loads(
+        (repo_root / "benchmarks" / "performance_regression_budgets.json").read_text(encoding="utf-8")
+    )
     with tempfile.TemporaryDirectory(prefix="gamenet-phase4-benchmark-pair-") as temp:
         evidence_root = Path(temp) / "evidence"
         evidence_root.mkdir()
@@ -175,6 +244,7 @@ def verify_pair_tool(
                 backend=backend,
             )
             assert result.returncode == 0, result.stderr
+            write_performance_fixture(root, sha, platform, backend, budget)
             write_job_manifest(root, job, artifact_name, sha)
 
         output = evidence_root / "pair-manifest.json"
@@ -247,26 +317,35 @@ def main() -> None:
     require(windows, "gamenet_phase4_benchmark", workflow)
     require(pair_job, "Verify paired Phase 4 benchmark evidence", workflow)
 
-    linux_run = step_block(linux, "Run Phase 4 scenario set")
-    windows_run = step_block(windows, "Run Phase 4 scenario set")
-    for fragment in (
-        "--scenario framing --messages 250000 --payload 256",
-        "--threads 1 --batch 64 --fanout 1 --tick-us 1000 --timeout-ms 30000",
-        "--scenario logic-queue --messages 20000 --payload 64",
-        "--threads 4 --batch 512 --fanout 1 --tick-us 1000 --timeout-ms 30000",
-        "--scenario broadcast-fanout --messages 32 --payload 256",
-        "--threads 2 --batch 64 --fanout 1024 --tick-us 1000 --timeout-ms 30000",
+    linux_candidate = step_block(linux, "Run candidate performance matrix")
+    windows_candidate = step_block(windows, "Run candidate performance matrix")
+    linux_baseline = step_block(linux, "Run baseline performance matrix")
+    windows_baseline = step_block(windows, "Run baseline performance matrix")
+    for step, interpreter, platform, backend in (
+        (linux_candidate, "python3", "linux", "epoll"),
+        (windows_candidate, "python", "windows", "iocp"),
+        (linux_baseline, "python3", "linux", "epoll"),
+        (windows_baseline, "python", "windows", "iocp"),
     ):
-        require(linux_run, fragment, workflow)
+        require(step, f"{interpreter} tools/run_performance_matrix.py", workflow)
+        require(step, f"--platform {platform} --backend {backend}", workflow)
+        require(step, "--repetitions 3", workflow)
+    require(linux_candidate, "--canonical-phase4-dir phase4-benchmark-results", workflow)
+    require(windows_candidate, "--canonical-phase4-dir phase4-benchmark-results", workflow)
+    require(linux_baseline, "performance-samples/baseline", workflow)
+    require(windows_baseline, "performance-samples/baseline", workflow)
+
+    runner = repo_root / "tools" / "run_performance_matrix.py"
+    runner_text = runner.read_text(encoding="utf-8")
     for fragment in (
-        "'--scenario', 'framing', '--messages', '250000', '--payload', '256'",
-        "'--threads', '1', '--batch', '64', '--fanout', '1', '--tick-us', '1000'",
-        "'--scenario', 'logic-queue', '--messages', '20000', '--payload', '64'",
-        "'--threads', '4', '--batch', '512', '--fanout', '1', '--tick-us', '1000'",
-        "'--scenario', 'broadcast-fanout', '--messages', '32', '--payload', '256'",
-        "'--threads', '2', '--batch', '64', '--fanout', '1024', '--tick-us', '1000'",
+        '"framing", "framing"',
+        '"logic-queue", "logic-queue"',
+        '"logic-queue-heavy", "logic-queue"',
+        '"broadcast-fanout", "broadcast-fanout"',
+        '"broadcast-fanout-4096", "broadcast-fanout"',
+        '"--fanout", "4096"',
     ):
-        require(windows_run, fragment, workflow)
+        require(runner_text, fragment, runner)
 
     linux_validation = step_block(linux, "Validate Phase 4 JSON artifacts")
     require(linux_validation, "python3 tools/validate_phase4_benchmark.py", workflow)
@@ -371,12 +450,11 @@ def main() -> None:
             "download/pair verification must not bypass a failed producer final-result gate"
         )
 
-    assert "logic_queue_lag_p99_us" not in text, (
-        "manual workflow must validate schema/status, not enforce performance thresholds"
-    )
-    assert "broadcast_fanout_completion_p99_us" not in text, (
-        "manual workflow must validate schema/status, not enforce performance thresholds"
-    )
+    for job in (linux, windows):
+        regression = step_block(job, "Enforce same-runner performance budgets")
+        require(regression, "tools/compare_performance_regression.py", workflow)
+        require(regression, "performance_regression_budgets.json", workflow)
+        require(regression, "performance-regression.json", workflow)
 
     assert validator.is_file(), f"missing shared Phase 4 benchmark validator: {validator}"
     validator_text = validator.read_text(encoding="utf-8")
@@ -455,7 +533,8 @@ def main() -> None:
     require(long_soak.read_text(encoding="utf-8"), guard, long_soak)
 
     docs_text = docs.read_text(encoding="utf-8")
-    require(docs_text, "same commit", docs)
+    require(docs_text, "same runner", docs)
+    require(docs_text, "baseline and candidate", docs)
     require(docs_text, "raw JSON artifacts", docs)
     require(docs_text, "Linux epoll", docs)
     require(docs_text, "Windows IOCP", docs)

@@ -95,7 +95,7 @@ def main() -> None:
     require(workflow_text, "linux-tsan:", workflow)
     require(workflow_text, "GAMENET_ENABLE_TSAN=ON", workflow)
     require(workflow_text, "ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60", workflow)
-    require(workflow_text, "--expect-label threading=61", workflow)
+    require(workflow_text, "--expect-label threading=64", workflow)
     require(workflow_text, "python3 tests/cmake/test_threading_gate_contracts.py", workflow)
 
     player_session_text = player_session.read_text(encoding="utf-8")

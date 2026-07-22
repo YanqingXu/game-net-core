@@ -11,8 +11,9 @@ artifact_kind: benchmark
 ## 1. Intent
 The core performance baseline is a reproducible, opt-in engineering tool for
 measuring the current Reactor/TCP implementation on Linux epoll and Windows
-IOCP. It records comparable evidence without turning timing thresholds into
-correctness tests or expanding the installed `GameNet::core` API.
+IOCP. The executable records raw measurements without embedding timing
+thresholds or expanding the installed `GameNet::core` API; the Phase 6 workflow
+applies reviewed same-runner relative regression budgets outside the executable.
 
 ---
 
@@ -24,14 +25,14 @@ correctness tests or expanding the installed `GameNet::core` API.
 - observe working-set growth and high-water notifications for slow-reading clients
 - report connection count, EventLoop worker count, backend, completion mode,
   build type, parameters, and measurements as one versioned JSON document
-- provide a manual-only workflow that captures the same fixed Release scenario
-  set as raw Linux and Windows artifacts from one commit
+- provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
+  and 4/16-slow-client Release matrix three times for both baseline and candidate
 - return a non-zero exit code when setup, I/O, timeout, or schema production fails
 
 ---
 
 ## 3. Non-Responsibilities
-- is not a CTest and defines no pass/fail performance threshold
+- is not a CTest and embeds no pass/fail performance threshold
 - does not claim cross-machine scores are directly comparable
 - does not install a benchmark library or add public headers
 - does not implement a backpressure policy, memory cap, metrics subsystem, or
@@ -99,6 +100,8 @@ correctness tests or expanding the installed `GameNet::core` API.
 - use Release builds for recorded baseline numbers
 - compare runs only when scenario parameters, build type, backend/completion mode,
   host context, and command are recorded
+- production-candidate regression compares baseline and candidate only on the
+  same runner, uses three-sample medians, and retains both raw sample sets
 - working-set deltas are process-level observations and include allocator/runtime effects
 - loopback results are regression baselines, not production network capacity claims
 - IOCP single-versus-batched completion performance remains a future implementation comparison
@@ -110,7 +113,7 @@ correctness tests or expanding the installed `GameNet::core` API.
   active intent, non-CTest status, scenario/schema fields, backend reporting,
   process-memory sampling, documentation commands, and CI guard parity
 - `tests/ci/test_core_benchmark_workflow.py` verifies the manual-only trigger,
-  paired Release platform jobs, fixed scenario set, JSON validation, and artifacts
+  paired Release platform jobs, expanded fixed matrix, JSON validation, and artifacts
 - the guard runs in ordinary CI and long-soak preflight, but the benchmark executable
   is intentionally not run as a correctness gate
 
