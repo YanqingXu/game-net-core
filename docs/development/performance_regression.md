@@ -5,6 +5,14 @@ as comparable capacity claims. Each Linux/epoll and Windows/IOCP producer uses
 one GitHub runner to build both the reviewed baseline commit
 `2b1be4343f7c478eb40542451f30aad8ca474003` and the candidate commit.
 
+The frozen baseline executable emits historical Core schema v1. The candidate
+emits Core schema v2, and its requested/accepted/rejected, hard-limit,
+pending-output, pause/resume, and recovery invariants are independently
+validated before comparison. The regression comparator uses only common
+performance measurements; it never invents v2 admission accounting for the v1
+baseline. After the v2 benchmark anchor is merged, the next reviewed baseline
+must also be v2.
+
 ## Matrix
 
 `tools/run_performance_matrix.py` runs 12 fixed Release scenarios three times
@@ -44,7 +52,9 @@ evidence job rehashes the samples, requires both platform regression results to
 pass against the same baseline and budget contract, and still avoids comparing
 Linux values directly with Windows values.
 
-A local Windows/IOCP preflight of the gate passed all 12 comparisons with 36
-candidate and 36 baseline samples. This is tool validation only: publication
-still requires the workflow-retained Linux/epoll and Windows/IOCP artifacts to
-name the same immutable candidate commit.
+Cross-platform workflow run `29808395220` passed all 12 comparisons at
+candidate SHA `5f926f3` with 36 candidate and 36 baseline samples per platform.
+The later endurance snapshot was `b344318`, so this performance run is retained
+as infrastructure evidence rather than same-SHA release evidence. Publication
+requires new Linux/epoll and Windows/IOCP artifacts naming the final immutable
+runtime candidate.

@@ -22,7 +22,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - exercise the public TcpServer/TcpConnection path over loopback TCP
 - measure echo round-trip latency and application-byte throughput
 - measure process working-set growth while holding idle connections
-- observe working-set growth and high-water notifications for slow-reading clients
+- observe working-set growth, bounded output admission, high/low-water read
+  throttling, and recovery for slow-reading clients
 - report connection count, EventLoop worker count, backend, completion mode,
   build type, parameters, and measurements as one versioned JSON document
 - provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
@@ -36,7 +37,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - does not claim cross-machine scores are directly comparable
 - does not install a benchmark library or add public headers
 - does not implement a backpressure policy, memory cap, metrics subsystem, or
-  alternate IOCP completion-drain strategy
+  alternate IOCP completion-drain strategy; it observes the Core policy
+  configured on `TcpServer`
 - does not benchmark HTTP, protocol framing, TLS, UDP, KCP, or game-server layers
 
 ---
@@ -56,19 +58,29 @@ applies reviewed same-runner relative regression budgets outside the executable.
 
 ### `slow-client`
 - clients connect with a deliberately small receive buffer and do not read
-- each accepted connection is offered the configured payload from its owner loop
-- report offered bytes, high-water callback count, and working-set change after settling
-- describe the result as observation of the current notification-only behavior,
-  not proof of a bounded output policy
+- each accepted connection calls `trySend()` with the configured payload from
+  its owner loop and records the exact admission result
+- hold reads until the memory sample, then drain accepted output so write
+  completion can observe read-throttle recovery
+- report requested, accepted, and rejected bytes; rejection reasons; configured
+  low/high/hard output thresholds and input limit; pending-output peak;
+  pause/resume observations; high-water callback count; and working-set change
+- the `--high-water` scenario parameter configures both read-throttle policy and
+  high-water notification; the low-water threshold is the recorded half-value
+- fail semantic validation if requested bytes do not equal accepted plus
+  rejected bytes
 
 ---
 
 ## 5. Output Contract
 - stdout contains exactly one JSON document with schema
-  `gamenet.core_benchmark.v1`; diagnostics use stderr
+  `gamenet.core_benchmark.v2`; diagnostics use stderr
 - every scenario reports `platform`, `backend`, `completion_mode`, and `build_type`
 - every scenario reports configured `connections` and `event_loop_threads`
 - measurement keys remain present across scenarios; values that do not apply are `null`
+- the regression runner may ingest the frozen `v1` baseline schema and current
+  `v2` candidate schema, but candidate artifacts and semantic validation require
+  the v2 bounded-admission fields
 - Windows reports the current single-completion
   `GetQueuedCompletionStatus` mode; Linux reports the batched `epoll_wait` mode
 - raw JSON output is the durable comparison artifact; documentation summaries
@@ -105,6 +117,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - working-set deltas are process-level observations and include allocator/runtime effects
 - loopback results are regression baselines, not production network capacity claims
 - IOCP single-versus-batched completion performance remains a future implementation comparison
+- the frozen v1 baseline and v2 candidate are compared only on their common
+  reviewed performance metrics; v2 admission/accounting fields are validated
+  independently and are not inferred for v1 samples
 
 ---
 
@@ -124,5 +139,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - Is each reported number defined precisely enough to compare later?
 - Are EventLoop, TcpServer, TcpConnection, and client-socket owners unambiguous?
 - Can callbacks or driver threads race on benchmark-owned result state?
-- Does slow-client output avoid claiming a memory cap that core does not implement?
+- Does slow-client output describe the configured Core hard limit without
+  turning one loopback run into a production capacity claim?
+- Does slow-client accounting prove requested = accepted + rejected and expose
+  the configured Core hard limit?
 - Are Release command, platform details, and raw JSON retained with recorded evidence?

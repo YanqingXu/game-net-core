@@ -88,20 +88,25 @@ jobs:
 
       - name: Validate JSON artifacts
         run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
+          python3 tools/validate_core_benchmark.py \
+            --input-dir benchmark-results \
+            --platform linux --backend epoll --build-type Release
 
-          files = sorted(Path("benchmark-results").glob("*.json"))
-          assert len(files) == 4, files
-          for path in files:
-              document = json.loads(path.read_text(encoding="utf-8"))
-              assert document["schema"] == "gamenet.core_benchmark.v1", path
-              assert document["status"] == "ok", (path, document.get("error"))
-              assert document["platform"] == "linux", path
-              assert document["backend"] == "epoll", path
-              assert document["build_type"] == "Release", path
-          PY
+      - name: Verify Core hard-limit benchmark semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase4-benchmark-results/core-v2-semantics
+          ./build-benchmark/benchmarks/gamenet_core_benchmark \
+            --scenario slow-client --connections 2 --threads 1 \
+            --slow-bytes 33554432 --high-water 65536 \
+            --settle-ms 100 --timeout-ms 30000 \
+            > phase4-benchmark-results/core-v2-semantics/slow-client-rejection.json
+          python3 tools/validate_core_benchmark.py \
+            --input phase4-benchmark-results/core-v2-semantics/slow-client-rejection.json \
+            --platform linux --backend epoll --build-type Release \
+            --scenario slow-client --expected-connections 2 \
+            --expected-slow-bytes 33554432 --require-overload
 
       - name: Run baseline performance matrix
         shell: bash
@@ -155,6 +160,8 @@ jobs:
             --command 'cmake -S . -B build-benchmark -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-benchmark --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' \
             --command 'python3 tools/run_performance_matrix.py --candidate --repetitions 3' \
+            --command 'gamenet_core_benchmark --scenario slow-client --connections 2 --slow-bytes 33554432' \
+            --command 'python3 tools/validate_core_benchmark.py --scenario slow-client --require-overload' \
             --command 'python3 tools/run_performance_matrix.py --baseline 2b1be4343f7c478eb40542451f30aad8ca474003 --repetitions 3' \
             --command 'python3 tools/compare_performance_regression.py --platform linux --backend epoll' \
             --command 'python3 tools/validate_phase4_benchmark.py --platform linux --backend epoll --build-type Release'
@@ -262,6 +269,36 @@ jobs:
             --commit-sha "$env:GITHUB_SHA" --repetitions 3
           if ($LASTEXITCODE -ne 0) { throw "candidate performance matrix failed" }
 
+      - name: Validate Core JSON artifacts
+        shell: pwsh
+        run: |
+          python tools/validate_core_benchmark.py `
+            --input-dir benchmark-results `
+            --platform windows --backend iocp --build-type Release
+          if ($LASTEXITCODE -ne 0) { throw "Core benchmark artifact validation failed" }
+
+      - name: Verify Core hard-limit benchmark semantics
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force `
+            phase4-benchmark-results/core-v2-semantics | Out-Null
+          $exe = Resolve-Path `
+            build-benchmark-windows/benchmarks/Release/gamenet_core_benchmark.exe
+          $json = & $exe `
+            --scenario slow-client --connections 2 --threads 1 `
+            --slow-bytes 33554432 --high-water 65536 `
+            --settle-ms 100 --timeout-ms 30000
+          if ($LASTEXITCODE -ne 0) { throw "hard-limit semantic benchmark failed" }
+          $path = "phase4-benchmark-results/core-v2-semantics/slow-client-rejection.json"
+          Set-Content -LiteralPath $path -Value $json -Encoding utf8 -NoNewline
+          python tools/validate_core_benchmark.py `
+            --input $path `
+            --platform windows --backend iocp --build-type Release `
+            --scenario slow-client --expected-connections 2 `
+            --expected-slow-bytes 33554432 --require-overload
+          if ($LASTEXITCODE -ne 0) { throw "invalid hard-limit semantic benchmark result" }
+
       - name: Run baseline performance matrix
         shell: pwsh
         run: |
@@ -318,6 +355,8 @@ jobs:
             --command 'cmake -S . -B build-benchmark-windows -G Visual Studio 18 2026 -A x64 -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
             --command 'cmake --build build-benchmark-windows --config Release --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' `
             --command 'python tools/run_performance_matrix.py --candidate --repetitions 3' `
+            --command 'gamenet_core_benchmark --scenario slow-client --connections 2 --slow-bytes 33554432' `
+            --command 'python tools/validate_core_benchmark.py --scenario slow-client --require-overload' `
             --command 'python tools/run_performance_matrix.py --baseline 2b1be4343f7c478eb40542451f30aad8ca474003 --repetitions 3' `
             --command 'python tools/compare_performance_regression.py --platform windows --backend iocp' `
             --command 'python tools/validate_phase4_benchmark.py --platform windows --backend iocp --build-type Release'

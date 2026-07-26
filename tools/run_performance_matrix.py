@@ -12,6 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from validate_core_benchmark import (  # noqa: E402
+    CoreBenchmarkValidationError,
+    validate_document as validate_core_document,
+)
+
 
 SCHEMA = "gamenet.performance_matrix.v1"
 
@@ -27,25 +33,25 @@ class Scenario:
 
 
 SCENARIOS = (
-    Scenario("core", "echo-1-worker", "echo", "gamenet.core_benchmark.v1", (
+    Scenario("core", "echo-1-worker", "echo", "gamenet.core_benchmark.v2", (
         "--scenario", "echo", "--connections", "4", "--threads", "1", "--messages", "10000",
         "--payload", "256", "--settle-ms", "500", "--timeout-ms", "30000"), True),
-    Scenario("core", "echo-2-workers", "echo", "gamenet.core_benchmark.v1", (
+    Scenario("core", "echo-2-workers", "echo", "gamenet.core_benchmark.v2", (
         "--scenario", "echo", "--connections", "4", "--threads", "2", "--messages", "10000",
         "--payload", "256", "--settle-ms", "500", "--timeout-ms", "30000"), True),
-    Scenario("core", "echo-4-workers", "echo", "gamenet.core_benchmark.v1", (
+    Scenario("core", "echo-4-workers", "echo", "gamenet.core_benchmark.v2", (
         "--scenario", "echo", "--connections", "8", "--threads", "4", "--messages", "5000",
         "--payload", "256", "--settle-ms", "500", "--timeout-ms", "30000")),
-    Scenario("core", "connections-256", "connections", "gamenet.core_benchmark.v1", (
+    Scenario("core", "connections-256", "connections", "gamenet.core_benchmark.v2", (
         "--scenario", "connections", "--connections", "256", "--threads", "1",
         "--settle-ms", "1000", "--timeout-ms", "30000"), True),
-    Scenario("core", "connections-1024", "connections", "gamenet.core_benchmark.v1", (
+    Scenario("core", "connections-1024", "connections", "gamenet.core_benchmark.v2", (
         "--scenario", "connections", "--connections", "1024", "--threads", "4",
         "--settle-ms", "1000", "--timeout-ms", "30000")),
-    Scenario("core", "slow-client-4", "slow-client", "gamenet.core_benchmark.v1", (
+    Scenario("core", "slow-client-4", "slow-client", "gamenet.core_benchmark.v2", (
         "--scenario", "slow-client", "--connections", "4", "--threads", "1", "--slow-bytes", "8388608",
         "--high-water", "65536", "--settle-ms", "1000", "--timeout-ms", "30000"), True),
-    Scenario("core", "slow-client-16", "slow-client", "gamenet.core_benchmark.v1", (
+    Scenario("core", "slow-client-16", "slow-client", "gamenet.core_benchmark.v2", (
         "--scenario", "slow-client", "--connections", "16", "--threads", "4", "--slow-bytes", "4194304",
         "--high-water", "65536", "--settle-ms", "1000", "--timeout-ms", "30000")),
     Scenario("phase4", "framing", "framing", "gamenet.phase4_benchmark.v1", (
@@ -95,7 +101,10 @@ def validate_document(
     build_type: str,
 ) -> dict[str, Any]:
     require(isinstance(document, dict), f"{scenario.key}: output must be a JSON object")
-    require(document.get("schema") == scenario.schema, f"{scenario.key}: schema mismatch")
+    allowed_schemas = {scenario.schema}
+    if scenario.group == "core":
+        allowed_schemas.add("gamenet.core_benchmark.v1")
+    require(document.get("schema") in allowed_schemas, f"{scenario.key}: schema mismatch")
     require(document.get("status") == "ok", f"{scenario.key}: benchmark status is not ok")
     require(document.get("error") is None, f"{scenario.key}: successful output must have null error")
     require(document.get("scenario") == scenario.reported_scenario, f"{scenario.key}: scenario mismatch")
@@ -104,6 +113,18 @@ def validate_document(
     require(document.get("build_type") == build_type, f"{scenario.key}: build type mismatch")
     require(isinstance(document.get("parameters"), dict), f"{scenario.key}: parameters missing")
     require(isinstance(document.get("measurements"), dict), f"{scenario.key}: measurements missing")
+    if document.get("schema") == "gamenet.core_benchmark.v2":
+        try:
+            validate_core_document(
+                document,
+                expected_platform=platform,
+                expected_backend=backend,
+                expected_build_type=build_type,
+                expected_scenario=scenario.reported_scenario,
+                label=scenario.key,
+            )
+        except CoreBenchmarkValidationError as error:
+            raise MatrixError(str(error)) from error
     return document
 
 
@@ -124,6 +145,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
     for scenario in SCENARIOS:
         samples = []
         parameters = None
+        actual_schema = None
         for repetition in range(1, args.repetitions + 1):
             command = [str(executables[scenario.group]), *scenario.arguments]
             completed = subprocess.run(
@@ -154,6 +176,13 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                 parameters = validated["parameters"]
             else:
                 require(validated["parameters"] == parameters, f"{scenario.key}: parameters changed between repetitions")
+            if actual_schema is None:
+                actual_schema = validated["schema"]
+            else:
+                require(
+                    validated["schema"] == actual_schema,
+                    f"{scenario.key}: schema changed between repetitions",
+                )
             relative = Path(scenario.group) / f"{scenario.key}-{repetition}.json"
             output = args.output_root / relative
             output.write_text(json.dumps(validated, indent=2) + "\n", encoding="utf-8")
@@ -172,7 +201,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "key": f"{scenario.group}.{scenario.key}",
             "group": scenario.group,
             "reported_scenario": scenario.reported_scenario,
-            "schema": scenario.schema,
+            "schema": actual_schema,
             "parameters": parameters,
             "samples": samples,
         })

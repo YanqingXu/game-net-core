@@ -96,6 +96,76 @@ def main() -> None:
     assert runner_keys == budget_keys
     assert len(runner_keys) == 12
 
+    slow_scenario = next(
+        scenario for scenario in runner.SCENARIOS
+        if scenario.group == "core" and scenario.key == "slow-client-4"
+    )
+    semantic_document = {
+        "schema": "gamenet.core_benchmark.v2",
+        "status": "ok",
+        "error": None,
+        "scenario": "slow-client",
+        "platform": "windows",
+        "backend": "iocp",
+        "backpressure_policy": "bounded_output_hysteresis",
+        "build_type": "Release",
+        "parameters": {
+            "connections": 2,
+            "slow_bytes_per_connection": 33554432,
+            "low_water_bytes": 32768,
+            "high_water_bytes": 65536,
+            "hard_limit_bytes": 16777216,
+            "max_input_buffer_bytes": 2097152,
+        },
+        "measurements": {
+            "elapsed_seconds": 0.1,
+            "round_trips": 0,
+            "application_bytes": 0,
+            "throughput_mib_per_second": None,
+            "p50_latency_us": None,
+            "p99_latency_us": None,
+            "working_set_before_bytes": 1000,
+            "working_set_after_bytes": 1000,
+            "working_set_delta_bytes": 0,
+            "approx_bytes_per_connection": 0.0,
+            "requested_bytes": 67108864,
+            "accepted_bytes": 0,
+            "rejected_bytes": 67108864,
+            "accepted_sends": 0,
+            "rejected_sends": 2,
+            "overloaded_sends": 2,
+            "closed_sends": 0,
+            "owner_unavailable_sends": 0,
+            "output_hard_limit_bytes": 16777216,
+            "pending_output_peak_bytes": 0,
+            "read_pause_observations": 0,
+            "read_resume_observations": 0,
+            "backpressure_recovery_seconds": None,
+            "high_water_callbacks": 0,
+        },
+    }
+    runner.validate_document(
+        semantic_document,
+        slow_scenario,
+        "windows",
+        "iocp",
+        "Release",
+    )
+    invalid_semantics = json.loads(json.dumps(semantic_document))
+    invalid_semantics["measurements"]["rejected_bytes"] -= 1
+    try:
+        runner.validate_document(
+            invalid_semantics,
+            slow_scenario,
+            "windows",
+            "iocp",
+            "Release",
+        )
+    except runner.MatrixError:
+        pass
+    else:
+        raise AssertionError("v2 benchmark accounting mismatch was not rejected")
+
     with tempfile.TemporaryDirectory(prefix="gamenet-performance-regression-") as directory:
         root = Path(directory)
         baseline = root / "baseline"
