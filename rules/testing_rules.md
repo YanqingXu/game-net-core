@@ -42,17 +42,31 @@ Contract tests verify:
 - queueInLoop executes later on loop thread
 - cross-thread queueInLoop wakes blocked loop
 - quit exits loop safely
+- normal-plus-reserved saturation still admits registered control notifications
+- control-source registration capacity is finite
+- repeated same-source notifications coalesce and self-notify is non-recursive
+- control callback exceptions do not suppress other sources
+- notify-versus-quit races prove Accepted work is drained and rejected work
+  returns Shutdown/OwnerUnavailable
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents
 - tied owner expired => dangerous callback path blocked
 - update/remove workflow respects loop-thread contract
+- deterministic two-entry active batch where the first callback removes and
+  destroys the not-yet-dispatched tied owner
+- current callback self-remove and owner release
+- same-fd replacement survives an explicitly rejected stale repeated remove
+- combined readiness stops after remove/re-register changes the registration
+  generation
 
 ## 7. Poller Required Test Examples
 - updateChannel registers correctly
 - removeChannel unregisters correctly
 - poll returns active channels accurately
 - invalid removal path is detected or guarded
+- Windows association-preserve and replacement-registration fault injection
+  both prove transactional TcpClient rollback and successful fresh reconnect
 
 ## 8. Lifecycle-Sensitive Modules
 For lifecycle-sensitive modules, tests should include:
@@ -60,8 +74,20 @@ For lifecycle-sensitive modules, tests should include:
 - callback-after-destroy prevention
 - repeated close/error handling guard
 - registration state consistency
+- active-batch invalidation before pending-peer destruction
+- current-Channel retirement under normal-plus-reserved queue saturation
 - finite-limit rejection and accounting release after accepted connection close
 - timeout-versus-success races for deadline-based admission
+- bounded control-plane saturation and final-drain races
+- normal-plus-reserved queue saturation while TcpConnection applies
+  backpressure/write-interest before dropping optional notifications, followed
+  by output-reservation and disconnecting-half-close convergence
+- deterministic Windows `WSAENOBUFS` / `WSAECONNRESET` submit failures and a
+  real `ERROR_OPERATION_ABORTED` cancellation completion, proving immediate
+  error handling, no phantom pending operation, and single-shot close
+- Connector owner-affinity rejection, callback re-entry, configured-backoff
+  restart, and accepted/rejected facade-generation races, including two
+  Accepted operations where the latest request supersedes an in-flight attempt
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

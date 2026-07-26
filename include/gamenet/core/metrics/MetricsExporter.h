@@ -1,7 +1,7 @@
 #pragma once
 
-// MetricsExporter 提供与 EventLoop 无关的线程安全指标聚合与快照导出。
-// 热路径只记录内存状态；文本序列化由报告线程显式执行。
+// MetricsExporter 是 provisional、与 EventLoop 无关的指标聚合接口。
+// 内置实现不做 I/O，但记录可分配、哈希并竞争互斥锁，尚非稳定热路径合同。
 
 #include "gamenet/core/base/noncopyable.h"
 

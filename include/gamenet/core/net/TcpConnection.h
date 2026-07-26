@@ -15,6 +15,7 @@
 #include <any>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -71,6 +72,9 @@ public:
 
     // Cross-thread-safe snapshot of admitted bytes not yet written or dropped.
     std::size_t pendingOutputBytes() const noexcept;
+    // Cross-thread-safe diagnostic count of optional high-water/write-complete
+    // notifications dropped because owner-loop queue admission failed.
+    std::uint64_t droppedNotificationCount() const noexcept;
     // Owner-loop-only diagnostic used by policy/contract integration.
     bool readingPausedByBackpressure() const;
 
@@ -100,8 +104,9 @@ private:
     void shutdownInLoop();
     void forceCloseInLoop();
     void finishClose();
-    void queueWriteComplete();
-    void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen);
+    void queueWriteComplete() noexcept;
+    void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen) noexcept;
+    void recordDroppedNotification() noexcept;
     bool tryReserveOutputBytes(std::size_t bytes) noexcept;
     void releaseOutputBytes(std::size_t bytes) noexcept;
     void clearBufferedOutputInLoop();
@@ -138,6 +143,7 @@ private:
     std::size_t highWaterMark_{0};
     TcpConnectionBackpressureOptions backpressureOptions_;
     std::atomic<std::size_t> pendingOutputBytes_{0};
+    std::atomic<std::uint64_t> droppedNotificationCount_{0};
     std::any context_;
     bool channelAdded_{false};
     bool channelRemoved_{false};

@@ -19,9 +19,12 @@ matrix, and immutable evidence are explicit and machine checked.
 - publish a versioned inventory of installed targets and public headers
 - distinguish stable Core source contracts from provisional upper-layer and
   unsupported platform-backend headers
+- bind the current manifest to an immutable historical tag, commit, snapshot
+  path, and content hash; verify the snapshot inventory and stable fingerprints
+  against that Git object; then emit deterministic target/header category diffs
 - reject unreviewed drift in the declared stable Core surface
-- expose bounded, non-owning production metrics through a promoted exporter
-  contract
+- expose bounded, non-owning observability through a provisional exporter
+  contract without freezing the current hot-path API
 - compare fixed benchmark scenarios against same-platform baselines with
   explicit regression budgets
 - retain structured 24-hour candidate and 72-hour release endurance evidence
@@ -44,12 +47,26 @@ matrix, and immutable evidence are explicit and machine checked.
   must agree before any long-duration evidence is eligible
 - `api/public_api_manifest.json` is the authoritative installed-surface
   classification for the candidate line
+- the manifest declares its compatibility line and historical snapshot; CI
+  retains the structured additions, removals, category moves, and stable
+  fingerprint changes as release evidence
 - stable Core declarations require an intentional manifest update and review;
   removals or incompatible changes require a documented migration decision
 - ABI remains explicitly unsupported until a later intent defines toolchain,
   standard-library, compiler-option, and symbol-version boundaries
 - provisional and platform-internal categories must remain visibly distinct
   from the stable Core promise
+- candidate library targets are static-only; shared-library packaging is not
+  supported before version 1.0 and `BUILD_SHARED_LIBS=ON` is rejected
+- Linux is the Tier 1 release-evidence platform; Windows remains Tier 2 until
+  the M3 IOCP promotion gates complete, while still passing required functional
+  and package-consumer CI
+- macOS, BSD variants, other target systems, TLS, and experimental modules are
+  rejected at configure time rather than represented by empty options or an
+  implicit Linux backend
+- the current all-rights-reserved `LICENSE` grants no external-use permission;
+  an externally adoptable release remains blocked until the project owner
+  deliberately publishes a license and matching package/SBOM metadata
 
 ## 5. Threading and Ownership Rules
 - compatibility verification is a build-time repository guard and owns no
@@ -65,18 +82,22 @@ matrix, and immutable evidence are explicit and machine checked.
 
 ## 6. Candidate Exit Gates
 1. compatibility manifest and guard pass in every ordinary CI producer
-2. production metrics exporter contracts pass under concurrency and teardown
+2. provisional metrics exporter contracts pass under concurrency and teardown
 3. fixed Release benchmarks stay within reviewed same-runner regression budgets
 4. fault-injection contracts pass on Linux and Windows
 5. one frozen commit completes the 24-hour candidate endurance gate
 6. the same frozen commit completes the 72-hour release endurance gate
 7. all supported platform, sanitizer, package, benchmark, and evidence gates
    are green and retained
+8. any release offered for external adoption has an explicit owner-approved
+   license; otherwise artifacts remain engineering previews with no use grant
 
 ## 7. Verification
 - `tests/api/test_public_api_manifest.py` verifies the installed inventory,
   stability classes, package version, exported targets, and stable-header
-  fingerprints and proves that missing or modified declarations are rejected
+  fingerprints; proves that missing, modified, misclassified, or tampered
+  declarations are rejected; and exercises deterministic historical API diff
+  and compatibility-decision semantics
 - `tests/ci/test_performance_regression.py` verifies the fixed 12-scenario,
   three-repetition baseline/candidate matrix, reviewed budgets, same-runner
   workflow wiring, retained evidence, and a real failing-regression fixture

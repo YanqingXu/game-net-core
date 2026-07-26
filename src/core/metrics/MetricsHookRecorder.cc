@@ -27,6 +27,7 @@ std::string_view eventLoopEventName(gamenet::net::EventLoopMetricEvent event) no
     using gamenet::net::EventLoopMetricEvent;
     switch (event) {
     case EventLoopMetricEvent::PendingFunctorsDrained: return "pending_functors_drained";
+    case EventLoopMetricEvent::ControlSourcesDrained: return "control_sources_drained";
     case EventLoopMetricEvent::WakeupHandled: return "wakeup_handled";
     }
     return "unknown";
@@ -106,8 +107,23 @@ void MetricsHookRecorder::record(
     exporter.incrementCounter(eventCounter("gamenet.net.event_loop", eventLoopEventName(sample.event)));
     exporter.observeHistogram("gamenet.net.event_loop.pending_functors", static_cast<double>(sample.pendingFunctors));
     exporter.observeHistogram("gamenet.net.event_loop.pending_functor_peak", static_cast<double>(sample.pendingFunctorPeak));
+    exporter.observeHistogram(
+        "gamenet.net.event_loop.pending_control_sources",
+        static_cast<double>(sample.pendingControlSources));
+    exporter.observeHistogram(
+        "gamenet.net.event_loop.pending_control_source_peak",
+        static_cast<double>(sample.pendingControlSourcePeak));
     exporter.observeHistogram("gamenet.net.event_loop.wakeup_count", static_cast<double>(sample.wakeupCount));
     exporter.observeHistogram("gamenet.net.event_loop.rejected_functors", static_cast<double>(sample.rejectedFunctors));
+    exporter.observeHistogram(
+        "gamenet.net.event_loop.control_notifications",
+        static_cast<double>(sample.controlNotifications));
+    exporter.observeHistogram(
+        "gamenet.net.event_loop.merged_control_notifications",
+        static_cast<double>(sample.mergedControlNotifications));
+    exporter.observeHistogram(
+        "gamenet.net.event_loop.rejected_control_notifications",
+        static_cast<double>(sample.rejectedControlNotifications));
     exporter.observeHistogram("gamenet.net.event_loop.callback_exceptions", static_cast<double>(sample.callbackExceptions));
     exporter.observeHistogram(
         "gamenet.net.event_loop.oldest_pending_latency_seconds",

@@ -1,4 +1,4 @@
-add_library(gamenet_game_logic
+add_library(gamenet_game_logic STATIC
     GameCommandQueue.cc
     LogicMetricsRecorder.cc
     LogicLoop.cc

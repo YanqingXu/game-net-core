@@ -66,7 +66,13 @@ int main(int argc, char* argv[]) {
     client.setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& connection) {
         if (connection->connected()) {
             std::cout << "connected " << connection->peerAddress().toIpPort() << '\n';
-            connection->send(args.message);
+            if (connection->trySend(args.message) !=
+                gamenet::net::TcpSendResult::Accepted) {
+                std::cerr << "echo request was not admitted\n";
+                connection->forceClose();
+                client.stop();
+                loop.quit();
+            }
             return;
         }
 

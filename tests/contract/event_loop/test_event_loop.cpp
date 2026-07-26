@@ -2,6 +2,7 @@
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopExecutor.h"
+#include "gamenet/core/net/EventLoopMetrics.h"
 #include "gamenet/core/net/EventLoopThread.h"
 #include "gamenet/core/net/EventLoopThreadPool.h"
 #include "gamenet/core/net/SocketsOps.h"
@@ -26,6 +27,13 @@
 using namespace std::chrono_literals;
 
 namespace {
+
+static_assert(
+    static_cast<int>(gamenet::net::EventLoopCallbackSource::PendingFunctor) == 2);
+static_assert(
+    static_cast<int>(gamenet::net::EventLoopCallbackSource::Metric) == 3);
+static_assert(
+    static_cast<int>(gamenet::net::EventLoopMetricEvent::WakeupHandled) == 1);
 
 struct CallbackReadablePair {
     gamenet::net::SocketFd readFd{gamenet::net::kInvalidSocket};
@@ -63,6 +71,29 @@ bool containsCallbackSource(
 }  // namespace
 
 int main() {
+    {
+        // The control-lane additions are append-only: the positional shape
+        // accepted by the earlier 0.3 metric sample retains its field meanings.
+        gamenet::net::EventLoopMetricSample legacyShape{
+            gamenet::net::EventLoopMetricEvent::PendingFunctorsDrained,
+            nullptr,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6ms,
+        };
+        GAMENET_TEST_ASSERT(legacyShape.pendingFunctors == 1);
+        GAMENET_TEST_ASSERT(legacyShape.pendingFunctorPeak == 2);
+        GAMENET_TEST_ASSERT(legacyShape.wakeupCount == 3);
+        GAMENET_TEST_ASSERT(legacyShape.rejectedFunctors == 4);
+        GAMENET_TEST_ASSERT(legacyShape.callbackExceptions == 5);
+        GAMENET_TEST_ASSERT(legacyShape.oldestPendingLatency == 6ms);
+        GAMENET_TEST_ASSERT(legacyShape.pendingControlSources == 0);
+        GAMENET_TEST_ASSERT(legacyShape.controlNotifications == 0);
+    }
+
     gamenet::net::EventLoopExecutor expiredExecutor;
     {
         gamenet::net::EventLoop loop;

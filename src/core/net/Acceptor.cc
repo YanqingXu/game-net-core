@@ -313,12 +313,12 @@ void Acceptor::postAccept() {
         kAcceptAddressBytes,
         &bytes,
         &iocpAccept_->operation.overlapped);
-    if (!ok && sockets::lastError() != ERROR_IO_PENDING) {
-        const int error = sockets::lastError();
+    const int acceptError = ok ? 0 : sockets::lastError();
+    if (!ok && acceptError != ERROR_IO_PENDING) {
         iocpAccept_->pending = false;
         sockets::close(iocpAccept_->accepted);
         iocpAccept_->accepted = kInvalidSocket;
-        handleAcceptError(AcceptorErrorStage::Accept, error);
+        handleAcceptError(AcceptorErrorStage::Accept, acceptError);
         return;
     }
     loop_->retainCompletionOperation(&iocpAccept_->operation, iocpAccept_);

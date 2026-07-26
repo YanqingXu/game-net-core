@@ -157,6 +157,12 @@ not performance thresholds.
   cancellation of pending read/write operations before connection-owned
   operation storage can be destroyed, and cross-thread/repeated shutdown
   draining pending output before one half-close.
+- `contract.tcp_connection.test_tcp_connection_iocp_sync_error`: source-private
+  injection proves `WSARecv` / `WSASend` synchronous `WSAENOBUFS` and
+  `WSAECONNRESET` failures enter TcpConnection's owner-loop error/close path
+  immediately instead of waiting for a phantom packet. A real cancellation of
+  the other pending read observes `ERROR_OPERATION_ABORTED`, drains its
+  operation storage, and still publishes one disconnected/close sequence.
 
 The Windows install/package consumer gate is also part of the Windows MSVC
 workflow gate and passes locally. The VS2026 Debug build installs to
@@ -201,6 +207,10 @@ The Windows MSVC workflow job must keep these gates green:
 - TcpConnection read, write, cross-thread send, peer close/reset,
   shutdown-with-pending-output, cross-thread shutdown, repeated shutdown, and
   repeated teardown contracts pass through the IOCP data path.
+- A synchronous non-pending overlapped submission failure is returned directly
+  to its lifecycle owner; no active Channel is fabricated for a packet that
+  cannot arrive, and the matching operation storage has no phantom pending
+  obligation.
 - Cancel/close ordering is covered for active connections with pending
   overlapped operations.
 - The install/package consumer gate passes on Windows with `GameNet::core`.

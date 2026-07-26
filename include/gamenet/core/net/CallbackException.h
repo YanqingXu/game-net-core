@@ -15,6 +15,9 @@ enum class EventLoopCallbackSource {
     Timer,
     PendingFunctor,
     Metric,
+    // Appended to preserve the numeric values of the 0.3 compatibility-line
+    // callback sources for consumers that persist diagnostics.
+    Control,
 };
 
 enum class EventLoopCallbackExceptionAction {

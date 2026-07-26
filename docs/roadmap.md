@@ -195,11 +195,13 @@ In progress after production hardening:
 - [x] Define the production-candidate intent, compatibility policy, supported
   API classes, and release exit gates.
 - [x] Add a versioned public API manifest and an automated compatibility guard.
-- [x] Promote and implement MetricsExporter with non-I/O producer adapters,
-  deterministic snapshots, and production text export.
+- [x] Implement provisional MetricsExporter and non-I/O producer adapters with
+  deterministic snapshots; defer hot-path API promotion to metrics-on evidence.
 - [x] Add same-platform performance regression budgets and retained trend
   evidence for the fixed Core and Phase 4 Release scenarios.
-- [ ] Add structured fault-injection coverage plus real 24-hour candidate and
-  72-hour release endurance gates.
+- [x] Add structured fault-injection coverage and validate the real 24-hour
+  candidate plus 72-hour paired Linux endurance infrastructure at `b344318`.
+- [ ] Complete independent maintainer review of the API diff, performance
+  validator/budgets, and release/endurance tooling on the frozen candidate.
 - [ ] Freeze one v0.3.0 production candidate, complete Linux/Windows evidence,
   publish the release, and merge the validated candidate to `main`.

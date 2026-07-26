@@ -7,6 +7,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <stdexcept>
 #include <unistd.h>
 
 namespace gamenet::net {
@@ -80,12 +81,30 @@ void EPollPoller::updateChannel(Channel* channel) {
 
     if (index == kNew || index == kDeleted) {
         if (index == kNew) {
-            channels_[fd] = channel;
+            const auto [it, inserted] = channels_.emplace(fd, channel);
+            if (!inserted) {
+                throw std::logic_error(
+                    it->second == channel
+                        ? "EPollPoller new Channel is already registered"
+                        : "EPollPoller fd belongs to a different Channel");
+            }
+        } else {
+            const auto it = channels_.find(fd);
+            if (it == channels_.end() || it->second != channel) {
+                throw std::logic_error(
+                    "EPollPoller deleted Channel registration identity mismatch");
+            }
         }
 
         channel->setIndex(kAdded);
         update(EPOLL_CTL_ADD, channel);
         return;
+    }
+
+    const auto existing = channels_.find(fd);
+    if (existing == channels_.end() || existing->second != channel) {
+        throw std::logic_error(
+            "EPollPoller update Channel registration identity mismatch");
     }
 
     if (channel->isNoneEvent()) {
@@ -98,11 +117,16 @@ void EPollPoller::updateChannel(Channel* channel) {
 
 void EPollPoller::removeChannel(Channel* channel) {
     const SocketFd fd = channel->fd();
-    channels_.erase(fd);
+    const auto it = channels_.find(fd);
+    if (it == channels_.end() || it->second != channel) {
+        throw std::logic_error(
+            "EPollPoller remove Channel registration identity mismatch");
+    }
 
     if (channel->index() == kAdded) {
         update(EPOLL_CTL_DEL, channel);
     }
+    channels_.erase(it);
     channel->setIndex(kNew);
 }
 

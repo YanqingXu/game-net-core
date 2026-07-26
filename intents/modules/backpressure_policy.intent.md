@@ -14,6 +14,10 @@ The owner-loop high/low-water enforcement described here is now active through
 per-connection output admission is active through
 `intents/modules/tcp_connection.intent.md`. This document remains deferred for
 broader policy variants and must not authorize additional implementation.
+The active TcpConnection contract also requires enforcement and write-interest
+progress to precede optional high-water notification admission; a rejected
+notification is observable through a dedicated dropped counter but cannot roll
+back the already-applied policy transition.
 
 ## 1. Intent
 Backpressure policy defines how one TcpConnection reacts when outbound bytes

@@ -13,9 +13,9 @@ source_paths: mini/base/MetricsExporter.h;mini/base/MetricsExporter.cc
 
 ## Intent
 
-`MetricsExporter` is the optional aggregation layer for the typed metric hooks
+`MetricsExporter` is the provisional optional aggregation layer for the typed metric hooks
 already exposed by the current Core, Logic, and Broadcast targets. It turns
-samples and control events into stable counter / histogram observations without
+samples and control events into structured counter / histogram observations without
 changing where hooks fire or how reactor state is owned.
 
 This module exists so benchmarks, CI, and future production adapters can consume metrics
@@ -33,9 +33,12 @@ through a replaceable exporter interface instead of hand-written counters in eac
   TcpServer-admission callbacks in Core.
 - Provide Logic and Broadcast adapters in their owning upper-layer targets so
   Core never imports an upper-layer type.
-- Keep metric names stable and human-readable.
+- Keep metric names deterministic and human-readable while the schema remains
+  provisional.
 - Allow callbacks returned by `MetricsHookRecorder` to outlive the recorder object by capturing
   the exporter ownership explicitly.
+- Keep the installed API explicitly provisional until a later promotion gate
+  replaces dynamic metric-name work on hot paths and measures enabled overhead.
 
 ## Non-Responsibilities
 
@@ -46,6 +49,8 @@ through a replaceable exporter interface instead of hand-written counters in eac
 - No dynamic per-event label extraction from reactor/game object ownership.
 - No behavior decisions based on metric values.
 - No ownership of `EventLoop`, `TcpConnection`, session, or game objects.
+- No claim that `InMemoryMetricsExporter` is a zero-allocation or contention-
+  free production hot-path implementation.
 
 ## Invariants
 
@@ -60,13 +65,17 @@ through a replaceable exporter interface instead of hand-written counters in eac
 9. Prometheus text rendering must be a snapshot serialization step, not work done in hook callbacks.
 10. Recorder adapters contain exporter exceptions so observability failure cannot
     change Connector, EventLoop, admission, Logic, or Broadcast behavior.
+11. The current public exporter and recorder declarations remain provisional;
+    installing them does not add them to the frozen stable-Core source promise.
 
 ## Threading Rules
 
 - `MetricsExporter` has no owner `EventLoop`.
 - `InMemoryMetricsExporter` protects mutable maps with an internal mutex.
 - `TaggedMetricsExporter` has no mutable shared state beyond the sink exporter it wraps.
-- Hook callbacks remain synchronous and lightweight; they should only record simple observations.
+- Hook callbacks remain synchronous. The reference in-memory exporter performs
+  validation, string/map work, and mutex synchronization, so it is opt-in and
+  must not be described as a proven lightweight production hot path.
 - If future exporters perform blocking I/O, they must do so outside owner loop callbacks.
 - Prometheus text rendering should be called from snapshot/reporting code, not from hot owner-loop hooks.
 
@@ -93,6 +102,8 @@ through a replaceable exporter interface instead of hand-written counters in eac
 - Extend labels beyond static deployment labels only through explicit sample fields and tests.
 - Add percentile sketches later behind the same histogram observation method.
 - Add network pull/push endpoints outside owner-loop hook callbacks.
+- Add pre-registered metric identifiers, per-loop/thread-local shards, snapshot
+  aggregation, and a metrics-enabled performance gate before stable promotion.
 
 ## Test Contracts
 
@@ -120,4 +131,5 @@ through a replaceable exporter interface instead of hand-written counters in eac
 - Are labels static value data rather than hidden object ownership?
 - Is text export performed from snapshots rather than inside hot callbacks?
 - Are new public callbacks covered by direct contract tests?
-- Are metric callbacks still lightweight enough for owner loop execution?
+- Is the API still visibly provisional?
+- Has any claim about owner-loop overhead been backed by metrics-on/off evidence?

@@ -18,6 +18,13 @@ CTest tests; the Windows install/package consumer gate also passes through
 `find_package(GameNetCore)` and `GameNet::core`; and the `windows-msvc` workflow job now represents the Windows CI gate.
 The remote green status is established by ci #17 on main.
 
+The original Task 6/7 snippets below are historical implementation scaffolding.
+Their synchronous-error branch that only assigns Channel `revents` is not a
+valid completion model: a non-`WSA_IO_PENDING` failure has no future packet.
+The active M1 contract returns that error to TcpConnection immediately and
+converges through its existing error/close path. See
+`tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp`.
+
 ## File Structure
 
 - Create `tests/cmake/test_windows_iocp_data_path_contract.py`: static guard for the new IOCP operation layer and documentation links.

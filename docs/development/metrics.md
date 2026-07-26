@@ -1,6 +1,7 @@
-# Production Metrics
+# Provisional Production Metrics
 
-The optional metrics layer is part of `GameNet::core`. It provides a
+The optional metrics layer is installed through `GameNet::core`, but its public
+API remains provisional in the 0.3 candidate line. It provides a
 thread-safe in-memory exporter, immutable static labels, deterministic value
 snapshots, Prometheus text rendering, and callback adapters for the metric
 hooks already owned by Core, Logic, and Broadcast.
@@ -18,6 +19,13 @@ Call `snapshot()` from a reporting thread and render that value copy with
 `renderPrometheusText()`. Rendering is intentionally outside hot owner-loop
 callbacks. A future network endpoint should serve these snapshots from an
 upper-layer reporting component rather than add HTTP behavior to Core.
+
+The reference exporter also validates names, constructs string keys, hashes
+maps, and takes a shared mutex on every observation. It is suitable for tests,
+local diagnostics, and functional integration, not yet a proven high-rate
+production recorder. Stable promotion requires pre-registered metric
+identifiers, sharded aggregation, type-conflict validation, and a dedicated
+metrics-on/off performance gate.
 
 ## Cardinality Boundary
 

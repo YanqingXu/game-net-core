@@ -51,6 +51,14 @@ int main() {
         .callbackExceptions = 1,
         .oldestPendingLatency = 4ms,
     });
+    eventLoopCallback({
+        .event = gamenet::net::EventLoopMetricEvent::ControlSourcesDrained,
+        .pendingControlSources = 2,
+        .pendingControlSourcePeak = 4,
+        .controlNotifications = 10'001,
+        .mergedControlNotifications = 9'999,
+        .rejectedControlNotifications = 3,
+    });
     admissionCallback({
         .event = gamenet::net::TcpServerAdmissionEvent::RejectedPerPeerRateLimit,
         .activeConnections = 10,
@@ -59,7 +67,19 @@ int main() {
     GAMENET_TEST_ASSERT(exporter->counterValue("gamenet.net.connector.connect_success") == 1);
     GAMENET_TEST_ASSERT(
         exporter->counterValue("gamenet.net.event_loop.pending_functors_drained") == 1);
+    GAMENET_TEST_ASSERT(
+        exporter->counterValue("gamenet.net.event_loop.control_sources_drained") == 1);
     GAMENET_TEST_ASSERT(exporter->histogram("gamenet.net.event_loop.pending_functors").max == 3);
+    GAMENET_TEST_ASSERT(
+        exporter->histogram("gamenet.net.event_loop.pending_control_sources").max == 2);
+    GAMENET_TEST_ASSERT(
+        exporter->histogram("gamenet.net.event_loop.pending_control_source_peak").max == 4);
+    GAMENET_TEST_ASSERT(
+        exporter->histogram("gamenet.net.event_loop.control_notifications").max == 10'001);
+    GAMENET_TEST_ASSERT(
+        exporter->histogram("gamenet.net.event_loop.merged_control_notifications").max == 9'999);
+    GAMENET_TEST_ASSERT(
+        exporter->histogram("gamenet.net.event_loop.rejected_control_notifications").max == 3);
     GAMENET_TEST_ASSERT(exporter->counterValue(
         "gamenet.net.tcp_server.admission.rejected_per_peer_rate_limit") == 1);
 

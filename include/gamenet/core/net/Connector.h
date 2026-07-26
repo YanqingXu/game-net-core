@@ -11,7 +11,9 @@
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/TimerId.h"
 
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
 
@@ -27,6 +29,7 @@ enum class ConnectorEvent {
     RetryScheduled,
     SelfConnectDetected,
     ConnectTimeout,
+    TerminalFailure,
 };
 
 using ConnectorEventCallback = std::function<void(const InetAddress&, ConnectorEvent)>;
@@ -50,7 +53,7 @@ public:
     const InetAddress& serverAddress() const noexcept;
     StateE state() const noexcept;
 
-    /// Start connecting. Marshals to the owner EventLoop.
+    /// Start connecting. Owner-loop-thread only.
     void start();
 
     /// Stop connecting or cancel pending retry. Owner-loop-thread only.
@@ -61,19 +64,19 @@ public:
 
     /// Configure retry backoff parameters. Must be set before start().
     void setRetryDelay(Duration initial, Duration max);
-    void setRetryEnabled(bool enabled) noexcept;
+    void setRetryEnabled(bool enabled);
     bool retryEnabled() const noexcept;
 
 private:
-    void startInLoop();
+    void startInLoop(std::uint64_t generation);
     void stopInLoop();
-    void connect();
-    void connecting(SocketFd sockfd);
-    void handleWrite();
-    void handleError();
-    void handleConnectTimeout();
+    void connect(std::uint64_t generation);
+    void connecting(SocketFd sockfd, std::uint64_t generation);
+    void handleWrite(std::uint64_t generation);
+    void handleError(std::uint64_t generation);
+    void handleConnectTimeout(std::uint64_t generation);
     void emitEvent(ConnectorEvent event) noexcept;
-    void retry(SocketFd sockfd);
+    void retry(SocketFd sockfd, std::uint64_t generation);
 #ifdef _WIN32
     bool cancelPendingConnectInLoop(SocketFd sockfd) noexcept;
     void finishCancelInLoop();
@@ -82,9 +85,9 @@ private:
 
     EventLoop* loop_;
     InetAddress serverAddr_;
-    StateE state_;
+    std::atomic<StateE> state_;
     bool connect_;
-    bool retryEnabled_;
+    std::atomic<bool> retryEnabled_;
     NewConnectionCallback newConnectionCallback_;
     ConnectorEventCallback connectorEventCallback_;
     std::unique_ptr<Channel> channel_;
@@ -94,13 +97,12 @@ private:
     std::shared_ptr<Connector> connectStopGuard_;
 #endif
     Duration retryDelayMs_;
+    Duration initialRetryDelay_;
     Duration maxRetryDelayMs_;
     Duration connectTimeout_;
     TimerId retryTimerId_;
     TimerId connectTimeoutTimerId_;
-
-    static constexpr Duration kDefaultInitRetryDelay = std::chrono::milliseconds(500);
-    static constexpr Duration kDefaultMaxRetryDelay = std::chrono::seconds(30);
+    std::uint64_t requestGeneration_{0};
 };
 
 }  // namespace gamenet::net

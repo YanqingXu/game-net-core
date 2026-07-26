@@ -28,19 +28,87 @@ No other direct mutation path is allowed for core loop state.
 - Capacity-aware callers use `tryQueueInLoop()` / `EventLoopExecutor::tryQueue()`
   and handle a false result
 - Must ensure wakeup when loop may be blocked in poll
+- Its reserve is not a lifecycle progress guarantee and must not be used by new
+  internal control paths
+
+## 5.1 EventLoop Control Sources
+- Registration and unregistration are EventLoop owner-thread-only
+- Registration access is source-private and must not be exported as an
+  installed public scheduling API
+- Registration happens before `loop()` and is bounded by
+  `EventLoopOptions::maxControlSources`
+- `EventLoopControlSource::notify()` may be called from any thread
+- Each registered source owns one preallocated pending bit; repeated notify
+  calls coalesce and allocate no queue node
+- Control callbacks execute only on the owner thread, after active Channel and
+  timer dispatch and before normal pending functors
+- A source executes at most once per control round; self-notify is deferred
+- Quit linearizes external control admission: Accepted work is final-drained,
+  later external work returns Shutdown, and expired targets return
+  OwnerUnavailable
+- Final-drain completion and control-plane Shutdown are published together;
+  later `quit()` calls cannot set executor owner-drain identity back to true
+- During Draining, only the currently executing control callback may re-arm
+  its own source; unrelated owner-thread work has no control-admission bypass
+- User callbacks and business/data work are forbidden from using control
+  sources merely to bypass queue admission
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread
 - handleEvent executes in EventLoop thread unless explicitly documented otherwise
+- active-batch epoch/index assignment and invalidation are owner-thread-only
+- successful remove invalidates the Channel's current batch slot before the
+  caller may release ownership; dispatch never dereferences an invalidated slot
+- remove/re-register changes the registration generation and stops remaining
+  callbacks from the old readiness snapshot
+- source-private retirement of the currently executing removed Channel is an
+  inline owner-loop operation and never uses pending-functor admission
+
+## 6.1 Connector and TcpClient
+- Connector mutation, retry/timeout handling, Channel cleanup, and connected-fd
+  publication are owner-loop-only
+- Connector `state()` and `retryEnabled()` are atomic diagnostic snapshots;
+  they do not grant cross-thread mutation rights
+- Connector callbacks execute on the owner loop and may re-enter its lifecycle
+  methods; code continuing after a callback must revalidate request generation
+  and may not unconditionally overwrite a state published by that re-entry
+- TcpClient is the cross-thread facade. Non-owner lifecycle calls use typed
+  executor admission and owner-thread calls execute inline only while executor
+  admission is still accepting
+- TcpClient publishes a latest-accepted generation under its admission mutex,
+  releases that mutex, and only then executes Connector, TcpConnection, or
+  user callback code
+- A rejected facade call cannot advance the published generation and cannot
+  stale an earlier Accepted operation
+- An accepted explicit connect observed while the current TcpConnection is
+  already disconnecting is owner-loop state, separate from automatic retry,
+  and survives that old connection's remove callback
 
 ## 7. TcpConnection
 - State transitions occur on owning EventLoop thread
 - `connected()` and `disconnected()` are cross-thread-safe snapshot observers;
   no other loop-owned state becomes cross-thread-readable through them
+- `droppedNotificationCount()` is a cross-thread-safe atomic diagnostic
+  snapshot and does not expose other loop-owned state
 - Actual socket write/read handling occurs on owning EventLoop thread
 - Cross-thread send request must be marshaled back into loop thread
 - Socket-option mutation, context access, callback replacement, connection
   establishment, and connection destruction are owning-EventLoop-thread only
+- Mandatory output-buffer, backpressure, write-interest, and disconnecting
+  half-close transitions occur before optional high-water/write-complete
+  callback submission
+- Optional high-water/write-complete callbacks use capacity-aware normal-queue
+  admission; rejection is counted and cannot throw across the mandatory state
+  transition
+- Windows low-water read resume executes inline on the owner loop and cannot
+  depend on ordinary pending-functor capacity
+- because that resume may invoke a re-entrant message callback, its caller must
+  recheck connection teardown and pending-overlapped-write state before
+  continuing the outer write transition
+- Windows overlapped read/write submission and completion consumption execute
+  on the connection owner loop. A synchronous non-pending submit error
+  converges immediately through the owner-loop error/close path and must not be
+  converted into a fabricated Channel event
 
 ## 8. Logger
 - Logger is process-global and is not owned by an EventLoop
@@ -102,6 +170,14 @@ No other direct mutation path is allowed for core loop state.
 - Direct Poller mutation from non-owner thread
 - Direct Channel mutation that changes registration from non-owner thread
 - User callback execution in ambiguous thread context
+- An unbounded emergency/control queue
+- Treating the public `queueInLoop()` reserve as guaranteed lifecycle capacity
+- Executing Connector, TcpConnection, or user callback code while holding the
+  TcpClient admission mutex
+- Waiting for an IOCP completion after a synchronous submit failure that
+  established no kernel-owned completion obligation
+- Deferring current-Channel destruction through the normal or reserved pending
+  functor queue
 
 ## 16. Fault and Endurance Drivers
 - fault clients may own and operate their own raw sockets but must not mutate

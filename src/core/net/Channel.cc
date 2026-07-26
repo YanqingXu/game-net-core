@@ -17,6 +17,9 @@ Channel::Channel(EventLoop* loop, SocketFd fd)
       index_(-1),
       eventHandling_(false),
       addedToLoop_(false),
+      registrationGeneration_(0),
+      activeBatchEpoch_(0),
+      activeBatchIndex_(0),
       tied_(false) {
 }
 
@@ -87,35 +90,52 @@ bool Channel::isReading() const noexcept {
 }
 
 void Channel::enableReading() {
+    if ((events_ & kReadEvent) != 0) {
+        return;
+    }
     events_ |= kReadEvent;
     update();
 }
 
 void Channel::disableReading() {
+    if ((events_ & kReadEvent) == 0) {
+        return;
+    }
     events_ &= ~kReadEvent;
     update();
 }
 
 void Channel::enableWriting() {
+    if ((events_ & kWriteEvent) != 0) {
+        return;
+    }
     events_ |= kWriteEvent;
     update();
 }
 
 void Channel::disableWriting() {
+    if ((events_ & kWriteEvent) == 0) {
+        return;
+    }
     events_ &= ~kWriteEvent;
     update();
 }
 
 void Channel::disableAll() {
+    if (events_ == kNoneEvent) {
+        return;
+    }
     events_ = kNoneEvent;
     update();
 }
 
 void Channel::remove() {
+    if (!addedToLoop_) {
+        throw std::logic_error("Channel::remove requires an active registration");
+    }
     if (!isNoneEvent()) {
         throw std::runtime_error("Channel::remove requires disableAll() first");
     }
-    addedToLoop_ = false;
     loop_->removeChannel(this);
 }
 
@@ -132,26 +152,45 @@ EventLoop* Channel::ownerLoop() noexcept {
 }
 
 void Channel::update() {
-    addedToLoop_ = true;
     loop_->updateChannel(this);
 }
 
+void Channel::advanceRegistrationGeneration() noexcept {
+    ++registrationGeneration_;
+    if (registrationGeneration_ == 0) {
+        ++registrationGeneration_;
+    }
+}
+
 void Channel::handleEventWithGuard(gamenet::base::Timestamp receiveTime) {
+    const std::uint64_t dispatchGeneration = registrationGeneration_;
     eventHandling_ = true;
     try {
         if ((revents_ & kCloseEvent) && !(revents_ & kReadEvent)) {
             if (closeCallback_) {
                 closeCallback_();
             }
+            if (registrationGeneration_ != dispatchGeneration) {
+                eventHandling_ = false;
+                return;
+            }
         }
         if (revents_ & kErrorEvent) {
             if (errorCallback_) {
                 errorCallback_();
             }
+            if (registrationGeneration_ != dispatchGeneration) {
+                eventHandling_ = false;
+                return;
+            }
         }
         if (revents_ & kReadEvent) {
             if (readCallback_) {
                 readCallback_(receiveTime);
+            }
+            if (registrationGeneration_ != dispatchGeneration) {
+                eventHandling_ = false;
+                return;
             }
         }
         if (revents_ & kWriteEvent) {

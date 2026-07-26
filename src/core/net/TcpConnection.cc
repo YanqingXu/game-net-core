@@ -203,6 +203,10 @@ std::size_t TcpConnection::pendingOutputBytes() const noexcept {
     return pendingOutputBytes_.load(std::memory_order_relaxed);
 }
 
+std::uint64_t TcpConnection::droppedNotificationCount() const noexcept {
+    return droppedNotificationCount_.load(std::memory_order_relaxed);
+}
+
 bool TcpConnection::readingPausedByBackpressure() const {
     loop_->assertInLoopThread();
     return !backpressure_->readingEnabled();
@@ -240,10 +244,10 @@ void TcpConnection::connectEstablished() {
     if (state_.load(std::memory_order_relaxed) != kConnecting || channelRemoved_) {
         return;
     }
-    setState(kConnected);
     channel_->tie(shared_from_this());
     channel_->enableReading();
     channelAdded_ = true;
+    setState(kConnected);
     backpressure_->configure(
         backpressureOptions_.highWaterMarkBytes,
         backpressureOptions_.lowWaterMarkBytes,
@@ -252,7 +256,12 @@ void TcpConnection::connectEstablished() {
     backpressure_->onConnectionEstablished(outputBuffer_.readableBytes(), *channel_);
 #ifdef _WIN32
     if (backpressure_->readingEnabled()) {
-        iocpTransport_->startRead(remainingInputCapacity());
+        const int submitError =
+            iocpTransport_->startRead(remainingInputCapacity());
+        if (submitError != 0) {
+            handleError(submitError);
+            return;
+        }
     }
 #endif
 
@@ -333,13 +342,20 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
             return;
         }
 #ifdef _WIN32
+        if (state_.load(std::memory_order_relaxed) == kDisconnected) {
+            return;
+        }
         if (forceClosePending_) {
             handleClose();
             return;
         }
         if (state_.load(std::memory_order_relaxed) == kConnected &&
             backpressure_->readingEnabled()) {
-            iocpTransport_->startRead(remainingInputCapacity());
+            const int submitError =
+                iocpTransport_->startRead(remainingInputCapacity());
+            if (submitError != 0) {
+                handleError(submitError);
+            }
         }
 #endif
         return;
@@ -372,6 +388,9 @@ void TcpConnection::handleWrite() {
         releaseOutputBytes(written);
         applyBackpressureInLoop();
 #ifdef _WIN32
+        if (state_.load(std::memory_order_relaxed) == kDisconnected) {
+            return;
+        }
         if (forceClosePending_) {
             handleClose();
             return;
@@ -379,14 +398,21 @@ void TcpConnection::handleWrite() {
 #endif
         if (outputBuffer_.readableBytes() == 0) {
             channel_->disableWriting();
-            queueWriteComplete();
             if (state_.load(std::memory_order_relaxed) == kDisconnecting) {
                 shutdownInLoop();
             }
+            queueWriteComplete();
         }
 #ifdef _WIN32
         else {
-            iocpTransport_->startWrite(outputBuffer_.peek(), outputBuffer_.readableBytes());
+            if (!iocpTransport_->writePending()) {
+                const int submitError = iocpTransport_->startWrite(
+                    outputBuffer_.peek(),
+                    outputBuffer_.readableBytes());
+                if (submitError != 0) {
+                    handleError(submitError);
+                }
+            }
         }
 #endif
         return;
@@ -479,14 +505,20 @@ void TcpConnection::sendReservedInLoop(const char* data, std::size_t len) {
         throw;
     }
     const std::size_t newLen = outputBuffer_.readableBytes();
-    maybeQueueHighWaterMark(oldLen, newLen);
     applyBackpressureInLoop();
     if (!iocpTransport_->writePending()) {
-        iocpTransport_->startWrite(outputBuffer_.peek(), outputBuffer_.readableBytes());
+        const int submitError = iocpTransport_->startWrite(
+            outputBuffer_.peek(),
+            outputBuffer_.readableBytes());
+        if (submitError != 0) {
+            handleError(submitError);
+            return;
+        }
         if (!channel_->isWriting()) {
             channel_->enableWriting();
         }
     }
+    maybeQueueHighWaterMark(oldLen, newLen);
     return;
 #endif
 
@@ -522,11 +554,11 @@ void TcpConnection::sendReservedInLoop(const char* data, std::size_t len) {
             throw;
         }
         const std::size_t newLen = outputBuffer_.readableBytes();
-        maybeQueueHighWaterMark(oldLen, newLen);
         applyBackpressureInLoop();
         if (!channel_->isWriting()) {
             channel_->enableWriting();
         }
+        maybeQueueHighWaterMark(oldLen, newLen);
     }
 }
 
@@ -545,42 +577,61 @@ void TcpConnection::forceCloseInLoop() {
     }
 }
 
-void TcpConnection::queueWriteComplete() {
+void TcpConnection::queueWriteComplete() noexcept {
     if (!writeCompleteCallback_) {
         return;
     }
-    auto cb = writeCompleteCallback_;
-    auto self = shared_from_this();
-    loop_->queueInLoop([self, cb = std::move(cb)] {
-        try {
-            cb(self);
-        } catch (...) {
-            self->reportCallbackException(
-                TcpConnectionCallbackSource::WriteComplete,
-                std::current_exception());
-            self->handleClose();
+
+    try {
+        auto cb = writeCompleteCallback_;
+        auto self = shared_from_this();
+        if (!loop_->tryQueueInLoop([self, cb = std::move(cb)] {
+                try {
+                    cb(self);
+                } catch (...) {
+                    self->reportCallbackException(
+                        TcpConnectionCallbackSource::WriteComplete,
+                        std::current_exception());
+                    self->handleClose();
+                }
+            })) {
+            recordDroppedNotification();
         }
-    });
+    } catch (...) {
+        recordDroppedNotification();
+    }
 }
 
-void TcpConnection::maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen) {
+void TcpConnection::maybeQueueHighWaterMark(
+    std::size_t oldLen,
+    std::size_t newLen) noexcept {
     if (!highWaterMarkCallback_ || highWaterMark_ == 0) {
         return;
     }
     if (oldLen < highWaterMark_ && newLen >= highWaterMark_) {
-        auto cb = highWaterMarkCallback_;
-        auto self = shared_from_this();
-        loop_->queueInLoop([self, cb = std::move(cb), newLen] {
-            try {
-                cb(self, newLen);
-            } catch (...) {
-                self->reportCallbackException(
-                    TcpConnectionCallbackSource::HighWaterMark,
-                    std::current_exception());
-                self->handleClose();
+        try {
+            auto cb = highWaterMarkCallback_;
+            auto self = shared_from_this();
+            if (!loop_->tryQueueInLoop([self, cb = std::move(cb), newLen] {
+                    try {
+                        cb(self, newLen);
+                    } catch (...) {
+                        self->reportCallbackException(
+                            TcpConnectionCallbackSource::HighWaterMark,
+                            std::current_exception());
+                        self->handleClose();
+                    }
+                })) {
+                recordDroppedNotification();
             }
-        });
+        } catch (...) {
+            recordDroppedNotification();
+        }
     }
+}
+
+void TcpConnection::recordDroppedNotification() noexcept {
+    droppedNotificationCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
 bool TcpConnection::tryReserveOutputBytes(std::size_t bytes) noexcept {
@@ -653,34 +704,36 @@ bool TcpConnection::closeOnInputLimitInLoop() {
 void TcpConnection::resumeWindowsReadAfterBackpressure() {
     loop_->assertInLoopThread();
     auto self = shared_from_this();
-    loop_->queueInLoop([self] {
-        if (self->state_.load(std::memory_order_relaxed) != kConnected ||
-            !self->backpressure_->readingEnabled()) {
+    if (state_.load(std::memory_order_relaxed) != kConnected ||
+        !backpressure_->readingEnabled()) {
+        return;
+    }
+    if (inputBuffer_.readableBytes() > 0 && messageCallback_) {
+        try {
+            messageCallback_(self, &inputBuffer_);
+        } catch (...) {
+            reportCallbackException(
+                TcpConnectionCallbackSource::Message,
+                std::current_exception());
+            handleClose();
             return;
         }
-        if (self->inputBuffer_.readableBytes() > 0 && self->messageCallback_) {
-            try {
-                self->messageCallback_(self, &self->inputBuffer_);
-            } catch (...) {
-                self->reportCallbackException(
-                    TcpConnectionCallbackSource::Message,
-                    std::current_exception());
-                self->handleClose();
-                return;
-            }
+    }
+    if (closeOnInputLimitInLoop()) {
+        return;
+    }
+    if (forceClosePending_ ||
+        state_.load(std::memory_order_relaxed) != kConnected ||
+        !backpressure_->readingEnabled()) {
+        return;
+    }
+    if (!iocpTransport_->readPending()) {
+        const int submitError =
+            iocpTransport_->startRead(remainingInputCapacity());
+        if (submitError != 0) {
+            handleError(submitError);
         }
-        if (self->closeOnInputLimitInLoop()) {
-            return;
-        }
-        if (self->forceClosePending_ ||
-            self->state_.load(std::memory_order_relaxed) != kConnected ||
-            !self->backpressure_->readingEnabled()) {
-            return;
-        }
-        if (!self->iocpTransport_->readPending()) {
-            self->iocpTransport_->startRead(self->remainingInputCapacity());
-        }
-    });
+    }
 }
 #endif
 

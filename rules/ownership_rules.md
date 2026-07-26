@@ -11,24 +11,53 @@ It must not blur these roles.
 ## 2. EventLoop
 - EventLoop owns its Poller
 - EventLoop owns wakeup-related resources it creates
+- EventLoop owns the fixed control-source slot table, pending bitset, and
+  registered callback storage
 - EventLoop does not own business-layer connection semantics
+- EventLoop may temporarily own one already-removed current Channel until its
+  active callback frame returns; this narrow retirement lease owns neither the
+  fd nor its upper business object
+
+## 2.1 EventLoopControlSource
+- A source handle is a copyable, non-owning scheduling capability
+- A handle neither owns nor extends EventLoop lifetime
+- Only the non-installed source-private control registry may create or revoke
+  registrations; public callers cannot claim internal slots
+- The registering subsystem owns the obligation to unregister on the owner
+  thread before its callback target is destroyed
+- EventLoop owns callback storage until unregister or EventLoop destruction
+- Slot generation invalidation prevents copied stale handles from addressing a
+  replacement registration
 
 ## 3. Poller
 - Poller does not own Channel
 - Poller only maintains registration/mapping relationship
 - Poller backend state must not outlive EventLoop
+- Poller erases a registration only after exact fd-plus-pointer validation; it
+  cannot erase a same-fd replacement on behalf of a stale Channel
 
 ## 4. Channel
 - Channel does not own fd by default
 - Channel belongs logically to one EventLoop
 - Channel may observe an upper-layer owner through tie/weak_ptr mechanism
 - Channel callback dispatch must respect observed owner lifetime
+- EventLoop active-batch slots observe Channel only while the matching
+  registration generation remains valid
+- successful remove revokes that observation before ownership may be released
 
 ## 5. TcpConnection
 - TcpConnection owns its input/output buffer members
+- TcpConnection owns its cumulative optional-notification drop counter
 - TcpConnection does not own EventLoop
 - TcpConnection lifecycle should be coordinated through shared ownership where needed
 - Callback-triggered lifetime risks must be explicitly guarded
+- An admitted deferred high-water/write-complete callback temporarily shares
+  connection ownership; a rejected callback submission retains no delayed
+  ownership and must not interrupt connection progress
+- On Windows, the posting transport owns each `OVERLAPPED`, `WSABUF`, and
+  referenced backing buffer until exactly one normal, error, or cancellation
+  completion is consumed. A synchronous non-pending submission failure creates
+  no completion ownership obligation
 
 ## 6. Timer / Scheduled Tasks
 - Timer containers own timer metadata
@@ -44,6 +73,17 @@ It must not blur these roles.
   connection callback
 - TcpServer owns the transferred fd until TcpConnection construction succeeds
 - Every rejected or failed accepted-socket setup path closes the fd exactly once
+- Connector transfers a connected fd exactly once at new-connection callback
+  entry. The receiver owns cleanup from that point and must establish RAII
+  before fallible work; Connector does not retain a second fd owner
+- IOCP association preservation is not ownership of a raw SOCKET value:
+  TcpClient records it only in the no-user-code handoff interval and rolls it
+  back if the replacement Channel cannot register, so callback failure cannot
+  leave a stale association for a reused numeric handle
+- TcpClient's connected-fd handoff is transactional. Any exception before the
+  replacement Channel is established clears provisional `connection_` and
+  request ownership, forgets the IOCP numeric association, and closes the fd
+  before Connector settles the failed callback generation
 
 ## 8. Callback Exception State
 - Exception records borrow no callback-owned storage; `std::exception_ptr`
@@ -84,6 +124,9 @@ It must not blur these roles.
 - Shared ownership used as a substitute for lifecycle design
 - Poller owning Channel
 - Channel owning EventLoop
+- A stale Channel remove erasing another Channel that reused the same fd
+- A control-source callback capturing an owner whose lifetime is not protected
+  through explicit unregister or revocable observation
 
 ## 14. Fault and Endurance Evidence
 - each fault cycle owns and closes every raw client socket it creates

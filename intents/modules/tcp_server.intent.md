@@ -17,7 +17,6 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - own Acceptor and EventLoopThreadPool collaboration
 - create TcpConnection on chosen loop
 - maintain connection map on base loop thread
-- optionally coordinate per-connection idle-timeout policy through owner-loop timers
 - optionally install per-connection backpressure thresholds for accepted connections
 - expose the Acceptor runtime-error policy and apply its Retry/Stop decision to
   accepted-socket setup failures before connection ownership is established
@@ -49,7 +48,6 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - base loop owns connection map mutation
 - close/remove path must not dereference a destroyed TcpServer
 - connection creation and removal remain explicit and loop-safe
-- idle-timeout policy must not bypass connection owner-loop close semantics
 - backpressure configuration must not mutate worker-loop Channel state directly from base loop code
 - shutdown should detach callbacks before asynchronous teardown continues
 - stop() during active write must let connection-owner close/cancel ordering
@@ -84,7 +82,6 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 ## 6. Failure Semantics
 - worker-loop teardown should not leave stale entries in the base-loop map
 - shutdown should tolerate already-closing connections
-- idle timeout should converge on the normal connection close/remove path
 - backpressure configuration should not leave accepted connections permanently read-paused after drain
 - callback lifetime must remain safe during server destruction
 - drain timeout, immediate-stop escalation, scheduling failure, and server
@@ -105,7 +102,6 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 ## 7. Test Contracts
 - new connections are assigned to a loop and registered there
 - close callback removes the connection through the base loop
-- idle timeout closes quiet connections without skipping the normal removal path
 - backpressure policy installed by TcpServer pauses and later resumes per-connection reads without breaking ownership rules
 - destruction invalidates delayed removal callbacks safely
 - stop() stops Acceptor, force-closes all connections, stops thread pool; idempotent
@@ -136,9 +132,32 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 
 ---
 
-## 8. Review Checklist
+## 8. Deferred General Idle Policy
+
+The active API implements only `unauthenticatedTimeout`: a base-loop admission
+deadline that is canceled when the accepted connection is explicitly marked
+authenticated. It does not implement a general connection idle timeout, and
+this intent must not present one as current behavior.
+
+A scalable general idle policy is deferred to the M3 deadline-bucket/time-wheel
+work. Its first promoted form should be read-idle and must define:
+
+- activity timestamps updated by the TcpConnection owner loop;
+- generation-tagged deadlines so stale expiry work cannot close a replacement
+  connection;
+- convergence through the normal close/remove and structured-reason path;
+- ordering against peer close, force close, graceful stop, authentication
+  deadline, heartbeat, and an optional explicit activity refresh;
+- bounded 10k/100k deadline-storm memory and loop-lag evidence rather than one
+  allocation-heavy timer object per connection.
+
+---
+
+## 9. Review Checklist
 - Does any callback still capture raw TcpServer lifetime unsafely?
 - Is base-loop bookkeeping isolated from worker-loop teardown?
 - Are shutdown and connection removal still explicit and predictable?
+- Is the unauthenticated admission deadline kept distinct from the deferred
+  general read-idle policy?
 - Can any rejected attempt or repeated stop leave a live authentication timer,
   peer count, or unbounded peer-rate record behind?

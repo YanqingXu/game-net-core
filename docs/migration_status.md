@@ -4,6 +4,8 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
+Current production-roadmap audit: 2026-07-26
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -29,26 +31,30 @@ TcpServer now optionally enforces global/per-peer connection limits, a bounded
 per-peer fixed-window attempt rate, and base-loop unauthenticated deadlines;
 all are disabled by default and expose distinct cumulative metrics.
 
-Phase 6 production-candidate work is now active. The first gate defines the
-0.3 source-compatibility boundary with a versioned installed-header/target
-manifest: stable Core declarations are fingerprinted, Phase 4 APIs remain
-provisional, platform backend headers are unsupported interfaces, and ABI
-compatibility remains explicitly out of scope before 1.0.
-The candidate package version is now `0.3.0`; the manifest baseline and the
-external exact-version install consumer are locked to that same version before
-the frozen long-duration evidence runs.
-MetricsExporter and its producer adapters are now implemented, and the fixed
-Core/Phase-4 Release matrix has a reviewed same-runner regression budget,
-three-repetition medians, and recursively hashed raw-sample evidence. A local
-Windows/IOCP preflight passed all 12 scenarios; it validates the tooling but is
-not a substitute for same-commit retained Linux/Windows release evidence.
-The production fault-injection executable now covers reset, callback failure,
+Phase 6 production-candidate infrastructure is now integrated on the roadmap
+branch for audit. The compatibility boundary is a v2 installed-header/target
+manifest with a retained `v0.2.0-phase4-preview` snapshot and deterministic
+structural diff: stable Core, provisional Phase 4/Metrics, and unsupported
+platform-backend interfaces remain distinct, while ABI compatibility stays
+out of scope before 1.0. The candidate package version is `0.3.0`, and the
+external install consumer continues to require that exact version.
+MetricsExporter and producer adapters are implemented as provisional
+observability APIs; their string/hash/global-mutex reference implementation is
+not yet a promoted hot-path contract. The Core benchmark now emits
+`gamenet.core_benchmark.v2`, uses `trySend()`, and validates requested,
+accepted, rejected, hard-limit, pending-output, pause/resume, and recovery
+semantics. The fixed Core/Phase-4 matrix retains the historical v1 executable
+only as a performance baseline and compares common metrics on the same runner.
+The production fault-injection executable covers reset, callback failure,
 bounded-output rejection, post-failure recovery, and slow-reader forced drain
 in one long-lived-process cycle. Its supervisor fixes candidate/release modes
 at 24/72 hours, writes monotonic checkpoints and hashed evidence, and requires
-the 72-hour run to consume same-SHA 24-hour evidence. A local Windows/IOCP
-one-second smoke passed five cycles; real Linux/epoll duration evidence awaits
-the dedicated self-hosted endurance runner.
+the 72-hour run to consume same-SHA 24-hour evidence. Infrastructure snapshot
+`b3443182d0606792df44a12bcb08927e767bc060` completed the real Linux/epoll
+24-hour run `29895457789` (73,617 cycles) and 72-hour paired run
+`29984629032` (220,851 cycles). Its cross-platform performance run
+`29808395220` passed at earlier SHA `5f926f3`; these are historical
+infrastructure-validation records, not evidence for later runtime changes.
 
 ## Phase Status
 
@@ -59,31 +65,33 @@ the dedicated self-hosted endurance runner.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
-| 6 | Production candidate | In progress: active release/endurance intents, 0.3 compatibility policy, exact installed public-header/target inventory, stable Core declaration fingerprints, metrics export, same-runner performance regression, structured fault injection, and fixed 24/72-hour evidence gates are implemented; real endurance and frozen-candidate cross-platform release evidence remain gated |
+| 6 | Production candidate | Infrastructure validated: API manifest/diff, provisional metrics, same-runner regression tooling, fault injection, and real 24/72-hour Linux endurance all exist; current M0/M1 runtime and contract work means no final candidate SHA is frozen, independent maintainer API/performance/release-tool review remains required, and release evidence must be regenerated after code freeze |
 
 ## Production-Hardening Worktree State
 
-- Intent semantics resolve 30 active targets and 93 explicit verification
+- Intent semantics resolve 30 active targets and 94 explicit verification
   paths, with `connection_backpressure_controller` and `graceful_shutdown`
   promoted from deferred design assets to active `GameNet::core`
   implementation authority.
-- MetricsExporter is promoted to active Core authority with thread-safe
+- MetricsExporter is active but provisional, with thread-safe
   in-memory aggregation, immutable static labels, deterministic Prometheus
   snapshots, exception-contained Core/Logic/Broadcast recorder adapters, and
-  bounded-cardinality metric names. Its unit, concurrency/owner-loop contract,
-  and real LogicLoop/Broadcast integration tests pass in the 89-test Debug
-  inventory.
+  bounded-cardinality metric names. Its current string/hash/global-mutex hot
+  path is a reference implementation, not a production performance claim.
 - The Release performance gate builds the reviewed baseline and candidate on
   the same runner, retains 72 raw samples per platform, compares medians for
   12 fixed Core/Phase-4 scenarios, and rejects parameter, hash, baseline, or
-  budget drift. The local Windows/IOCP preflight passed 12/12 comparisons;
-  authoritative release evidence remains bound to the later frozen commit.
+  budget drift. Candidate Core v2 output also has an independent semantic
+  validator and a forced overload case, while historical Core v1 data remains
+  performance-only. Cross-platform run `29808395220` passed at `5f926f3`; a
+  later frozen runtime commit requires its own retained run.
 - `integration.resilience.test_fault_injection` executes five production fault
   profiles in one cycle and is part of the ordinary Linux/Windows CTest matrix.
   The same executable can remain alive under a heartbeat supervisor for fixed
-  24/72-hour Linux/epoll modes; the local Windows/IOCP one-second smoke passed
-  five cycles, while shortened smoke evidence is explicitly non-releasable.
-- The current Windows MSVC Debug/Release preflights pass 89/89 configured
+  24/72-hour Linux/epoll modes. Snapshot `b344318` completed both real modes
+  with same-SHA pairing; shortened smoke evidence remains non-releasable and
+  the final changed runtime must be requalified after freeze.
+- At historical snapshot `b344318`, Windows MSVC Debug/Release preflights pass 89/89 configured
   CTests in 39.40/38.00 seconds. The Release fault-injection target separately
   passes 10/10 repeats in 1.98 seconds, the exact inventory verifier reports
   `threading=64`, `fault_injection=1`, and `endurance=1`, and all 30 Python
@@ -158,9 +166,13 @@ the dedicated self-hosted endurance runner.
 
 ## Verification State
 
-The current worktree configures 89 configured CTest tests: 8 unit tests, 73 contract tests, and 8 integration tests. Phase 4 coverage now includes bounded
+The current worktree configures 94 configured CTest tests: 8 unit tests, 78 contract tests, and 8 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
-contracts, four Pipeline integrations, and four Broadcast contracts/integrations.
+contracts, four Pipeline integrations, and four Broadcast
+contracts/integrations. The four current-roadmap additions cover EventLoop
+control-lane saturation, optional TcpConnection notification saturation,
+Connector/TcpClient typed admission and generation races, and IOCP synchronous
+submission errors.
 
 Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
 `5ebad2c1a4a9487437340935e21f7468140c7e8d`:
@@ -177,10 +189,12 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   corpus contains 90 files and no crash artifact. Candidate main-CI run
   `29160903594` repeated the sanitizer-backed fuzz gate successfully and
   retained its SHA-bound log, corpus, dictionary, and artifact evidence.
-- The current Debug inventory includes 64 threading-labeled tests and eight
-  Pipeline/Broadcast tests. On the latest tree, the complete threading slice
-  passed repeat 50: 61 x 50 = 3,050 executions with zero failures in 1,777.76
-  seconds. The focused Pipeline/Broadcast slice also passed repeat 50: 8 x 50 =
+- The current Debug inventory includes 67 threading-labeled tests, 73
+  lifecycle-labeled tests, and eight Pipeline/Broadcast tests. These current
+  runtime changes still require new repeat and remote evidence. On the
+  historical `final-v4` tree, its 61-test threading selection passed repeat 50:
+  61 x 50 = 3,050 executions with zero failures in 1,777.76 seconds. The
+  focused Pipeline/Broadcast slice also passed repeat 50: 8 x 50 =
   400 executions with zero failures in 54.16 seconds. Both
   `gamenet.ctest_repeat_evidence.v1` manifests report `result: success` and bind
   to the same `final-v4` inventory SHA-256

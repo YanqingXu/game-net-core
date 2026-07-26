@@ -58,6 +58,21 @@ run the fault-injection CTest in ordinary CI, sanitizer, Release, and package
 gates; Windows/IOCP is therefore a supported functional backend, but the 24/72
 hour release-duration claim is explicitly Linux/epoll.
 
+## Completed Infrastructure Evidence
+
+The Phase 6 infrastructure snapshot
+`b3443182d0606792df44a12bcb08927e767bc060` completed both unscaled modes on
+the dedicated Linux/epoll runner:
+
+- 24-hour candidate run `29895457789`: success, 73,617 uninterrupted cycles;
+- 72-hour release run `29984629032`: success, 220,851 uninterrupted cycles,
+  including verification of the retained same-SHA 24-hour artifact.
+
+These records prove the supervisor, process-duration, RSS handshake, checkpoint,
+hashing, and same-SHA pair machinery. They do not automatically qualify later
+runtime commits. Any EventLoop, TCP, platform data-path, Metrics hot-path, or
+other runtime change requires new 24/72-hour evidence on the final frozen SHA.
+
 ## Local Smoke
 
 After a Debug or Release test build:

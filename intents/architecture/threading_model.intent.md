@@ -25,6 +25,9 @@ That thread is the only place where:
 
 This is the primary concurrency discipline of the system.
 
+Active-batch epoch assignment, slot invalidation, registration generation, and
+current-Channel retirement are owner-thread-only and need no cross-thread lock.
+
 ---
 
 ## 3. Why This Model Exists
@@ -58,6 +61,7 @@ Approved paths:
 - runInLoop(fn)
 - queueInLoop(fn)
 - wakeup()
+- a pre-registered EventLoopControlSource for bounded internal lifecycle work
 
 ### runInLoop(fn)
 - executes immediately if caller is already in owner thread
@@ -72,6 +76,17 @@ Approved paths:
 - interrupts blocked poll wait
 - causes loop to observe pending work sooner
 
+### EventLoopControlSource::notify()
+- may be called from any thread after owner-thread registration
+- receives its registration only through the non-installed source-private
+  control registry; ordinary public callers cannot register control work
+- sets one preallocated mailbox bit; repeated notifications coalesce
+- never consumes normal or reserved pending-functor capacity
+- executes its registered callback only on the EventLoop owner thread
+- is reserved for finite internal control/lifecycle state transitions rather
+  than user or business work
+- returns an explicit PostResult so quit and expired-owner races are observable
+
 ---
 
 ## 6. Dispatch Ordering
@@ -85,12 +100,20 @@ Exact micro-order can evolve, but must remain documented and stable enough for r
 
 v1 default direction:
 1. poll for active events
-2. dispatch active channels
-3. execute pending functors
-4. repeat
+2. assign the active-batch epoch and dispatch still-valid unique Channel slots
+3. dispatch expired timers
+4. execute one control-source round
+5. execute pending functors
+6. repeat
 
 If quit is requested during an iteration, already-queued functors should still be drained
 before the loop fully exits.
+
+Quit also linearizes control admission. A control notification accepted before
+the Accepting-to-Draining transition is executed before loop exit. External
+notifications after that transition return Shutdown; only the currently
+executing control callback may re-arm its own source during the final
+accepted-work drain.
 
 If this changes, related contracts/tests/docs must be updated.
 
@@ -152,7 +175,13 @@ These must be explicitly guarded in implementation and tests.
 - cross-thread runInLoop is marshaled correctly
 - queueInLoop from another thread wakes loop
 - queued work executes on loop thread
+- normal and reserved queue saturation does not reject a registered control source
+- repeated notifications for one control source coalesce without recursion
+- quit races produce either an executed Accepted request or an explicit
+  Shutdown/OwnerUnavailable result
 - channel registration change is loop-thread enforced
+- removing one active Channel invalidates its O(1) batch slot before another
+  owner-thread callback may release it
 
 ---
 

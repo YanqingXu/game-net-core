@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.20)
 
 project(GameNetCore VERSION 0.3.0 LANGUAGES CXX)
 
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux"
+   AND NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    message(FATAL_ERROR
+        "game-net-core currently supports only Linux and Windows; "
+        "CMAKE_SYSTEM_NAME='${CMAKE_SYSTEM_NAME}' is unsupported."
+    )
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -13,6 +21,24 @@ option(GAMENET_ENABLE_ASAN_UBSAN "Enable ASan/UBSan" OFF)
 option(GAMENET_ENABLE_TSAN "Enable TSan" OFF)
 option(GAMENET_ENABLE_TLS "Build TLS support" OFF)
 option(GAMENET_ENABLE_EXPERIMENTAL "Build experimental modules" OFF)
+
+if(BUILD_SHARED_LIBS)
+    message(FATAL_ERROR
+        "game-net-core is static-only before 1.0; configure with BUILD_SHARED_LIBS=OFF."
+    )
+endif()
+
+if(GAMENET_ENABLE_TLS)
+    message(FATAL_ERROR
+        "GAMENET_ENABLE_TLS=ON is not implemented; TLS remains deferred."
+    )
+endif()
+
+if(GAMENET_ENABLE_EXPERIMENTAL)
+    message(FATAL_ERROR
+        "GAMENET_ENABLE_EXPERIMENTAL=ON is not implemented; experimental modules remain deferred."
+    )
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 

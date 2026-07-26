@@ -1,6 +1,7 @@
 #pragma once
 
-// BroadcastMetricsRecorder 将广播结果和丢弃原因记录到共享 MetricsExporter。
+// Provisional adapter：同步记录广播结果与丢弃原因；
+// 高 fanout 下的分配、哈希和锁开销尚未成为稳定性能合同。
 
 #include "gamenet/broadcast/BroadcastTypes.h"
 #include "gamenet/core/metrics/MetricsExporter.h"

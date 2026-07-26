@@ -26,8 +26,11 @@ foundations without changing the core dependency direction.
 The published integration/contract preview is
 [`v0.2.0-phase4-preview`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview);
 it does not declare production readiness or API/ABI stability.
-The active Phase 6 line installs as `GameNetCore 0.3.0` and remains a production
-candidate until its fixed 24-hour and 72-hour Linux endurance gates complete.
+The active Phase 6 line installs as `GameNetCore 0.3.0`. Its infrastructure
+snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
+72-hour Linux endurance runs, but it is not a stable release: the current M0/M1
+roadmap work changes contracts and runtime code, so the eventual frozen
+candidate must receive its own same-SHA CI, performance, and endurance evidence.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 
@@ -73,6 +76,33 @@ This project is not:
 - an AOI/world-state framework
 - a database/cache framework
 - a complete gateway platform
+
+## Supported Builds
+
+The current CMake target-system allow-list is Linux and Windows:
+
+- Linux/epoll is Tier 1 and owns the release, sanitizer, performance, and
+  long-duration reference evidence.
+- Windows/IOCP is a required Tier 2 functional and package platform until the
+  M3 batching, error-path, ownership, and capacity promotion gates complete.
+- macOS, BSD variants, and other target systems fail during configure.
+
+All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
+rejected, and no binary ABI compatibility is promised before 1.0.
+`GAMENET_ENABLE_TLS` and `GAMENET_ENABLE_EXPERIMENTAL` are compatibility
+options that currently accept only `OFF`; `ON` fails instead of silently
+building no feature.
+
+See [Platform and Build Support](docs/development/platform_support.md) for the
+support tiers, exact option behavior, commands, and Windows promotion criteria.
+
+## Licensing Status
+
+The current top-level `LICENSE` is all-rights-reserved and grants no external
+permission to use, copy, modify, or redistribute this code. Engineering
+candidate work can continue, but an externally adoptable release is blocked
+until the project owner publishes an explicit license and corresponding
+package/SBOM metadata. See [Licensing Status](docs/development/licensing.md).
 
 ## Layout
 

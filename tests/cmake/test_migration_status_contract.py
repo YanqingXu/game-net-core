@@ -31,6 +31,21 @@ def main() -> None:
     status_text = migration_status.read_text(encoding="utf-8")
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
+    require(status_text, "Current production-roadmap audit: 2026-07-26", migration_status)
+    require(status_text, "gamenet.core_benchmark.v2", migration_status)
+    require(status_text, "MetricsExporter is active but provisional", migration_status)
+    require(
+        status_text,
+        "b3443182d0606792df44a12bcb08927e767bc060",
+        migration_status,
+    )
+    require(status_text, "29895457789", migration_status)
+    require(status_text, "73,617 cycles", migration_status)
+    require(status_text, "29984629032", migration_status)
+    require(status_text, "220,851 cycles", migration_status)
+    require(status_text, "29808395220", migration_status)
+    require(status_text, "earlier SHA `5f926f3`", migration_status)
+    assert "real Linux/epoll duration evidence awaits" not in status_text
     require(status_text, f"{configured_test_count} configured CTest tests", migration_status)
     require(
         status_text,
@@ -60,7 +75,7 @@ def main() -> None:
     require(status_text, "intent metadata contract guard", migration_status)
     require(status_text, "all 60 formal `*.intent.md` documents", migration_status)
     require(status_text, "30 active targets", migration_status)
-    require(status_text, "93 explicit verification", migration_status)
+    require(status_text, "94 explicit verification", migration_status)
     require(status_text, "connection_backpressure_controller", migration_status)
     require(status_text, "graceful_shutdown", migration_status)
     require(status_text, "global/per-peer connection limits", migration_status)

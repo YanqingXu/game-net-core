@@ -1,7 +1,7 @@
 #pragma once
 
-// MetricsHookRecorder 将现有 Core metric hook 映射为稳定指标名。
-// 返回的回调只共享 exporter，不延长任何 reactor 对象的生命周期。
+// MetricsHookRecorder 将 Core hook 映射到 provisional 指标 schema。
+// 回调同步调用 exporter，可能分配或竞争；它只共享 exporter，不延长 reactor 生命周期。
 
 #include "gamenet/core/metrics/MetricsExporter.h"
 #include "gamenet/core/net/Connector.h"

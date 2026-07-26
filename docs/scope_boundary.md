@@ -22,8 +22,8 @@ project is split by component boundaries.
 - Network-only PlayerSession and SessionManager lifecycle state
 - Value-type GameCommand, bounded queue, and fixed-tick LogicLoop
 - Owner-loop BroadcastRouter/Dispatcher with explicit fanout/byte budgets
-- Thread-safe MetricsExporter aggregation and non-blocking Core/Logic/Broadcast
-  producer adapters
+- Provisional thread-safe MetricsExporter aggregation and non-I/O
+  Core/Logic/Broadcast producer adapters
 - A non-installed GameServerPipeline composition example and integration test
 
 ## Deferred

@@ -197,10 +197,20 @@ for this completion.
 
 - Every completion carries an operation kind, byte count, and Win32/WinSock
   error code.
+- `WSARecv`, `WSASend`, `AcceptEx`, or `ConnectEx` returning a synchronous
+  error other than the pending sentinel creates no completion obligation. The
+  posting owner must consume that error immediately; setting Channel `revents`
+  cannot manufacture a completion packet and would strand lifecycle progress.
+- Operation records and every buffer referenced by `WSABUF` remain owned by
+  the posting module from successful/pending submission through consumption of
+  its one normal, error, or cancellation completion. Poller observes this
+  storage and never releases or reuses it.
 - Failed accept/connect/read/write completions must converge on the module's
   existing error path.
 - Peer EOF is represented by a successful read completion with zero bytes.
 - Repeated close/error/forceClose paths must stay single-shot.
+- `ERROR_OPERATION_ABORTED` clears the canceled operation's one pending
+  obligation; it does not create a second teardown path.
 - Socket close and Channel removal must happen on the owner loop thread.
 - A pending completion that arrives after logical close must be recognized by
   operation state and must not dispatch duplicate user callbacks.

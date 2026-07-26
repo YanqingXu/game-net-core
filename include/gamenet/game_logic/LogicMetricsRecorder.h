@@ -1,6 +1,7 @@
 #pragma once
 
-// LogicMetricsRecorder 将 LogicLoop tick 样本记录到共享 MetricsExporter。
+// Provisional adapter：同步将 LogicLoop tick 样本记录到共享 MetricsExporter；
+// 当前实现不承诺无分配或无锁热路径。
 
 #include "gamenet/core/metrics/MetricsExporter.h"
 #include "gamenet/game_logic/LogicLoop.h"

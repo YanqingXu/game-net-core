@@ -24,6 +24,9 @@ EventLoop is the heart of reactor execution in game-net-core.
 - bound pending-functor admission and execute at most a configured batch per
   normal loop iteration so task floods cannot grow memory without limit or
   monopolize the owner thread
+- host a separately bounded set of pre-registered internal control sources;
+  each source owns one coalescing mailbox bit that cannot be consumed by
+  normal or reserved pending functors
 - maintain thread-affinity discipline
 - provide runInLoop / queueInLoop API
 - provide a copyable, non-owning `EventLoopExecutor` that can reject queued work
@@ -52,16 +55,52 @@ EventLoop is the heart of reactor execution in game-net-core.
 - quit must not abandon already-queued pending functors
 - wakeup is used to interrupt blocking poll when needed
 - channel update/remove must respect EventLoop ownership
+- every active Channel batch has one owner-thread epoch; each unique Channel is
+  assigned one O(1)-addressable slot before callbacks begin
+- successful Channel removal invalidates that slot before ownership may be
+  released, and dispatch skips invalidated slots without dereferencing them
+- the loop may temporarily own one already-removed current Channel solely
+  until its active callback frame returns; this source-private retirement path
+  performs no queue admission or allocation
 - Poller lifetime does not exceed EventLoop lifetime
 - EventLoop exclusively owns executor admission state; executor handles neither
   own nor extend EventLoop lifetime
-- executor admission closes before the final pending-functor drain so a
-  successful `tryQueue` is either in that drain set or a normal loop iteration
+- `quit()` closes executor admission before the final pending-functor drain, so
+  a successful executor post is either in that drain set or a normal loop
+  iteration and a later post returns `PostResult::Shutdown`
 - owner-thread identity remains usable only while accepting work or executing
   that final accepted-work drain; it becomes unavailable after the drain ends
+- once the loop has published control-plane Shutdown, repeated or concurrent
+  `quit()` calls are idempotent and cannot re-enable the executor's
+  final-drain owner identity
 - capacity-aware `tryQueueInLoop` and executor submissions never exceed the
-  normal pending-functor limit; legacy/control `queueInLoop` may use only the
+  normal pending-functor limit; legacy `queueInLoop` may use only the
   separately bounded reserve and throws explicitly when total capacity is full
+- `queueInLoop` and its reserve remain legacy/data-plane facilities and do not
+  provide lifecycle progress guarantees; internal lifecycle work uses a
+  pre-registered control source instead
+- control-source registration is owner-thread-only, happens before `loop()`,
+  cannot exceed the configured `maxControlSources`, and rejects configurations
+  above the supported 65,536-source storage bound before allocation
+- registration and unregistration are reachable only through the source-private
+  `detail::EventLoopControlRegistry`; installed public callers cannot reserve
+  slots or register arbitrary work in the internal control lane
+- a registered source has at most one pending mailbox bit; repeated `notify()`
+  calls coalesce without allocating or growing a queue
+- normal-plus-reserved saturation cannot reject a registered control-source
+  notification
+- control callbacks execute on the owner thread, after the active Channel and
+  expired-timer phases, and before normal pending functors
+- one control source executes at most once per control round; a callback that
+  notifies itself is deferred to a later round and never recursively invoked
+- quit linearizes the control plane from Accepting to Draining: notifications
+  accepted before that transition are included in the final drain, external
+  notifications after it return `PostResult::Shutdown`, and only the currently
+  executing control callback may re-arm its own source while the accepted-work
+  drain is running
+- the control plane becomes Shutdown only after its pending bitset is empty;
+  handles whose EventLoop no longer exists return
+  `PostResult::OwnerUnavailable`
 - normal iterations execute at most `maxFunctorsPerIteration`; accepted
   remainder is preserved and the loop is woken for another I/O/timer-aware
   iteration
@@ -83,12 +122,16 @@ EventLoop is the heart of reactor execution in game-net-core.
 ## 6. Main Execution Model
 Default v1 loop direction:
 1. wait for active I/O via Poller
-2. dispatch active channels
-3. execute pending functors
-4. repeat until quit requested
+2. stamp and dispatch the unique active-Channel batch, skipping registrations
+   invalidated by earlier callbacks
+3. dispatch expired timers
+4. execute one round of pending control sources
+5. execute pending functors
+6. repeat until quit requested
 
 If quit is observed, EventLoop may stop polling new iterations,
-but it should still drain already-queued pending functors before leaving loop().
+but it should still drain already-queued pending functors and control-source
+notifications accepted before the quit transition before leaving loop().
 
 If this order changes, docs/tests/contracts must be updated.
 
@@ -101,7 +144,13 @@ Typical API direction:
 - runInLoop(Functor)
 - queueInLoop(Functor)
 - tryQueueInLoop(Functor) -> bool
+- source-private detail::EventLoopControlRegistry::registerSource(Functor)
+  -> EventLoopControlSource
+- source-private detail::EventLoopControlRegistry::unregisterSource(
+  EventLoopControlSource)
+- EventLoopControlSource::notify() -> PostResult
 - pendingFunctorCount() / rejectedFunctorCount() snapshots
+- pendingControlSourceCount() / mergedControlNotificationCount() snapshots
 - executor() -> EventLoopExecutor
 - setCallbackExceptionHandler(EventLoopCallbackExceptionHandler)
 - callbackExceptionCount()
@@ -126,6 +175,10 @@ Additional APIs can be added later for richer timer and coroutine features.
 - queueInLoop enqueues within the normal-plus-reserved hard capacity and throws
   explicitly at saturation
 - tryQueueInLoop and EventLoopExecutor return false at normal-capacity saturation
+- control-source registration and unregistration are owner-thread-only;
+  `notify()` is thread-safe and non-throwing
+- control-source callbacks are owner-thread-only and user/data work must not be
+  routed through this internal lifecycle facility
 - cross-thread enqueue must ensure wakeup when loop may be blocked
 - pending functor queue flush occurs on owner thread only
 - cross-thread-observed pending functor execution state is atomic or synchronized
@@ -158,8 +211,22 @@ EventLoop should explicitly handle:
 - queued functors that were already accepted before loop exit
 - executor `tryQueue` after admission close or destruction returns false and
   never dereferences the expired EventLoop
+- typed executor `post` after quit returns `PostResult::Shutdown`; a post that
+  linearized before quit returns Accepted and remains in the final drain
+- a `quit()` arriving after final drain observes Shutdown, leaves
+  `drainingAccepted` false, and cannot make `isInOwnerThread()` true again
 - pending-functor saturation is explicit: capacity-aware APIs return false,
-  while the legacy/control API throws `std::overflow_error`
+  while the legacy API throws `std::overflow_error`
+- control-source registration capacity exhaustion fails before the loop starts;
+  an already registered source never reports QueueFull at runtime
+- `PostResult::Accepted` means the source bit is either newly pending or safely
+  coalesced into an existing pending request
+- `PostResult::Shutdown` means quit has sealed external control admission;
+  `PostResult::OwnerUnavailable` means the source registration or EventLoop
+  lifetime is no longer available
+- an exception from one control callback is observed as
+  `EventLoopCallbackSource::Control` and cannot skip other sources from the
+  same round
 
 v1 should prefer predictable behavior over over-complicated generic error models.
 
@@ -190,7 +257,25 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   thread, and copied handles become unavailable after loop teardown
 - work accepted before executor admission closes can still perform owner-only
   operations during the final drain, while new submissions are rejected
+- repeated `quit()` after loop exit does not resurrect executor availability or
+  final-drain owner identity
+- normal-plus-reserved saturation does not reject a registered control source
+- 10,000 notifications for one source coalesce into one pending source
+- registration cannot exceed `maxControlSources`
+- notifying from inside a control callback schedules a later round without
+  recursive callback execution
+- one throwing control callback does not suppress later sources
+- a notification racing with quit either returns Accepted and executes in the
+  final drain, or returns Shutdown/OwnerUnavailable and does not partially run
 - update/remove channel routes through correct Poller interaction path
+- two synthetically captured active Channels exercise pending-peer removal and
+  destruction identically on Linux and Windows without depending on IOCP batch
+  dequeue width
+- current-Channel internal retirement remains available when normal and
+  reserved pending-functor capacity are both full
+- `tests/contract/event_loop/test_event_loop_control_saturation.cpp` verifies
+  bounded registration, saturation isolation, coalescing, non-recursive
+  re-arming, callback-exception containment, and quit linearization
 - `tests/contract/event_loop/test_event_loop.cpp` verifies
   Channel, Timer, pending-functor, and metric callback exceptions are observed,
   later callbacks still run under Continue, Quit still drains accepted work,
