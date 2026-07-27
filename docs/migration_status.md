@@ -213,7 +213,7 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   corpus contains 90 files and no crash artifact. Candidate main-CI run
   `29160903594` repeated the sanitizer-backed fuzz gate successfully and
   retained its SHA-bound log, corpus, dictionary, and artifact evidence.
-- The current Debug inventory includes 67 threading-labeled tests, 73
+- The current Debug inventory includes 75 threading-labeled tests, 81
   lifecycle-labeled tests, and eight Pipeline/Broadcast tests. These current
   runtime changes still require new repeat and remote evidence. On the
   historical `final-v4` tree, its 61-test threading selection passed repeat 50:

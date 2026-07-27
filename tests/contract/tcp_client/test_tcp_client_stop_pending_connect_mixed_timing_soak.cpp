@@ -77,6 +77,10 @@ int main() {
 
         loop.runAfter(55ms + std::chrono::milliseconds(iteration * 3), [&] {
             GAMENET_TEST_ASSERT(loop.isInLoopThread());
+            // The ordering contract is stop-before-server-start, not a
+            // scheduler-latency budget for creating the non-owner thread.
+            // Join the one-shot handoff before asserting the committed stop.
+            stopper.join();
             GAMENET_TEST_ASSERT(stopIssued.load());
             server.start();
             serverStartedAfterStop = true;

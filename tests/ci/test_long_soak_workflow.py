@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 67
+EXPECTED_THREADING_TESTS = 75
 EXPECTED_PHASE4_SOAK_TESTS = 8
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -203,7 +203,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 94", workflow)
+    require(inventory, "--expected-total 102", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=4", workflow)
     require(inventory, "--expect-label broadcast=4", workflow)
@@ -256,7 +256,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 94",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 102",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -406,7 +406,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "67 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "75 threading-labeled tests", ci_docs)
     require(ci_docs_text, "8 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "Phase 3.5 historical evidence: run `29077148022`", ci_docs)
     require(ci_docs_text, "job `86311227712`", ci_docs)
