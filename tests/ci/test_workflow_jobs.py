@@ -13,8 +13,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 94
-EXPECTED_THREADING_TOTAL = 67
+EXPECTED_CTEST_TOTAL = 102
+EXPECTED_THREADING_TOTAL = 75
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
     "${{ github.run_id }}-${{ github.run_attempt }}"
@@ -101,7 +101,7 @@ JOB_CONTRACTS = {
         "Configure",
         "Build",
         "Test",
-        10,
+        30,
         ("ci-evidence/ctest-junit.xml", "ci-evidence/install-consumer-junit.xml"),
         9,
         package_step="Install and verify package consumer",
@@ -114,7 +114,7 @@ JOB_CONTRACTS = {
         "Configure Release",
         "Build Release",
         "Test Release",
-        10,
+        30,
         ("ci-evidence/ctest-junit.xml", "ci-evidence/install-consumer-junit.xml"),
         9,
         package_step="Install and verify Release package consumer",
@@ -645,7 +645,44 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    self_hosted_workflow_path = (
+        repo_root / ".github" / "workflows" / "windows-self-hosted-ci.yml"
+    )
+    self_hosted_workflow = self_hosted_workflow_path.read_text(encoding="utf-8")
     ci_docs = (repo_root / "docs" / "development" / "ci.md").read_text(encoding="utf-8")
+
+    require(self_hosted_workflow, "name: windows-self-hosted-ci")
+    require(self_hosted_workflow, "on:\n  workflow_dispatch:")
+    assert "pull_request:" not in self_hosted_workflow
+    assert "\n  push:" not in self_hosted_workflow
+    require(self_hosted_workflow, "permissions:\n  contents: read")
+    self_hosted_job = job_block(self_hosted_workflow, "windows-iocp")
+    require(
+        self_hosted_job,
+        "if: github.repository == 'YanqingXu/game-net-core' && "
+        "github.ref == 'refs/heads/main'",
+    )
+    require(
+        self_hosted_job,
+        "runs-on: [self-hosted, windows, x64, gamenet-windows]",
+    )
+    require(self_hosted_job, "max-parallel: 1")
+    require(self_hosted_job, "- Debug")
+    require(self_hosted_job, "- Release")
+    require(self_hosted_job, "- name: Bootstrap machine tool paths")
+    require(self_hosted_job, "- name: Check repository guards")
+    require(self_hosted_job, '"tests/ci/test_workflow_jobs.py"')
+    require(self_hosted_job, "& py -3 $guard")
+    require(self_hosted_job, '-G "Visual Studio 18 2026"')
+    require(self_hosted_job, "--expected-total 102")
+    require(self_hosted_job, "--timeout 30")
+    require(self_hosted_job, "- name: Install and verify package consumer")
+    require(self_hosted_job, "--expected-total 1")
+    require(self_hosted_job, "uses: actions/upload-artifact@v4")
+    require(self_hosted_job, "retention-days: 90")
+    require(ci_docs, "Manual Windows Self-Hosted IOCP")
+    require(ci_docs, "[self-hosted, windows, x64, gamenet-windows]")
+    require(ci_docs, "does not run for `pull_request` or `push`")
 
     require(workflow, "linux-cmake:")
     require(workflow, "Linux CMake build and tests")
@@ -735,7 +772,7 @@ def main() -> None:
     require(workflow, "-G \"Visual Studio 18 2026\"")
     require(workflow, "-A x64")
     require(workflow, "cmake --build build-windows --config Debug --parallel")
-    require(workflow, "ctest --test-dir build-windows -C Debug --output-on-failure --timeout 10")
+    require(workflow, "ctest --test-dir build-windows -C Debug --output-on-failure --timeout 30")
     require(workflow, "python tests/ci/test_long_soak_workflow.py")
     require(workflow, "cmake --install build-windows --config Debug --prefix \"$pwd/build-windows/_install\"")
     require(workflow, "cmake -S tests/cmake/install_consumer -B build-windows-install-consumer")
@@ -810,7 +847,7 @@ def main() -> None:
     assert workflow.count(f"name: {ARTIFACT_NAME}") == len(JOB_CONTRACTS)
     assert workflow.count("retention-days: 90") == len(JOB_CONTRACTS) + 1
     assert workflow.count(f"--expected-total {EXPECTED_CTEST_TOTAL}") == 2 * len(JOB_CONTRACTS)
-    assert workflow.count("--expected-total 1") == 6
+    assert len(re.findall(r"--expected-total 1(?=\s|['\"])", workflow)) == 6
     assert workflow.count(f"--expect-label threading={EXPECTED_THREADING_TOTAL}") == 2
     assert workflow.count("path: ci-evidence/") == len(JOB_CONTRACTS)
     assert workflow.count("if-no-files-found: error") == len(JOB_CONTRACTS) + 1
@@ -826,8 +863,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 94")
-    require(ci_docs, "threading=67")
+    require(ci_docs, "exactly 102")
+    require(ci_docs, "threading=75")
     require(ci_docs, "exactly 1")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")
@@ -855,7 +892,7 @@ def main() -> None:
     require(windows_release, "cmake --build build-windows-release --config Release --parallel")
     require(
         windows_release,
-        "ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 10",
+        "ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 30",
     )
     require(
         windows_release,

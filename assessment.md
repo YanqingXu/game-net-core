@@ -73,7 +73,8 @@ CTest 清单为 **102 项（8 unit、85 contract、9 integration）**：
   worker aggregate/BaseReleased/ack/join，以及结构化 close reason 和
   独立 `TcpClientControl`；
 - 当前工作树的 Windows MSVC Debug 与 Release 已分别全量通过
-  **102/102** CTest；21 个本轮相关 Python 静态合同通过，public API v2
+  **102/102** CTest；当前标签为 threading 75、lifecycle 81；21 个本轮
+  相关 Python 静态合同通过，public API v2
   manifest/diff 通过，隔离安装包的 Release consumer 通过 CTest 1/1。
 
 M1 的本地 runtime 实现与直接合同现已闭环。尚未完成的是冻结候选 SHA

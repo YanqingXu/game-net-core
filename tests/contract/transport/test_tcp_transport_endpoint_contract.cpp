@@ -61,7 +61,7 @@ int main() {
     std::thread observer([&] {
         while (!stopObserver.load(std::memory_order_relaxed)) {
             if (!endpoint->isOpen()) {
-                observerSawClosed.store(true, std::memory_order_relaxed);
+                observerSawClosed.store(true, std::memory_order_release);
                 break;
             }
         }
@@ -86,13 +86,18 @@ int main() {
     });
     loop.loop();
 
+    const auto observerDeadline = std::chrono::steady_clock::now() + 1s;
+    while (!observerSawClosed.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < observerDeadline) {
+        std::this_thread::yield();
+    }
     stopObserver.store(true, std::memory_order_relaxed);
     observer.join();
 
     GAMENET_TEST_ASSERT(received == payload.size());
     GAMENET_TEST_ASSERT(closeRequested);
     GAMENET_TEST_ASSERT(!endpoint->isOpen());
-    GAMENET_TEST_ASSERT(observerSawClosed.load(std::memory_order_relaxed));
+    GAMENET_TEST_ASSERT(observerSawClosed.load(std::memory_order_acquire));
     connection.reset();
     GAMENET_TEST_ASSERT(
         endpoint->send("expired") == gamenet::transport::EndpointResult::Closed);

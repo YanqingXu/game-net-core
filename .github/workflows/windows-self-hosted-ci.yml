@@ -1,0 +1,236 @@
+name: windows-self-hosted-ci
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-iocp:
+    name: Windows Self-Hosted MSVC IOCP (${{ matrix.configuration }})
+    if: github.repository == 'YanqingXu/game-net-core' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, windows, x64, gamenet-windows]
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        configuration:
+          - Debug
+          - Release
+
+    env:
+      GAMENET_CONFIGURATION: ${{ matrix.configuration }}
+      GAMENET_BUILD_DIR: build-windows-self-hosted-${{ matrix.configuration }}
+      GAMENET_CONSUMER_DIR: build-windows-self-hosted-consumer-${{ matrix.configuration }}
+
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Bootstrap machine tool paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe is required"
+          }
+          $installationPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $installationPath) {
+            throw "Visual Studio C++ tools are required"
+          }
+          $cmakeBin = Join-Path $installationPath `
+            "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $pythonExe = & py -3 -c "import sys; print(sys.executable)"
+          $pythonBin = Split-Path -Parent $pythonExe
+          foreach ($toolPath in @($cmakeBin, $pythonBin)) {
+            if (-not (Test-Path $toolPath)) {
+              throw "Required tool path is missing: $toolPath"
+            }
+            $toolPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+          "GAMENET_VS_INSTALLATION=$installationPath" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Record toolchain evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force ci-evidence | Out-Null
+          $toolchain = @(
+            cmake --version
+            ctest --version
+            python --version
+            git --version
+            "Windows: $([System.Environment]::OSVersion.VersionString)"
+            "Visual Studio installation: $env:GAMENET_VS_INSTALLATION"
+            "MSVC tools version:"
+            Get-Content (Join-Path $env:GAMENET_VS_INSTALLATION `
+              "VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt")
+          )
+          $toolchain | Tee-Object -FilePath ci-evidence/toolchain.txt
+
+      - name: Check repository guards
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $guards = @(
+            "tests/scope/test_scope_guard.py"
+            "tests/scope/test_intent_consistency.py"
+            "tests/scope/test_intent_metadata.py"
+            "tools/verify_migration_provenance.py"
+            "tests/scope/test_intent_semantics.py"
+            "tools/check_scope_boundaries.py"
+            "tests/api/test_public_api_manifest.py"
+            "tests/ci/test_performance_regression.py"
+            "tests/ci/test_endurance_gate.py"
+            "tests/cmake/test_sanitizer_flags.py"
+            "tests/cmake/test_install_package_contract.py"
+            "tests/cmake/test_packet_framer_fuzz_contract.py"
+            "tests/cmake/test_core_benchmark_contract.py"
+            "tests/cmake/test_phase4_benchmark_contract.py"
+            "tests/cmake/test_logger_thread_contract.py"
+            "tests/cmake/test_event_loop_contracts.py"
+            "tests/cmake/test_event_loop_thread_pool_contracts.py"
+            "tests/cmake/test_migration_status_contract.py"
+            "tests/cmake/test_msvc_utf8_contract.py"
+            "tests/cmake/test_platform_backend_contract.py"
+            "tests/cmake/test_build_governance_contract.py"
+            "tests/cmake/test_tcp_lifecycle_contracts.py"
+            "tests/cmake/test_tcp_connection_context_contract.py"
+            "tests/cmake/test_tcp_connection_thread_contract.py"
+            "tests/cmake/test_timer_queue_contracts.py"
+            "tests/cmake/test_threading_gate_contracts.py"
+            "tests/cmake/test_windows_iocp_milestone_contract.py"
+            "tests/cmake/test_windows_iocp_data_path_contract.py"
+            "tests/cmake/test_release_safe_tests.py"
+            "tests/ci/test_workflow_jobs.py"
+            "tests/ci/test_long_soak_workflow.py"
+            "tests/ci/test_core_benchmark_workflow.py"
+            "tests/ci/test_phase4_benchmark_workflow.py"
+          )
+          foreach ($guard in $guards) {
+            Write-Host "Running $guard"
+            & py -3 $guard
+            if ($LASTEXITCODE -ne 0) {
+              throw "Repository guard failed: $guard"
+            }
+          }
+          & py -3 tools/compare_public_api_manifest.py `
+            --output ci-evidence/public-api-diff.json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Public API comparison failed"
+          }
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B "$env:GAMENET_BUILD_DIR"
+          -G "Visual Studio 18 2026"
+          -A x64
+          -DGAMENET_BUILD_TESTING=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Verify CTest inventory
+        shell: pwsh
+        run: |
+          py -3 tools/verify_ctest_inventory.py `
+            --test-dir "$env:GAMENET_BUILD_DIR" `
+            --config "$env:GAMENET_CONFIGURATION" `
+            --expected-total 102 `
+            --output ci-evidence/ctest-inventory.json
+
+      - name: Build
+        shell: pwsh
+        run: >
+          cmake --build "$env:GAMENET_BUILD_DIR"
+          --config "$env:GAMENET_CONFIGURATION"
+          --parallel
+
+      - name: Test
+        shell: pwsh
+        run: >
+          ctest --test-dir "$env:GAMENET_BUILD_DIR"
+          -C "$env:GAMENET_CONFIGURATION"
+          --output-on-failure
+          --timeout 30
+          --output-junit "$pwd/ci-evidence/ctest-junit.xml"
+          --output-log "$pwd/ci-evidence/ctest.log"
+
+      - name: Install and verify package consumer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installPrefix = Join-Path $pwd "$env:GAMENET_BUILD_DIR/_install"
+          cmake --install "$env:GAMENET_BUILD_DIR" `
+            --config "$env:GAMENET_CONFIGURATION" `
+            --prefix "$installPrefix"
+          cmake -S tests/cmake/install_consumer `
+            -B "$env:GAMENET_CONSUMER_DIR" `
+            -G "Visual Studio 18 2026" `
+            -A x64 `
+            -DCMAKE_PREFIX_PATH="$installPrefix"
+          py -3 tools/verify_ctest_inventory.py `
+            --test-dir "$env:GAMENET_CONSUMER_DIR" `
+            --config "$env:GAMENET_CONFIGURATION" `
+            --expected-total 1 `
+            --output ci-evidence/install-consumer-inventory.json
+          cmake --build "$env:GAMENET_CONSUMER_DIR" `
+            --config "$env:GAMENET_CONFIGURATION" `
+            --parallel
+          ctest --test-dir "$env:GAMENET_CONSUMER_DIR" `
+            -C "$env:GAMENET_CONFIGURATION" `
+            --output-on-failure `
+            --timeout 60 `
+            --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" `
+            --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
+
+      - name: Write CI evidence manifest
+        if: always()
+        shell: pwsh
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: ""
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          py -3 tools/write_ci_evidence.py `
+            --evidence-root ci-evidence `
+            --output ci-evidence/manifest.json `
+            --artifact-name "windows-self-hosted-${{ matrix.configuration }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" `
+            --command "cmake configure $env:GAMENET_CONFIGURATION" `
+            --command "verify CTest inventory 102" `
+            --command "cmake build $env:GAMENET_CONFIGURATION" `
+            --command "ctest $env:GAMENET_CONFIGURATION" `
+            --command "install and verify package consumer"
+
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-self-hosted-${{ matrix.configuration }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 90

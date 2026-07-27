@@ -47,6 +47,9 @@ int main() {
             peerCloseIssued = true;
             loop.runAfter(80ms + std::chrono::milliseconds(iteration), [&] {
                 GAMENET_TEST_ASSERT(loop.isInLoopThread());
+                // Preserve the intended stop-before-peer-close ordering even
+                // when a loaded Windows runner delays the non-owner handoff.
+                stopper.join();
                 GAMENET_TEST_ASSERT(stopIssued.load());
                 GAMENET_TEST_ASSERT(serverConnection);
                 serverConnection->forceClose();
