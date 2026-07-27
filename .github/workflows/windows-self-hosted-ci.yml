@@ -27,8 +27,8 @@ jobs:
 
     env:
       GAMENET_CONFIGURATION: ${{ matrix.configuration }}
-      GAMENET_BUILD_DIR: build-windows-self-hosted-${{ matrix.configuration }}
-      GAMENET_CONSUMER_DIR: build-windows-self-hosted-consumer-${{ matrix.configuration }}
+      GAMENET_BUILD_DIR: b
+      GAMENET_CONSUMER_DIR: c
 
     steps:
       - name: Checkout trusted main
@@ -226,8 +226,29 @@ jobs:
             --command "ctest $env:GAMENET_CONFIGURATION" `
             --command "install and verify package consumer"
 
+      - name: Publish CI evidence summary
+        if: always()
+        shell: pwsh
+        run: |
+          $manifestPath = "ci-evidence/manifest.json"
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            Write-Warning "CI evidence manifest is unavailable"
+            "CI evidence manifest is unavailable." |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            exit 0
+          }
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw
+          Write-Host $manifest
+          @(
+            "## Windows Self-Hosted $env:GAMENET_CONFIGURATION evidence"
+            '```json'
+            $manifest
+            '```'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
       - name: Upload CI evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: windows-self-hosted-${{ matrix.configuration }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
