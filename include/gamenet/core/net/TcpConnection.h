@@ -9,13 +9,18 @@
 #include "gamenet/core/net/CallbackException.h"
 #include "gamenet/core/net/Callbacks.h"
 #include "gamenet/core/net/InetAddress.h"
+#include "gamenet/core/net/PostResult.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "gamenet/core/net/TcpConnectionClose.h"
 #include "gamenet/core/net/TcpConnectionOptions.h"
 
 #include <any>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -23,6 +28,7 @@ namespace gamenet::net {
 
 class Channel;
 class EventLoop;
+class EventLoopLifecycleSource;
 namespace detail {
 class ConnectionBackpressureController;
 }
@@ -61,6 +67,8 @@ public:
     TcpSendResult trySend(const void* data, std::size_t len);
     void shutdown();
     void forceClose();
+    PostResult tryShutdown();
+    PostResult tryForceClose();
 
     // Socket options, context, and callback slots are owner-loop-only mutable
     // state. Configure callbacks before connectEstablished(); only teardown
@@ -71,6 +79,12 @@ public:
 
     // Cross-thread-safe snapshot of admitted bytes not yet written or dropped.
     std::size_t pendingOutputBytes() const noexcept;
+    // Cross-thread-safe diagnostic count of optional high-water/write-complete
+    // notifications dropped because owner-loop queue admission failed.
+    std::uint64_t droppedNotificationCount() const noexcept;
+    std::optional<TcpConnectionCloseInfo> closeInfo() const noexcept;
+    TcpConnectionClosePhase closePhase() const noexcept;
+    bool socketClosed() const noexcept;
     // Owner-loop-only diagnostic used by policy/contract integration.
     bool readingPausedByBackpressure() const;
 
@@ -85,6 +99,7 @@ public:
     void setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t highWaterMark);
     void setWriteCompleteCallback(WriteCompleteCallback cb);
     void setCloseCallback(CloseCallback cb);
+    void setCloseInfoCallback(CloseInfoCallback cb);
     void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
 
     void connectEstablished();
@@ -99,9 +114,17 @@ private:
     void sendReservedInLoop(const char* data, std::size_t len);
     void shutdownInLoop();
     void forceCloseInLoop();
+    void driveLifecycleInLoop();
+    void beginCloseInLoop();
     void finishClose();
-    void queueWriteComplete();
-    void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen);
+    void publishCloseInfo(
+        TcpConnectionCloseReason reason,
+        int nativeError = 0) noexcept;
+    PostResult signalLifecycle() noexcept;
+    void detachLifecycleNode();
+    void queueWriteComplete() noexcept;
+    void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen) noexcept;
+    void recordDroppedNotification() noexcept;
     bool tryReserveOutputBytes(std::size_t bytes) noexcept;
     void releaseOutputBytes(std::size_t bytes) noexcept;
     void clearBufferedOutputInLoop();
@@ -134,15 +157,24 @@ private:
     HighWaterMarkCallback highWaterMarkCallback_;
     WriteCompleteCallback writeCompleteCallback_;
     CloseCallback closeCallback_;
+    CloseInfoCallback closeInfoCallback_;
     TcpConnectionCallbackExceptionHandler callbackExceptionHandler_;
     std::size_t highWaterMark_{0};
     TcpConnectionBackpressureOptions backpressureOptions_;
     std::atomic<std::size_t> pendingOutputBytes_{0};
+    std::atomic<std::uint64_t> droppedNotificationCount_{0};
+    std::atomic<std::uint64_t> closeInfoBits_{0};
+    std::atomic<TcpConnectionClosePhase> closePhase_{
+        TcpConnectionClosePhase::Open};
+    std::atomic<bool> gracefulShutdownRequested_{false};
+    std::atomic<bool> forceCloseRequested_{false};
     std::any context_;
     bool channelAdded_{false};
     bool channelRemoved_{false};
     bool forceClosePending_{false};
     TcpConnectionPtr forceCloseGuard_;
+    mutable std::mutex lifecycleSourceMutex_;
+    std::shared_ptr<EventLoopLifecycleSource> lifecycleSource_;
 };
 
 }  // namespace gamenet::net

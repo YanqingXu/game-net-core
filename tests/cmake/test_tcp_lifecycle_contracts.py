@@ -146,6 +146,9 @@ def main() -> None:
     connector_retry_stop_test = (
         repo_root / "tests" / "contract" / "connector" / "test_connector_retry_stop.cpp"
     )
+    connector_thread_test = (
+        repo_root / "tests" / "contract" / "connector" / "test_connector_thread_contract.cpp"
+    )
     connection_write_complete_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_write_complete_ordering.cpp"
     )
@@ -166,6 +169,12 @@ def main() -> None:
     )
     connection_high_water_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_high_water_mark.cpp"
+    )
+    connection_queue_saturation_test = (
+        repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_queue_saturation.cpp"
+    )
+    connection_iocp_sync_error_test = (
+        repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_iocp_sync_error.cpp"
     )
     connection_repeated_force_close_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_repeated_force_close.cpp"
@@ -317,6 +326,9 @@ def main() -> None:
     assert connector_retry_stop_test.exists(), (
         f"missing Connector retry-stop contract: {connector_retry_stop_test}"
     )
+    assert connector_thread_test.exists(), (
+        f"missing Connector thread contract: {connector_thread_test}"
+    )
     assert connection_write_complete_test.exists(), (
         f"missing TCP connection write-complete ordering contract: {connection_write_complete_test}"
     )
@@ -337,6 +349,12 @@ def main() -> None:
     )
     assert connection_high_water_test.exists(), (
         f"missing TCP connection high-water mark contract: {connection_high_water_test}"
+    )
+    assert connection_queue_saturation_test.exists(), (
+        f"missing TCP connection queue-saturation contract: {connection_queue_saturation_test}"
+    )
+    assert connection_iocp_sync_error_test.exists(), (
+        f"missing TCP connection IOCP sync-error contract: {connection_iocp_sync_error_test}"
     )
     assert connection_repeated_force_close_test.exists(), (
         f"missing TCP connection repeated force-close contract: {connection_repeated_force_close_test}"
@@ -1532,6 +1550,17 @@ def main() -> None:
     require(tcp_server_intent_text, "finite global/per-peer connection counts", tcp_server_intent)
     require(tcp_server_intent_text, "peer rate table has an explicit finite capacity", tcp_server_intent)
     require(tcp_server_intent_text, "authentication completion may originate", tcp_server_intent)
+    require(tcp_server_intent_text, "## 8. Deferred General Idle Policy", tcp_server_intent)
+    require(
+        tcp_server_intent_text,
+        "It does not implement a general connection idle timeout",
+        tcp_server_intent,
+    )
+    require(tcp_server_intent_text, "M3 deadline-bucket/time-wheel", tcp_server_intent)
+    assert (
+        "optionally coordinate per-connection idle-timeout policy" not in
+        tcp_server_intent_text
+    ), "active TcpServer responsibilities must not claim the deferred idle policy"
 
     tcp_connection_intent_text = tcp_connection_intent.read_text(encoding="utf-8")
     require(tcp_connection_intent_text, "peer close or reset converges on the normal close path", tcp_connection_intent)
@@ -1566,10 +1595,13 @@ def main() -> None:
     iocp_transport_header_text = iocp_transport_header.read_text(encoding="utf-8")
     require(iocp_transport_header_text, "cancelPendingOperations", iocp_transport_header)
     require(iocp_transport_header_text, "hasPendingOperations", iocp_transport_header)
+    require(iocp_transport_header_text, "[[nodiscard]] int startRead", iocp_transport_header)
+    require(iocp_transport_header_text, "[[nodiscard]] int startWrite", iocp_transport_header)
 
     iocp_transport_source_text = iocp_transport_source.read_text(encoding="utf-8")
     require(iocp_transport_source_text, "CancelIoEx", iocp_transport_source)
     require(iocp_transport_source_text, "ERROR_NOT_FOUND", iocp_transport_source)
+    assert "setRevents" not in iocp_transport_source_text
 
     tcp_connection_source_text = tcp_connection_source.read_text(encoding="utf-8")
     require(tcp_connection_source_text, "cancelPendingOperations", tcp_connection_source)
@@ -1584,29 +1616,52 @@ def main() -> None:
     require(tcp_client_source_text, "if (!conn->disconnected())", tcp_client_source)
     require(tcp_client_source_text, "conn->forceClose();", tcp_client_source)
     require(tcp_client_source_text, "void TcpClient::setRetryInLoop(bool enabled) noexcept", tcp_client_source)
-    require(tcp_client_source_text, "loop_->runInLoop([this, lifetime, enabled]", tcp_client_source)
+    require(tcp_client_source_text, "PostResult TcpClient::tryConnect() noexcept", tcp_client_source)
+    require(tcp_client_source_text, "ownerExecutor_.post(", tcp_client_source)
+    require(tcp_client_source_text, "ownerExecutor_.isInOwnerThread()", tcp_client_source)
+    require(tcp_client_source_text, "latestAcceptedOperationGeneration_ = generation", tcp_client_source)
     require(tcp_client_source_text, "connector_->setRetryEnabled(enabled);", tcp_client_source)
     require(tcp_client_source_text, "activeConnectRequestId_.compare_exchange_strong", tcp_client_source)
     require(tcp_client_source_text, "void TcpClient::handleConnectorEvent(ConnectorEvent event)", tcp_client_source)
-    require(tcp_client_source_text, "finishTerminalConnectFailure(requestId);", tcp_client_source)
+    require(tcp_client_source_text, "finishTerminalConnectFailure(", tcp_client_source)
+    require(tcp_client_source_text, "terminalConnectFailureCallback_", tcp_client_source)
+    require(tcp_client_source_text, "struct TcpClientControl::State", tcp_client_source)
+    require(tcp_client_source_text, "TcpClientControl::tryConnect()", tcp_client_source)
+    require(tcp_client_source_text, "detail::EventLoopLifecycleRegistry::attach", tcp_client_source)
+    require(tcp_client_source_text, "detail::EventLoopLifecycleRegistry::detach", tcp_client_source)
+    require(tcp_client_source_text, "void TcpClient::driveControlInLoop()", tcp_client_source)
+    require(tcp_client_source_text, "conn->setCloseInfoCallback(closeInfoCallback_);", tcp_client_source)
 
     tcp_client_header_text = tcp_client_header.read_text(encoding="utf-8")
+    require(tcp_client_header_text, "PostResult tryConnect() noexcept;", tcp_client_header)
+    require(tcp_client_header_text, "PostResult tryDisconnect() noexcept;", tcp_client_header)
+    require(tcp_client_header_text, "PostResult tryStop() noexcept;", tcp_client_header)
     require(tcp_client_header_text, "void setRetryInLoop(bool enabled) noexcept;", tcp_client_header)
     require(tcp_client_header_text, "std::atomic<std::uint64_t> activeConnectRequestId_{0};", tcp_client_header)
+    require(tcp_client_header_text, "mutable std::mutex admissionMutex_;", tcp_client_header)
     require(tcp_client_header_text, "void setCallbackExceptionHandler", tcp_client_header)
+    require(tcp_client_header_text, "TcpClientControl control() const noexcept;", tcp_client_header)
+    require(tcp_client_header_text, "void setCloseInfoCallback(CloseInfoCallback cb);", tcp_client_header)
 
     tcp_server_source_text = tcp_server_source.read_text(encoding="utf-8")
     tcp_server_header_text = tcp_server_header.read_text(encoding="utf-8")
     require(tcp_server_header_text, "TcpServerStopFuture stopGracefully", tcp_server_header)
     require(tcp_server_header_text, "ForcedAfterTimeout", tcp_server_header)
-    require(tcp_server_source_text, "connection->shutdown();", tcp_server_source)
+    require(tcp_server_source_text, "(void)connection->tryShutdown();", tcp_server_source)
     require(tcp_server_source_text, "finishGracefulStopInLoop", tcp_server_source)
+    require(tcp_server_source_text, "beginAggregateStopInLoop", tcp_server_source)
+    require(tcp_server_source_text, "driveWorkerStopParticipant", tcp_server_source)
+    require(tcp_server_source_text, "releaseWorkerConnectionsInLoop", tcp_server_source)
+    require(tcp_server_source_text, "participant->baseReleased = true;", tcp_server_source)
+    require(tcp_server_source_text, "participant->ackReported = true;", tcp_server_source)
+    require(tcp_server_source_text, "finishAggregateStopInLoop", tcp_server_source)
     require(tcp_server_source_text, "bool TcpServer::forceCloseAllConnections()", tcp_server_source)
     require(tcp_server_source_text, "notifyClosed", tcp_server_source)
     require(tcp_server_source_text, "setCloseCallback([notifyClosed](const TcpConnectionPtr& conn)", tcp_server_source)
     require(tcp_server_source_text, "conn->connectDestroyed();", tcp_server_source)
     require(tcp_server_header_text, "void setAcceptErrorCallback", tcp_server_header)
     require(tcp_server_header_text, "void setCallbackExceptionHandler", tcp_server_header)
+    require(tcp_server_header_text, "void setCloseInfoCallback(CloseInfoCallback cb);", tcp_server_header)
     require(tcp_server_source_text, "connection->setCallbackExceptionHandler", tcp_server_source)
     require(tcp_server_header_text, "struct TcpServerAdmissionOptions", tcp_server_header)
     require(tcp_server_header_text, "maxConnectionsPerPeer", tcp_server_header)
@@ -1664,22 +1719,55 @@ def main() -> None:
     connector_header_text = connector_header.read_text(encoding="utf-8")
     require(connector_header_text, "connectStopGuard_", connector_header)
     require(connector_header_text, "finishCancelInLoop", connector_header)
+    require(connector_header_text, "std::atomic<StateE> state_", connector_header)
+    require(connector_header_text, "Duration initialRetryDelay_", connector_header)
+    require(connector_header_text, "std::uint64_t requestGeneration_", connector_header)
 
     connector_source_text = connector_source.read_text(encoding="utf-8")
+    require(connector_source_text, "void Connector::start()", connector_source)
+    require(connector_source_text, "loop_->assertInLoopThread();", connector_source)
     require(connector_source_text, "CancelIoEx", connector_source)
     require(connector_source_text, "finishCancelInLoop", connector_source)
     require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
     require(connector_source_text, "SocketFd Connector::removeAndReleaseChannel()", connector_source)
-    require(connector_source_text, "std::shared_ptr<Channel>(std::move(channel_))", connector_source)
-    require(connector_source_text, "loop_->queueInLoop([deferredChannel]", connector_source)
+    require(connector_source_text, "auto removedChannel = std::move(channel_);", connector_source)
+    require(
+        connector_source_text,
+        "loop_->retireCurrentChannel(std::move(removedChannel))",
+        connector_source,
+    )
+    assert "loop_->queueInLoop([deferredChannel]" not in connector_source_text, (
+        "Connector Channel retirement must not depend on deferred queue capacity"
+    )
     require(connector_source_text, "void Connector::emitEvent", connector_source)
     require(connector_source_text, "Connector event callback threw", connector_source)
     connector_contract_text = connector_contract_test.read_text(encoding="utf-8")
     require(connector_contract_text, "connector observer failure", connector_contract_test)
     require(connector_contract_text, "connectorEvents >= 2", connector_contract_test)
+    connector_thread_text = connector_thread_test.read_text(encoding="utf-8")
+    require(
+        connector_thread_text,
+        "testAcceptedStopThenConnectSupersedesInflightAttempt",
+        connector_thread_test,
+    )
+    require(
+        connector_thread_text,
+        "testConnectSuccessObserverMayStopReentrantly",
+        connector_thread_test,
+    )
+    require(connector_thread_text, "PostResult::QueueFull", connector_thread_test)
+    require(connector_thread_text, "ThrowOnCopy", connector_thread_test)
     assert "resetChannel" not in connector_source_text, (
         "Connector must vacate channel_ synchronously instead of leaving the member occupied until a queued reset"
     )
+
+    queue_saturation_text = connection_queue_saturation_test.read_text(encoding="utf-8")
+    require(queue_saturation_text, "droppedNotificationCount", connection_queue_saturation_test)
+    require(queue_saturation_text, "pendingOutputBytes() == 0", connection_queue_saturation_test)
+    iocp_sync_error_text = connection_iocp_sync_error_test.read_text(encoding="utf-8")
+    require(iocp_sync_error_text, "WSAENOBUFS", connection_iocp_sync_error_test)
+    require(iocp_sync_error_text, "WSAECONNRESET", connection_iocp_sync_error_test)
+    require(iocp_sync_error_text, "ERROR_OPERATION_ABORTED", connection_iocp_sync_error_test)
 
     iocp_poller_source_text = iocp_poller_source.read_text(encoding="utf-8")
     require(iocp_poller_source_text, "IocpOperationKind::Read", iocp_poller_source)
@@ -1699,6 +1787,8 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_server_stop_from_worker_callback_soak.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_repeated_stop.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_repeated_stop.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_saturation_shutdown.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_release_handshake.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_retry_stop_race.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_retry_stop_soak.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_stop_pending_connect.cpp", tests_cmake)
@@ -1725,8 +1815,11 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_client_cross_thread_connect.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_cross_thread_retry_config.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_cross_thread_retry_config.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_control_lifetime.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_client_close_reason.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_connector_retry_stop.cpp", tests_cmake)
     require(tests_cmake_text, "test_connector_retry_stop.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_connector_thread_contract.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_peer_close.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_peer_reset.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_write_complete_ordering.cpp", tests_cmake)
@@ -1738,6 +1831,10 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_connection_repeated_shutdown.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_shutdown.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_high_water_mark.cpp", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_queue_saturation.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_iocp_sync_error.cpp lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_completion_drain.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_close_reason.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_force_close.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_connect_destroyed.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_connect_destroyed.cpp lifecycle", tests_cmake)
@@ -1754,6 +1851,8 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_event_loop_lifecycle_hub.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_iocp_quit_completion_drain.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "contract tcp_server", tests_cmake)
     require(tests_cmake_text, "contract tcp_client", tests_cmake)
     require(tests_cmake_text, "contract tcp_connection", tests_cmake)

@@ -52,9 +52,15 @@ int main(int argc, char* argv[]) {
                   << connection->peerAddress().toIpPort() << '\n';
     });
 
-    server.setMessageCallback([](const gamenet::net::TcpConnectionPtr& connection, gamenet::net::Buffer* buffer) {
-        connection->send(buffer->retrieveAllAsString());
-    });
+    server.setMessageCallback(
+        [](const gamenet::net::TcpConnectionPtr& connection,
+           gamenet::net::Buffer* buffer) {
+            const auto result =
+                connection->trySend(buffer->retrieveAllAsString());
+            if (result != gamenet::net::TcpSendResult::Accepted) {
+                connection->forceClose();
+            }
+        });
 
     server.start();
 

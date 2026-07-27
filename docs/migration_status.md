@@ -4,6 +4,8 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
+Current production-roadmap audit: 2026-07-27
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -29,6 +31,42 @@ TcpServer now optionally enforces global/per-peer connection limits, a bounded
 per-peer fixed-window attempt rate, and base-loop unauthenticated deadlines;
 all are disabled by default and expose distinct cumulative metrics.
 
+The current M1 worktree closes the remaining local runtime lifecycle slices in
+dependency order. Each EventLoop owns a dynamic lifecycle hub with allocation-
+free cross-thread signals and generation-safe detach; loop shutdown now moves
+through quiescing and final draining and, on IOCP, waits for lifecycle and
+completion silence. TcpConnection has explicit socket-close/completion-drain
+phases and first-writer structured close reasons. TcpServer stop is aggregated
+per worker with a worker-cleanup, base-bookkeeping, BaseReleased, worker-ack,
+and join handshake. TcpClient exposes a detached-lifetime-safe
+TcpClientControl mailbox. These are local implementation and contract results,
+not final frozen-SHA release evidence.
+
+Phase 6 production-candidate infrastructure is now integrated on the roadmap
+branch for audit. The compatibility boundary is a v2 installed-header/target
+manifest with a retained `v0.2.0-phase4-preview` snapshot and deterministic
+structural diff: stable Core, provisional Phase 4/Metrics, and unsupported
+platform-backend interfaces remain distinct, while ABI compatibility stays
+out of scope before 1.0. The candidate package version is `0.3.0`, and the
+external install consumer continues to require that exact version.
+MetricsExporter and producer adapters are implemented as provisional
+observability APIs; their string/hash/global-mutex reference implementation is
+not yet a promoted hot-path contract. The Core benchmark now emits
+`gamenet.core_benchmark.v2`, uses `trySend()`, and validates requested,
+accepted, rejected, hard-limit, pending-output, pause/resume, and recovery
+semantics. The fixed Core/Phase-4 matrix retains the historical v1 executable
+only as a performance baseline and compares common metrics on the same runner.
+The production fault-injection executable covers reset, callback failure,
+bounded-output rejection, post-failure recovery, and slow-reader forced drain
+in one long-lived-process cycle. Its supervisor fixes candidate/release modes
+at 24/72 hours, writes monotonic checkpoints and hashed evidence, and requires
+the 72-hour run to consume same-SHA 24-hour evidence. Infrastructure snapshot
+`b3443182d0606792df44a12bcb08927e767bc060` completed the real Linux/epoll
+24-hour run `29895457789` (73,617 cycles) and 72-hour paired run
+`29984629032` (220,851 cycles). Its cross-platform performance run
+`29808395220` passed at earlier SHA `5f926f3`; these are historical
+infrastructure-validation records, not evidence for later runtime changes.
+
 ## Phase Status
 
 | Phase | Scope | Current status |
@@ -38,13 +76,37 @@ all are disabled by default and expose distinct cumulative metrics.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
+| 6 | Production candidate | Infrastructure validated: API manifest/diff, provisional metrics, same-runner regression tooling, fault injection, and real 24/72-hour Linux endurance all exist; current M0/M1 runtime and contract work means no final candidate SHA is frozen, independent maintainer API/performance/release-tool review remains required, and release evidence must be regenerated after code freeze |
 
 ## Production-Hardening Worktree State
 
-- Intent semantics resolve 27 active targets and 84 explicit verification
+- Intent semantics resolve 30 active targets and 94 explicit verification
   paths, with `connection_backpressure_controller` and `graceful_shutdown`
   promoted from deferred design assets to active `GameNet::core`
   implementation authority.
+- MetricsExporter is active but provisional, with thread-safe
+  in-memory aggregation, immutable static labels, deterministic Prometheus
+  snapshots, exception-contained Core/Logic/Broadcast recorder adapters, and
+  bounded-cardinality metric names. Its current string/hash/global-mutex hot
+  path is a reference implementation, not a production performance claim.
+- The Release performance gate builds the reviewed baseline and candidate on
+  the same runner, retains 72 raw samples per platform, compares medians for
+  12 fixed Core/Phase-4 scenarios, and rejects parameter, hash, baseline, or
+  budget drift. Candidate Core v2 output also has an independent semantic
+  validator and a forced overload case, while historical Core v1 data remains
+  performance-only. Cross-platform run `29808395220` passed at `5f926f3`; a
+  later frozen runtime commit requires its own retained run.
+- `integration.resilience.test_fault_injection` executes five production fault
+  profiles in one cycle and is part of the ordinary Linux/Windows CTest matrix.
+  The same executable can remain alive under a heartbeat supervisor for fixed
+  24/72-hour Linux/epoll modes. Snapshot `b344318` completed both real modes
+  with same-SHA pairing; shortened smoke evidence remains non-releasable and
+  the final changed runtime must be requalified after freeze.
+- At historical snapshot `b344318`, Windows MSVC Debug/Release preflights pass 89/89 configured
+  CTests in 39.40/38.00 seconds. The Release fault-injection target separately
+  passes 10/10 repeats in 1.98 seconds, the exact inventory verifier reports
+  `threading=64`, `fault_injection=1`, and `endurance=1`, and all 30 Python
+  guards pass.
 - `tests/contract/socket/test_socket_contract.cpp` carries the Linux child-
   process/default-SIGPIPE contract.
 - `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
@@ -115,9 +177,26 @@ all are disabled by default and expose distinct cumulative metrics.
 
 ## Verification State
 
-The current worktree configures 85 configured CTest tests: 7 unit tests, 72 contract tests, and 6 integration tests. Phase 4 coverage now includes bounded
+The current worktree configures 102 configured CTest tests: 8 unit tests, 85 contract tests, and 9 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
-contracts, four Pipeline integrations, and four Broadcast contracts/integrations.
+contracts, four Pipeline integrations, and four Broadcast
+contracts/integrations. The eight current-roadmap additions cover the EventLoop
+lifecycle hub, IOCP quit/completion drain, TcpConnection explicit close and
+structured reasons, TcpServer aggregate stop/release handshake, and
+TcpClientControl lifetime/close-reason propagation. Existing roadmap coverage
+also includes EventLoop
+control-lane saturation, optional TcpConnection notification saturation,
+Connector/TcpClient typed admission and generation races, and IOCP synchronous
+submission errors.
+
+On 2026-07-27, the current Windows MSVC worktree passed full Debug and Release
+builds and 102/102 CTests in both configurations. The 21 directly relevant
+Python repository/API contracts passed, including the public API manifest and
+deterministic compatibility diff. A clean Release install exposed the two new
+stable Core headers, and the isolated `find_package(GameNetCore)` consumer
+built and passed CTest 1/1. Current runtime changes still require frozen-SHA
+Linux, sanitizer/TSan, repeat, performance, and 24/72-hour endurance evidence
+before any stable promotion.
 
 Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
 `5ebad2c1a4a9487437340935e21f7468140c7e8d`:
@@ -134,10 +213,12 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   corpus contains 90 files and no crash artifact. Candidate main-CI run
   `29160903594` repeated the sanitizer-backed fuzz gate successfully and
   retained its SHA-bound log, corpus, dictionary, and artifact evidence.
-- The current Debug inventory includes 61 threading-labeled tests and eight
-  Pipeline/Broadcast tests. On the latest tree, the complete threading slice
-  passed repeat 50: 61 x 50 = 3,050 executions with zero failures in 1,777.76
-  seconds. The focused Pipeline/Broadcast slice also passed repeat 50: 8 x 50 =
+- The current Debug inventory includes 67 threading-labeled tests, 73
+  lifecycle-labeled tests, and eight Pipeline/Broadcast tests. These current
+  runtime changes still require new repeat and remote evidence. On the
+  historical `final-v4` tree, its 61-test threading selection passed repeat 50:
+  61 x 50 = 3,050 executions with zero failures in 1,777.76 seconds. The
+  focused Pipeline/Broadcast slice also passed repeat 50: 8 x 50 =
   400 executions with zero failures in 54.16 seconds. Both
   `gamenet.ctest_repeat_evidence.v1` manifests report `result: success` and bind
   to the same `final-v4` inventory SHA-256
@@ -308,7 +389,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
-- Intent governance: all 59 formal `*.intent.md` documents now carry ordered
+- Intent governance: all 60 formal `*.intent.md` documents now carry ordered
   `status`, `target`, `migration_source`, and `promote_gate` front matter and
   appear exactly once in the intent index: 25 active contracts, 23 deferred design assets, and 11 legacy source-project stage documents.
   Active bodies reject stale `MINI_ENABLE_*`, `mini::`, `mini/net`, and

@@ -13,8 +13,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 85
-EXPECTED_THREADING_TOTAL = 61
+EXPECTED_CTEST_TOTAL = 94
+EXPECTED_THREADING_TOTAL = 67
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
     "${{ github.run_id }}-${{ github.run_attempt }}"
@@ -52,7 +52,7 @@ JOB_CONTRACTS = {
         "Test",
         60,
         ("ci-evidence/ctest-junit.xml", "ci-evidence/install-consumer-junit.xml"),
-        9,
+        10,
         package_step="Install and verify package consumer",
     ),
     "linux-asan-ubsan": JobContract(
@@ -393,7 +393,11 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
             artifact = root / artifact_name
             artifact.mkdir(parents=True)
             (artifact / "toolchain.txt").write_text("synthetic toolchain\n", encoding="utf-8")
-            main_total = 84 if scenario == "inventory-total" and job == "linux-release" else EXPECTED_CTEST_TOTAL
+            main_total = (
+                EXPECTED_CTEST_TOTAL - 1
+                if scenario == "inventory-total" and job == "linux-release"
+                else EXPECTED_CTEST_TOTAL
+            )
             main_names = write_inventory(artifact / "ctest-inventory.json", main_total, main=True)
             selected_names = main_names[:EXPECTED_THREADING_TOTAL] if job == "linux-tsan" else main_names
             if job == "linux-tsan":
@@ -664,6 +668,25 @@ def main() -> None:
     require(workflow, "python tests/scope/test_intent_metadata.py")
     require(workflow, "python3 tests/scope/test_intent_semantics.py")
     require(workflow, "python tests/scope/test_intent_semantics.py")
+    require(workflow, "python3 tests/api/test_public_api_manifest.py")
+    require(workflow, "python tests/api/test_public_api_manifest.py")
+    assert workflow.count("python3 tests/api/test_public_api_manifest.py") == 4
+    assert workflow.count("python tests/api/test_public_api_manifest.py") == 2
+    assert workflow.count("fetch-depth: 0") == 6, (
+        "all six CI producers must fetch the tagged API baseline for provenance verification"
+    )
+    require(workflow, "python3 tools/compare_public_api_manifest.py")
+    require(workflow, "--output ci-evidence/public-api-diff.json")
+    assert workflow.count("python3 tools/compare_public_api_manifest.py") == 2
+    assert workflow.count("ci-evidence/public-api-diff.json") == 2
+    require(workflow, "python3 tests/ci/test_performance_regression.py")
+    require(workflow, "python tests/ci/test_performance_regression.py")
+    assert workflow.count("python3 tests/ci/test_performance_regression.py") == 4
+    assert workflow.count("python tests/ci/test_performance_regression.py") == 2
+    require(workflow, "python3 tests/ci/test_endurance_gate.py")
+    require(workflow, "python tests/ci/test_endurance_gate.py")
+    assert workflow.count("python3 tests/ci/test_endurance_gate.py") == 4
+    assert workflow.count("python tests/ci/test_endurance_gate.py") == 2
     require(workflow, "python3 tests/cmake/test_install_package_contract.py")
     require(workflow, "python3 tests/cmake/test_packet_framer_fuzz_contract.py")
     require(workflow, "python3 tests/cmake/test_core_benchmark_contract.py")
@@ -677,6 +700,10 @@ def main() -> None:
     require(workflow, "python3 tests/cmake/test_migration_status_contract.py")
     require(workflow, "python3 tests/cmake/test_msvc_utf8_contract.py")
     require(workflow, "python3 tests/cmake/test_platform_backend_contract.py")
+    require(workflow, "python3 tests/cmake/test_build_governance_contract.py")
+    require(workflow, "python tests/cmake/test_build_governance_contract.py")
+    assert workflow.count("python3 tests/cmake/test_build_governance_contract.py") == 4
+    assert workflow.count("python tests/cmake/test_build_governance_contract.py") == 2
     require(workflow, "python3 tests/cmake/test_tcp_lifecycle_contracts.py")
     require(workflow, "python3 tests/cmake/test_tcp_connection_context_contract.py")
     require(workflow, "python3 tests/cmake/test_tcp_connection_thread_contract.py")
@@ -734,6 +761,7 @@ def main() -> None:
         semantic_guard = f"{interpreter} tests/scope/test_intent_semantics.py"
         require(guards, verifier)
         require(guards, semantic_guard)
+        require(guards, f"{interpreter} tests/cmake/test_build_governance_contract.py")
         assert guards.index(verifier) < guards.index(semantic_guard), (
             f"{job_name} must verify immutable migration provenance before intent semantics"
         )
@@ -798,8 +826,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 85")
-    require(ci_docs, "threading=61")
+    require(ci_docs, "exactly 94")
+    require(ci_docs, "threading=67")
     require(ci_docs, "exactly 1")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")

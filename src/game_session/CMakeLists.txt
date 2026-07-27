@@ -1,4 +1,4 @@
-add_library(gamenet_game_session
+add_library(gamenet_game_session STATIC
     PlayerSession.cc
     SessionManager.cc
 )

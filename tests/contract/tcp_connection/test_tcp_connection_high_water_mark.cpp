@@ -33,6 +33,7 @@ int main() {
     bool highWaterBeforeSendReturned = false;
     bool observedReadPause = false;
     bool observedReadResume = false;
+    bool resumedMessageSendAccepted = false;
     std::atomic<bool> startDraining{false};
     std::atomic<std::size_t> drainedBytes{0};
 
@@ -73,6 +74,8 @@ int main() {
             GAMENET_TEST_ASSERT(input->retrieveAllAsString() == "ping");
             observedReadResume = !conn->readingPausedByBackpressure();
             ++messageCallbackCount;
+            resumedMessageSendAccepted =
+                conn->trySend("pong") == gamenet::net::TcpSendResult::Accepted;
             conn->forceClose();
         });
 
@@ -157,6 +160,7 @@ int main() {
     GAMENET_TEST_ASSERT(highWaterBytes >= highWaterMark);
     GAMENET_TEST_ASSERT(observedReadPause);
     GAMENET_TEST_ASSERT(observedReadResume);
+    GAMENET_TEST_ASSERT(resumedMessageSendAccepted);
     GAMENET_TEST_ASSERT(messageCallbackCount == 1);
     GAMENET_TEST_ASSERT(closeCallbackCount == 1);
     GAMENET_TEST_ASSERT(connection->disconnected());

@@ -12,6 +12,7 @@ def main() -> None:
     top_cmake = repo_root / "CMakeLists.txt"
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     benchmark_source = repo_root / "benchmarks" / "core" / "main.cpp"
+    benchmark_validator = repo_root / "tools" / "validate_core_benchmark.py"
     intent_index = repo_root / "intents" / "README.md"
     intent = repo_root / "intents" / "usecases" / "core_performance_baseline.intent.md"
     scope_guard = repo_root / "tools" / "check_scope_boundaries.py"
@@ -25,6 +26,7 @@ def main() -> None:
     top_text = top_cmake.read_text(encoding="utf-8")
     benchmark_cmake_text = benchmark_cmake.read_text(encoding="utf-8")
     source_text = benchmark_source.read_text(encoding="utf-8")
+    validator_text = benchmark_validator.read_text(encoding="utf-8")
     index_text = intent_index.read_text(encoding="utf-8")
     intent_text = intent.read_text(encoding="utf-8")
     scope_text = scope_guard.read_text(encoding="utf-8")
@@ -56,12 +58,13 @@ def main() -> None:
     require(index_text, "intents/usecases/core_performance_baseline.intent.md", intent_index)
     require(intent_text, "is not a CTest", intent)
     require(intent_text, "process main thread owns and destroys EventLoop and TcpServer", intent)
-    require(intent_text, "gamenet.core_benchmark.v1", intent)
-    require(intent_text, "notification-only behavior", intent)
+    require(intent_text, "gamenet.core_benchmark.v2", intent)
+    require(intent_text, "requested, accepted, and rejected bytes", intent)
+    require(intent_text, "hold reads until the memory sample", intent)
     require(scope_text, '"benchmarks"', scope_guard)
 
     for fragment in (
-        "gamenet.core_benchmark.v1",
+        "gamenet.core_benchmark.v2",
         "echo",
         "connections",
         "slow-client",
@@ -72,16 +75,47 @@ def main() -> None:
         "working_set_after_bytes",
         "working_set_delta_bytes",
         "approx_bytes_per_connection",
+        "requested_bytes",
+        "accepted_bytes",
+        "rejected_bytes",
+        "low_water_bytes",
+        "hard_limit_bytes",
+        "max_input_buffer_bytes",
+        "output_hard_limit_bytes",
+        "pending_output_peak_bytes",
+        "read_pause_observations",
+        "read_resume_observations",
+        "backpressure_recovery_seconds",
         "high_water_callbacks",
-        "high_water_notification_only",
+        "bounded_output_hysteresis",
         "single_get_queued_completion_status",
         "epoll_wait_batch",
     ):
         require(source_text, fragment, benchmark_source)
 
+    require(source_text, "connection->trySend(payload)", benchmark_source)
+    require(source_text, "connection->trySend(buffer->peek(), readable)", benchmark_source)
+    assert "connection->send(" not in source_text, "Core benchmark must not ignore send admission"
+    require(source_text, "result.requestedBytes != result.acceptedBytes + result.rejectedBytes", benchmark_source)
     require(source_text, "GetProcessMemoryInfo", benchmark_source)
     require(source_text, 'std::ifstream statm("/proc/self/statm")', benchmark_source)
     require(source_text, "server.connectionCount() == 0", benchmark_source)
+    require(validator_text, 'SCHEMA = "gamenet.core_benchmark.v2"', benchmark_validator)
+    require(
+        validator_text,
+        "requested bytes do not equal accepted plus rejected",
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "pending output peak exceeds hard limit",
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "benchmark connection owner was unavailable",
+        benchmark_validator,
+    )
 
     require(docs_text, "-DGAMENET_BUILD_BENCHMARKS=ON", docs)
     require(docs_text, "--scenario echo", docs)

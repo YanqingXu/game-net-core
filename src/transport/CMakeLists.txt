@@ -1,4 +1,4 @@
-add_library(gamenet_transport
+add_library(gamenet_transport STATIC
     TcpTransportEndpoint.cc
 )
 add_library(GameNet::transport ALIAS gamenet_transport)

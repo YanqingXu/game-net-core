@@ -1,8 +1,11 @@
 #pragma once
 
+#include "gamenet/core/net/PostResult.h"
+
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 
 namespace gamenet::net {
 
@@ -16,6 +19,15 @@ public:
 
     EventLoopExecutor() = default;
 
+    template <typename Function>
+    PostResult post(Function&& callback) const noexcept {
+        try {
+            return postFunctor(Functor(std::forward<Function>(callback)));
+        } catch (...) {
+            return PostResult::QueueFull;
+        }
+    }
+
     bool tryQueue(Functor callback) const;
     bool available() const noexcept;
     // True while the caller is the owner and the loop is either accepting new
@@ -26,6 +38,7 @@ public:
 private:
     struct State;
 
+    PostResult postFunctor(Functor callback) const noexcept;
     explicit EventLoopExecutor(const std::shared_ptr<State>& state) noexcept;
 
     std::weak_ptr<State> state_;

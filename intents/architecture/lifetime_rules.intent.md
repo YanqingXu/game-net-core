@@ -50,6 +50,11 @@ its destruction path must ensure registration is removed before effective invali
 Typical rule:
 remove before destroy.
 
+For Channel, successful remove is also the active-batch invalidation
+linearization point. EventLoop must make every not-yet-dispatched entry for that
+registration unreachable before remove returns. Re-registration creates a new
+generation and cannot revive readiness captured for the removed generation.
+
 This is especially important for:
 - Channel vs Poller
 - future timers vs timer container
@@ -74,6 +79,15 @@ This is preferred over blind raw pointer callback assumptions.
 - Poller must not outlive EventLoop
 - Poller must not keep stale references to destroyed Channel
 - EventLoop shutdown path must avoid processing invalid backend registrations
+- EventLoop owns registered control callbacks and their fixed mailbox slots
+- EventLoopControlSource handles are non-owning capabilities and never extend
+  EventLoop lifetime
+- the source-private EventLoopControlRegistry is the only registration access
+  path and is not part of the installed public scheduling surface
+- a subsystem that ends before its EventLoop must unregister its control source
+  on the owner thread after stopping producers
+- unregister invalidates every copied handle generation and clears its pending
+  mailbox bit before callback storage is released
 
 ---
 
@@ -83,6 +97,12 @@ This is preferred over blind raw pointer callback assumptions.
 - Channel does not own fd by default
 - Channel may outlive or underlive external fd owner only if registration semantics remain valid
 - tied owner expiration must block unsafe callback dispatch path
+- `tie` protects the owner only after the Channel callback starts; EventLoop
+  active-batch membership protects a different Channel destroyed before its
+  callback starts
+- an internal owner releasing the currently executing Channel transfers that
+  removed Channel into the source-private current-dispatch retirement slot
+  until `handleEvent` returns; it must not rely on a pending-functor queue
 
 ---
 
@@ -123,6 +143,11 @@ destruction should be coordinated through loop thread rather than arbitrary exte
 - repeated teardown path is idempotent or guarded
 - registration container remains consistent after object removal
 - queued callback does not use invalidated owner object
+- copied control-source handles return OwnerUnavailable after unregister or
+  EventLoop destruction and never dereference expired loop storage
+- stale active-batch entries are invalidated before Channel destruction, and a
+  same-address re-registration cannot pass the old generation check
+- repeated remove cannot erase a same-fd replacement registration
 
 ---
 

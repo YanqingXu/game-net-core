@@ -20,10 +20,18 @@ def main() -> None:
     acceptor_source = repo_root / "src" / "core" / "net" / "Acceptor.cc"
     connector_header = repo_root / "include" / "gamenet" / "core" / "net" / "Connector.h"
     connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
+    tcp_client_source = repo_root / "src" / "core" / "net" / "TcpClient.cc"
     tcp_connection_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpConnection.h"
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
     tcp_transport = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport.h"
     tcp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
+    sync_error_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_sync_error.cpp"
+    )
     poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
     poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
@@ -81,7 +89,7 @@ def main() -> None:
     assert "platform::bindUnspecifiedOrDie" not in connector_source_text
     assert "platform::updateConnectContextOrDie" not in connector_source_text
     require(connector_source_text, "IocpOperationKind::Connect", connector_source)
-    require(connector_source_text, "preserveSocketAssociation", connector_source)
+    assert "preserveSocketAssociation" not in connector_source_text
     require(connector_source_text, "retainCompletionOperation", connector_source)
     require(connector_source_text, "retryAfterCancel", connector_source)
     require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
@@ -95,11 +103,17 @@ def main() -> None:
     require(tcp_connection_source_text, "iocpTransport_->completeRead", tcp_connection_source)
     require(tcp_connection_source_text, "iocpTransport_->completeWrite", tcp_connection_source)
 
+    tcp_client_source_text = tcp_client_source.read_text(encoding="utf-8")
+    require(
+        tcp_client_source_text,
+        "preserveSocketAssociation",
+        tcp_client_source)
+
     tcp_transport_text = tcp_transport.read_text(encoding="utf-8")
     require(tcp_transport_text, "class IocpTcpTransport", tcp_transport)
-    require(tcp_transport_text, "startRead", tcp_transport)
+    require(tcp_transport_text, "[[nodiscard]] int startRead", tcp_transport)
     require(tcp_transport_text, "completeRead", tcp_transport)
-    require(tcp_transport_text, "startWrite", tcp_transport)
+    require(tcp_transport_text, "[[nodiscard]] int startWrite", tcp_transport)
     require(tcp_transport_text, "completeWrite", tcp_transport)
     require(tcp_transport_text, "writeStorage_", tcp_transport)
 
@@ -108,6 +122,15 @@ def main() -> None:
     require(tcp_transport_source_text, "WSASend", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Read", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Write", tcp_transport_source)
+    require(tcp_transport_source_text, "return error;", tcp_transport_source)
+    assert "setRevents" not in tcp_transport_source_text, (
+        "a synchronous IOCP submission error must not fabricate Channel readiness"
+    )
+
+    sync_error_test_text = sync_error_test.read_text(encoding="utf-8")
+    require(sync_error_test_text, "WSAENOBUFS", sync_error_test)
+    require(sync_error_test_text, "WSAECONNRESET", sync_error_test)
+    require(sync_error_test_text, "ERROR_OPERATION_ABORTED", sync_error_test)
 
     poller_header_text = poller_header.read_text(encoding="utf-8")
     require(poller_header_text, "Windows IOCP backend for EventLoop", poller_header)
@@ -123,8 +146,15 @@ def main() -> None:
     require(poller_text, "IocpOperationKind::Write", poller_source)
     require(poller_text, "associatedFds_", poller_source)
 
-    require(core_cmake.read_text(encoding="utf-8"), "net/platform/IocpSocketOps_win.cc", core_cmake)
-    require(core_cmake.read_text(encoding="utf-8"), "net/platform/IocpTcpTransport_win.cc", core_cmake)
+    core_cmake_text = core_cmake.read_text(encoding="utf-8")
+    require(core_cmake_text, "net/platform/IocpSocketOps_win.cc", core_cmake)
+    require(core_cmake_text, "net/platform/IocpTcpTransport_win.cc", core_cmake)
+    require(core_cmake_text, "if(GAMENET_BUILD_TESTING)", core_cmake)
+    require(
+        core_cmake_text,
+        "GAMENET_INTERNAL_IOCP_TEST_HOOKS=1",
+        core_cmake,
+    )
 
     guard_command = "python3 tests/cmake/test_windows_iocp_data_path_contract.py"
     require(ci_docs.read_text(encoding="utf-8"), "test_windows_iocp_data_path_contract.py", ci_docs)

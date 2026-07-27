@@ -15,6 +15,10 @@
 
 namespace gamenet::net {
 
+namespace detail {
+class EventLoopIocpAssociationHarness;
+}
+
 class IocpPoller : public Poller {
 public:
     explicit IocpPoller(EventLoop* loop);
@@ -24,10 +28,15 @@ public:
     void updateChannel(Channel* channel) override;
     void removeChannel(Channel* channel) override;
     void preserveSocketAssociation(SocketFd sockfd) override;
+    void forgetSocketAssociation(SocketFd sockfd) noexcept;
     void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) override;
+    void trackCompletionOperation(void* operation) override;
+    bool hasPendingCompletionOperations() const noexcept override;
     bool wakeup() override;
 
 private:
+    friend class detail::EventLoopIocpAssociationHarness;
+
     static constexpr int kNew = -1;
     static constexpr int kAdded = 1;
     static constexpr int kDeleted = 2;
@@ -37,6 +46,7 @@ private:
 
     HANDLE iocp_;
     std::unordered_set<SocketFd> associatedFds_;
+    std::unordered_set<void*> outstandingOperations_;
     std::unordered_map<void*, std::shared_ptr<void>> retainedOperations_;
 };
 

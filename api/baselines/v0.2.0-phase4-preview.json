@@ -1,0 +1,103 @@
+{
+  "schema": "gamenet.public_api_snapshot.v1",
+  "package_version": "0.2.0",
+  "compatibility_line": "0.2",
+  "source": {
+    "tag": "v0.2.0-phase4-preview",
+    "commit": "7668d6b82a0d815ccd79f83c572bc0a36bcceea0"
+  },
+  "policy": {
+    "stable_core_source_compatibility": "required-within-compatibility-line",
+    "abi_compatibility": "not-guaranteed-before-1.0",
+    "provisional_source_compatibility": "not-guaranteed",
+    "platform_backend_headers": "unsupported-internal"
+  },
+  "targets": {
+    "platform_internal": [],
+    "provisional": [
+      "GameNet::broadcast",
+      "GameNet::game_logic",
+      "GameNet::game_session",
+      "GameNet::protocol",
+      "GameNet::transport"
+    ],
+    "stable_core": [
+      "GameNet::core"
+    ]
+  },
+  "headers": {
+    "platform_internal": [
+      "include/gamenet/core/net/platform/IocpOperation.h",
+      "include/gamenet/core/net/platform/IocpSocketOps.h",
+      "include/gamenet/core/net/platform/SocketTypes.h",
+      "include/gamenet/core/net/platform/Wakeup.h",
+      "include/gamenet/core/net/poller/EPollPoller.h",
+      "include/gamenet/core/net/poller/IocpPoller.h"
+    ],
+    "provisional": [
+      "include/gamenet/broadcast/BroadcastDispatcher.h",
+      "include/gamenet/broadcast/BroadcastRouter.h",
+      "include/gamenet/broadcast/BroadcastTypes.h",
+      "include/gamenet/game_logic/GameCommand.h",
+      "include/gamenet/game_logic/GameCommandQueue.h",
+      "include/gamenet/game_logic/LogicLoop.h",
+      "include/gamenet/game_session/PlayerSession.h",
+      "include/gamenet/game_session/SessionManager.h",
+      "include/gamenet/protocol/PacketFramer.h",
+      "include/gamenet/transport/TcpTransportEndpoint.h",
+      "include/gamenet/transport/TransportEndpoint.h"
+    ],
+    "stable_core": [
+      "include/gamenet/core/base/Logger.h",
+      "include/gamenet/core/base/Timestamp.h",
+      "include/gamenet/core/base/noncopyable.h",
+      "include/gamenet/core/net/Acceptor.h",
+      "include/gamenet/core/net/Buffer.h",
+      "include/gamenet/core/net/Callbacks.h",
+      "include/gamenet/core/net/Channel.h",
+      "include/gamenet/core/net/Connector.h",
+      "include/gamenet/core/net/ConnectorOptions.h",
+      "include/gamenet/core/net/EventLoop.h",
+      "include/gamenet/core/net/EventLoopExecutor.h",
+      "include/gamenet/core/net/EventLoopMetrics.h",
+      "include/gamenet/core/net/EventLoopThread.h",
+      "include/gamenet/core/net/EventLoopThreadPool.h",
+      "include/gamenet/core/net/InetAddress.h",
+      "include/gamenet/core/net/Poller.h",
+      "include/gamenet/core/net/Socket.h",
+      "include/gamenet/core/net/SocketTypes.h",
+      "include/gamenet/core/net/SocketsOps.h",
+      "include/gamenet/core/net/TcpClient.h",
+      "include/gamenet/core/net/TcpConnection.h",
+      "include/gamenet/core/net/TcpServer.h",
+      "include/gamenet/core/net/TimerId.h",
+      "include/gamenet/core/net/TimerQueue.h"
+    ]
+  },
+  "stable_header_fingerprints": {
+    "include/gamenet/core/base/Logger.h": "7ba3bd6d20360aaa4c77fb0767d4ed10f2f89d3aff0c6462d06d32933063b0b3",
+    "include/gamenet/core/base/Timestamp.h": "c668d00e88f50d591a58a7d6eb845f5c0fe7db8296159c098113108827cf1ec1",
+    "include/gamenet/core/base/noncopyable.h": "06e896f354470b405c28a955f106e79716b373662e32ef5af9afe35c36c164d2",
+    "include/gamenet/core/net/Acceptor.h": "0f06ee3a1a3734fdb8b6991934f26e24ddf71c59659d5b0ec5db316ccc9389d7",
+    "include/gamenet/core/net/Buffer.h": "41f789f77121c5efbbdf3190ea344430bf94f2d88c3d0f77d7a3913b0c7eb106",
+    "include/gamenet/core/net/Callbacks.h": "42b2c4e308271457b0ffd83d08652819a791d9d6fd14ee7c9d08b0578501da63",
+    "include/gamenet/core/net/Channel.h": "974d5dda8b45d20861075f1e5a4b9592a5382ff5af688f2e57154edbd8b7d59d",
+    "include/gamenet/core/net/Connector.h": "ac12b2c673857a043be49f29e581885224fe1229fa4615a369e64755f8f5d73c",
+    "include/gamenet/core/net/ConnectorOptions.h": "5b03f5e7912ad83fa2d6576469c815e8a972599de76e56de301e013f21e4630b",
+    "include/gamenet/core/net/EventLoop.h": "c0c1787a68cf1eecfcc7b3deb329818927b5c117ff17e7a8f30f9684629670f4",
+    "include/gamenet/core/net/EventLoopExecutor.h": "fde71c81478a04715756c1b48de668f4a4ee11612703867be1015404cd5ea141",
+    "include/gamenet/core/net/EventLoopMetrics.h": "aaf7868673947225594dd54270baf8d91fa9833d080ab0c413dda2340d96fa95",
+    "include/gamenet/core/net/EventLoopThread.h": "32f163e47ec7325c6ba30881527925d62feb11ef26aab4fd2b75f433bdc3ec4b",
+    "include/gamenet/core/net/EventLoopThreadPool.h": "19d312377277e0d9dc96e2da10904c0c5b86d8da169045d12853bdf167c5e24c",
+    "include/gamenet/core/net/InetAddress.h": "bc66c67c68e7a3224c85cf33a2775f58da5ddb9024935970eb5757336873fe8f",
+    "include/gamenet/core/net/Poller.h": "8609de9931977426a24e0aa53c0ba6db0fd1451fdb606f1f227e2cd16c799f0a",
+    "include/gamenet/core/net/Socket.h": "c88194025b8c288f99d1756b970844bac8da57a5b18b0b7c14b0a319fe477cc1",
+    "include/gamenet/core/net/SocketTypes.h": "537c47c5a80e0bc756d94239b07cb35faef0ade9fbf578f0baf2faccf714b6a1",
+    "include/gamenet/core/net/SocketsOps.h": "3b8cfd719b471e6c2f18bbed27496a979a4b681b6cc3db400393884784c944d2",
+    "include/gamenet/core/net/TcpClient.h": "23e5ab4e2486f434412b52a84619c9c3b280cb3504bb2c48e97bddf997732985",
+    "include/gamenet/core/net/TcpConnection.h": "2d59e6d2f97187b85cd8701e590cca9f5589e7a67d33916067afb99fdae4d9d4",
+    "include/gamenet/core/net/TcpServer.h": "240b5e15d0cedf74ed27ca634ce91cab81deacc6fce551a2331f81d772115c69",
+    "include/gamenet/core/net/TimerId.h": "3f4ffe32ab0985427de257aae3fa80ff894ff65f6b4e636571ee84e20293032a",
+    "include/gamenet/core/net/TimerQueue.h": "21dad279f0a05f38186d4cbe4de55ae65091f54465e545f9196149620e37c72e"
+  }
+}

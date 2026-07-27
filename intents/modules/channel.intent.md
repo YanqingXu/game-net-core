@@ -46,6 +46,13 @@ Channel is not the Poller.
 - revents reflects active events returned by Poller/backend
 - events reflects current interest mask requested by owner/module logic
 - dangerous callback dispatch should be guarded if tie is enabled and owner expired
+- successful remove is the registration-lifetime linearization point: before it
+  returns, the owning EventLoop invalidates any not-yet-dispatched entry for
+  that Channel in the current active batch
+- one registration has one monotonically changing generation; remove followed
+  by re-register cannot consume readiness captured for the old generation
+- remove of an unregistered Channel is rejected explicitly and cannot mutate a
+  same-fd replacement registration
 
 ---
 
@@ -67,6 +74,11 @@ Typical event types include:
 Exact mapping depends on backend, but Channel should expose a stable semantic interface
 rather than leaking raw backend complexity into upper layers.
 
+One backend poll result contains at most one active entry per Channel. Backends
+merge ready event bits before EventLoop dispatch. If a callback removes and
+re-registers the current Channel, the registration-generation change stops the
+remaining callbacks associated with the old readiness snapshot.
+
 ---
 
 ## 7. Threading Rules
@@ -82,6 +94,13 @@ rather than leaking raw backend complexity into upper layers.
 - Channel may observe an upper-layer owner via weak tie
 - if tied owner has expired, dangerous callback path should not proceed
 - a Channel must not remain registered in Poller after effective teardown begins
+- a tied owner guard protects only a callback that has already entered
+  `handleEvent`; pending entries elsewhere in the same active batch are
+  protected by EventLoop batch invalidation, not by `tie`
+- a Channel cannot destroy itself while its own `handleEvent` frame is active;
+  an internal owner that releases the current Channel uses the source-private
+  EventLoop current-dispatch retirement facility, which retains only that
+  removed Channel until the callback frame returns
 
 ---
 
@@ -121,6 +140,12 @@ API naming can evolve, but semantics should remain stable.
 - tie blocks unsafe callback path when owner expired
 - remove/update obey loop-thread discipline
 - backend-facing state remains consistent after repeated enable/disable
+- two Channels captured in one deterministic active batch allow the first
+  callback to remove and destroy the second without dispatching a stale pointer
+- repeated remove is rejected and does not erase a same-fd replacement
+- remove/re-register during a combined error/read/write dispatch stops the
+  remaining callbacks from the old registration generation
+- current-Channel retirement completes without pending-functor admission
 
 ---
 

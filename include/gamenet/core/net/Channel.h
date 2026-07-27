@@ -7,6 +7,8 @@
 #include "gamenet/core/base/noncopyable.h"
 #include "gamenet/core/net/SocketTypes.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 
@@ -56,7 +58,10 @@ public:
     static constexpr uint32_t kCloseEvent = 0x08;
 
 private:
+    friend class EventLoop;
+
     void update();
+    void advanceRegistrationGeneration() noexcept;
     void handleEventWithGuard(gamenet::base::Timestamp receiveTime);
 
     EventLoop* loop_;
@@ -66,6 +71,9 @@ private:
     int index_;
     bool eventHandling_;
     bool addedToLoop_;
+    std::uint64_t registrationGeneration_;
+    std::uint64_t activeBatchEpoch_;
+    std::size_t activeBatchIndex_;
     bool tied_;
     std::weak_ptr<void> tie_;
     ReadEventCallback readCallback_;

@@ -6,8 +6,10 @@
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
+#include "detail/EventLoopLifecycleRegistry.h"
 
 #include <cassert>
+#include <exception>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -15,10 +17,90 @@
 
 namespace gamenet::net {
 
+namespace {
+
+constexpr unsigned kControlConnect = 1;
+constexpr unsigned kControlDisconnect = 2;
+constexpr unsigned kControlStop = 3;
+
+}  // namespace
+
+struct TcpClientControl::State {
+    std::mutex mutex;
+    TcpClient* target{nullptr};
+    bool accepting{true};
+    unsigned pendingOperation{0};
+    std::uint64_t nextGeneration{1};
+    std::uint64_t pendingGeneration{0};
+    EventLoopLifecycleSource source;
+};
+
+TcpClientControl::TcpClientControl(std::shared_ptr<State> state) noexcept
+    : state_(std::move(state)) {}
+
+PostResult TcpClientControl::post(unsigned operation) const noexcept {
+    const auto state = state_;
+    if (!state) {
+        return PostResult::OwnerUnavailable;
+    }
+
+    std::lock_guard lock(state->mutex);
+    if (!state->accepting || state->target == nullptr) {
+        return PostResult::OwnerUnavailable;
+    }
+    if (state->nextGeneration == 0) {
+        return PostResult::Shutdown;
+    }
+
+    const std::uint64_t generation = state->nextGeneration++;
+    state->pendingOperation = operation;
+    state->pendingGeneration = generation;
+    const PostResult result = state->source.signal();
+    if (result != PostResult::Accepted &&
+        state->pendingGeneration == generation) {
+        state->pendingOperation = 0;
+        state->pendingGeneration = 0;
+    }
+    return result;
+}
+
+PostResult TcpClientControl::tryConnect() const noexcept {
+    return post(kControlConnect);
+}
+
+PostResult TcpClientControl::tryDisconnect() const noexcept {
+    return post(kControlDisconnect);
+}
+
+PostResult TcpClientControl::tryStop() const noexcept {
+    return post(kControlStop);
+}
+
+bool TcpClientControl::available() const noexcept {
+    const auto state = state_;
+    if (!state) {
+        return false;
+    }
+    std::lock_guard lock(state->mutex);
+    return state->accepting && state->target != nullptr;
+}
+
 TcpClient::TcpClient(EventLoop* loop, const InetAddress& serverAddr, std::string name)
+    : TcpClient(loop, serverAddr, std::move(name), ConnectorOptions{}) {
+}
+
+TcpClient::TcpClient(
+    EventLoop* loop,
+    const InetAddress& serverAddr,
+    std::string name,
+    ConnectorOptions connectorOptions)
     : loop_(loop),
+      ownerExecutor_(loop->executor()),
       name_(std::move(name)),
-      connector_(std::make_shared<Connector>(loop, serverAddr)) {
+      connector_(std::make_shared<Connector>(loop, serverAddr, connectorOptions)),
+      retry_(connectorOptions.enableRetry),
+      pendingTerminalConnectEvent_(ConnectorEvent::ConnectFailed) {
+    connectorOptions.validate();
     std::weak_ptr<void> lifetime = lifetimeToken_;
     connector_->setNewConnectionCallback([this, lifetime](SocketFd sockfd) {
         if (!lifetime.lock()) {
@@ -33,12 +115,49 @@ TcpClient::TcpClient(EventLoop* loop, const InetAddress& serverAddr, std::string
                 handleConnectorEvent(event);
             }
         });
+
+    controlState_ = std::make_shared<TcpClientControl::State>();
+    controlState_->target = this;
+    const auto controlState = controlState_;
+    controlState_->source = detail::EventLoopLifecycleRegistry::attach(
+        *loop_,
+        [controlState] {
+            TcpClient* target = nullptr;
+            {
+                std::lock_guard lock(controlState->mutex);
+                if (controlState->accepting) {
+                    target = controlState->target;
+                }
+            }
+            if (target != nullptr) {
+                target->driveControlInLoop();
+            }
+        });
 }
 
 TcpClient::~TcpClient() {
     loop_->assertInLoopThread();
-    lifetimeToken_.reset();
-    activeConnectRequestId_.store(0, std::memory_order_relaxed);
+    const auto controlState = controlState_;
+    if (controlState) {
+        {
+            std::lock_guard lock(controlState->mutex);
+            controlState->accepting = false;
+            controlState->target = nullptr;
+            controlState->pendingOperation = 0;
+            controlState->pendingGeneration = 0;
+        }
+        detail::EventLoopLifecycleRegistry::detach(
+            *loop_,
+            controlState->source);
+        controlState_.reset();
+    }
+    {
+        std::lock_guard lock(admissionMutex_);
+        lifetimeToken_.reset();
+        activeConnectRequestId_.store(0, std::memory_order_release);
+        latestAcceptedOperationGeneration_ = nextOperationGeneration_++;
+    }
+    pendingReconnectRequestId_ = 0;
     pendingTerminalConnectRequestId_ = 0;
 
     TcpConnectionPtr conn;
@@ -68,43 +187,197 @@ TcpClient::~TcpClient() {
     }
 }
 
-void TcpClient::connect() {
-    const std::uint64_t requestId = nextConnectRequestId_.fetch_add(1, std::memory_order_relaxed);
-    std::uint64_t idleRequest = 0;
-    if (!activeConnectRequestId_.compare_exchange_strong(
-            idleRequest,
-            requestId,
-            std::memory_order_relaxed,
-            std::memory_order_relaxed)) {
-        return;
-    }
+PostResult TcpClient::tryConnect() noexcept {
+    std::uint64_t requestId = 0;
+    std::uint64_t generation = 0;
+    std::weak_ptr<void> lifetime;
+    bool runInline = false;
+    try {
+        {
+            std::lock_guard lock(admissionMutex_);
+            const std::uint64_t activeRequest =
+                activeConnectRequestId_.load(std::memory_order_acquire);
+            if (activeRequest != 0) {
+                bool endedLifecycleAwaitingRemoval = false;
+                {
+                    std::lock_guard connectionLock(mutex_);
+                    endedLifecycleAwaitingRemoval =
+                        connection_ &&
+                        connection_->disconnected() &&
+                        connectionRequestId_ == activeRequest &&
+                        pendingReconnectRequestId_ == 0;
+                }
+                if (!endedLifecycleAwaitingRemoval) {
+                    return PostResult::Accepted;
+                }
+            }
 
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    loop_->runInLoop([this, lifetime, requestId] {
-        if (lifetime.lock()) {
-            connectInLoop(requestId);
+            requestId =
+                nextConnectRequestId_.fetch_add(1, std::memory_order_relaxed);
+            generation = nextOperationGeneration_++;
+            lifetime = lifetimeToken_;
+            runInline =
+                ownerExecutor_.available() &&
+                ownerExecutor_.isInOwnerThread();
+            if (runInline) {
+                activeConnectRequestId_.store(
+                    requestId,
+                    std::memory_order_release);
+                latestAcceptedOperationGeneration_ = generation;
+            } else {
+                const PostResult result = ownerExecutor_.post(
+                    [this, lifetime, requestId, generation] {
+                        if (lifetime.lock()) {
+                            connectInLoop(requestId, generation);
+                        }
+                    });
+                if (result != PostResult::Accepted) {
+                    return result;
+                }
+                activeConnectRequestId_.store(
+                    requestId,
+                    std::memory_order_release);
+                latestAcceptedOperationGeneration_ = generation;
+            }
         }
-    });
+
+        if (runInline && lifetime.lock()) {
+            connectInLoop(requestId, generation);
+        }
+        return PostResult::Accepted;
+    } catch (const std::exception& error) {
+        if (runInline) {
+            LOG_ERROR << "TcpClient inline connect operation threw: "
+                      << error.what();
+            return PostResult::Accepted;
+        }
+        return PostResult::QueueFull;
+    } catch (...) {
+        if (runInline) {
+            LOG_ERROR << "TcpClient inline connect operation threw "
+                         "a non-standard exception";
+            return PostResult::Accepted;
+        }
+        return PostResult::QueueFull;
+    }
+}
+
+PostResult TcpClient::tryDisconnect() noexcept {
+    std::uint64_t generation = 0;
+    std::weak_ptr<void> lifetime;
+    bool runInline = false;
+    try {
+        {
+            std::lock_guard lock(admissionMutex_);
+            generation = nextOperationGeneration_++;
+            lifetime = lifetimeToken_;
+            runInline =
+                ownerExecutor_.available() &&
+                ownerExecutor_.isInOwnerThread();
+            if (runInline) {
+                activeConnectRequestId_.store(0, std::memory_order_release);
+                latestAcceptedOperationGeneration_ = generation;
+            } else {
+                const PostResult result = ownerExecutor_.post(
+                    [this, lifetime, generation] {
+                        if (lifetime.lock()) {
+                            disconnectInLoop(generation);
+                        }
+                    });
+                if (result != PostResult::Accepted) {
+                    return result;
+                }
+                activeConnectRequestId_.store(0, std::memory_order_release);
+                latestAcceptedOperationGeneration_ = generation;
+            }
+        }
+
+        if (runInline && lifetime.lock()) {
+            disconnectInLoop(generation);
+        }
+        return PostResult::Accepted;
+    } catch (const std::exception& error) {
+        if (runInline) {
+            LOG_ERROR << "TcpClient inline disconnect operation threw: "
+                      << error.what();
+            return PostResult::Accepted;
+        }
+        return PostResult::QueueFull;
+    } catch (...) {
+        if (runInline) {
+            LOG_ERROR << "TcpClient inline disconnect operation threw "
+                         "a non-standard exception";
+            return PostResult::Accepted;
+        }
+        return PostResult::QueueFull;
+    }
+}
+
+PostResult TcpClient::tryStop() noexcept {
+    std::uint64_t generation = 0;
+    std::weak_ptr<void> lifetime;
+    bool runInline = false;
+    try {
+        {
+            std::lock_guard lock(admissionMutex_);
+            generation = nextOperationGeneration_++;
+            lifetime = lifetimeToken_;
+            runInline =
+                ownerExecutor_.available() &&
+                ownerExecutor_.isInOwnerThread();
+            if (runInline) {
+                activeConnectRequestId_.store(0, std::memory_order_release);
+                latestAcceptedOperationGeneration_ = generation;
+            } else {
+                const PostResult result = ownerExecutor_.post(
+                    [this, lifetime, generation] {
+                        if (lifetime.lock()) {
+                            stopInLoop(generation);
+                        }
+                    });
+                if (result != PostResult::Accepted) {
+                    return result;
+                }
+                activeConnectRequestId_.store(0, std::memory_order_release);
+                latestAcceptedOperationGeneration_ = generation;
+            }
+        }
+
+        if (runInline && lifetime.lock()) {
+            stopInLoop(generation);
+        }
+        return PostResult::Accepted;
+    } catch (const std::exception& error) {
+        if (runInline) {
+            LOG_ERROR << "TcpClient inline stop operation threw: "
+                      << error.what();
+            return PostResult::Accepted;
+        }
+        return PostResult::QueueFull;
+    } catch (...) {
+        if (runInline) {
+            LOG_ERROR << "TcpClient inline stop operation threw "
+                         "a non-standard exception";
+            return PostResult::Accepted;
+        }
+        return PostResult::QueueFull;
+    }
+}
+
+void TcpClient::connect() {
+    (void)tryConnect();
 }
 
 void TcpClient::disconnect() {
-    activeConnectRequestId_.store(0, std::memory_order_relaxed);
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    loop_->runInLoop([this, lifetime] {
-        if (lifetime.lock()) {
-            disconnectInLoop();
-        }
-    });
+    (void)tryDisconnect();
 }
 
 void TcpClient::stop() {
-    activeConnectRequestId_.store(0, std::memory_order_relaxed);
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    loop_->runInLoop([this, lifetime] {
-        if (lifetime.lock()) {
-            stopInLoop();
-        }
-    });
+    (void)tryStop();
+}
+
+TcpClientControl TcpClient::control() const noexcept {
+    return TcpClientControl(controlState_);
 }
 
 void TcpClient::enableRetry() {
@@ -116,12 +389,31 @@ void TcpClient::disableRetry() {
 }
 
 void TcpClient::setRetry(bool enabled) {
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    loop_->runInLoop([this, lifetime, enabled] {
-        if (lifetime.lock()) {
+    std::weak_ptr<void> lifetime;
+    bool runInline = false;
+    try {
+        {
+            std::lock_guard lock(admissionMutex_);
+            lifetime = lifetimeToken_;
+            runInline =
+                ownerExecutor_.available() &&
+                ownerExecutor_.isInOwnerThread();
+            if (!runInline) {
+                (void)ownerExecutor_.post(
+                    [this, lifetime, enabled] {
+                        if (lifetime.lock()) {
+                            setRetryInLoop(enabled);
+                        }
+                    });
+            }
+        }
+        if (runInline && lifetime.lock()) {
             setRetryInLoop(enabled);
         }
-    });
+    } catch (...) {
+        // Compatibility API: typed admission is available for lifecycle
+        // requests; retry configuration simply remains unchanged on failure.
+    }
 }
 
 bool TcpClient::retry() const noexcept {
@@ -153,6 +445,10 @@ void TcpClient::setWriteCompleteCallback(WriteCompleteCallback cb) {
     writeCompleteCallback_ = std::move(cb);
 }
 
+void TcpClient::setCloseInfoCallback(CloseInfoCallback cb) {
+    closeInfoCallback_ = std::move(cb);
+}
+
 void TcpClient::setConnectionBackpressureOptions(
     TcpConnectionBackpressureOptions options) {
     options.validate();
@@ -168,8 +464,58 @@ void TcpClient::setCallbackExceptionHandler(
     callbackExceptionHandler_ = std::move(cb);
 }
 
-void TcpClient::connectInLoop(std::uint64_t requestId) {
+void TcpClient::setTerminalConnectFailureCallback(
+    TerminalConnectFailureCallback cb) {
     loop_->assertInLoopThread();
+    terminalConnectFailureCallback_ = std::move(cb);
+}
+
+void TcpClient::driveControlInLoop() {
+    loop_->assertInLoopThread();
+    const auto controlState = controlState_;
+    if (!controlState) {
+        return;
+    }
+
+    unsigned operation = 0;
+    {
+        std::lock_guard lock(controlState->mutex);
+        if (!controlState->accepting ||
+            controlState->target != this) {
+            return;
+        }
+        operation = controlState->pendingOperation;
+        controlState->pendingOperation = 0;
+        controlState->pendingGeneration = 0;
+    }
+
+    switch (operation) {
+        case kControlConnect:
+            (void)tryConnect();
+            break;
+        case kControlDisconnect:
+            (void)tryDisconnect();
+            break;
+        case kControlStop:
+            (void)tryStop();
+            break;
+        default:
+            break;
+    }
+}
+
+bool TcpClient::isLatestAcceptedOperation(std::uint64_t generation) const {
+    std::lock_guard lock(admissionMutex_);
+    return latestAcceptedOperationGeneration_ == generation;
+}
+
+void TcpClient::connectInLoop(
+    std::uint64_t requestId,
+    std::uint64_t generation) {
+    loop_->assertInLoopThread();
+    if (!isLatestAcceptedOperation(generation)) {
+        return;
+    }
     if (activeConnectRequestId_.load(std::memory_order_relaxed) != requestId) {
         return;
     }
@@ -179,15 +525,28 @@ void TcpClient::connectInLoop(std::uint64_t requestId) {
     {
         std::lock_guard lock(mutex_);
         if (connection_) {
-            connectionRequestId_ = requestId;
+            if (connection_->connected()) {
+                // A queued disconnect that never became the latest operation
+                // left the current connection active. Rebind that live
+                // lifecycle to the latest explicit connect request.
+                connectionRequestId_ = requestId;
+                pendingReconnectRequestId_ = 0;
+            } else {
+                // Disconnect has already entered its owner-loop state
+                // transition. Preserve this explicit request separately from
+                // automatic retry policy until the old close callback removes
+                // the connection.
+                pendingReconnectRequestId_ = requestId;
+            }
             return;
         }
     }
 
+    connectorRequestId_ = requestId;
     if (connector_->state() == Connector::kConnecting) {
+        connector_->start();
         return;
     }
-    connectorRequestId_ = requestId;
     if (connector_->state() == Connector::kConnected) {
         connector_->restart();
         return;
@@ -195,8 +554,11 @@ void TcpClient::connectInLoop(std::uint64_t requestId) {
     connector_->start();
 }
 
-void TcpClient::disconnectInLoop() {
+void TcpClient::disconnectInLoop(std::uint64_t generation) {
     loop_->assertInLoopThread();
+    if (!isLatestAcceptedOperation(generation)) {
+        return;
+    }
     connect_ = false;
 
     TcpConnectionPtr conn;
@@ -212,8 +574,11 @@ void TcpClient::disconnectInLoop() {
     }
 }
 
-void TcpClient::stopInLoop() {
+void TcpClient::stopInLoop(std::uint64_t generation) {
     loop_->assertInLoopThread();
+    if (!isLatestAcceptedOperation(generation)) {
+        return;
+    }
     connect_ = false;
     connector_->stop();
 }
@@ -233,6 +598,15 @@ void TcpClient::handleConnectorEvent(ConnectorEvent event) {
         pendingTerminalConnectRequestId_ = 0;
         return;
     }
+    if (event == ConnectorEvent::TerminalFailure) {
+        const std::uint64_t requestId = pendingTerminalConnectRequestId_;
+        if (requestId != 0) {
+            finishTerminalConnectFailure(
+                requestId,
+                pendingTerminalConnectEvent_);
+        }
+        return;
+    }
     if (event != ConnectorEvent::ConnectFailed &&
         event != ConnectorEvent::SelfConnectDetected &&
         event != ConnectorEvent::ConnectTimeout) {
@@ -245,15 +619,12 @@ void TcpClient::handleConnectorEvent(ConnectorEvent event) {
     }
 
     pendingTerminalConnectRequestId_ = requestId;
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    loop_->queueInLoop([this, lifetime, requestId] {
-        if (lifetime.lock()) {
-            finishTerminalConnectFailure(requestId);
-        }
-    });
+    pendingTerminalConnectEvent_ = event;
 }
 
-void TcpClient::finishTerminalConnectFailure(std::uint64_t requestId) {
+void TcpClient::finishTerminalConnectFailure(
+    std::uint64_t requestId,
+    ConnectorEvent event) {
     loop_->assertInLoopThread();
     if (pendingTerminalConnectRequestId_ != requestId) {
         return;
@@ -264,17 +635,33 @@ void TcpClient::finishTerminalConnectFailure(std::uint64_t requestId) {
         connectorRequestId_ = 0;
     }
 
-    std::uint64_t activeRequest = requestId;
-    activeConnectRequestId_.compare_exchange_strong(
-        activeRequest,
-        0,
-        std::memory_order_relaxed,
-        std::memory_order_relaxed);
+    bool releasedCurrentRequest = false;
+    {
+        std::lock_guard lock(admissionMutex_);
+        std::uint64_t activeRequest = requestId;
+        releasedCurrentRequest = activeConnectRequestId_.compare_exchange_strong(
+            activeRequest,
+            0,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire);
+    }
+
+    if (releasedCurrentRequest && terminalConnectFailureCallback_) {
+        try {
+            terminalConnectFailureCallback_(connector_->serverAddress(), event);
+        } catch (const std::exception& error) {
+            LOG_ERROR << "TcpClient terminal connect failure callback threw: "
+                      << error.what();
+        } catch (...) {
+            LOG_ERROR << "TcpClient terminal connect failure callback threw "
+                         "a non-standard exception";
+        }
+    }
 }
 
 void TcpClient::newConnection(SocketFd sockfd) {
-    loop_->assertInLoopThread();
     Socket pendingSocket(sockfd);
+    loop_->assertInLoopThread();
 
     const std::uint64_t requestId = connectorRequestId_;
     if (requestId == 0 ||
@@ -291,7 +678,9 @@ void TcpClient::newConnection(SocketFd sockfd) {
             connector_->restart();
         } else {
             pendingTerminalConnectRequestId_ = requestId;
-            finishTerminalConnectFailure(requestId);
+            finishTerminalConnectFailure(
+                requestId,
+                ConnectorEvent::ConnectFailed);
         }
         return;
     }
@@ -305,17 +694,20 @@ void TcpClient::newConnection(SocketFd sockfd) {
             connector_->restart();
         } else {
             pendingTerminalConnectRequestId_ = requestId;
-            finishTerminalConnectFailure(requestId);
+            finishTerminalConnectFailure(
+                requestId,
+                ConnectorEvent::ConnectFailed);
         }
         return;
     }
     const InetAddress localAddr(localStorage);
     const std::string connName = name_ + "#" + std::to_string(nextConnId_++);
+    const SocketFd connectedFd = pendingSocket.fd();
 
     auto conn = std::make_shared<TcpConnection>(
         loop_,
         connName,
-        pendingSocket.fd(),
+        connectedFd,
         localAddr,
         peerAddr);
     (void)pendingSocket.releaseFd();
@@ -323,6 +715,7 @@ void TcpClient::newConnection(SocketFd sockfd) {
     conn->setConnectionCallback(connectionCallback_);
     conn->setMessageCallback(messageCallback_);
     conn->setWriteCompleteCallback(writeCompleteCallback_);
+    conn->setCloseInfoCallback(closeInfoCallback_);
     conn->setCallbackExceptionHandler(callbackExceptionHandler_);
 
     std::weak_ptr<void> lifetime = lifetimeToken_;
@@ -332,28 +725,78 @@ void TcpClient::newConnection(SocketFd sockfd) {
         }
     });
 
-    {
-        std::lock_guard lock(mutex_);
-        connection_ = conn;
-        connectionRequestId_ = requestId;
-    }
+    try {
+        {
+            std::lock_guard lock(mutex_);
+            connection_ = conn;
+            connectionRequestId_ = requestId;
+            pendingReconnectRequestId_ = 0;
+        }
 
-    conn->connectEstablished();
+#ifdef _WIN32
+        // ConnectEx already associated this socket with the owner loop's IOCP.
+        // The ledger entry and replacement Channel publication are one
+        // rollback-capable transaction.
+        loop_->preserveSocketAssociation(connectedFd);
+#endif
+        conn->connectEstablished();
+    } catch (...) {
+        const auto handoffFailure = std::current_exception();
+        {
+            std::lock_guard lock(mutex_);
+            if (connection_ == conn) {
+                connection_.reset();
+                connectionRequestId_ = 0;
+                pendingReconnectRequestId_ = 0;
+            }
+        }
+
+        // A registration failure occurs before kConnected publication, so
+        // this cleanup cannot report a disconnected callback for an
+        // unpublished connection.
+        conn->connectDestroyed();
+#ifdef _WIN32
+        loop_->forgetSocketAssociation(connectedFd);
+#endif
+        pendingTerminalConnectRequestId_ = requestId;
+        pendingTerminalConnectEvent_ = ConnectorEvent::ConnectFailed;
+        finishTerminalConnectFailure(
+            requestId,
+            ConnectorEvent::ConnectFailed);
+        std::rethrow_exception(handoffFailure);
+    }
 }
 
 void TcpClient::removeConnection(const TcpConnectionPtr& conn) {
     loop_->assertInLoopThread();
 
     std::uint64_t requestId = 0;
+    std::uint64_t pendingReconnectRequestId = 0;
     {
         std::lock_guard lock(mutex_);
         assert(connection_ == conn);
         connection_.reset();
         requestId = connectionRequestId_;
         connectionRequestId_ = 0;
+        pendingReconnectRequestId = pendingReconnectRequestId_;
+        pendingReconnectRequestId_ = 0;
     }
 
-    loop_->queueInLoop([conn] { conn->connectDestroyed(); });
+    // Explicit socket close permits the numeric handle to be reused
+    // immediately. Remove the old Channel before a re-entrant reconnect can
+    // create/register a replacement with that same value. EventLoop's active-
+    // batch invalidation keeps inline current-Channel removal safe while this
+    // callback frame retains the TcpConnection.
+    conn->connectDestroyed();
+
+    if (pendingReconnectRequestId != 0 &&
+        activeConnectRequestId_.load(std::memory_order_relaxed) ==
+            pendingReconnectRequestId &&
+        connect_) {
+        connectorRequestId_ = pendingReconnectRequestId;
+        connector_->restart();
+        return;
+    }
 
     if (requestId != 0 &&
         activeConnectRequestId_.load(std::memory_order_relaxed) == requestId &&
@@ -363,12 +806,15 @@ void TcpClient::removeConnection(const TcpConnectionPtr& conn) {
         return;
     }
 
-    std::uint64_t activeRequest = requestId;
-    activeConnectRequestId_.compare_exchange_strong(
-        activeRequest,
-        0,
-        std::memory_order_relaxed,
-        std::memory_order_relaxed);
+    {
+        std::lock_guard lock(admissionMutex_);
+        std::uint64_t activeRequest = requestId;
+        activeConnectRequestId_.compare_exchange_strong(
+            activeRequest,
+            0,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire);
+    }
 }
 
 }  // namespace gamenet::net

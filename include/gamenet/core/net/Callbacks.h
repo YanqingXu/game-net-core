@@ -2,6 +2,8 @@
 
 // Callback types shared by the low-level Reactor/TCP core components.
 
+#include "gamenet/core/net/TcpConnectionClose.h"
+
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -18,6 +20,9 @@ using MessageCallback = std::function<void(const TcpConnectionPtr&, Buffer*)>;
 using HighWaterMarkCallback = std::function<void(const TcpConnectionPtr&, std::size_t)>;
 using WriteCompleteCallback = std::function<void(const TcpConnectionPtr&)>;
 using CloseCallback = std::function<void(const TcpConnectionPtr&)>;
+using CloseInfoCallback = std::function<void(
+    const TcpConnectionPtr&,
+    const TcpConnectionCloseInfo&)>;
 using ThreadInitCallback = std::function<void(EventLoop*)>;
 
 }  // namespace gamenet::net

@@ -14,6 +14,8 @@ class EventLoop;
 enum class EventLoopMetricEvent {
     PendingFunctorsDrained,
     WakeupHandled,
+    // Appended to preserve existing event values within the 0.3 source line.
+    ControlSourcesDrained,
 };
 
 struct EventLoopMetricSample {
@@ -27,6 +29,13 @@ struct EventLoopMetricSample {
     std::uint64_t rejectedFunctors{0};
     std::uint64_t callbackExceptions{0};
     Duration oldestPendingLatency{Duration::zero()};
+    // New control-lane observations stay append-only so existing positional
+    // aggregate initialization retains the 0.3 field meanings.
+    std::size_t pendingControlSources{0};
+    std::size_t pendingControlSourcePeak{0};
+    std::uint64_t controlNotifications{0};
+    std::uint64_t mergedControlNotifications{0};
+    std::uint64_t rejectedControlNotifications{0};
 };
 
 using EventLoopMetricCallback = std::function<void(const EventLoopMetricSample&)>;

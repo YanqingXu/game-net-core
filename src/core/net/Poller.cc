@@ -18,6 +18,14 @@ void Poller::retainCompletionOperation(void* operation, std::shared_ptr<void> li
     (void)lifetime;
 }
 
+void Poller::trackCompletionOperation(void* operation) {
+    (void)operation;
+}
+
+bool Poller::hasPendingCompletionOperations() const noexcept {
+    return false;
+}
+
 bool Poller::wakeup() {
     return false;
 }

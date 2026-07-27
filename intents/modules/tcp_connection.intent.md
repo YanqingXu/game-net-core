@@ -34,8 +34,16 @@ inline inside TcpConnection.
 - expose force-close style teardown entry that still converges on the same close path
 - expose connection context as loop-owned mutable state, not cross-thread storage
 - dispatch user-visible connection/message/write-complete/high-water/close callbacks
+- count optional high-water/write-complete notifications that cannot be
+  admitted to the owner-loop normal queue without allowing that diagnostic
+  loss to interrupt connection progress
 - coordinate loop-owned helper components for transport, coroutine waiting,
   and backpressure without bypassing EventLoop scheduling
+- attach one dynamic EventLoop lifecycle node after initial Channel
+  registration and detach it only after socket close, completion drain,
+  Channel removal, and final callback publication converge
+- publish a structured close result that preserves the semantic reason and an
+  optional native error without making upper layers parse log text
 
 ---
 
@@ -61,11 +69,38 @@ inline inside TcpConnection.
 - every accepted output byte is reserved exactly once and released exactly once
   after write completion or close-time discard; the configured hard limit is
   never exceeded even by concurrent cross-thread send admission
+- output-buffer mutation, backpressure enforcement, and write-interest /
+  platform write initiation complete before an optional high-water
+  notification is submitted
+- output drain disables write interest and performs a pending disconnecting
+  half-close before an optional write-complete notification is submitted
+- rejected optional notification submission increments one connection-local
+  atomic dropped-notification counter and never rolls back mandatory state
 - each socket read is capped by the input buffer's remaining allowance; the
   input Buffer never grows past the configured connection limit
 - coroutine resume returns through EventLoop scheduling
 - transport-specific behavior (plain TCP or TLS) must not change callback ordering
   or close-path convergence
+- on Windows, successful or pending `WSARecv` / `WSASend` submission establishes
+  exactly one completion obligation; a synchronous non-pending failure
+  establishes none and is returned directly to TcpConnection
+- close is an explicit owner-loop state machine:
+  `Open -> Closing -> SocketClosed -> CompletionDraining -> Closed`; public
+  connected/disconnecting snapshots remain compatible views of that model
+- exactly one semantic close reason wins at the first transition to Closing;
+  later errors/cancel completions may add diagnostic native-error context but
+  cannot replace the winning reason or duplicate callbacks
+- the socket is explicitly closed on the owner loop after read/write
+  cancellation has been requested; destruction is not the mechanism that
+  initiates close
+- on Windows, closing the socket does not release transport operation storage;
+  `CompletionDraining` remains attached to the EventLoop lifecycle hub until
+  every kernel-owned completion obligation has been consumed
+- on Linux, explicit socket close and Channel removal can normally converge in
+  the same lifecycle visit, while preserving identical callback/result order
+- disconnected and close callbacks run only after the socket is closed and
+  completion obligations are zero; TcpServer/TcpClient removal observes the
+  structured close result
 
 ---
 
@@ -77,6 +112,9 @@ inline inside TcpConnection.
   ConnectionBackpressureController
 - TcpConnection remains the only component that changes the public connection state
   or invokes the final close callback used by TcpServer/TcpClient
+- EventLoop owns lifecycle-node scheduling/storage; TcpConnection owns the
+  node registration generation and requests detach during final owner-loop
+  cleanup
 
 ---
 
@@ -85,6 +123,8 @@ inline inside TcpConnection.
 - cross-thread send/shutdown must marshal back into the loop
 - `connected()` and `disconnected()` may be called from any thread and return
   a point-in-time state snapshot
+- `droppedNotificationCount()` may be called from any thread and returns a
+  point-in-time cumulative snapshot
 - socket-option mutation, connection context access, callback replacement,
   `connectEstablished()`, and `connectDestroyed()` are owner-loop-only
 - callback setters are setup-time configuration before establishment; the
@@ -93,8 +133,22 @@ inline inside TcpConnection.
   context access through `runInLoop()` or `queueInLoop()`
 - helper components must not create a second mutable thread domain
 - backpressure threshold evaluation and read-interest toggling happen on the owner loop
+- high-water and write-complete callbacks remain deferred owner-loop
+  callbacks when admitted; normal-queue saturation may drop them explicitly
+- Windows read resume is mandatory owner-loop work and runs inline from the
+  low-water transition instead of depending on ordinary queue admission; a
+  buffered message callback on that path may therefore re-enter connection APIs
+- after such Windows callback re-entry, the outer write handler rechecks
+  disconnected/force-close state and pending-overlapped-write state before it
+  performs any further transition
 - await readiness checks must not inspect loop-owned mutable state off-thread
 - transport handshake/read/write/shutdown logic runs on the owner loop thread only
+- cross-thread force-close/error/owner-shutdown paths update a synchronized
+  close request and call lifecycle `signal()`; they never depend on ordinary
+  functor admission for terminal progress
+- lifecycle-node callbacks run on the connection owner loop and may consume
+  coalesced send-shutdown, force-close, socket-close, and completion-drain
+  work; every visit must re-read the explicit close state
 
 ---
 
@@ -107,6 +161,15 @@ inline inside TcpConnection.
   teardown API from the close callback
 - pending IOCP read/write operations are canceled and drained on the owner loop
   before force-close teardown releases connection-owned operation storage
+- EventLoop quit cannot strand the connection between cancellation and
+  completion consumption: the attached lifecycle node keeps the loop in
+  Quiescing until the operation count reaches zero
+- a synchronous Windows read/write submission failure invokes the same
+  `handleError()` -> `handleClose()` convergence immediately on the owner loop;
+  it does not set Channel `revents` and wait for a nonexistent completion
+- normal, error, and `ERROR_OPERATION_ABORTED` completion consumption clears
+  the corresponding pending obligation once; repeated close/error entry remains
+  single-shot
 - timeout-driven close should reuse the normal close path rather than inventing a side channel
 - backpressure throttling should resume automatically after the output buffer drains below the low-water threshold
 - disconnected state should block unsafe user-visible actions
@@ -115,19 +178,36 @@ inline inside TcpConnection.
 - repeated shutdown requests are idempotent and must not duplicate the
   owner-loop half-close, write-complete, disconnected, or close callbacks
 - high-water callback fires once when output crosses the threshold and is
-  delivered on the owner loop
+  delivered on the owner loop when its optional queue submission is admitted
+- high-water/write-complete queue rejection, callback capture failure, or
+  allocation failure is contained at the optional notification boundary,
+  increments `droppedNotificationCount()`, and does not throw into the active
+  read/write/state-transition path
+- a dropped high-water notification does not prevent read backpressure or
+  EPOLLOUT/WSASend progress; a dropped write-complete notification does not
+  prevent a disconnecting connection from half-closing
 - `trySend()` reports `Overloaded` before queue/buffer growth when the hard
   output reservation limit would be exceeded; the legacy `send()` API uses the
   same bounded admission path
 - reaching the configured input hard limit after message dispatch is treated
   as connection overload and converges on the existing close path
 - helper-component failure must still converge on TcpConnection's existing error/close model
+- kConnected publication occurs only after initial Channel registration
+  succeeds; a registration exception leaves the object in kConnecting so
+  rollback cannot emit a disconnected callback for a connection that was
+  never established
 - connection-established, message, high-water, and write-complete callback
   exceptions are reported and force-close only the offending connection
 - disconnected and close callback exceptions are reported and contained;
   remaining lifecycle callbacks and remove-before-destroy cleanup still run
 - an exception observer is diagnostic only: if it throws, the fixed connection
   close/cleanup policy still applies
+- structured close reasons distinguish at least PeerEof, Reset,
+  ConnectTimeout, InputLimit, OutputOverload, AdmissionPolicy,
+  GracefulShutdown, ForcedShutdown, CallbackFailure, and InternalError
+- the first close transition publishes one immutable `TcpConnectionCloseInfo`;
+  callbacks receive the same semantic reason even when later cancellation
+  completions carry platform-specific abort errors
 
 ---
 
@@ -179,8 +259,14 @@ inline inside TcpConnection.
   verifies repeated owner and non-owner shutdown requests drain pending output
   and converge on one owner-loop half-close
 - `tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp`
-  verifies high-water callback threshold delivery, hard-limit rejection, and
-  high/low-water read pause/resume on the owner loop
+  verifies high-water callback threshold delivery, hard-limit rejection,
+  high/low-water read pause/resume on the owner loop, and a resumed message
+  callback that re-enters `trySend()` plus `forceClose()`
+- `tests/contract/tcp_connection/test_tcp_connection_queue_saturation.cpp`
+  fills both normal and reserved pending-functor capacity and proves that
+  rejected high-water/write-complete notifications increment the dedicated
+  dropped counter without throwing; mandatory backpressure, write progress,
+  disconnecting half-close, and output-reservation release still converge
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp`
   verifies concurrent-domain admission reserves bytes before owner-loop
   execution and rejects a second send that would exceed the same hard limit
@@ -210,6 +296,20 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_force_close_pending_write.cpp`
   verifies non-owner-thread forceClose marshals to the owner loop while a large
   write is pending and still drains cancel/close before destruction
+- `tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp`
+  injects synchronous `WSAENOBUFS` / `WSAECONNRESET` read and write submission
+  failures, proves they close immediately without phantom readiness, and
+  verifies cancellation of the other real pending operation reports
+  `ERROR_OPERATION_ABORTED` before one final teardown
+- `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
+  verifies explicit socket close precedes disconnected publication, pending
+  operations retain storage, and one final lifecycle detach follows drain
+- `tests/contract/tcp_connection/test_tcp_connection_close_reason.cpp`
+  verifies first-reason-wins, native-error preservation, callback failure,
+  overload, graceful, forced, peer EOF, and reset mapping
+- `tests/integration/tcp/test_iocp_quit_completion_drain.cpp` races force close,
+  socket cancellation, and EventLoop quit and proves the real completion is
+  consumed before Shutdown
 - high-water to low-water drain path pauses and resumes read processing on the owner loop
 - coroutine awaiters resume through EventLoop rather than arbitrary caller thread
 - repeated teardown does not leave stale registration behind

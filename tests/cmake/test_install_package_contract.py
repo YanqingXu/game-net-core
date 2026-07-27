@@ -48,7 +48,7 @@ def main() -> None:
 
     assert consumer_cmake.exists(), f"missing install consumer CMake fixture: {consumer_cmake}"
     consumer_cmake_text = consumer_cmake.read_text(encoding="utf-8")
-    require(consumer_cmake_text, "find_package(GameNetCore 0.2.0 EXACT REQUIRED)", consumer_cmake)
+    require(consumer_cmake_text, "find_package(GameNetCore 0.3.0 EXACT REQUIRED)", consumer_cmake)
     require(consumer_cmake_text, "target_link_libraries(gamenet_install_consumer", consumer_cmake)
     for target in ("core", "protocol", "transport", "game_session", "game_logic", "broadcast"):
         require(consumer_cmake_text, f"GameNet::{target}", consumer_cmake)

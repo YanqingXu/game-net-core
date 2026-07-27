@@ -73,19 +73,31 @@ completion-mode value so its results cannot be confused with this baseline.
   all accepted idle connections have settled. `approx_bytes_per_connection`
   is the process working-set delta divided by configured connections, not an
   allocator-level object-size claim.
-- `slow-client` gives clients a small receive buffer, never reads responses,
-  and offers `slow_bytes_per_connection` from each connection owner loop. It
-  records working-set growth and high-water notifications. The current
-  `high_water_notification_only` policy is observable, not a memory cap.
+- `slow-client` gives clients a small receive buffer, holds reads through the
+  working-set sample, and calls `trySend()` from each connection owner loop.
+  It then drains accepted output to observe write completion and read-throttle
+  recovery. The result records requested/accepted/rejected bytes, rejection
+  reasons, configured low/high/hard output thresholds and input limit,
+  pending-output peak, pause/resume observations, high-water notifications, and
+  recovery duration. `--high-water` drives both the connection read-throttle
+  threshold and notification threshold; the recorded low-water value is half.
 
-Every run writes one `gamenet.core_benchmark.v1` JSON document to stdout.
+Every current run writes one `gamenet.core_benchmark.v2` JSON document to stdout.
 Stable keys include scenario parameters, platform, backend, completion mode,
 build type, throughput, P50/P99, connection count, EventLoop worker count,
-working-set before/after/delta, approximate bytes per connection, offered
-bytes, and high-water callback count. Non-applicable measurements are `null`.
+working-set before/after/delta, approximate bytes per connection,
+requested/accepted/rejected admission accounting, configured low/high/hard and
+input limits, pending-output peak, throttle observations, recovery duration,
+and high-water callback count.
 Diagnostics are written to stderr, and setup/I/O/timeout failures return a
 non-zero exit code with `status: "error"` when lifecycle-safe reporting is
 possible.
+
+The frozen performance baseline still emits `gamenet.core_benchmark.v1`.
+The matrix runner accepts v1 only for that reviewed baseline and v2 for the
+candidate. Relative regression compares their common reviewed performance
+metrics; v2 admission and recovery accounting is validated independently and
+is never inferred for v1 samples.
 
 ## Evidence Discipline
 
@@ -95,17 +107,21 @@ completion mode beside it. Compare runs only when those fields and scenario
 parameters match. CPU load, power policy, allocator state, and loopback stack
 noise can materially change results.
 
-The first local Windows Release evidence is stored under
+The first historical Core v1 Windows Release evidence is stored under
 `docs/development/benchmark_results/2026-07-10-windows-msvc-release/`. Linux
-Release output is still required from a Linux host or CI artifact before the
-cross-platform PR-0C evidence gate can be called complete.
+and Windows regression infrastructure later passed together in workflow run
+`29808395220` at candidate SHA `5f926f3`. That run predates the current v2 and
+runtime changes, so it is retained as tooling evidence rather than final
+candidate evidence.
 
 ## Manual Cross-Platform Capture
 
 The manual-only `core-benchmark` workflow runs the fixed scenario set in Linux
-Release and Windows MSVC Release jobs for the same commit. Each job validates
-schema, status, platform, backend, and build type without imposing timing
-thresholds, then uploads the four raw JSON artifacts as one bundle. The
+Release and Windows MSVC Release jobs. Each producer builds both the reviewed
+baseline and candidate on the same runner, executes three repetitions of an
+expanded 1/2/4-worker, 256/1,024-connection, and 4/16-slow-client matrix, and
+enforces the reviewed relative budgets. It also preserves the four original
+canonical raw JSON artifacts as one bundle. The
 canonical artifact name binds the producer job, commit SHA, workflow run id,
 and run attempt:
 
@@ -122,3 +138,8 @@ The workflow also builds and captures the separate Phase 4 scenario set. Those
 documents use `gamenet.phase4_benchmark.v1` and distinct artifact names; see
 `docs/development/phase4_benchmark.md`. They do not change this Core schema or
 the four-file Core artifact contract.
+
+The full baseline/candidate sample sets and `gamenet.performance_regression.v1`
+are retained with the Phase 4 producer evidence. See
+`docs/development/performance_regression.md`. These comparisons are same-runner
+regression gates, not cross-platform capacity comparisons.

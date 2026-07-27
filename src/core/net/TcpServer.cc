@@ -5,6 +5,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TimerId.h"
+#include "detail/EventLoopLifecycleRegistry.h"
 
 #include "gamenet/core/base/Logger.h"
 
@@ -15,7 +16,9 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace gamenet::net {
 
@@ -65,10 +68,51 @@ struct TcpServer::GracefulStopState {
     TcpServerStopFuture future;
     mutable std::mutex mutex;
     bool completed{false};
+    bool begun{false};
     bool forceStarted{false};
     std::size_t initialConnectionCount{0};
     std::size_t forcedConnectionCount{0};
+    TcpServerStopOptions options;
     TimerId timeoutTimer;
+};
+
+struct TcpServer::WorkerStopParticipant {
+    enum class Command {
+        None,
+        Graceful,
+        Force,
+    };
+
+    explicit WorkerStopParticipant(
+        EventLoop* loopValue,
+        EventLoopLifecycleSource baseSourceValue)
+        : loop(loopValue),
+          baseSource(std::move(baseSourceValue)) {}
+
+    EventLoop* loop;
+    EventLoopLifecycleSource source;
+    EventLoopLifecycleSource baseSource;
+    std::mutex mutex;
+    std::uint64_t generation{0};
+    Command command{Command::None};
+    bool callbacksInstalled{false};
+    bool forceIssued{false};
+    bool locallyQuiet{false};
+    bool quietReported{false};
+    bool baseReleased{false};
+    bool ackReported{false};
+    std::vector<TcpConnectionPtr> connections;
+    std::vector<std::string> connectionNames;
+    std::unordered_set<std::string> pendingConnectionNames;
+};
+
+struct TcpServer::AggregateStopState {
+    std::uint64_t generation{0};
+    TcpServerStopOutcome outcome{TcpServerStopOutcome::Drained};
+    bool forceStarted{false};
+    bool joined{false};
+    std::shared_ptr<GracefulStopState> gracefulState;
+    std::vector<std::shared_ptr<WorkerStopParticipant>> participants;
 };
 
 TcpServer::TcpServer(EventLoop* loop, const InetAddress& listenAddr, std::string name, bool reusePort)
@@ -78,6 +122,17 @@ TcpServer::TcpServer(EventLoop* loop, const InetAddress& listenAddr, std::string
       threadPool_(std::make_unique<EventLoopThreadPool>(loop, name_)) {
     acceptor_->setNewConnectionCallback(
         [this](SocketFd sockfd, const InetAddress& peerAddr) { newConnection(sockfd, peerAddr); });
+
+    std::weak_ptr<void> lifetime = lifetimeToken_;
+    auto source = detail::EventLoopLifecycleRegistry::attach(
+        *loop_,
+        [this, lifetime] {
+            if (lifetime.lock()) {
+                driveStopLifecycleInLoop();
+            }
+        });
+    stopLifecycleSource_ =
+        std::make_shared<EventLoopLifecycleSource>(std::move(source));
 }
 
 TcpServer::~TcpServer() {
@@ -97,6 +152,21 @@ TcpServer::~TcpServer() {
     }
     if (!forceCloseAllConnections()) {
         threadPool_->stop();
+    }
+    for (const auto& participant : workerStopParticipants_) {
+        if (participant && participant->loop == loop_) {
+            detail::EventLoopLifecycleRegistry::detach(
+                *loop_,
+                participant->source);
+        }
+    }
+    std::shared_ptr<EventLoopLifecycleSource> stopSource;
+    {
+        std::lock_guard lock(stopLifecycleMutex_);
+        stopSource = std::move(stopLifecycleSource_);
+    }
+    if (stopSource) {
+        detail::EventLoopLifecycleRegistry::detach(*loop_, *stopSource);
     }
 }
 
@@ -123,6 +193,10 @@ void TcpServer::setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t h
 
 void TcpServer::setWriteCompleteCallback(WriteCompleteCallback cb) {
     writeCompleteCallback_ = std::move(cb);
+}
+
+void TcpServer::setCloseInfoCallback(CloseInfoCallback cb) {
+    closeInfoCallback_ = std::move(cb);
 }
 
 void TcpServer::setConnectionBackpressureOptions(
@@ -208,6 +282,12 @@ const InetAddress& TcpServer::listenAddress() const noexcept {
 
 std::size_t TcpServer::connectionCount() const {
     loop_->assertInLoopThread();
+    if (aggregateStopState_ && aggregateStopState_->forceStarted) {
+        // Compatibility view: immediate/forced stop logically detaches every
+        // connection at commit time. Internal ownership remains in the base
+        // map until worker cleanup is quiet and BaseReleased can be published.
+        return 0;
+    }
     return connections_.size();
 }
 
@@ -219,8 +299,21 @@ void TcpServer::start() {
 
     stopped_ = false;
     try {
-        threadPool_->start(threadInitCallback_);
+        workerStopParticipants_.clear();
+        std::weak_ptr<void> lifetime = lifetimeToken_;
+        const auto userThreadInit = threadInitCallback_;
+        threadPool_->start(
+            [this, lifetime, userThreadInit](EventLoop* workerLoop) {
+                if (!lifetime.lock()) {
+                    return;
+                }
+                registerWorkerStopParticipant(workerLoop);
+                if (userThreadInit) {
+                    userThreadInit(workerLoop);
+                }
+            });
     } catch (...) {
+        workerStopParticipants_.clear();
         started_.store(false, std::memory_order_relaxed);
         stopped_ = true;
         throw;
@@ -234,12 +327,12 @@ void TcpServer::start() {
 }
 
 void TcpServer::stop() {
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    loop_->runInLoop([this, lifetime] {
-        if (lifetime.lock()) {
-            stopInLoop();
-        }
-    });
+    immediateStopRequested_.store(true, std::memory_order_release);
+    if (loop_->isInLoopThread()) {
+        driveStopLifecycleInLoop();
+        return;
+    }
+    (void)signalStopLifecycle();
 }
 
 TcpServerStopFuture TcpServer::stopGracefully(TcpServerStopOptions options) {
@@ -252,28 +345,17 @@ TcpServerStopFuture TcpServer::stopGracefully(TcpServerStopOptions options) {
             return gracefulStopState_->future;
         }
         state = std::make_shared<GracefulStopState>();
+        state->options = options;
         gracefulStopState_ = state;
     }
 
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    auto begin = [this, lifetime, state, options] {
-        if (!lifetime.lock()) {
-            state->complete(TcpServerStopResult{
-                .outcome = TcpServerStopOutcome::ServerDestroyed,
-            });
-            return;
-        }
-        beginGracefulStopInLoop(state, options);
-    };
-
     if (loop_->isInLoopThread()) {
-        begin();
+        driveStopLifecycleInLoop();
         return state->future;
     }
 
-    try {
-        loop_->queueInLoop(std::move(begin));
-    } catch (...) {
+    const PostResult admitted = signalStopLifecycle();
+    if (admitted != PostResult::Accepted) {
         state->complete(TcpServerStopResult{
             .outcome = TcpServerStopOutcome::SchedulingFailed,
         });
@@ -285,12 +367,74 @@ TcpServerStopFuture TcpServer::stopGracefully(TcpServerStopOptions options) {
     return state->future;
 }
 
-void TcpServer::stopInLoop() {
+PostResult TcpServer::signalStopLifecycle() noexcept {
+    std::shared_ptr<EventLoopLifecycleSource> source;
+    {
+        std::lock_guard lock(stopLifecycleMutex_);
+        source = stopLifecycleSource_;
+    }
+    if (!source) {
+        return PostResult::OwnerUnavailable;
+    }
+    return source->signal();
+}
+
+void TcpServer::registerWorkerStopParticipant(EventLoop* workerLoop) {
+    workerLoop->assertInLoopThread();
+
+    std::shared_ptr<EventLoopLifecycleSource> baseSource;
+    {
+        std::lock_guard lock(stopLifecycleMutex_);
+        baseSource = stopLifecycleSource_;
+    }
+    if (!baseSource) {
+        throw std::logic_error(
+            "TcpServer base lifecycle source is unavailable");
+    }
+
+    auto participant =
+        std::make_shared<WorkerStopParticipant>(
+            workerLoop,
+            *baseSource);
+    const auto source = detail::EventLoopLifecycleRegistry::attach(
+        *workerLoop,
+        [participant] {
+            driveWorkerStopParticipant(participant);
+        });
+    participant->source = source;
+    workerStopParticipants_.push_back(std::move(participant));
+}
+
+void TcpServer::driveStopLifecycleInLoop() {
     loop_->assertInLoopThread();
-    if (stopped_) {
-        const auto state = gracefulStopStateSnapshot();
-        if (state && !state->isCompleted() && !state->forceStarted) {
-            forceGracefulStopInLoop(state, TcpServerStopOutcome::ForcedByImmediateStop);
+
+    const auto gracefulState = gracefulStopStateSnapshot();
+    if (gracefulState &&
+        !gracefulState->isCompleted() &&
+        !gracefulState->begun) {
+        gracefulState->begun = true;
+        beginGracefulStopInLoop(
+            gracefulState,
+            gracefulState->options);
+    }
+
+    if (immediateStopRequested_.exchange(
+            false,
+            std::memory_order_acq_rel)) {
+        stopInLoop();
+    }
+
+    consumeWorkerStopNotificationsInLoop();
+}
+
+void TcpServer::beginAggregateStopInLoop(
+    const std::shared_ptr<GracefulStopState>& gracefulState,
+    TcpServerStopOutcome outcome,
+    bool force) {
+    loop_->assertInLoopThread();
+    if (aggregateStopState_) {
+        if (force) {
+            requestAggregateForceInLoop(outcome);
         }
         return;
     }
@@ -300,9 +444,372 @@ void TcpServer::stopInLoop() {
     if (acceptor_->listening()) {
         acceptor_->stop();
     }
-    if (!forceCloseAllConnections()) {
-        threadPool_->stop();
+
+    if (nextStopGeneration_ == 0) {
+        throw std::overflow_error(
+            "TcpServer stop generation is exhausted");
     }
+    auto aggregate = std::make_shared<AggregateStopState>();
+    aggregate->generation = nextStopGeneration_++;
+    aggregate->outcome = outcome;
+    aggregate->forceStarted = force;
+    aggregate->gracefulState = gracefulState;
+    aggregate->participants = workerStopParticipants_;
+    aggregateStopState_ = aggregate;
+
+    std::unordered_map<EventLoop*, std::vector<TcpConnectionPtr>>
+        connectionsByLoop;
+    for (const auto& [name, connection] : connections_) {
+        (void)name;
+        connectionsByLoop[connection->getLoop()].push_back(connection);
+    }
+
+    for (const auto& participant : aggregate->participants) {
+        std::vector<TcpConnectionPtr> assigned;
+        const auto found = connectionsByLoop.find(participant->loop);
+        if (found != connectionsByLoop.end()) {
+            assigned = std::move(found->second);
+            connectionsByLoop.erase(found);
+        }
+
+        {
+            std::lock_guard lock(participant->mutex);
+            participant->generation = aggregate->generation;
+            participant->command =
+                force
+                ? WorkerStopParticipant::Command::Force
+                : WorkerStopParticipant::Command::Graceful;
+            participant->callbacksInstalled = false;
+            participant->forceIssued = false;
+            participant->locallyQuiet = assigned.empty();
+            participant->quietReported = false;
+            participant->baseReleased = false;
+            participant->ackReported = false;
+            participant->connections = std::move(assigned);
+            participant->connectionNames.clear();
+            participant->pendingConnectionNames.clear();
+            participant->connectionNames.reserve(
+                participant->connections.size());
+            participant->pendingConnectionNames.reserve(
+                participant->connections.size());
+            for (const auto& connection : participant->connections) {
+                participant->connectionNames.push_back(
+                    connection->name());
+                participant->pendingConnectionNames.insert(
+                    connection->name());
+            }
+        }
+
+        const PostResult signaled = participant->source.signal();
+        if (signaled != PostResult::Accepted) {
+            LOG_ERROR
+                << "TcpServer worker aggregate rejected stop generation "
+                << aggregate->generation;
+        }
+    }
+
+    if (!connectionsByLoop.empty()) {
+        LOG_FATAL
+            << "TcpServer has connections without a worker stop participant";
+    }
+
+    if (aggregate->participants.empty()) {
+        finishAggregateStopInLoop();
+    }
+}
+
+void TcpServer::requestAggregateForceInLoop(
+    TcpServerStopOutcome outcome) {
+    loop_->assertInLoopThread();
+    const auto aggregate = aggregateStopState_;
+    if (!aggregate || aggregate->joined) {
+        return;
+    }
+
+    if (outcome == TcpServerStopOutcome::ForcedByImmediateStop ||
+        !aggregate->forceStarted) {
+        aggregate->outcome = outcome;
+    }
+    if (aggregate->forceStarted) {
+        return;
+    }
+    aggregate->forceStarted = true;
+    if (aggregate->gracefulState) {
+        aggregate->gracefulState->forceStarted = true;
+        aggregate->gracefulState->forcedConnectionCount =
+            connections_.size();
+    }
+
+    for (const auto& participant : aggregate->participants) {
+        bool signal = false;
+        {
+            std::lock_guard lock(participant->mutex);
+            if (participant->generation != aggregate->generation ||
+                participant->ackReported) {
+                continue;
+            }
+            if (participant->command !=
+                WorkerStopParticipant::Command::Force) {
+                participant->command =
+                    WorkerStopParticipant::Command::Force;
+                signal = true;
+            }
+        }
+        if (signal) {
+            (void)participant->source.signal();
+        }
+    }
+}
+
+void TcpServer::workerConnectionClosed(
+    const std::shared_ptr<WorkerStopParticipant>& participant,
+    std::uint64_t generation,
+    const TcpConnectionPtr& connection) {
+    participant->loop->assertInLoopThread();
+    connection->connectDestroyed();
+
+    bool notifyBase = false;
+    {
+        std::lock_guard lock(participant->mutex);
+        if (participant->generation != generation ||
+            participant->ackReported) {
+            return;
+        }
+        if (participant->pendingConnectionNames.erase(
+                connection->name()) == 0) {
+            return;
+        }
+        if (participant->pendingConnectionNames.empty()) {
+            participant->locallyQuiet = true;
+            if (!participant->quietReported) {
+                participant->quietReported = true;
+                notifyBase = true;
+            }
+        }
+    }
+    if (notifyBase) {
+        (void)participant->baseSource.signal();
+    }
+}
+
+void TcpServer::driveWorkerStopParticipant(
+    const std::shared_ptr<WorkerStopParticipant>& participant) {
+    participant->loop->assertInLoopThread();
+
+    std::uint64_t generation = 0;
+    WorkerStopParticipant::Command initialCommand =
+        WorkerStopParticipant::Command::None;
+    std::vector<TcpConnectionPtr> installConnections;
+    std::vector<TcpConnectionPtr> forceConnections;
+    bool notifyBaseQuiet = false;
+    bool notifyBaseAck = false;
+    bool detach = false;
+
+    {
+        std::lock_guard lock(participant->mutex);
+        generation = participant->generation;
+        if (generation == 0) {
+            return;
+        }
+
+        if (!participant->callbacksInstalled) {
+            participant->callbacksInstalled = true;
+            initialCommand = participant->command;
+            installConnections = participant->connections;
+            if (initialCommand ==
+                WorkerStopParticipant::Command::Force) {
+                participant->forceIssued = true;
+            }
+        } else if (
+            participant->command ==
+                WorkerStopParticipant::Command::Force &&
+            !participant->forceIssued) {
+            participant->forceIssued = true;
+            forceConnections = participant->connections;
+        }
+
+        if (participant->pendingConnectionNames.empty()) {
+            participant->locallyQuiet = true;
+            if (!participant->quietReported) {
+                participant->quietReported = true;
+                notifyBaseQuiet = true;
+            }
+        }
+
+        if (participant->baseReleased &&
+            participant->locallyQuiet &&
+            !participant->ackReported) {
+            participant->ackReported = true;
+            participant->connections.clear();
+            participant->connectionNames.clear();
+            participant->pendingConnectionNames.clear();
+            notifyBaseAck = true;
+            detach = true;
+        }
+    }
+
+    for (const auto& connection : installConnections) {
+        std::weak_ptr<WorkerStopParticipant> weakParticipant =
+            participant;
+        connection->setCloseCallback(
+            [weakParticipant, generation](
+                const TcpConnectionPtr& closedConnection) {
+                if (const auto locked = weakParticipant.lock()) {
+                    workerConnectionClosed(
+                        locked,
+                        generation,
+                        closedConnection);
+                } else {
+                    closedConnection->connectDestroyed();
+                }
+            });
+
+        if (connection->disconnected()) {
+            workerConnectionClosed(
+                participant,
+                generation,
+                connection);
+        } else if (
+            initialCommand ==
+            WorkerStopParticipant::Command::Force) {
+            (void)connection->tryForceClose();
+        } else {
+            (void)connection->tryShutdown();
+        }
+    }
+
+    for (const auto& connection : forceConnections) {
+        if (!connection->disconnected()) {
+            (void)connection->tryForceClose();
+        }
+    }
+
+    // Synchronous force-close callbacks may have transitioned the participant
+    // to quiet after the initial snapshot.
+    {
+        std::lock_guard lock(participant->mutex);
+        if (participant->generation == generation &&
+            participant->pendingConnectionNames.empty()) {
+            participant->locallyQuiet = true;
+            if (!participant->quietReported) {
+                participant->quietReported = true;
+                notifyBaseQuiet = true;
+            }
+        }
+    }
+
+    if (notifyBaseQuiet || notifyBaseAck) {
+        (void)participant->baseSource.signal();
+    }
+    if (detach) {
+        detail::EventLoopLifecycleRegistry::detach(
+            *participant->loop,
+            participant->source);
+    }
+}
+
+void TcpServer::releaseWorkerConnectionsInLoop(
+    const std::shared_ptr<WorkerStopParticipant>& participant,
+    std::uint64_t generation) {
+    loop_->assertInLoopThread();
+
+    std::vector<std::string> connectionNames;
+    {
+        std::lock_guard lock(participant->mutex);
+        if (participant->generation != generation ||
+            !participant->locallyQuiet ||
+            participant->baseReleased) {
+            return;
+        }
+        connectionNames = participant->connectionNames;
+    }
+
+    for (const auto& connectionName : connectionNames) {
+        if (connections_.erase(connectionName) != 0) {
+            releaseConnectionAdmission(connectionName);
+        }
+    }
+
+    {
+        std::lock_guard lock(participant->mutex);
+        if (participant->generation != generation ||
+            participant->baseReleased) {
+            return;
+        }
+        participant->baseReleased = true;
+    }
+    (void)participant->source.signal();
+}
+
+void TcpServer::consumeWorkerStopNotificationsInLoop() {
+    loop_->assertInLoopThread();
+    const auto aggregate = aggregateStopState_;
+    if (!aggregate || aggregate->joined) {
+        return;
+    }
+
+    for (const auto& participant : aggregate->participants) {
+        releaseWorkerConnectionsInLoop(
+            participant,
+            aggregate->generation);
+    }
+
+    bool allAcknowledged = true;
+    for (const auto& participant : aggregate->participants) {
+        std::lock_guard lock(participant->mutex);
+        if (participant->generation != aggregate->generation ||
+            !participant->ackReported) {
+            allAcknowledged = false;
+            break;
+        }
+    }
+    if (allAcknowledged) {
+        finishAggregateStopInLoop();
+    }
+}
+
+void TcpServer::finishAggregateStopInLoop() {
+    loop_->assertInLoopThread();
+    const auto aggregate = aggregateStopState_;
+    if (!aggregate || aggregate->joined) {
+        return;
+    }
+    aggregate->joined = true;
+
+    if (aggregate->gracefulState &&
+        aggregate->gracefulState->timeoutTimer.valid()) {
+        loop_->cancel(aggregate->gracefulState->timeoutTimer);
+        aggregate->gracefulState->timeoutTimer = {};
+    }
+
+    clearConnectionAdmission();
+    threadPool_->stop();
+    if (aggregate->gracefulState) {
+        aggregate->gracefulState->complete(TcpServerStopResult{
+            .outcome = aggregate->outcome,
+            .initialConnectionCount =
+                aggregate->gracefulState->initialConnectionCount,
+            .forcedConnectionCount =
+                aggregate->gracefulState->forcedConnectionCount,
+        });
+    }
+    aggregateStopState_.reset();
+}
+
+void TcpServer::stopInLoop() {
+    loop_->assertInLoopThread();
+    if (aggregateStopState_) {
+        requestAggregateForceInLoop(
+            TcpServerStopOutcome::ForcedByImmediateStop);
+        return;
+    }
+    if (stopped_) {
+        return;
+    }
+    beginAggregateStopInLoop(
+        {},
+        TcpServerStopOutcome::ForcedByImmediateStop,
+        true);
 }
 
 void TcpServer::beginGracefulStopInLoop(
@@ -319,21 +826,13 @@ void TcpServer::beginGracefulStopInLoop(
         return;
     }
 
-    stopped_ = true;
-    acceptor_->setNewConnectionCallback({});
-    if (acceptor_->listening()) {
-        acceptor_->stop();
-    }
-
     state->initialConnectionCount = connections_.size();
-    if (connections_.empty()) {
-        finishGracefulStopInLoop(state, TcpServerStopOutcome::Drained);
+    beginAggregateStopInLoop(
+        state,
+        TcpServerStopOutcome::Drained,
+        false);
+    if (state->isCompleted()) {
         return;
-    }
-
-    for (const auto& [name, connection] : connections_) {
-        (void)name;
-        connection->shutdown();
     }
 
     if (options.drainTimeout == std::chrono::milliseconds::zero()) {
@@ -369,9 +868,7 @@ void TcpServer::forceGracefulStopInLoop(
         state->timeoutTimer = {};
     }
     state->forcedConnectionCount = connections_.size();
-    if (!forceCloseAllConnectionsForGraceful(state, outcome)) {
-        finishGracefulStopInLoop(state, outcome);
-    }
+    requestAggregateForceInLoop(outcome);
 }
 
 void TcpServer::finishGracefulStopInLoop(
@@ -384,6 +881,11 @@ void TcpServer::finishGracefulStopInLoop(
     if (state->timeoutTimer.valid()) {
         loop_->cancel(state->timeoutTimer);
         state->timeoutTimer = {};
+    }
+    if (aggregateStopState_ &&
+        aggregateStopState_->gracefulState == state) {
+        aggregateStopState_->outcome = outcome;
+        return;
     }
     threadPool_->stop();
     state->complete(TcpServerStopResult{
@@ -692,6 +1194,7 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
          messageCallback = messageCallback_,
          highWaterMarkCallback = highWaterMarkCallback_,
          writeCompleteCallback = writeCompleteCallback_,
+         closeInfoCallback = closeInfoCallback_,
          callbackExceptionHandler = callbackExceptionHandler_,
          closeCallback = std::move(closeCallback),
          backpressureOptions = backpressureOptions_,
@@ -703,6 +1206,7 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
                 connection->setHighWaterMarkCallback(std::move(highWaterMarkCallback), highWaterMark);
             }
             connection->setWriteCompleteCallback(std::move(writeCompleteCallback));
+            connection->setCloseInfoCallback(std::move(closeInfoCallback));
             connection->setCallbackExceptionHandler(std::move(callbackExceptionHandler));
             connection->setCloseCallback(std::move(closeCallback));
             connection->connectEstablished();
@@ -738,6 +1242,12 @@ void TcpServer::removeConnection(const TcpConnectionPtr& connection) {
 
 void TcpServer::removeConnectionInLoop(const TcpConnectionPtr& connection) {
     loop_->assertInLoopThread();
+    if (aggregateStopState_ && !aggregateStopState_->joined) {
+        // The active aggregate owns worker cleanup and base-map release for
+        // this generation. A normal close notification already committed
+        // before stop is deliberately coalesced into that handshake.
+        return;
+    }
     const auto erased = connections_.erase(connection->name());
     if (erased == 0) {
         return;

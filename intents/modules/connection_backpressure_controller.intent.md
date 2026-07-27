@@ -53,6 +53,9 @@ all of that logic inline.
 - TcpConnection owns ConnectionBackpressureController
 - TcpConnection notifies the controller after writes, drains, connection establishment,
   policy reconfiguration, and teardown
+- TcpConnection applies the controller transition before attempting an
+  optional high-water notification, so notification saturation cannot suppress
+  Channel read-interest enforcement
 - Channel performs the actual enableReading/disableReading calls
 - the higher-level backpressure policy intent remains defined by
   `intents/modules/backpressure_policy.intent.md`
@@ -91,6 +94,10 @@ all of that logic inline.
   proves that crossing high-water pauses read processing, input remains
   undispatched while paused, draining to low-water resumes on the owner loop,
   and the connection-wide hard byte limit rejects before buffer growth.
+- `tests/contract/tcp_connection/test_tcp_connection_queue_saturation.cpp`
+  proves that normal-plus-reserved functor saturation can drop the optional
+  high-water callback while this controller still pauses reads, resumes after
+  drain, and permits output to reach zero.
 - `tests/contract/tcp_server/test_tcp_server_contract.cpp` proves that
   TcpServer installs its configured connection hard limit before establishment.
 - TcpConnection separately enforces the input-buffer hard limit carried by the

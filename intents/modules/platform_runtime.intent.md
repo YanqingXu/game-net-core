@@ -62,6 +62,13 @@ This module is not business logic.
 - Platform-specific code must not leak backend event constants into user-facing APIs.
 - Compatibility headers may forward old include paths, but implementation belongs in
   `platform/` or `poller/`.
+- A Windows overlapped submission that fails synchronously with an error other
+  than `WSA_IO_PENDING` creates no completion obligation. The posting owner
+  receives that error immediately and must not synthesize Channel readiness for
+  a completion packet that will never exist.
+- Each posted `OVERLAPPED`, `WSABUF`, and referenced buffer has stable storage
+  owned by the posting module until exactly one normal, error, or cancellation
+  completion is consumed. `IocpPoller` only observes that operation storage.
 
 ---
 
@@ -73,6 +80,25 @@ This module is not business logic.
 - `PollerFactory` chooses an IOCP-backed Windows backend and `EPollPoller` on Linux.
 - CMake selects exactly one socket implementation, one wakeup implementation, and
   one concrete poller backend for the target platform.
+
+---
+
+## Supported Build Boundary
+
+- The configured target system must be exactly Linux or Windows.
+- Linux is the Tier 1 reference platform for release, sanitizer, performance,
+  and long-duration endurance evidence.
+- Windows is Tier 2 until the M3 IOCP batching, synchronous-error, resource
+  ownership, and capacity gates are complete; it remains a required functional
+  and package-consumer CI platform.
+- macOS, BSD variants, and all other target systems fail at CMake configure
+  time instead of selecting Linux sources implicitly.
+- Installed library targets are static-only before version 1.0.
+- `BUILD_SHARED_LIBS=ON`, `GAMENET_ENABLE_TLS=ON`, and
+  `GAMENET_ENABLE_EXPERIMENTAL=ON` fail at configure time. The latter two
+  options remain accepted only as `OFF` for command-line compatibility while
+  their modules are deferred.
+- No binary ABI compatibility is promised before version 1.0.
 
 ---
 
@@ -110,7 +136,14 @@ This module is not business logic.
   runtime path.
 - Unsupported platform features must be reported as unsupported, not emulated
   silently.
+- Unsupported target systems, shared-library requests, and unimplemented
+  optional-module requests fail during CMake configure rather than producing a
+  partially selected build.
 - Would-block and interrupted errors must normalize to stable helper predicates.
+- Windows `WSARecv` / `WSASend` synchronous non-pending failures and queued
+  error completions normalize into the same owner-loop connection error/close
+  path. `ERROR_OPERATION_ABORTED` is consumed as the terminal result of a
+  canceled pending operation and cannot produce duplicate lifecycle callbacks.
 - A Linux write after peer close returns an explicit socket error; it must not
   terminate the hosting process through `SIGPIPE`.
 - Wakeup drain failure is logged by `EventLoop` without changing callback ordering.
@@ -132,9 +165,19 @@ This module is not business logic.
   creation, bind, and listen failures are returned without terminating the
   process.
 - Future Windows workflow verifies the Windows source selection and IOCP completion path.
+- `tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp`
+  injects `WSAENOBUFS` and `WSAECONNRESET` at the source-private submission
+  boundary, verifies immediate single-shot close convergence, and observes a
+  real `ERROR_OPERATION_ABORTED` completion after cancellation.
+- The deterministic IOCP fault seam is compiled only when
+  `GAMENET_BUILD_TESTING=ON`; release and benchmark builds contain no fault-hook
+  state or hot-path atomic access.
 - `docs/development/windows_iocp_milestone.md` defines the Windows promotion
   gates for IOCP wakeup, overlapped read/write ownership, and cancel/close ordering.
 - Linux CI/builds verify the Linux source selection and EPollPoller path.
+- `tests/cmake/test_build_governance_contract.py` verifies the supported target
+  systems, explicit backend branches, static-only targets, rejected empty
+  options, documentation, and CI guard registration.
 
 ---
 

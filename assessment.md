@@ -1,632 +1,1207 @@
-# 审计结论
-
-> **历史输入快照。** 本文记录 2026-07-11 的初始审计，因此正文中的 Draft PR、
-> Request changes 与未发布判断不应被当作当前状态。整改后的最新审计见
-> [`docs/development/phase4_audit_2026-07-11.md`](docs/development/phase4_audit_2026-07-11.md)，
-> 已发布 Preview 的身份、证据与校验和见
-> [`docs/development/releases/v0.2.0-phase4-preview.md`](docs/development/releases/v0.2.0-phase4-preview.md)。
-
-截至 **2026 年 7 月 11 日**，应把项目状态严格拆成两个基线：
-
-1. **`main` / 已发布基线**：Phase 1～3.5 的 Reactor/TCP Core 已收口，代码树仍以 `GameNet::core` 为主；仓库 README 也仍把 Reactor/TCP 定义为当前 active target。([github.com][1])
-2. **Phase 4 开发基线**：PacketFramer、Transport、Session、LogicLoop、Pipeline 示例和 Broadcast 都存在于当前 **draft PR #4**，但尚未合入 `main`、尚未发布。PR #4 目前是 1 个提交、57 个文件、2829 行新增，状态为 open、draft、mergeable。
-
-我的最终判定是：
-
-| 审计对象                       | 判定                               | 说明                                                  |
-| -------------------------- | -------------------------------- | --------------------------------------------------- |
-| Phase 2/3 Reactor/TCP Core | **通过，Preview-grade 稳定**          | 跨平台 CI、Sanitizers、长稳、真实 IOCP 数据路径均有证据               |
-| `v0.1.0-core-preview`      | **Tag 已发布；GitHub Release 未发布**   | 是可追溯 annotated tag，不是带发布说明和资产的 GitHub Release       |
-| Phase 4 代码基础               | **有条件通过**                        | 模块边界和基本契约正确，但存在多项生命周期、状态机和测试真实性缺口                   |
-| 当前 PR #4                   | **建议 Request changes，不应按现状直接合并** | 主要阻断项是生命周期、真实 fuzz、并发测试、Pipeline 认证状态机和 Intent 语义校验 |
-| 完整游戏网络底座                   | **尚未到 70%～75% 的可发布成熟度**          | “模块文件已存在”接近该口径；按可合并、可验证、可发布口径约为 55%～65%             |
-
----
-
-# 1. Phase 2/3 Core 审计
-
-## 1.1 `v0.1.0-core-preview` 的真实发布状态
-
-Core 的证据链是成立的：
-
-* 最后验证提交为 `c4818d4b...`；
-* `ci` run `29079836593` 在该提交上通过 Linux Debug、ASan/UBSan、TSan、Linux Release 和 Windows MSVC IOCP 五个 job；
-* annotated tag `v0.1.0-core-preview` 指向该验证提交。
-* 我独立核对了该 run，五个 job 的结论均为 `success`。
-
-但“发布”需要更精确地表述：
-
-> **当前是 tagged core preview，不是 GitHub Release。**
-
-GitHub 仓库页面仍明确显示 **No releases published**。([github.com][1])
-
-这不影响 tag 作为源码基线的有效性，但缺少：
-
-* Release notes；
-* 已知限制；
-* 构建产物或源码归档校验和；
-* benchmark / soak artifact 索引；
-* 下游升级说明。
-
-因此，文档里建议统一使用“已打 annotated preview tag”，不要笼统写成“GitHub Release 已发布”。
-
-## 1.2 跨平台 CI 与 Windows IOCP
-
-当前 CI 矩阵覆盖：
-
-| Job               | 实际范围                               | 审计判断     |
-| ----------------- | ---------------------------------- | -------- |
-| Linux CMake Debug | 全量 CTest、守卫、安装消费方编译                | 通过       |
-| Linux ASan/UBSan  | Debug + 全量 CTest                   | 通过       |
-| Linux TSan        | Debug + `threading` 标签测试           | 通过，但不是全量 |
-| Linux Release     | Release + 全量 CTest                 | 通过       |
-| Windows MSVC IOCP | Windows Debug + 全量 CTest + 安装消费方编译 | 通过       |
-
-工作流确实分别启用了 `-fsanitize=address,undefined` 和 `-fsanitize=thread`；TSan job 只执行 `ctest -L threading`。Windows job 使用真实 MSVC/IOCP 路径，但远端只跑 Debug 配置。
-
-Windows 支持不是“能编译的兼容层”，而是已经覆盖真实 IOCP 数据路径：
-
-* `AcceptEx`；
-* `ConnectEx`；
-* `WSARecv`；
-* `WSASend`；
-* `PostQueuedCompletionStatus` wakeup；
-* pending overlapped I/O 的取消与 teardown 顺序。
-
-这部分可以认定为 **功能可用且具有较强契约证据**。
-
-## 1.3 Sanitizers 与长稳证据
-
-Core 当前有三类独立验证：
-
-* ASan/UBSan：全量 Debug CTest；
-* TSan：线程相关 slice；
-* long-soak：46 个 threading tests 重复 50 次，共 2300 次执行，远端成功。
-* Linux epoll 与 Windows IOCP 的 Release benchmark workflow 均成功，并上传原始 JSON。
-
-因此 Core 的正确定位是：
-
-> **可以作为后续组件迁移的冻结 Preview 基线；不应宣传为 production-ready。**
-
-剩余工程缺口主要是：
-
-1. TSan 只覆盖 `threading` 标签，不覆盖全量测试。
-2. Windows Release 目前是本地结果和手动 benchmark，不是主 CI 必需 job。
-3. 性能数据只是快照，没有回归阈值。
-4. long-soak 是手动 workflow，不是每个候选版本的自动门禁。
-5. 远端 install consumer 只配置和编译，没有执行其 `main()`；工作流的“verify”命名略高于实际证据。
-
----
-
-# 2. Phase 4 当前落地状态
-
-## 2.1 先纠正文档与远端证据的不一致
-
-PR #4 中的 `migration_status.md` 和 `assessment.md` 仍写着“Phase 4 远端 Linux/sanitizer/TSan 证据待产生”。
-
-但实际情况已经变化：
-
-* PR head `0d62054e...` 对应 `ci` run #32；
-* run #32 已完成且结论为 success；
-* Linux Debug、ASan/UBSan、TSan、Release、Windows MSVC IOCP 五个 job 全部成功。
-
-因此，在 PR 合并前必须更新证据账本，至少记录：
-
-* PR head SHA；
-* GitHub 生成的 merge-ref SHA；
-* run id `29147391402`；
-* 五个 job 的结果；
-* 74-test 数量；
-* TSan 实际执行的是哪 51 个线程标签测试。
-
-否则当前文档已经不是最新事实。
-
-## 2.2 是否遵循 Intent → Invariants → Contracts → Tests
-
-`AGENTS.md` 要求顺序是：
-
-`Intent → Invariants → Threading → Ownership → Contracts → Tests → Implementation`，并明确要求回答 owner thread、释放者、可重入 callback、跨线程 marshal 和具体测试文件。
-
-对 PR #4 的判断应分成两层：
-
-### 产物结构：基本符合
-
-六个 Phase 4 交付物均具有：
-
-* active intent；
-* 线程和所有权说明；
-* 独立 CMake target 或 example target；
-* contract / integration test；
-* 实现代码。
-
-### 开发历史：不可审计
-
-当前 PR 把原路线图 PR-1～PR-6 的全部内容压在 **一个提交** 中。无法从提交历史证明：
-
-* intent 是否先于代码确定；
-* contract 是否先失败再实现；
-* 每一层是否独立评审和验证；
-* 后一层是否只依赖已冻结的前一层。
-
-因此更准确的结论是：
-
-> **最终文件布局遵循了意图驱动的形式，但提交历史没有提供意图驱动过程的证据。**
-
----
-
-# 3. Phase 4 模块逐项审计
-
-## 3.1 PacketFramer
-
-### 已完成的部分
-
-PacketFramer active intent 明确了：
-
-* `uint32` 大端长度前缀；
-* 半包、粘包、空帧；
-* 最大 payload；
-* faulted 状态与显式 reset；
-* caller-owned、非线程安全；
-* 不承载业务字段。
-
-实现和基本 contract 覆盖了上述主要行为。
-
-### 阻断问题
-
-**1. “fuzz smoke”并不是真正的 fuzz。**
-
-当前测试只用固定随机种子生成合法 payload，先 `encode()`，再随机分块喂给 parser，验证往返结果。它没有把任意畸形字节作为输入，也不是 `LLVMFuzzerTestOneInput` harness。
-
-而原 `mini_trantor` 已有真正的 libFuzzer 入口，会把任意输入同时送入单帧和批量解码。
-
-因此 PR 文案中的“fuzz passed”应改为“deterministic chunked round-trip smoke passed”，并补回真正的 fuzz target。
-
-**2. 缺少每次解析的 frame/byte budget。**
-
-当前 `push()` 会先把整个输入追加到内部 `std::string`，再循环解析所有完整帧。恶意客户端可以用大量小帧让单次 I/O callback 长时间占用 owner loop，也可以使一次追加产生很高的瞬时内存压力。原项目 PacketFramer 已经有 `maxFramesPerBatch`。
-
-进入 Pipeline 前应增加：
-
-* `maxBufferedBytes`；
-* `maxFramesPerPush`；
-* 剩余输入的 owner-loop continuation；
-* 超限时的明确状态和测试。
-
-**判定：有条件通过；真实 fuzz 和解析预算是合并前门禁。**
-
-## 3.2 TransportEndpoint
-
-### 已完成的部分
-
-接口保持较窄：
-
-* immutable session id；
-* owner loop；
-* send；
-* close；
-* isOpen；
-* TCP adapter 通过 `weak_ptr<TcpConnection>` 观察底层连接。
-
-这符合“不立即引入庞大 TransportManager”的路线。
-
-### 阻断问题
-
-`TcpTransportEndpoint` 同时保存：
-
-* `EventLoop* ownerLoop_`；
-* `weak_ptr<TcpConnection>`。
-
-`send()` / `close()` 在确认弱连接仍存活之前，先解引用 `ownerLoop_` 检查线程。若 endpoint 比 connection 和 loop 活得更久，会出现悬空 loop 指针风险。现有测试只覆盖“connection 已过期、EventLoop 仍存活”，没有覆盖 endpoint outlives loop。
-
-这与项目生命周期规则存在直接张力：仓库明确禁止没有生命周期保证的 raw-pointer 回调和“probably still alive”假设。
-
-此外，BroadcastRouter 会在 management loop 调用 `endpoint->isOpen()`，但 TransportEndpoint intent 没有明确声明 `isOpen()` 是跨线程安全 snapshot observer。
-
-需要补齐：
-
-* endpoint / connection / loop 的严格 lifetime dominance；
-* 或 loop lifetime token；
-* `isOpen()` 的跨线程契约；
-* wrong-thread close；
-* endpoint outlives connection/loop；
-* loop stop 后 queued send/close 的行为。
-
-**判定：接口方向正确，生命周期契约未闭环。**
-
-## 3.3 PlayerSession / SessionManager
-
-### 已完成的部分
-
-设计具备合理的管理面：
-
-* 单一 management loop 所有权；
-* player 和 transport 双索引；
-* duplicate login replace/reject；
-* rebind；
-* stale disconnect 防护；
-* heartbeat / idle expiration；
-* endpoint close 回到 endpoint owner loop。
-
-### 阻断问题
-
-**1. TransportSessionId 冲突会破坏双索引不变量。**
-
-当两个不同玩家使用相同 transport id 调用 `authenticate()` 时，代码会直接：
+# game-net-core 推荐开发路线
+
+> 基线日期：2026-07-26
+> 当前执行检查点：2026-07-27
+> 主线基线：`main@2b1be4343f7c478eb40542451f30aad8ca474003`
+> 候选分支：`codex/phase6-production-candidate@b3443182d0606792df44a12bcb08927e767bc060`
+> 执行分支：`codex/assessment-roadmap-execution`
+
+## 0. 执行进度
+
+本路线已经进入实施，而不是仅保留为建议。当前本地执行检查点的
+CTest 清单为 **102 项（8 unit、85 contract、9 integration）**：
+
+- M0 Phase 6 草案已快进整合到执行分支并完成代码审计，M0 的本地实现
+  与门禁已经闭环；stable tag 仍受独立 maintainer 评审、许可决策和最终
+  SHA 重跑约束；
+- MetricsExporter/Core、Logic、Broadcast recorder 已明确降为
+  provisional，当前字符串、哈希、全局 mutex 模型不再被描述为稳定热路径；
+- Core benchmark 已升级为 `gamenet.core_benchmark.v2`，echo/slow-client
+  均使用 `trySend()`，并由独立 validator 核验 requested/accepted/rejected、
+  low/high/hard/input limits、pending peak、pause/resume 与 recovery；
+- public API manifest 已升级为 v2，保留
+  `v0.2.0-phase4-preview@7668d6b...` 历史 snapshot，并在 CI 生成确定性
+  target/header/category/fingerprint diff；
+- CMake 已收紧为 Linux/Windows、static-only；unsupported OS、
+  `BUILD_SHARED_LIBS=ON`、未实现 TLS/experimental 开关均 fail closed；
+- 当前 all-rights-reserved/no-license-grant 已记录为外部采用阻断项；
+- `b344318` 的 24 小时（73,617 cycles）与 72 小时（220,851 cycles）
+  Linux/epoll 结果已登记为基础设施历史证据；任何后续 runtime 修改仍需在
+  最终冻结 SHA 重跑；
+- M1 已完成第一组底层原语：typed `PostResult`、固定 control-source slot、
+  pending bit 合并、quit admission 线性化和 final drain；
+- 跨线程普通任务饱和时，高水位与写完成通知会按合同丢弃并计数，连接状态
+  转换先于可选通知；Windows IOCP 同步提交失败会保留原始错误并立即收敛；
+- Connector/TcpClient 已增加请求代际、owner-thread 合同与 typed 控制结果，
+  Connector 的当前回调 Channel 使用 source-private 退役槽，不再依赖普通
+  pending queue 延长生命周期；
+- Connector 成功观察者同步 `restart()` 或 `stop() → start()` 时，旧代仅
+  通过 compare-exchange 收口自身状态，不会覆盖新代 `kConnecting`；
+  TcpClient 在旧连接已经 disconnecting 时接受的显式 connect 会独立保留，
+  即使 automatic retry 关闭也会在旧连接移除后启动；
+- EventLoop final-drain 完成与 control Shutdown 会一起发布，重复 `quit()`
+  不会复活已关闭 executor 的 owner 身份；Windows Connector 回调拒绝 fd
+  时也不会留下可污染 SOCKET 数值复用的 IOCP association 记录；
+- TcpClient 现在把“已经发出 disconnected 回调、尚待内部 remove”的旧连接
+  识别为已结束生命周期；即使 retry=false，回调内返回 Accepted 的显式
+  `tryConnect()` 也会生成并保留新请求，不再被旧 request id 静默合并；
+- Windows Connector → TcpConnection 接管已改为可回滚事务：
+  provisional `connection_`、request bookkeeping、IOCP association 与替代
+  Channel 注册任一步失败都会清理并发布 terminal failure；测试可分别注入
+  association preserve 和 replacement registration 的分配失败，并证明随后
+  的重入显式连接可以成功；
+- Channel/EventLoop/Poller 已完成 active-batch 代际与精确身份校验：
+  批次中被移除/销毁的 Channel 不会继续分发旧 readiness，同一 fd 的陈旧
+  remove 不会误删新注册；
+- 上一提交检查点的工作树已重新配置、全量构建并通过 Debug/Release CTest
+  **94/94**；当时的测试标签为 unit 8、contract 78、integration 8、
+  threading 67、lifecycle 73。此前 active-batch Debug/Release 各 50 次
+  重复亦通过；27 个 Python guard 文件所覆盖的仓库逻辑门禁、public API
+  v2 manifest/diff 和 CTest 标签/数量核验均通过；
+- `GAMENET_BUILD_TESTING=OFF` 的纯运行时 Release 已重新构建；本轮条件
+  编译的 IOCP/Logic internal test hooks 在工程、产物、安装库和安装头中
+  均为零，隔离安装包的外部 consumer 已通过 Release 运行与 CTest 1/1；
+- `Logger::resetForTesting()` 仍是既有公开 Logger 合同，并非本轮条件编译
+  hook；后续独立 API 人工评审必须明确决定是否继续保留该公开测试接口；
+- benchmark v2 已在最终两项 P1 修复的直接前一 runtime revision 上通过
+  echo、2×8 MiB accepted slow-client、2×32 MiB overload 三类独立
+  validator；由于 P1 修复再次改变 runtime，严格的最终 SHA 性能证据仍需
+  下次冻结候选时重跑，不能把该结果冒充为最终 artifact 的性能证明；
+- M1 的四个剩余切片已按依赖顺序在当前工作树完成：EventLoop 动态
+  lifecycle hub、`Running → Quiescing → FinalDraining → Shutdown` 与
+  IOCP completion 静默、TcpConnection 显式 close/drain、TcpServer
+  worker aggregate/BaseReleased/ack/join，以及结构化 close reason 和
+  独立 `TcpClientControl`；
+- 当前工作树的 Windows MSVC Debug 与 Release 已分别全量通过
+  **102/102** CTest；21 个本轮相关 Python 静态合同通过，public API v2
+  manifest/diff 通过，隔离安装包的 Release consumer 通过 CTest 1/1。
+
+M1 的本地 runtime 实现与直接合同现已闭环。尚未完成的是冻结候选 SHA
+之后的跨平台、sanitizer/TSan、性能与 24/72 小时耐久证据重跑，以及独立
+maintainer 的 API、性能和发布工具人工评审。因此当前仍不得创建 stable
+tag，也不得把历史 `b344318` 耐久记录当作本轮 runtime 的最终证明。
+
+独立 maintainer 的 API、性能和发布工具人工评审仍是稳定候选门禁；当前
+执行不得据此创建 stable tag。
+
+### 0.1 上一收敛检查点与本轮执行结果
+
+上一轮按用户要求在 `codex/assessment-roadmap-execution` 分支收敛、提交
+并推送了当时的全部本地修改。该远端分支尖端是本轮工作的代码基线；没有
+从未包含这些 M0/M1 原语的旧 `main` 或 Phase 6 候选重新开始。
+
+已冻结到本检查点的范围：
+
+1. M0 的平台、构建、许可、API manifest v2、CI/证据语义和 benchmark v2；
+2. M1 的 typed admission、固定 control source、final drain、active-batch
+   失效、精确 Channel 身份、IOCP 同步错误传播和可选通知降级；
+3. Connector/TcpClient 请求代际、回调重入、显式 reconnect、事务式 IOCP
+   fd 接管，以及对应的 deterministic contract tests。
+
+该检查点留下的实施顺序不可倒置。本轮已严格按原顺序完成：
+
+1. 先更新 `event_loop`、`tcp_connection`、`tcp_server` intents 与三份 rules；
+2. 先写 lifecycle committed-notify、dirty-set/detach-generation、queue
+   saturation、IOCP cancel/quit completion-drain 的失败契约；
+3. 实现 loop 级动态节点 hub：跨线程 signal 零分配、generation 防 ABA、
+   owner-thread attach/detach、预算 drain 与自重排；
+4. 再把 EventLoop 状态推进为
+   `Running → Quiescing → FinalDraining → Shutdown`，在 Windows 持续 poll
+   直到 IOCP completion 与 lifecycle hub 同时静默；
+5. 最后接入 TcpConnection、TcpServer 三方/聚合停服握手、结构化 close
+   reason 和析构后安全的 `TcpClientControl`，并补齐 public API manifest、
+   安装消费和文档证据。
+
+仍然明确未完成、不得误报为已验证的范围：
+
+1. 当前 runtime 修改后的 24h/72h endurance 尚未重跑；
+2. 当前 runtime 的 Linux、ASan/UBSan、TSan、repeat-50 和跨平台性能证据
+   尚未绑定到冻结候选 SHA；
+3. 独立 maintainer 的 API、性能和发布工具人工评审尚未完成；
+4. stable tag 仍禁止。
+
+上一提交检查点的最终复验记录（历史 94 项清单）：
+
+- Debug：重新配置和全目标构建成功，CTest 94/94，0 失败；
+- Release：重新配置和全目标构建成功，CTest 94/94，0 失败；
+- Connector 定向合同覆盖 callback restart/stop-start、显式 reconnect、
+  association preserve fault 和 replacement registration fault，单次通过；
+- public API v2 manifest、immutable git baseline 和 compatibility diff
+  验证通过，无待裁决的 compatibility-line 阻断；
+- testing-off Windows/MSVC Release 全量构建成功，构建树 0 tests；新增及
+  既有 IOCP internal hooks 在工程命令、48 个二进制产物、安装库和 52 个
+  安装头/CMake 文件中均为零；
+- 构建与安装后的 `gamenet_core.lib` SHA-256 均为
+  `A2EE360888AE856E05DA8F3ECA5DD0A077E5E214C691D055A3553E0F6FA6C0CC`；
+- 隔离安装包的外部 consumer 配置、Release 构建、直接运行和 CTest 1/1
+  均通过，其 SHA-256 为
+  `3449C593E790E1243DB38738B06811B68F787F34176FC2C31C1E7365C92F1BFF`。
+
+当前未提交工作树的本地复验记录：
+
+- Windows MSVC Debug：全目标构建成功，CTest 102/102，0 失败；
+- Windows MSVC Release：全目标构建成功，CTest 102/102，0 失败；
+- 21 个本轮相关 Python 静态合同、public API manifest 和确定性
+  compatibility diff 均通过；
+- `cmake --install` 后的隔离 Release consumer 可配置、构建并通过
+  CTest 1/1；`TcpClientControl.h` 与 `TcpConnectionClose.h` 均出现在
+  安装树；
+- 以上仅是本地实现闭环证据，不替代冻结 SHA 所需的远端、sanitizer、
+  性能和 24/72 小时耐久证据。
+
+## 1. 目标与当前判断
+
+game-net-core 的目标是成为高性能、通用、可验证的游戏服务器网络底座。这里的“通用”不等于在 Core 中堆叠所有协议，而是要求：
+
+- Reactor/TCP 核心在高负载、队列饱和、慢客户端、断连风暴和停服期间仍能确定性收敛；
+- 线程归属、所有权、回调重入和跨线程投递是可审计的公开合同；
+- 上层 Packet、Session、Logic、Broadcast 能组合成正式 Gateway，而不是只能运行的示例；
+- 性能由可重复的容量模型、延迟分位数、内存和过载恢复证据证明；
+- TLS、UDP、KCP 等扩展建立在统一的 ingress、结果模型和背压策略之上；
+- 发布版本具有精确 SHA、兼容性边界、测试证据和可追溯资产。
+
+当前项目已经是一套较成熟的 Reactor/TCP Preview，而不是原型。Core 的正常路径、跨平台功能、线程/生命周期测试和 CI 证据较强；主要差距集中在饱和终态、Windows IOCP 数据路径、大规模公平性、Phase 4/5 上下层语义闭环，以及正式 Gateway 和安全传输。
+
+下一阶段的核心原则是：
+
+> 先证明系统在最坏状态下必然收敛，再优化吞吐；先完成 TCP 全链路，再扩展 TLS、UDP 和 KCP。
+
+## 2. 执行原则
+
+### 2.1 严格遵循 intent-driven 流程
+
+每个核心改动必须按以下顺序推进：
+
+1. 更新或新增 `intents/`；
+2. 写明不变量；
+3. 写明 owner loop/thread；
+4. 写明所有权和释放者；
+5. 写明允许重入的 callback；
+6. 写明跨线程操作及 marshal 方式；
+7. 写明过载、关闭和失败终态；
+8. 先添加 contract/failure/threading tests；
+9. 最后实现；
+10. 更新证据账本和发布文档。
+
+每个 Core PR 的描述必须回答：
+
+- 哪个 loop/thread 拥有状态？
+- 谁持有对象，谁负责释放？
+- 哪些 callback 可以重入？
+- 哪些 API 可以跨线程调用？
+- 队列满、owner 停止、对象销毁时返回什么？
+- 哪个具体测试验证每条合同？
+- 对 public/source contract 有什么兼容性影响？
+- 失败时如何回滚，哪些证据 SHA 会失效？
+
+### 2.2 保持范围克制
+
+在饱和终态、IOCP 内存模型和正式 Gateway 未闭环前：
+
+- 不新增 HTTP、WebSocket、RPC；
+- 不将 coroutine 引入 Core 所有权模型；
+- 不同时启动 TLS、UDP、KCP；
+- 不把账号、房间、AOI、对象序列化等业务逻辑放入网络底座；
+- 不把当前 Pipeline 示例直接升级为大而全框架。
+
+### 2.3 小 PR、单一风险、精确证据
+
+- 每个 PR 只解决一组紧密相关的不变量；
+- 禁止把核心生命周期修复、性能重构和新协议混在一个 PR；
+- 运行时代码发生变化后，旧 SHA 的耐久与性能证据只能作为历史参考；
+- 发布证据必须属于最终候选 SHA；
+- API manifest 是变更提醒器，不是兼容性证明，仍需真实 consumer 和 API diff。
+
+## 3. 总体里程碑与依赖
+
+```text
+M0  Phase 6 发布基础设施审计
+ │
+ ├── M1  饱和终态与核心生命周期闭环
+ │    │
+ │    └── M2  Phase 4 / Phase 5 上层语义对齐
+ │          │
+ │          ├── M3  IOCP v2、内存与公平性
+ │          │
+ │          └── M4  正式 Packet/Gateway/Pipeline
+ │                  │
+ │                  └── M5  端到端背压、指标与生产发布门禁
+ │                         │
+ │                         └── M6  TLS 与 Gateway Security
+ │                                │
+ │                                └── M7  UDP experimental
+ │                                       │
+ │                                       └── M8  KCP preview
+```
+
+M3 和 M4 可以在 M1、M2 完成后并行。M3 完成后可以执行 M5-A，收口 Core/Phase 4 的 v0.3 候选；M4 完成后再执行 M5-B，汇总正式 Gateway 的全链路证据。M6 依赖正式 Gateway 生命周期，M7 依赖 transport-neutral ingress，M8 严格依赖 UDP。
+
+## 4. M0：Phase 6 发布基础设施审计
+
+### 4.1 目标
+
+保留 Phase 6 已完成的兼容性、指标、性能回归、故障注入和耐久基础设施，但不把当前 Draft 直接当作稳定版本发布。
+
+### 4.2 任务
+
+1. 审计 `codex/phase6-production-candidate` 的 8 个提交。
+2. 更新 PR #7 中过期的候选 SHA、CI、24 小时和 72 小时证据。
+3. 将 MetricsExporter 和上层 recorder 标记为 provisional，避免在热路径设计稳定前冻结 API。
+4. 修正 Core benchmark 的语义漂移：
+   - 使用 `trySend()`；
+   - 记录 requested、accepted、rejected bytes；
+   - 记录 hard limit、pause/resume、peak pending output；
+   - 不再输出 `high_water_notification_only`；
+   - benchmark schema 升级为 v2。
+5. 检查 public API manifest：
+   - stable Core、provisional upper layer、platform internal 必须分开；
+   - internal poller/platform header 不应作为推荐消费 API；
+   - manifest 更新必须输出与上一版本的结构化差异。
+6. 明确平台支持等级：
+   - 推荐 Linux/epoll 作为首要生产性能平台；
+   - Windows/IOCP 在 M3 前保持功能与正确性支持；
+   - 如果 Windows 必须同为 Tier 1，M3 必须成为 0.3 候选的发布阻断项。
+7. 明确当前只支持 Linux 和 Windows；macOS/BSD 配置必须显式报 unsupported，不能落入 Linux epoll 分支。
+8. 对尚未实现的 `GAMENET_ENABLE_TLS`、`GAMENET_ENABLE_EXPERIMENTAL` 给出显式 configure error 或清楚的占位说明，不能成为无效果开关。
+9. 明确 static/shared 策略；在没有导出宏和 shared-build CI 前，发布文档应声明 static-first。
+10. 明确许可证策略。当前 `LICENSE` 未授予外部使用许可；若计划供外部项目采用，必须在发布前解决。
+
+### 4.3 验收门禁
+
+- PR 描述、migration status、roadmap 与真实 SHA/运行状态一致；
+- Metrics API 未被错误声明为稳定热路径接口；
+- benchmark v2 能检测发送拒绝，不能把被拒绝字节计为成功；
+- API manifest 能区分 public、provisional、internal；
+- 至少一次独立人工 API、性能和发布工具审查；
+- M0 可以合并为发布基础设施，但不得因此直接创建 stable tag。
+
+## 5. M1：饱和终态与核心生命周期闭环
+
+M1 是所有后续开发的最高优先级门禁。
+
+### 5.1 EventLoop 控制面投递模型
+
+#### 问题
+
+普通任务和 teardown/control work 共用有限 pending queue。队列满时 `queueInLoop()` 抛异常，Server shutdown、remove、force-close、认证超时和 Connector 清理可能无法完成。
+
+#### 设计要求
+
+新增或修订 EventLoop overload intent，定义两类任务：
+
+- user/data work：允许拒绝，返回明确结果；
+- internal control work：数量必须可证明有界，并保证最终被执行或被同步合并。
+
+不建议简单增加一个无界“紧急队列”。推荐设计：
+
+- internal control lane 不向普通调用者开放；
+- shutdown/remove/cancel 使用幂等状态位或 generation 合并重复请求；
+- TcpServer 按 worker 投递一个聚合 shutdown task，而不是每连接一个 task；
+- control task 的最大数量由 subsystem/worker 数决定，而不是连接数决定；
+- owner loop 已停止时返回 `OwnerUnavailable`，调用方必须执行定义好的 fallback；
+- 同线程 teardown 优先内联执行；
+- 可选通知、指标和用户 callback 排队失败不得阻断状态转换。
+
+#### API 方向
+
+统一结果枚举，避免 `void`、异常和 `bool` 混用：
 
 ```cpp
-byTransport_[session->transportId().value] = session;
+enum class PostResult {
+    Accepted,
+    QueueFull,
+    OwnerUnavailable,
+    Shutdown,
+};
 ```
 
-第二个 session 覆盖 transport 索引，但第一个仍留在 `byPlayer_`。此时两个 player session 认为自己绑定了同一个 transport，只有一个能从 transport 索引找到。
+公开 data-plane API 使用 non-throwing admission；内部 control API 必须说明为什么不会丢失。现有兼容 API 可以保留一段迁移期，但生产代码不得继续忽略结果。
 
-这是可确定构造的逻辑错误，必须显式 reject、rebind 或先清理旧绑定。
+#### 必测场景
 
-**2. 异步方法捕获裸 `this`。**
+- normal queue 已满时 close 仍收敛；
+- normal+reserve 已满时 graceful stop future 仍完成；
+- 多 worker、每 worker 超过普通队列容量的连接关闭；
+- authentication timeout 在队列满时确实关闭连接；
+- remove callback 无法回流 base loop 时连接表与 admission 计数不残留；
+- Connector retry/cancel/Channel release 在队列满时不泄漏；
+- loop quit 与跨线程 control post 竞争；
+- callback 抛异常与队列饱和同时发生；
+- ASan/UBSan、TSan、repeat-50。
 
-`postAuthenticate`、`postOffline`、`postHeartbeat` 都把裸 `this` 放入 EventLoop 队列。若 SessionManager 在任务执行前销毁，会形成 use-after-free 风险。
+### 5.2 TcpConnection 状态转换与可选通知解耦
 
-原 `mini_trantor` SessionManager 已经保留了 lifetime token；当前迁移反而丢失了这项保护。
+#### 任务
 
-**3. 测试声明高于实际覆盖。**
+- 先完成 output buffer、backpressure 和 write-interest 状态转换；
+- 再异步投递 high-water/write-complete 通知；
+- 通知投递失败只增加 dropped-notification 指标，不得使连接停写；
+- Windows read resume 不得依赖可能被拒绝的普通任务；
+- `send()` 逐步标记为兼容接口，生产路径统一使用 `trySend()`；
+- 增加结构化 close/error reason：
+  - PeerEof；
+  - Reset；
+  - ConnectTimeout；
+  - InputLimit；
+  - OutputOverload；
+  - AdmissionPolicy；
+  - GracefulShutdown；
+  - ForcedShutdown；
+  - CallbackFailure；
+  - InternalError。
 
-intent 声称测试覆盖 callback re-entry、endpoint-loop closure 和 cross-thread async submit；当前测试只实际跨线程调用了 `postAuthenticate`，没有覆盖：
+#### 验收门禁
 
-* `postOffline` / `postHeartbeat` 的竞争；
-* callback 内重新进入 manager；
-* manager destruction with queued work；
-* transport id collision。
+- 所有 connection 状态转换都有单次终态保证；
+- high-water callback 投递失败不会阻止 EPOLLOUT/WSASend；
+- pending output reservation 在所有异常和关闭路径归零；
+- close reason 能传递到 TcpServer/TcpClient 和上层指标。
 
-**判定：基本状态机可用，但索引唯一性和异步生命周期是 P0。**
+### 5.3 Connector 线程合同
 
-## 3.4 LogicLoop / GameCommandQueue
+#### 推荐决策
 
-### 已完成的部分
+Connector 保持 owner-loop-only，由 TcpClient 提供线程安全 facade。这与当前 intent 的窄职责最一致。
 
-当前实现具备：
+#### 任务
 
-* 值类型 GameCommand；
-* command count / queued bytes / payload bytes 三种上限；
-* Accepted / QueueFull / PayloadTooLarge / Stopped；
-* 固定 tick、每 tick 最大 drain；
-* queue snapshot 和 high-water mark；
-* handler/output/metric callback。
+- `start/stop/restart/setRetry...` 增加 owner-loop assert；
+- 或将跨线程入口全部移入 lambda 后再修改 loop-owned 状态；
+- `state()` 若需跨线程读取，改为明确 atomic snapshot；
+- `restart()` 恢复配置的 initial retry delay，而不是固定 500 ms；
+- TcpClient 暴露 ConnectorOptions、connect timeout、自定义 backoff；
+- TcpClient 增加显式 terminal failure callback/result；
+- 使用 request generation 丢弃过期 connect/stop/retry。
 
-### 阻断问题
+#### 必测场景
 
-**1. 所谓“concurrent submit”测试没有真实并发。**
+- 直接跨线程 start/stop/restart；
+- stop 与 retry timer 同时发生；
+- stop 与 Windows ConnectEx completion 同时发生；
+- 自定义初始退避在 restart 后保持；
+- owner loop 销毁后 facade 调用；
+- TSan 合同。
 
-测试先启动一个线程完成全部 submit，然后立即 `join()`，之后才调用 `eventLoop.loop()`。因此 submit 与 drain 从未重叠。
+### 5.4 active Channel 批次生命周期
 
-它也没有验证 intent 声称的“handler/output callback 可重入 submit”。
+#### 问题
 
-TSan 能证明当前执行路径没有报告竞态，但这条测试没有制造最重要的并发交错。
+Poller 返回裸 `Channel*` 集合。一个 Channel callback 可能移除并销毁同一 active batch 中尚未 dispatch 的另一个 Channel。
 
-**2. stop / restart 语义不完整。**
+#### 推荐方案
 
-`stop()` 永久 `queue_.close()`；之后再次 `start()` 会重新安装 timer，但 queue 仍拒绝所有命令，形成“运行中但永远不能接收”的状态。
+二选一并写入 intent：
 
-必须二选一：
+1. dispatch epoch + deferred reclamation；或
+2. EventLoop 跟踪 active batch membership，禁止在本轮结束前销毁 batch 中的 Channel。
 
-* 明确 LogicLoop 是 one-shot，stop 后禁止 restart；
-* 或提供 queue reopen/reset 并规定旧命令处理方式。
+仅依靠 Channel 自身的 `eventHandling_` 不足以保护“尚未开始回调”的 Channel。
 
-**3. 生命周期与 observer 契约不足。**
+#### 必测场景
 
-Timer callback 捕获裸 `this`；`running_` 是普通 bool，而公开的 `running()` 没有 owner-thread assert，也不是 atomic。若调用方跨线程读取，会产生数据竞争风险。
+- 两个 Channel 同时 ready，第一个 callback 移除并请求销毁第二个；
+- callback 移除自身；
+- callback 销毁 tied owner；
+- close/error/read/write 多事件组合；
+- epoll 与 IOCP 都验证延迟 completion。
 
-原 `mini_trantor` LogicLoop 已使用 atomic running、独立 lifetime token 和更完整的 backpressure 结果。
+### 5.5 IOCP 同步失败正确性
 
-**4. stop 时的 pending command 策略缺失。**
+- WSARecv/WSASend 同步失败必须立即进入统一 error/close 路径；
+- 不得只设置 revents 后等待一个不会到来的 completion；
+- error、cancel completion 和正常 completion 必须只收敛一次；
+- 增加 WSAENOBUFS、WSAECONNRESET、ERROR_OPERATION_ABORTED 故障注入。
 
-当前 stop 只关闭 admission 和取消 timer，队列内命令保留但永不消费，也没有 dropped/drained 数量。
+### 5.6 TcpServer idle-timeout 合同漂移
 
-**判定：API 骨架正确，但当前测试不足以证明线程和生命周期契约；它应是后续最高优先级。**
+当前 active `tcp_server.intent.md` 声明了可选 idle timeout，但公开 API 和实现只有 unauthenticated timeout，没有通用连接 idle policy。
 
-## 3.5 Pipeline 示例
+分两步处理：
 
-### 已完成的部分
+1. M1 立即修正文档和 active intent，不得继续把未实现能力写成已完成合同；
+2. M3 在 deadline bucket/时间轮具备后实现可扩展 idle timeout。
 
-Pipeline 保持在非安装 example 中，没有把组合层反向塞入 core。它通过真实 TCP 测试了：
+正式设计必须明确：
 
-* 分段 AUTH frame；
-* AUTH_OK；
-* 两个粘连 command frame；
-* LogicLoop 响应；
-* 断线后 session 清理。
+- read-idle、write-idle、all-idle 的语义，首版推荐只提供 read-idle；
+- activity timestamp 由 connection owner loop 更新；
+- timeout close 回到正常 close/remove 路径；
+- callback、timer 和业务读取竞争时如何判断 generation；
+- idle policy 与 heartbeat、unauthenticated timeout 的优先级；
+- 是否允许应用显式刷新 activity；
+- 大规模连接不能默认创建一个高分配成本 timer 对象。
 
-这是正确的第一条 vertical slice。
+计划测试：
 
-### 阻断问题
+- quiet connection 到期关闭；
+- 持续入站数据刷新 deadline；
+- idle timeout 与 peer close/force close/graceful stop 竞争；
+- 旧 generation timer 不关闭新连接；
+- 10k/100k deadline storm 的 loop lag 和内存。
 
-**1. `AUTH + command` 同批到达会被错误关闭。**
+### 5.7 M1 完成定义
 
-收到第一条 AUTH frame 后，Pipeline 调用 `postAuthenticate()`，该操作总是排队；在 callback 执行前，同一 `onMessage()` 中的下一条 frame 仍看到 `sessionId == 0`，于是被当作另一条 AUTH。普通 command 会触发 ProtocolError。
+- 没有生命周期控制路径依赖“可能抛出且无 fallback”的投递；
+- 队列饱和测试覆盖 Core 与多 worker server，不只覆盖 EventLoop 本身；
+- Connector 没有普通字段的跨线程读写；
+- active batch destruction 有明确实现保护和回归测试；
+- 所有关闭路径产生结构化 reason；
+- Linux/Windows Debug、Release、sanitizer、TSan 和 repeat 证据全绿。
 
-当前集成测试是在收到 `AUTH_OK` 后才发送两个 command，所以没有覆盖这个窗口。
+## 6. M2：Phase 4 / Phase 5 上层语义对齐
 
-需要显式状态机：
+### 6.1 统一异步结果
+
+将以下 `void` 或被忽略的 `bool` 改为显式结果：
+
+- SessionManager postAuthenticate/postOffline/postHeartbeat；
+- Pipeline I/O → management handoff；
+- management → logic handoff；
+- logic output → management/owner loop；
+- endpoint close/send；
+- Broadcast task dispatch。
+
+结果至少区分：
+
+- Accepted；
+- QueueFull；
+- OwnerUnavailable；
+- Shutdown；
+- EndpointClosed；
+- EndpointOverloaded；
+- PolicyRejected。
+
+每个调用点必须决定：
+
+- 重试；
+- 丢弃；
+- 关闭连接；
+- 降级；
+- 或记录指标。
+
+不得只记录日志后继续保持模糊状态。
+
+### 6.2 修复 Pipeline 黑洞连接
+
+- framer continuation admission 失败必须关闭 endpoint；
+- `Authenticating` 状态的 pending frame 必须有 count/bytes 双上限；
+- 认证投递失败必须回退到 Closing，而不是永久停留；
+- output send 被拒绝时必须执行明确策略；
+- 连接进入 closing 后停止接收新业务命令。
+
+### 6.3 Session binding generation
+
+为每次认证/rebind 分配 generation：
 
 ```text
-Unauthenticated
-  -> Authenticating
-  -> Online
-  -> Closing
+(sessionId, transportId, generation)
 ```
 
-`Authenticating` 期间必须规定：
-
-* bounded pending frames；
-* 暂停读取；
-* 或明确 reject/close。
-
-**2. shutdown 仍不安全。**
-
-Pipeline、SessionManager、LogicLoop、server callbacks 多处捕获裸 `this`。`stop()` 先关闭 LogicLoop，再停止 server，但没有等待：
-
-* queued authentication；
-* session cleanup；
-* logic output；
-* endpoint send；
-* server close callback
-
-全部收敛。
-
-**3. 只使用一个 EventLoop。**
-
-当前示例证明了模块组合，但没有证明生产形态中的：
-
-* I/O loop；
-* management loop；
-* logic loop
-
-三者分离后的 handoff 和销毁顺序。
-
-**判定：vertical slice 成立，但状态机与 shutdown 尚未达到可提升为正式 library 的程度。**
-
-## 3.6 Broadcast
-
-### 已完成的部分
-
-Broadcast 设计总体清晰：
-
-* 上层提供 session 列表，不计算 AOI/房间；
-* management loop 路由；
-* 按 endpoint owner loop 分组；
-* fanout / byte hard limit；
-* low-priority soft limit；
-* payload 共享；
-* chunked dispatch；
-* 细分 metric reason。
-
-### 主要缺口
-
-1. `TransportEndpoint::isOpen()` 的跨线程安全没有成为接口级不变量。
-2. `BroadcastPlan` 是公开可构造结构，允许外部产生 `ownerLoop == nullptr` 的 batch；dispatcher 会直接解引用。
-3. Plan 和 task 持有 endpoint/payload，但不拥有或观察 owner loop 生命周期。
-4. 测试只要求看到某一种 hard limit reason，没有分别证明 fanout hard limit 和 byte hard limit。
-5. `EndpointClosed`、`SendRejected` 没有被完整验证。
-6. 只有 fake endpoint，没有真实 TCP endpoint 的多 loop 集成。
-7. 没有高 fanout、reconnect、ordering、slow endpoint 的 soak/performance 证据。当前源项目已有多类 broadcast stress/latency 测试，迁移时不应完全丢失这些证据。
-
-**判定：算法骨架较好，适合作为 PR-6，但还不是全链路背压闭环。**
-
----
-
-# 4. Intent 元数据审计
-
-## 4.1 整体分类
-
-PR #4 中共有：
-
-* 24 active；
-* 23 deferred；
-* 11 legacy。
-
-Intent index 对三种状态的语义定义是正确的：
-
-* active 才是当前实现授权；
-* deferred 只是未来设计资产；
-* legacy 不能作为当前范围、路线或验证证据。
-
-大部分分类合理：
-
-* `connection_transport` 继续 deferred 是正确的，因为它描述的是 TcpConnection 内部 plain TCP/TLS 读写 helper，与当前上层 `TransportEndpoint` 不是同一抽象。
-* TLS 继续 deferred 正确。
-* UDP/KCP 继续 `GameNet::experimental` + `experimental-only` 正确。
-* v1/v2/v3/v5/v6 等历史阶段文档归入 legacy 合理。
-
-## 4.2 需要修正的分类与守卫
-
-### 问题一：Pipeline active intent 指向不存在的 target
-
-Pipeline intent 写的是：
-
-```yaml
-status: active
-target: GameNet::game
-```
-
-但当前 CMake 只有：
-
-* `gamenet_pipeline_demo_support`；
-* `gamenet_game_server_pipeline_demo`；
-
-没有 `GameNet::game` alias，也没有安装该 target。
-
-这违反了 Intent README 对 active 的定义：active 必须指向已实现组件。
-
-建议不要为了满足元数据而创建正式 `GameNet::game` library；更合适的是扩展 metadata：
-
-```yaml
-artifact_kind: example
-target: gamenet_game_server_pipeline_demo
-```
-
-### 问题二：metadata guard 只校验字符串合法，不校验目标真实存在
-
-当前 guard 会检查：
-
-* status / target / source / gate 是否属于允许集合；
-* active/deferred/legacy 与目录索引是否一致；
-* stale source-project 字符串是否出现在 active body。
-
-它不会检查：
-
-* `GameNet::*` alias 是否在 CMake 中真实存在；
-* intent 声明的测试文件是否存在；
-* 测试是否注册到 CTest；
-* active target 是否实际安装；
-* example intent 是否真的有对应 executable。
-
-因此它能防止格式漂移，不能防止语义漂移。
-
-### 问题三：`game_backpressure_policy` 已部分实现，却仍整体 deferred
-
-该 deferred intent 描述了：
-
-* LogicLoop admission limits；
-* command backlog；
-* broadcast hard/soft budgets；
-* priority shedding；
-* metric reasons。
-
-其中若干部分已经出现在 active LogicLoop 和 Broadcast 实现中。继续把整份文档标为 deferred 并非“实现越权”，因为本次确实另写了 active intents；但它会让读者无法判断：
-
-* 哪些章节已经被 active intent 取代；
-* 哪些仍是未来设计；
-* 实现是否偷偷依赖 deferred 设计资产。
-
-建议拆分为：
-
-* active `logic_admission.intent.md`；
-* active `broadcast_backpressure.intent.md`；
-* deferred `end_to_end_game_backpressure.intent.md`；
-
-或者增加：
-
-```yaml
-superseded_sections:
-derived_active_intents:
-```
-
-### 问题四：`migration_source: native` 的溯源能力不足
-
-PacketFramer、SessionManager、LogicLoop、Pipeline、Broadcast 在 `mini_trantor` 中都有明确前身，甚至已有更丰富的 fuzz、lifetime token、backpressure 和 stress tests。
-
-把这些全部标成 `native` 会隐藏“重设计自旧模块”的事实。更好的元数据应记录：
-
-```yaml
-migration_source: mini_trantor
-source_commit: 3eba368...
-source_paths:
-migration_mode: redesign
-```
-
-这对识别迁移过程中丢失的安全机制尤其重要。
-
----
-
-# 5. 对当前进度百分比的修正
-
-PR 分支的 `assessment.md` 把“完整游戏网络底座愿景”估算为约 70%～75%。
-
-这个数字只有在“计划中的六类组件是否都有文件”这一口径下成立。按更严格的审计口径：
-
-| 口径                               |          建议估算 |
-| -------------------------------- | ------------: |
-| 已合入、已发布的 `main`                  | **约 40%～45%** |
-| 加上 draft PR #4 的功能骨架             |     **约 60%** |
-| Phase 4 计划交付物的“文件存在率”            |   **接近 100%** |
-| Phase 4 生命周期/并发/失败契约成熟度          | **约 50%～60%** |
-| 相对 `mini_trantor` 对应模块的行为与测试迁移覆盖 | **约 25%～40%** |
-| Production readiness             |     **仍明显不足** |
-
-造成差距的不是模块数量，而是：
-
-* 真正的 fuzz 缺失；
-* shutdown/lifetime token 丢失；
-* 并发测试没有真实交错；
-* Pipeline 认证状态窗口；
-* Broadcast 缺少真实 transport soak；
-* Phase 4 没有远端 long-soak / benchmark；
-* 尚未合入和发布。
-
----
-
-# 6. 后续路线图：PR-4 到 PR-7+
-
-当前 GitHub PR #4 不应被视为原路线图中的“PR-4 LogicLoop”；它实际是 PR-1～PR-6 的 umbrella draft。建议把它保留为 tracking PR，并提取为可独立评审的 stacked merge units。
-
-前置条件是先把 PacketFramer、Transport、Session 三层从当前大 PR 中独立出来，并解决前述 P0。
-
-## 逻辑路线编号
-
-| 优先级 | PR                         | 范围                                        | 合并门禁                                                                                                                        |
-| --: | -------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-|   1 | **PR-4 LogicLoop**         | Queue + fixed tick + metrics              | 真正多 producer 并发；submit/drain 重叠；callback re-entry；明确 one-shot/restart；stop 的 drain/drop 语义；lifetime token；TSan              |
-|   2 | **PR-5 Pipeline 示例**       | TCP → Framer → Session → Logic → Response | 显式认证状态机；`AUTH+command` 同批测试；disconnect-before-auth-complete；多 loop handoff；有界 pending input；安全 shutdown                     |
-|   3 | **PR-6 Broadcast**         | Router + Dispatcher + backpressure        | `isOpen()` snapshot 契约；opaque/validated plan；全 reason 矩阵；真实 TcpTransportEndpoint 双 loop 测试；large-fanout soak；send rejection |
-|   4 | **PR-7 Phase 4 closure**   | 不新增功能，只补证据并发布                             | 五 job 全绿；51 threading × 50；真实 fuzz；Windows Release CI；安装 consumer 实际运行；Phase 4 benchmark；文档更新；版本提升                          |
-|   5 | **PR-8 Coroutine bridge**  | 仅调度适配，不改变 core ownership                  | owner-loop resume；取消；awaiter destruction；无隐式阻塞；只有出现明确使用者时才启动                                                                |
-|   6 | **PR-9 TLS adapter**       | 可选独立 transport target                     | 非阻塞 handshake；WANT_READ/WANT_WRITE；证书验证；timeout；close_notify；pending I/O shutdown；Linux/Windows CI                          |
-|   7 | **PR-10 UDP experimental** | 独立实验 target                               | datagram read budget；truncation；IPv4/IPv6；peer identity；zero-length；burst fairness；Linux epoll + Windows IOCP               |
-|   8 | **PR-11 KCP preview**      | 构建于 UDP experimental                      | fake clock/network；loss/reorder/duplicate/jitter；重传；seq wrap；fragment/reassembly；内存与 session 上限；decoder fuzz                |
-
-## PR-7 Phase 4 closure 应发布为新版本
-
-当前 CMake 项目版本仍是 `0.1.0`，但 PR #4 新增了五个安装级公共 target。
-
-不建议把带有大量新公共 API 的 Phase 4 继续作为同一个 `0.1.0` 身份发布。更清晰的版本应是例如：
+- Logic command 携带 generation；
+- 在执行业务 handler 前验证当前 binding；
+- superseded connection 的命令不得产生业务副作用；
+- stale disconnect 只能影响对应 generation；
+- duplicate replace 和 reject-new 都必须有真实 Pipeline 集成测试。
+
+### 6.4 接入 Phase 5 Core 能力
+
+正式 Pipeline 必须使用：
+
+- `TcpServer::setAdmissionOptions()`；
+- `TcpServer::tryMarkConnectionAuthenticated()`；
+- connection backpressure options；
+- callback exception policy；
+- `TcpServer::stopGracefully()` future。
+
+认证成功后必须同步更新 Core admission 状态。停服顺序建议：
+
+1. 停止新连接和新认证；
+2. 停止接收新业务命令；
+3. 等待已接受 management/logic work；
+4. 停止 Broadcast 新计划；
+5. 排空允许完成的输出；
+6. 超时后 force close；
+7. 等待所有 owner-loop cleanup；
+8. 最后销毁 Session、Logic、Server 和 loops。
+
+### 6.5 Broadcast 结果与全局预算
+
+- 区分 dispatch queue full、owner unavailable、endpoint overloaded、closed；
+- DispatchSummary 返回 scheduled、accepted、dropped 和 reason counts；
+- 增加 per-owner outstanding task/bytes；
+- 增加全局 broadcast outstanding bytes；
+- 连续多个合法 plan 也不能绕过总预算；
+- 高/低优先级采用明确 shedding 策略；
+- shared payload 继续保持跨 loop value ownership。
+
+### 6.6 Session 类型安全
+
+- PlayerSession 构造和 mutation 收到 SessionManager private/friend；
+- Broadcast 消费 immutable `BroadcastTarget` 或 `SessionSnapshot`；
+- 外部不得通过 mutable alias 跨线程修改 session；
+- heartbeat/idle expiry 接入 Pipeline；
+- 当前 O(N) expiry 先建立规模基准，再决定 min-heap、bucket 或时间轮。
+
+### 6.7 M2 测试矩阵
+
+- EventLoop queue 饱和下 auth/offline/heartbeat；
+- AUTH 与 command 同批、认证延迟、认证失败、断连早于认证完成；
+- duplicate replace 旧连接继续发 command；
+- stale output、stale disconnect、session generation rollover；
+- management/logic/endpoint 三个物理 loop；
+- shutdown 时存在 pending auth、pending command、pending output、pending broadcast；
+- Broadcast 每种 dropped reason；
+- heartbeat/idle timeout 的完整 TCP 路径；
+- callback re-entry 和 callback 中销毁；
+- ASan/UBSan、TSan、repeat-50、真实 TCP integration。
+
+## 7. M3：IOCP v2、内存治理与调度公平性
+
+### 7.1 先定义容量模型
+
+性能优化前先固定测试硬件、编译器、CPU governor、网络拓扑和业务 profile。每个结果必须记录：
+
+- commit SHA；
+- OS、kernel、compiler、build type；
+- CPU、内存、NUMA 和网卡；
+- connection/message/payload 数量；
+- throughput；
+- P50/P95/P99/P999；
+- CPU/core；
+- RSS 与 bytes/connection；
+- allocation rate；
+- pending queue/bytes high-water；
+- accepted/rejected/dropped；
+- overload 后恢复时间；
+- graceful shutdown 完成时间。
+
+建议建立以下 promotion profiles：
+
+| Profile | 首阶段规模 | 目标规模 | 关键指标 |
+|---|---:|---:|---|
+| Idle connections | 10k | 100k | RSS/conn、CPU idle、stop time |
+| Small echo | 64/256/1024 B | 多连接多 worker | msg/s、MiB/s、P99/P999 |
+| Connection churn | 1k/s | 按硬件提升 | accept/s、close/s、worker skew |
+| Slow reader | 1k connections | 混合正常客户端 | RSS、rejected bytes、恢复时间 |
+| Timer storm | 100k timers | 同刻/分桶 | loop lag、P99 timer delay |
+| Queue saturation | 所有队列上限 | 多层同时饱和 | 终态、drop reason、恢复 |
+| Broadcast TCP | 1k recipients | 10k+ recipients | fanout P99、RSS、slow-client |
+| Full Pipeline | auth+command+response | churn+slow+广播混合 | end-to-end P99、queue lag |
+
+阈值必须先作为趋势基线，再在专用 runner 稳定后变成回归预算。不得把跨机器绝对值当作可靠比较。
+
+### 7.2 IOCP v2 数据路径
+
+#### 任务
+
+1. `GetQueuedCompletionStatusEx` 批量 drain；
+2. 每轮 completion count/time budget；
+3. wakeup coalescing，避免每个跨线程任务一个 completion；
+4. 可配置 AcceptEx pre-post pool；
+5. read buffer 改为 slab/pool 或按需小块；
+6. idle connection 不再常驻 64 KiB；
+7. output 改为稳定 segment/chunk ownership；
+8. WSASend 直接引用稳定 pending segment，避免完整镜像；
+9. partial completion 只移动 offset，不复制剩余全部数据；
+10. 每次提交显式限制在 `ULONG`；
+11. cancel/completion lifetime 继续由明确 owner 保持。
+
+#### 验收门禁
+
+- 10k idle connection RSS 显著低于当前约 71 KiB/连接基线；
+- slow-client 不再出现 output buffer 与 writeStorage 双份峰值；
+- batch completion 在吞吐与 CPU 上有可重复收益；
+- cancel、partial write、同步失败和延迟 completion 全部通过；
+- Windows Debug/Release 与 sanitizer 证据齐全。
+
+### 7.3 Linux/通用公平性
+
+- accept loop 增加 count/time budget；
+- active Channel dispatch 增加 count/time budget；
+- expired timer drain 增加 count/time budget；
+- 未完成 ready work 使用 zero-timeout 或 wakeup 延续；
+- 定义 repeating timer 的 fixed-delay/fixed-rate 和最大 catch-up；
+- 大规模连接 deadline 使用分层时间轮或 bucket；
+- EventLoopThreadPool 增加可插拔 selector：
+  - round-robin；
+  - least-connections；
+  - queue-lag；
+  - consistent-hash；
+- 在 connect/disconnect storm 证明 base-loop 瓶颈后，再引入 `SO_REUSEPORT` per-worker accept。
+
+### 7.4 全局内存治理
+
+在现有 per-connection hard limit 之上增加：
+
+- per-loop pending output bytes；
+- server/global pending output bytes；
+- broadcast outstanding bytes；
+- PacketFramer retained capacity；
+- Buffer hysteretic trim；
+- pool/slab 最大保留量；
+- 超预算策略和结构化指标。
+
+全局 quota 不应通过每次发送争用一个全局 mutex；建议使用 per-loop 计数和低频聚合。
+
+### 7.5 M3 完成定义
+
+- Linux/Windows 都有同 runner 性能矩阵；
+- IOCP 不再单 completion drain；
+- idle connection 内存不由固定 64 KiB 缓冲主导；
+- 慢客户端输出不重复持有完整 payload；
+- accept、timer、active channels、functors 均有公平预算；
+- overload 后延迟和内存能恢复到稳定区间；
+- 10k profile 成为每个性能候选的强制门禁，100k 作为专用容量门禁。
+
+## 8. M4：正式 Packet 与 Gateway/Pipeline
+
+### 8.1 Rich Game Packet
+
+在 PacketFramer 之上增加窄的网络 envelope：
 
 ```text
-v0.2.0-phase4-preview
+version
+header length
+message id
+request id
+flags
+priority
+payload length
+payload
 ```
 
-并创建正式 GitHub Release，附：
+不在底座中定义 protobuf、JSON、FlatBuffers 或业务对象。序列化由外部 adapter 负责。
 
-* 精确 tag / commit；
-* known limitations；
-* Linux / Windows CI run；
-* sanitizer 结果；
-* soak 结果；
-* benchmark artifacts；
-* 安装消费方验证；
-* 不稳定 API 清单。
+#### 合同
 
----
+- 固定字节序；
+- version negotiation/rejection；
+- unknown flags；
+- header/payload 独立上限；
+- request/response correlation；
+- priority 只表达调度意图，不绕过硬限制；
+- 畸形 header fail-closed；
+- parser 有 frame/byte/time budget；
+- 真 libFuzzer、最小 corpus、跨分块 differential test。
 
-# 7. 进入下一阶段前必须补齐的工程护栏
+### 8.2 Transport-neutral ingress
 
-| 护栏             | 最低要求                                                                                   |
-| -------------- | -------------------------------------------------------------------------------------- |
-| 生命周期           | 所有 queued/timer callback 禁止无保证的裸 `this`；引入 lifetime token、weak owner 或显式 shutdown/join |
-| 活跃 Intent 语义   | active target 必须真实存在；example 与 installed target 分开表示                                   |
-| Intent-to-test | intent 中列出的每个 test path 必须存在且注册到 CTest                                                 |
-| 源迁移追踪          | 每个迁移模块记录 source commit/path，以及 kept/deferred/dropped invariants                        |
-| 并发测试           | 不接受“线程提交后 join，再启动 loop”作为并发证明；必须制造 submit/drain、close/callback、destroy/queued-work 交错 |
-| Fuzz           | PacketFramer 和未来 UDP/KCP decoder 必须有真正的 sanitizer-backed fuzz harness 和最小 corpus       |
-| 长稳             | Phase 4 的 51 个 threading tests 至少远端 repeat-50；Pipeline/Broadcast 再增加专项 soak            |
-| 包验证            | 安装 consumer 不仅编译，还要在 Linux/Windows 执行                                                  |
-| 性能             | 增加 framing throughput、queue lag/P99、broadcast fanout latency 和内存高水位基线                  |
-| 证据账本           | 同时记录 head SHA、merge-ref SHA、run id、job 范围、测试数；禁止用本地结果替代远端证据                            |
-| 发布             | 公共 target 增加后提升版本，并用正式 Release 固化 known limitations                                    |
-| 依赖方向           | 保持 `core` 永不依赖 protocol/session/game/experimental；experimental target 默认关闭             |
+当前 TransportEndpoint 主要抽象 output。UDP 前需增加窄 ingress/event sink：
 
----
+- Connected；
+- Bytes/Datagram received；
+- Writable/Overloaded；
+- Closed with reason；
+- transport/session identity；
+- owner executor。
 
-# 最终合并建议
+不要创建包含 TCP、TLS、UDP、KCP 所有细节的 mega-interface。transport-specific 信息通过受控扩展或 metadata value 暴露。
 
-**Core Phase 2/3：审计通过。**
+### 8.3 正式 Gateway 组件
 
-**当前 Phase 4 PR #4：建议 Request changes。** 在合并前至少必须解决以下六个阻断项：
+从示例中提取可安装但保持窄职责的组件：
 
-1. SessionManager transport id 冲突。
-2. SessionManager / LogicLoop / Pipeline 的 queued callback 生命周期。
-3. PacketFramer 的真实 fuzz 和 frame/byte processing budget。
-4. LogicLoop 的真实并发、re-entry 和 stop/restart 契约。
-5. Pipeline 的 `Authenticating` 状态及 `AUTH+command` 同批输入。
-6. Active intent target 与实际 CMake/example target 的语义校验。
+- IngressAdapter；
+- PacketCodec；
+- Admission/AuthCoordinator；
+- SessionBindingManager；
+- CommandDispatcher；
+- OutputDispatcher；
+- ShutdownCoordinator。
 
-最优的下一步不是继续添加 TLS/UDP/KCP，而是把当前 PR #4 转为 tracking PR，按 Packet/Transport/Session → LogicLoop → Pipeline → Broadcast 的依赖顺序拆分，并用 PR-7 专门完成 Phase 4 的远端证据和 Preview Release 收口。
+必须是可注入接口：
 
-[1]: https://github.com/YanqingXu/game-net-core "GitHub - YanqingXu/game-net-core: A modern C++23 networking foundation for game servers. · GitHub"
+- async auth validator；
+- command handler/sink；
+- output encoder；
+- clock/timer；
+- metrics sink；
+- overload policy。
+
+Gateway 不拥有账号数据库、世界状态、房间或 AOI。
+
+### 8.4 Auth 与 cancellation
+
+- auth request 带 connection generation；
+- validator completion 带 cancellation/lifetime token；
+- auth timeout、disconnect、replacement 后的旧 completion 必须失效；
+- pending auth count/bytes/rate 有界；
+- 成功后调用 Core authenticated marker；
+- 失败返回结构化 reason；
+- 不在 owner loop 执行阻塞认证。
+
+### 8.5 Logic 调度与公平性
+
+- 增加 oldest-command-lag soft/hard limit；
+- per-session pending count/bytes；
+- 单 session 每 tick 最大 drain；
+- priority 参与 admission/shedding，但不得饿死正常队列；
+- handler 执行时间可观测；
+- 慢 handler 与异常 handler 隔离；
+- Windows timer cadence 经过专门验证后，再决定是否替换 mutex+deque 为分片 MPSC。
+
+先修策略与公平性，再以 allocation/lock profiling 驱动无锁结构；不得仅为了“高性能”盲目引入 lock-free。
+
+### 8.6 M4 完成定义
+
+- Pipeline 从 example 变成窄的 provisional library；
+- example 只负责演示配置和业务 handler；
+- auth、session generation、logic、broadcast、output、graceful stop 全链路闭环；
+- ingress 对未来 TLS/UDP 可复用；
+- packet codec 有 fuzz 与版本合同；
+- 真实 TCP full-pipeline benchmark 和 soak 进入 CI/专用 runner。
+
+## 9. M5：端到端背压、可观测性与生产发布门禁
+
+M5 分成两个 promotion point：
+
+- **M5-A Core/Phase 4 candidate gate**：在 M3 完成后即可执行，用于收口 `v0.3.0-production-candidate`，不依赖正式 Gateway；
+- **M5-B Gateway end-to-end gate**：在 M4 完成后执行，增加完整 auth/session/logic/broadcast/TCP 链路证据。
+
+M5-A 可以先发布候选，但不能把尚未完成的 Gateway、安全或多传输能力写入版本承诺。M5-B 通过后再发布 Gateway Preview。
+
+### 9.1 统一背压状态
+
+构建从 socket 到业务的完整决策链：
+
+```text
+socket input
+→ framing budget
+→ pending-auth budget
+→ session quota
+→ logic queue/lag
+→ output quota
+→ broadcast quota
+→ connection/server memory quota
+```
+
+每层必须提供：
+
+- 当前容量；
+- hard/soft threshold；
+- admission result；
+- action；
+- reason；
+- metric；
+- 恢复条件。
+
+禁止某层接受工作后，在下一层静默丢弃且不反馈。
+
+### 9.2 Metrics 热路径重构
+
+Phase 6 的 InMemoryMetricsExporter 适合作为功能原型，不适合作为最终热路径。
+
+#### 任务
+
+- 预注册 `MetricId`；
+- 固定 label schema，禁止每事件动态拼接字符串；
+- per-loop/thread-local counter；
+- histogram 使用明确 bucket 或可替换 recorder；
+- snapshot 时聚合；
+- counter 与 histogram 名称/type 冲突检测；
+- cumulative counter 不作为 histogram sample；
+- endpoint 级高频事件支持采样或聚合；
+- exporter failure 不影响网络行为。
+
+#### 性能门禁
+
+- metrics disabled；
+- metrics enabled but no scrape；
+- metrics enabled + periodic snapshot；
+- Broadcast 高 fanout metrics；
+- EventLoop 高频 wakeup metrics；
+- 记录 CPU、allocation、lock contention 和 P99 差异。
+
+### 9.3 生产配置
+
+提供分层配置并在 start 前验证：
+
+- EventLoop budgets；
+- thread count/selector/affinity；
+- connection input/output limits；
+- per-loop/global memory quota；
+- server admission；
+- auth timeout/rate；
+- heartbeat/idle；
+- Logic queue/lag/fairness；
+- Broadcast budgets；
+- socket options；
+- shutdown deadline；
+- metrics。
+
+非法配置必须在启动前失败，不能运行中静默修正。
+
+### 9.4 CI 与发布强化
+
+正式候选至少包含：
+
+- Linux GCC Debug/Release；
+- Linux Clang Debug/Release；
+- ASan/UBSan；
+- TSan threading +关键 Pipeline；
+- Windows MSVC Debug/Release IOCP；
+- Windows ASan 常态 job；
+- IPv4/IPv6 TCP integration；
+- EMFILE/ENOBUFS/WSAENOBUFS 故障注入；
+- Packet fuzz；
+- repeat-50；
+- 10k capacity/performance gate；
+- 24 小时候选 endurance；
+- 72 小时 release endurance；
+- install consumer 编译并执行；
+- static analysis；
+- warning policy；
+- public API diff。
+
+发布资产：
+
+- annotated tag；
+- release notes；
+- known limitations；
+- checksums；
+- SBOM；
+- provenance；
+- CI/performance/endurance manifests；
+- raw benchmark samples；
+- API manifest；
+- upgrade notes。
+
+GitHub Actions 的短期 artifact 不能作为唯一长期证据，关键 manifests 和原始样本必须附到 Release。
+
+### 9.5 M5 完成定义
+
+- 所有层的 overload reason 可以从 ingress 追踪到最终 action；
+- metrics-on 开销在专用 runner 上有预算；
+- runtime 配置可验证；
+- 最终候选 SHA 拥有完整 CI、性能、24/72 小时证据；
+- 发布仍可声明 API provisional，但不得模糊 ABI/安全/容量边界。
+
+## 10. M6：TLS 与 Gateway Security
+
+### 10.1 前置条件
+
+- M1/M2 生命周期和 shutdown 已闭环；
+- M4 transport-neutral ingress 已稳定；
+- M5 overload/metrics 能观察 handshake 和 auth；
+- plain TCP 行为保持不变。
+
+### 10.2 ConnectionTransport 内部抽象
+
+先在 TcpConnection 内部建立窄 transport helper：
+
+- plain socket read/write；
+- TLS read/write；
+- WANT_READ/WANT_WRITE；
+- pending encrypted/plain bytes；
+- shutdown/cancel；
+- error mapping。
+
+该抽象服务 TcpConnection，不与上层 TransportEndpoint 混为一谈。
+
+### 10.3 TLS 合同
+
+- 非阻塞 handshake；
+- handshake timeout；
+- certificate chain/hostname verification；
+- SNI；
+- session resumption；
+- WANT_READ/WANT_WRITE 公平性；
+- output/input hard limit；
+- `close_notify` 与 forced close；
+- pending I/O teardown；
+- Linux/Windows；
+- invalid certificate、truncated record、slow handshake、renegotiation policy；
+- TLS 库版本和 CVE 更新策略。
+
+### 10.4 Gateway Security
+
+- 注入式 token validator；
+- nonce/replay protection hook；
+- pre-auth frame count/bytes/rate limit；
+- per-peer auth attempt rate；
+- auth failure reason 不泄露敏感细节；
+- security metrics 限制 label cardinality；
+- 日志不记录 token/secret；
+- fuzz auth envelope；
+- TLS 和认证分别可测试，但公网发布 gate 要求二者同时成立。
+
+## 11. M7：UDP experimental
+
+### 11.1 范围
+
+首版只实现非阻塞 datagram 基础：
+
+- IPv4/IPv6；
+- zero-length datagram；
+- truncation detection；
+- peer identity；
+- owner-loop read budget；
+- receive/send result；
+- stop/detach；
+- basic session mapping；
+- Linux epoll 与 Windows IOCP。
+
+首版不同时实现 PMTU、raw ICMP、FEC、可靠传输或复杂拥塞控制。
+
+### 11.2 平台路径
+
+- Linux 先以 recvfrom/sendto 建立合同，再按证据考虑 recvmmsg/sendmmsg；
+- Windows 使用 overlapped WSARecvFrom/WSASendTo，并保持 completion lifetime；
+- burst drain 必须有 count/time budget；
+- peer map 和 receive buffer 必须有内存上限。
+
+### 11.3 测试与门禁
+
+- truncation、zero-length、oversized datagram；
+- IPv4/IPv6；
+- burst fairness；
+- stop 与 pending receive completion；
+- peer address reuse；
+- malformed datagram fuzz；
+- packet loss 不应破坏资源回收；
+- UDP target 保持 experimental、默认关闭。
+
+## 12. M8：KCP preview
+
+### 12.1 前置条件
+
+- UDP owner/lifetime/backpressure 合同稳定；
+- fake clock 和 fake network 可用；
+- packet/session memory 上限可观测；
+- UDP decoder fuzz 已建立。
+
+### 12.2 首版范围
+
+- conversation/session identity；
+- ACK/RTO/retry；
+- loss/reorder/duplicate/jitter；
+- sequence wrap；
+- fragmentation/reassembly；
+- max fragment/message/session memory；
+- idle/timeout/stop；
+- decoder fuzz；
+- metrics。
+
+### 12.3 明确限制
+
+首版 KCP 只能是 preview：
+
+- 不宣称 production-grade congestion control；
+- 不在同一版本加入 PMTU、cwnd、冗余和 XOR parity；
+- 每个扩展必须有独立 intent、仿真模型和 promotion gate；
+- 与 TCP/TLS Core 保持单向依赖和独立 target。
+
+## 13. 建议的近期 PR 拆分
+
+### PR-A：Phase 6 infrastructure audit
+
+- 更新候选证据；
+- Metrics 标记 provisional；
+- benchmark schema v2；
+- API manifest 分类；
+- 不创建稳定 tag。
+
+### PR-B：EventLoop control-plane saturation
+
+- control lane/coalescing intent；
+- TcpServer 聚合 shutdown；
+- queue-full 生命周期故障注入；
+- graceful future 必然完成。
+
+### PR-C：Connector、Channel batch 与 IOCP 同步错误
+
+- Connector owner-loop contract；
+- request generation；
+- active batch reclamation；
+- WSARecv/WSASend 同步失败；
+- TSan/ASan contracts。
+
+### PR-D：Phase 4 typed dispatch results
+
+- PostResult/DispatchResult；
+- SessionManager 不再忽略 admission；
+- Pipeline continuation 失败关闭；
+- Broadcast reason 完整映射。
+
+### PR-E：Session generation 与 Pipeline/Core 对齐
+
+- duplicate replace generation；
+- Core authenticated marker；
+- graceful shutdown coordinator；
+- heartbeat/idle full path。
+
+### PR-F：Performance harness v2
+
+- workload profiles；
+- requested/accepted/rejected；
+- RSS、CPU、P99/P999、recovery；
+- metrics on/off；
+- 10k profile。
+
+### PR-G：IOCP batching 与 buffer ownership
+
+- GQCSEx；
+- wakeup coalescing；
+- read pool；
+- segmented write；
+- AcceptEx pool。
+
+### PR-H：公平预算与时间轮
+
+- accept/channel/timer budget；
+- timer semantics；
+- deadline bucket/wheel；
+- loop selector。
+
+### PR-I：Rich Packet 与 ingress
+
+- envelope；
+- codec；
+- fuzz；
+- transport-neutral ingress。
+
+### PR-J：正式 Gateway/Pipeline
+
+- injectable auth；
+- session/logic/output coordinator；
+- end-to-end backpressure；
+- real TCP benchmark。
+
+### PR-K：Production metrics/config
+
+- MetricId；
+- sharded recorder；
+- validated runtime config；
+- release observability。
+
+### PR-L：0.3 production-candidate closure
+
+- 不新增功能；
+- 最终 SHA 全量 CI；
+- Linux/Windows performance；
+- 24/72 小时 endurance；
+- API diff；
+- SBOM/provenance/checksums；
+- Release 和 known limitations。
+
+### PR 依赖与合并顺序
+
+| PR | 前置依赖 | 可以并行的工作 | 合并后才能开始 |
+|---|---|---|---|
+| A | 无 | B 的 intent/contract 设计 | 最终 API/发布分类 |
+| B | EventLoop overload intent 评审 | C 的 Connector/Channel 测试设计 | D、Server saturation 修复 |
+| C | 相关 lifetime/thread intent | B 的非重叠实现 | IOCP v2 数据路径 |
+| D | B 的 PostResult/control contract | Broadcast reason 设计 | E |
+| E | D | F 的 workload 设计 | 正式 Pipeline promotion |
+| F | B/E 的可观测字段确定 | G 的 buffer intent | G、H 的性能比较 |
+| G | C、F baseline | H 的 timer/fairness 设计 | Windows capacity gate |
+| H | F baseline | G | M3 完成 |
+| I | D/E 的结果与 generation 模型 | G/H | J |
+| J | I、E | K 的 recorder 设计 | M5-B、TLS |
+| K | F、D 的 reason schema | J | L |
+| L | A～H、K；若纳入 Gateway 则还需 I/J | 不与运行时代码修改并行 | v0.3 candidate 发布 |
+
+推荐执行节奏：
+
+1. A 先收口治理边界，同时完成 B 的 intent 和失败测试；
+2. B 合并后立即推进 C、D；
+3. D 后推进 E，形成 Phase 4/5 语义闭环；
+4. F 先建立可信 baseline，再实施 G、H；
+5. Core/Phase 4 候选按 A～H、K、L 收口；
+6. I/J 在依赖稳定后建立 Gateway Preview；
+7. TLS、UDP、KCP 不与 P0/P1 修复争抢主线评审资源。
+
+## 14. 计划测试文件与证据映射
+
+下列路径是计划中的明确验证落点。实现 PR 可以调整命名，但不能删除对应验证层次；新文件必须注册到 CTest，并回写到相关 active intent。
+
+| 工作流 | 必须更新的 intent/rules | 计划新增或扩展的测试 |
+|---|---|---|
+| EventLoop control saturation | `event_loop.intent.md`、`graceful_shutdown.intent.md`、thread/ownership/testing rules | `tests/contract/event_loop/test_event_loop_control_saturation.cpp` |
+| TcpServer 饱和停服 | `tcp_server.intent.md`、`graceful_shutdown.intent.md` | `tests/contract/tcp_server/test_tcp_server_saturation_shutdown.cpp` |
+| TcpConnection 通知/写状态 | `tcp_connection.intent.md`、`backpressure_policy.intent.md` | `tests/contract/tcp_connection/test_tcp_connection_queue_saturation.cpp` |
+| Connector 线程合同 | `connector.intent.md`、`tcp_client.intent.md`、thread rules | `tests/contract/connector/test_connector_thread_contract.cpp` |
+| active Channel lifetime | `channel.intent.md`、`event_loop.intent.md`、lifetime intent | `tests/contract/channel/test_channel_active_batch_lifetime.cpp` |
+| IOCP 同步错误与批处理 | `poller.intent.md`、`acceptor.intent.md`、`tcp_connection.intent.md` | `tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp`、`tests/integration/tcp/test_iocp_batch_completion.cpp` |
+| TcpServer idle timeout | `tcp_server.intent.md`、`timer_queue.intent.md` | `tests/contract/tcp_server/test_tcp_server_idle_timeout.cpp`、`tests/integration/tcp/test_tcp_server_idle_timeout.cpp` |
+| 上层投递饱和 | `player_session.intent.md`、Pipeline use-case intent、`broadcast.intent.md` | `tests/integration/game_pipeline/test_game_server_pipeline_saturation.cpp` |
+| Session generation | `player_session.intent.md`、Pipeline use-case intent | `tests/integration/game_pipeline/test_game_server_pipeline_binding_generation.cpp` |
+| Pipeline graceful stop | Pipeline use-case intent、`graceful_shutdown.intent.md` | 扩展 `tests/integration/game_pipeline/test_game_server_pipeline_shutdown.cpp` |
+| Broadcast 真实过载 | `broadcast.intent.md`、`game_backpressure_policy.intent.md` | `tests/integration/broadcast/test_broadcast_tcp_overload.cpp` |
+| Logic fairness/lag | `logic_loop.intent.md`、`game_backpressure_policy.intent.md` | `tests/contract/game_logic/test_logic_loop_fairness.cpp` |
+| Rich Packet | 新增 active game-packet intent、更新 scope | `tests/contract/protocol/test_game_packet_contract.cpp`、新增 fuzz harness/corpus |
+| Gateway | 新增 active gateway intent、更新 ownership/thread rules | `tests/integration/game_gateway/` 下 auth、handoff、shutdown、overload 矩阵 |
+| Metrics hot path | `metrics_exporter.intent.md`、performance baseline intents | metrics contract + metrics-on/off benchmark |
+| TLS | `connection_transport.intent.md`、`tls.intent.md` | `tests/contract/tls/` 与真实 loop integration |
+| UDP | `udp.intent.md`、platform/runtime rules | `tests/contract/udp/`、`tests/integration/udp/`、decoder fuzz |
+| KCP | `kcp_transport.intent.md` | fake-clock/network contract、loss/reorder/fragment fuzz |
+
+每个候选 SHA 的证据清单必须包含：
+
+- 普通 Debug/Release CTest；
+- Linux ASan/UBSan；
+- Linux TSan；
+- Windows IOCP Debug/Release；
+- 可用时的 Windows ASan；
+- 真正的多 loop TCP integration；
+- saturation、slow reader/writer、RST/half-close、connection storm；
+- auth success/timeout/disconnect/replacement 竞争；
+- real TCP broadcast slow endpoint；
+- metrics on/off；
+- repeat/nightly fuzz；
+- 24/72 小时 RSS、fd/handle、queue-depth plateau。
+
+性能回归预算与绝对容量 SLO 必须分开记录：
+
+- 回归预算回答“同 runner 是否比上一基线退化”；
+- 容量 SLO 回答“指定硬件和 workload 能承载多少连接/吞吐/延迟”；
+- synthetic endpoint benchmark 只能证明调度算法成本，不能作为真实网络容量证明。
+
+## 15. 建议发布序列
+
+版本号可在实施时调整，但发布含义应保持清晰：
+
+| 建议版本 | 主要内容 | 稳定性声明 |
+|---|---|---|
+| `v0.3.0-production-candidate` | M0、M1、M2、M3 与 M5-A | Core/Phase 4 source contract 候选；无 ABI 承诺 |
+| `v0.4.0-performance-preview` | M3 的 100k 容量提升、趋势阈值固化和平台调优 | 容量证据预览 |
+| `v0.5.0-gateway-preview` | M4 正式 Packet/Gateway | 上层 API provisional |
+| `v0.6.0-tls-preview` | M6 TLS/Security | 安全部署预览 |
+| `v0.7.0-udp-experimental` | M7 UDP | experimental |
+| `v0.8.0-kcp-preview` | M8 KCP | experimental/preview |
+
+只要 M1～M3、Metrics 或其他工作改变运行时代码，现有 Phase 6 的 24/72 小时结果就不能直接作为最终 0.3 候选证据，必须在最终 SHA 重跑。
+
+## 16. 全局完成标准
+
+项目只有同时满足以下条件，才能从“高质量 Preview”提升为“生产候选网络底座”：
+
+- 所有控制和生命周期操作在队列饱和时仍能收敛；
+- 没有未定义的跨线程普通字段访问；
+- 没有依赖裸指针存活概率的 active batch/queued callback；
+- input、logic、output、broadcast 和 global memory 都有可观测硬边界；
+- duplicate login、stale completion、shutdown race 不产生业务副作用；
+- Linux/Windows 的错误、取消、关闭语义一致；
+- 10k/100k、慢客户端、连接风暴、timer storm、真实 TCP broadcast 有证据；
+- metrics 开启后的性能开销受控；
+- 正式 Gateway 不包含业务逻辑，但具备可注入 auth/handler/output；
+- TLS/UDP/KCP 只在其依赖合同稳定后进入 active scope；
+- 每个发布版本都有精确 SHA、兼容性说明、原始证据和已知限制。
+
+## 17. 明确暂缓项
+
+以下内容不进入近期主线：
+
+- HTTP/WebSocket/RPC；
+- 游戏账号系统；
+- AOI、房间、世界状态；
+- 对象序列化框架；
+- coroutine 全面改写；
+- 未经基准证明的 lock-free 重构；
+- UDP 首版中的 PMTU/FEC；
+- KCP 首版中的复杂拥塞控制和冗余算法；
+- 没有 TLS、安全认证和限流合同的公网 production 声明。
+
+近期最重要的交付物不是更多协议，而是：
+
+> 一套在队列饱和、连接风暴、慢客户端、回调异常和优雅停服过程中，仍能通过合同测试证明必然收敛的 TCP 游戏服务器网络底座。

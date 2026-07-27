@@ -49,6 +49,11 @@ def main() -> None:
         "include/gamenet/core/net/EventLoop.h",
         "namespace gamenet::net { class EventLoop {}; }\n",
     )
+    assert_clean(
+        repo_root,
+        "include/gamenet/core/metrics/MetricsExporter.h",
+        "namespace gamenet::metrics { class MetricsExporter {}; }\n",
+    )
     assert_violation(
         repo_root,
         "src/core/net/Legacy.cc",

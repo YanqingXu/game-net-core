@@ -65,7 +65,25 @@ struct Result {
     double elapsedSeconds{0.0};
     std::uint64_t roundTrips{0};
     std::uint64_t applicationBytes{0};
-    std::uint64_t offeredBytes{0};
+    std::uint64_t requestedBytes{0};
+    std::uint64_t acceptedBytes{0};
+    std::uint64_t rejectedBytes{0};
+    std::uint64_t acceptedSends{0};
+    std::uint64_t rejectedSends{0};
+    std::uint64_t overloadedSends{0};
+    std::uint64_t closedSends{0};
+    std::uint64_t ownerUnavailableSends{0};
+    std::uint64_t pendingOutputPeakBytes{0};
+    std::uint64_t readPauseObservations{0};
+    std::uint64_t readResumeObservations{0};
+    std::uint64_t outputLowWaterBytes{
+        gamenet::net::TcpConnectionBackpressureOptions{}.lowWaterMarkBytes};
+    std::uint64_t outputHighWaterBytes{
+        gamenet::net::TcpConnectionBackpressureOptions{}.highWaterMarkBytes};
+    std::uint64_t outputHardLimitBytes{
+        gamenet::net::TcpConnectionBackpressureOptions{}.hardLimitBytes};
+    std::uint64_t maxInputBufferBytes{
+        gamenet::net::TcpConnectionBackpressureOptions{}.maxInputBufferBytes};
     std::uint64_t workingSetBefore{0};
     std::uint64_t workingSetAfter{0};
     std::int64_t workingSetDelta{0};
@@ -73,6 +91,7 @@ struct Result {
     std::optional<double> p50LatencyUs;
     std::optional<double> p99LatencyUs;
     std::optional<double> approxBytesPerConnection;
+    std::optional<double> backpressureRecoverySeconds;
     std::uint64_t highWaterCallbacks{0};
 };
 
@@ -90,6 +109,66 @@ public:
 
     void markHighWater() {
         highWaterCallbacks_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void markSlowSend(
+        gamenet::net::TcpSendResult result,
+        std::size_t requestedBytes,
+        std::size_t pendingOutputBytes,
+        bool readingPaused) {
+        requestedBytes_.fetch_add(requestedBytes, std::memory_order_relaxed);
+        switch (result) {
+        case gamenet::net::TcpSendResult::Accepted:
+            acceptedBytes_.fetch_add(requestedBytes, std::memory_order_relaxed);
+            acceptedSends_.fetch_add(1, std::memory_order_relaxed);
+            break;
+        case gamenet::net::TcpSendResult::Overloaded:
+            rejectedBytes_.fetch_add(requestedBytes, std::memory_order_relaxed);
+            rejectedSends_.fetch_add(1, std::memory_order_relaxed);
+            overloadedSends_.fetch_add(1, std::memory_order_relaxed);
+            break;
+        case gamenet::net::TcpSendResult::Closed:
+            rejectedBytes_.fetch_add(requestedBytes, std::memory_order_relaxed);
+            rejectedSends_.fetch_add(1, std::memory_order_relaxed);
+            closedSends_.fetch_add(1, std::memory_order_relaxed);
+            break;
+        case gamenet::net::TcpSendResult::OwnerUnavailable:
+            rejectedBytes_.fetch_add(requestedBytes, std::memory_order_relaxed);
+            rejectedSends_.fetch_add(1, std::memory_order_relaxed);
+            ownerUnavailableSends_.fetch_add(1, std::memory_order_relaxed);
+            break;
+        }
+        auto peak = pendingOutputPeakBytes_.load(std::memory_order_relaxed);
+        while (pendingOutputBytes > peak &&
+               !pendingOutputPeakBytes_.compare_exchange_weak(
+                   peak,
+                   pendingOutputBytes,
+                   std::memory_order_relaxed,
+                   std::memory_order_relaxed)) {
+        }
+        if (readingPaused) {
+            readPauseObservations_.fetch_add(1, std::memory_order_relaxed);
+        }
+        slowSendAttempts_.fetch_add(1, std::memory_order_release);
+        cv_.notify_all();
+    }
+
+    void markSlowWriteComplete(bool readingResumed) {
+        if (readingResumed) {
+            readResumeObservations_.fetch_add(1, std::memory_order_relaxed);
+        }
+        slowWriteCompletes_.fetch_add(1, std::memory_order_release);
+        cv_.notify_all();
+    }
+
+    bool waitForSlowWriteCompletes(
+        std::size_t expected,
+        std::chrono::milliseconds timeout) {
+        std::unique_lock lock(mutex_);
+        return cv_.wait_for(lock, timeout, [&] {
+            return slowWriteCompletes_.load(std::memory_order_acquire) >= expected ||
+                   !failure_.empty();
+        }) && slowWriteCompletes_.load(std::memory_order_acquire) >= expected;
     }
 
     bool waitForConnections(std::size_t expected, std::chrono::milliseconds timeout) {
@@ -126,6 +205,54 @@ public:
         return highWaterCallbacks_.load(std::memory_order_relaxed);
     }
 
+    std::uint64_t requestedBytes() const noexcept {
+        return requestedBytes_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t acceptedBytes() const noexcept {
+        return acceptedBytes_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t rejectedBytes() const noexcept {
+        return rejectedBytes_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t acceptedSends() const noexcept {
+        return acceptedSends_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t rejectedSends() const noexcept {
+        return rejectedSends_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t overloadedSends() const noexcept {
+        return overloadedSends_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t closedSends() const noexcept {
+        return closedSends_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t ownerUnavailableSends() const noexcept {
+        return ownerUnavailableSends_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t pendingOutputPeakBytes() const noexcept {
+        return pendingOutputPeakBytes_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t readPauseObservations() const noexcept {
+        return readPauseObservations_.load(std::memory_order_relaxed);
+    }
+
+    std::uint64_t readResumeObservations() const noexcept {
+        return readResumeObservations_.load(std::memory_order_relaxed);
+    }
+
+    std::size_t slowSendAttempts() const noexcept {
+        return slowSendAttempts_.load(std::memory_order_acquire);
+    }
+
     void markDriverDone() noexcept {
         driverDone_.store(true, std::memory_order_release);
     }
@@ -138,6 +265,19 @@ private:
     std::atomic<std::size_t> connected_{0};
     std::atomic<std::size_t> disconnected_{0};
     std::atomic<std::uint64_t> highWaterCallbacks_{0};
+    std::atomic<std::uint64_t> requestedBytes_{0};
+    std::atomic<std::uint64_t> acceptedBytes_{0};
+    std::atomic<std::uint64_t> rejectedBytes_{0};
+    std::atomic<std::uint64_t> acceptedSends_{0};
+    std::atomic<std::uint64_t> rejectedSends_{0};
+    std::atomic<std::uint64_t> overloadedSends_{0};
+    std::atomic<std::uint64_t> closedSends_{0};
+    std::atomic<std::uint64_t> ownerUnavailableSends_{0};
+    std::atomic<std::uint64_t> pendingOutputPeakBytes_{0};
+    std::atomic<std::uint64_t> readPauseObservations_{0};
+    std::atomic<std::uint64_t> readResumeObservations_{0};
+    std::atomic<std::size_t> slowSendAttempts_{0};
+    std::atomic<std::size_t> slowWriteCompletes_{0};
     std::atomic<bool> driverDone_{false};
     mutable std::mutex mutex_;
     std::condition_variable cv_;
@@ -180,7 +320,7 @@ void printUsage(std::ostream& output) {
         << "  --messages N          echo messages per connection (default 1000)\n"
         << "  --payload N           echo payload bytes (default 256)\n"
         << "  --slow-bytes N        bytes offered to each slow client (default 8388608)\n"
-        << "  --high-water N        high-water notification threshold (default 65536)\n"
+        << "  --high-water N        output pause/callback threshold (default 65536)\n"
         << "  --settle-ms N         settle interval before memory sampling (default 500)\n"
         << "  --timeout-ms N        connection/I/O and overall timeout (default 30000)\n";
 }
@@ -211,7 +351,11 @@ Config parseArgs(int argc, char* argv[]) {
         } else if (option == "--slow-bytes") {
             config.slowBytes = parseSize(value, option, 1, 256U * kMebibyte);
         } else if (option == "--high-water") {
-            config.highWaterBytes = parseSize(value, option, 1, 256U * kMebibyte);
+            config.highWaterBytes = parseSize(
+                value,
+                option,
+                2,
+                gamenet::net::TcpConnectionBackpressureOptions{}.hardLimitBytes - 1);
         } else if (option == "--settle-ms") {
             config.settle = std::chrono::milliseconds(parseSize(value, option, 0, 60000));
         } else if (option == "--timeout-ms") {
@@ -519,10 +663,46 @@ void runSlowClient(
     Result& result) {
     const auto started = Clock::now();
     auto clients = connectClients(config, address, state, true);
+    if (state.slowSendAttempts() != config.connections) {
+        throw std::runtime_error("slow-client send-attempt accounting did not converge");
+    }
     std::this_thread::sleep_for(config.settle);
     recordWorkingSet(result, config);
+
+    const auto acceptedSends = state.acceptedSends();
+    if (acceptedSends != 0 && acceptedSends != config.connections) {
+        throw std::runtime_error(
+            "slow-client mixed accepted/rejected sends cannot map responses to clients");
+    }
+    if (acceptedSends != 0) {
+        const auto recoveryStarted = Clock::now();
+        std::vector<std::thread> readers;
+        readers.reserve(config.connections);
+        for (std::size_t index = 0; index < config.connections; ++index) {
+            readers.emplace_back([&, index] {
+                try {
+                    std::string received(config.slowBytes, '\0');
+                    clients[index].receiveExact(received);
+                } catch (const std::exception& error) {
+                    state.fail(error.what());
+                }
+            });
+        }
+        for (auto& reader : readers) {
+            reader.join();
+        }
+        if (!state.failure().empty()) {
+            throw std::runtime_error(state.failure());
+        }
+        if (!state.waitForSlowWriteCompletes(acceptedSends, config.timeout)) {
+            throw std::runtime_error(
+                "timed out waiting for slow-client output drain and backpressure recovery");
+        }
+        result.backpressureRecoverySeconds =
+            std::chrono::duration<double>(Clock::now() - recoveryStarted).count();
+    }
+
     result.elapsedSeconds = std::chrono::duration<double>(Clock::now() - started).count();
-    result.offeredBytes = static_cast<std::uint64_t>(config.connections) * config.slowBytes;
     clients.clear();
 }
 
@@ -590,7 +770,7 @@ void printResult(const Config& config, const Result& result, const SharedState& 
     const std::string failure = state.failure();
     std::cout << std::fixed << std::setprecision(3)
               << "{\n"
-              << "  \"schema\": \"gamenet.core_benchmark.v1\",\n"
+              << "  \"schema\": \"gamenet.core_benchmark.v2\",\n"
               << "  \"status\": \"" << (failure.empty() ? "ok" : "error") << "\",\n"
               << "  \"error\": ";
     if (failure.empty()) {
@@ -603,7 +783,7 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "  \"platform\": \"" << platformName() << "\",\n"
               << "  \"backend\": \"" << backendName() << "\",\n"
               << "  \"completion_mode\": \"" << completionMode() << "\",\n"
-              << "  \"backpressure_policy\": \"high_water_notification_only\",\n"
+              << "  \"backpressure_policy\": \"bounded_output_hysteresis\",\n"
               << "  \"build_type\": \"" << GAMENET_BENCHMARK_BUILD_TYPE << "\",\n"
               << "  \"parameters\": {\n"
               << "    \"connections\": " << config.connections << ",\n"
@@ -611,7 +791,10 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "    \"messages_per_connection\": " << config.messagesPerConnection << ",\n"
               << "    \"payload_bytes\": " << config.payloadBytes << ",\n"
               << "    \"slow_bytes_per_connection\": " << config.slowBytes << ",\n"
-              << "    \"high_water_bytes\": " << config.highWaterBytes << ",\n"
+              << "    \"low_water_bytes\": " << result.outputLowWaterBytes << ",\n"
+              << "    \"high_water_bytes\": " << result.outputHighWaterBytes << ",\n"
+              << "    \"hard_limit_bytes\": " << result.outputHardLimitBytes << ",\n"
+              << "    \"max_input_buffer_bytes\": " << result.maxInputBufferBytes << ",\n"
               << "    \"settle_ms\": " << config.settle.count() << ",\n"
               << "    \"timeout_ms\": " << config.timeout.count() << "\n"
               << "  },\n"
@@ -632,7 +815,21 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "    \"approx_bytes_per_connection\": ";
     printOptional(std::cout, result.approxBytesPerConnection);
     std::cout << ",\n"
-              << "    \"offered_bytes\": " << result.offeredBytes << ",\n"
+              << "    \"requested_bytes\": " << result.requestedBytes << ",\n"
+              << "    \"accepted_bytes\": " << result.acceptedBytes << ",\n"
+              << "    \"rejected_bytes\": " << result.rejectedBytes << ",\n"
+              << "    \"accepted_sends\": " << result.acceptedSends << ",\n"
+              << "    \"rejected_sends\": " << result.rejectedSends << ",\n"
+              << "    \"overloaded_sends\": " << result.overloadedSends << ",\n"
+              << "    \"closed_sends\": " << result.closedSends << ",\n"
+              << "    \"owner_unavailable_sends\": " << result.ownerUnavailableSends << ",\n"
+              << "    \"output_hard_limit_bytes\": " << result.outputHardLimitBytes << ",\n"
+              << "    \"pending_output_peak_bytes\": " << result.pendingOutputPeakBytes << ",\n"
+              << "    \"read_pause_observations\": " << result.readPauseObservations << ",\n"
+              << "    \"read_resume_observations\": " << result.readResumeObservations << ",\n"
+              << "    \"backpressure_recovery_seconds\": ";
+    printOptional(std::cout, result.backpressureRecoverySeconds);
+    std::cout << ",\n"
               << "    \"high_water_callbacks\": " << result.highWaterCallbacks << "\n"
               << "  }\n"
               << "}\n";
@@ -646,9 +843,19 @@ int run(const Config& config) {
         gamenet::net::InetAddress(0, true),
         "core-benchmark");
     server.setThreadNum(static_cast<int>(config.eventLoopThreads));
+    gamenet::net::TcpConnectionBackpressureOptions backpressureOptions;
+    backpressureOptions.highWaterMarkBytes = config.highWaterBytes;
+    backpressureOptions.lowWaterMarkBytes = std::max<std::size_t>(
+        1,
+        config.highWaterBytes / 2);
+    server.setConnectionBackpressureOptions(backpressureOptions);
 
     SharedState state;
     Result result;
+    result.outputLowWaterBytes = backpressureOptions.lowWaterMarkBytes;
+    result.outputHighWaterBytes = backpressureOptions.highWaterMarkBytes;
+    result.outputHardLimitBytes = backpressureOptions.hardLimitBytes;
+    result.maxInputBufferBytes = backpressureOptions.maxInputBufferBytes;
     const std::string payload(
         config.scenario == "slow-client" ? config.slowBytes : config.payloadBytes,
         'x');
@@ -656,7 +863,12 @@ int run(const Config& config) {
     server.setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& connection) {
         if (connection->connected()) {
             if (config.scenario == "slow-client") {
-                connection->send(payload);
+                const auto sendResult = connection->trySend(payload);
+                state.markSlowSend(
+                    sendResult,
+                    payload.size(),
+                    connection->pendingOutputBytes(),
+                    connection->readingPausedByBackpressure());
             }
             state.markConnected();
         } else {
@@ -665,16 +877,25 @@ int run(const Config& config) {
     });
     if (config.scenario == "echo") {
         server.setMessageCallback(
-            [](const gamenet::net::TcpConnectionPtr& connection, gamenet::net::Buffer* buffer) {
+            [&](const gamenet::net::TcpConnectionPtr& connection, gamenet::net::Buffer* buffer) {
                 const std::size_t readable = buffer->readableBytes();
-                connection->send(buffer->peek(), readable);
+                const auto sendResult = connection->trySend(buffer->peek(), readable);
                 buffer->retrieve(readable);
+                if (sendResult != gamenet::net::TcpSendResult::Accepted) {
+                    state.fail("echo response was rejected by TcpConnection admission");
+                    connection->forceClose();
+                }
             });
     }
     if (config.scenario == "slow-client") {
         server.setHighWaterMarkCallback(
             [&](const gamenet::net::TcpConnectionPtr&, std::size_t) { state.markHighWater(); },
             config.highWaterBytes);
+        server.setWriteCompleteCallback(
+            [&](const gamenet::net::TcpConnectionPtr& connection) {
+                state.markSlowWriteComplete(
+                    !connection->readingPausedByBackpressure());
+            });
     }
 
     server.start();
@@ -721,6 +942,22 @@ int run(const Config& config) {
     driver.join();
 
     result.highWaterCallbacks = state.highWaterCallbacks();
+    result.requestedBytes = state.requestedBytes();
+    result.acceptedBytes = state.acceptedBytes();
+    result.rejectedBytes = state.rejectedBytes();
+    result.acceptedSends = state.acceptedSends();
+    result.rejectedSends = state.rejectedSends();
+    result.overloadedSends = state.overloadedSends();
+    result.closedSends = state.closedSends();
+    result.ownerUnavailableSends = state.ownerUnavailableSends();
+    result.pendingOutputPeakBytes = state.pendingOutputPeakBytes();
+    result.readPauseObservations = state.readPauseObservations();
+    result.readResumeObservations = state.readResumeObservations();
+    if (config.scenario == "slow-client" &&
+        (result.requestedBytes != result.acceptedBytes + result.rejectedBytes ||
+         result.acceptedSends + result.rejectedSends != config.connections)) {
+        state.fail("slow-client admission accounting is inconsistent");
+    }
     printResult(config, result, state);
     return state.failure().empty() ? 0 : 1;
 }

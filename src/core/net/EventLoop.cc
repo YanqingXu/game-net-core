@@ -5,16 +5,22 @@
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TimerQueue.h"
 #include "gamenet/core/net/platform/Wakeup.h"
+#ifdef _WIN32
+#include "gamenet/core/net/poller/IocpPoller.h"
+#endif
 
 #include "gamenet/core/base/Logger.h"
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
+#include <cstdint>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -24,6 +30,12 @@ namespace {
 
 thread_local EventLoop* t_loopInThisThread = nullptr;
 std::atomic<std::uint64_t> nextExecutorId{1};
+constexpr std::size_t kMaxControlSources = 65536;
+
+EventLoopOptions validatedEventLoopOptions(EventLoopOptions options) {
+    options.validate();
+    return options;
+}
 
 }  // namespace
 
@@ -38,16 +50,207 @@ struct EventLoopExecutor::State {
     bool drainingAccepted{false};
 };
 
+struct EventLoopControlSource::State {
+    static constexpr std::size_t kNoActiveSlot =
+        (std::numeric_limits<std::size_t>::max)();
+
+    enum class Phase {
+        Accepting,
+        Draining,
+        Shutdown,
+    };
+
+    struct Slot {
+        std::shared_ptr<EventLoop::Functor> callback;
+        std::uint64_t generation{0};
+        bool active{false};
+    };
+
+    State(EventLoop* loopValue, std::size_t maxSources)
+        : loop(loopValue),
+          slots(maxSources),
+          pendingWords(maxSources / 64 + (maxSources % 64 == 0 ? 0 : 1), 0) {}
+
+    mutable std::mutex mutex;
+    EventLoop* loop;
+    Phase phase{Phase::Accepting};
+    std::vector<Slot> slots;
+    std::vector<std::uint64_t> pendingWords;
+    std::size_t pendingCount{0};
+    std::size_t activeCallbackSlot{kNoActiveSlot};
+    std::size_t pendingPeak{0};
+    std::atomic<std::uint64_t> notifications{0};
+    std::atomic<std::uint64_t> mergedNotifications{0};
+    std::atomic<std::uint64_t> rejectedNotifications{0};
+};
+
+struct EventLoopLifecycleSource::Node {
+    std::shared_ptr<EventLoop::Functor> callback;
+    Node* dirtyNext{nullptr};
+    std::uint64_t id{0};
+    std::uint64_t generation{1};
+    std::uint64_t pendingGeneration{0};
+    bool attached{true};
+    bool dirty{false};
+    bool active{false};
+};
+
+struct EventLoopLifecycleSource::State {
+    State(EventLoop* loopValue, std::size_t maxNodesValue)
+        : loop(loopValue), maxNodes(maxNodesValue) {}
+
+    mutable std::mutex mutex;
+    EventLoop* loop;
+    EventLoopPhase phase{EventLoopPhase::Running};
+    const std::size_t maxNodes;
+    std::uint64_t nextNodeId{1};
+    std::unordered_map<std::uint64_t, std::shared_ptr<Node>> nodes;
+    Node* dirtyHead{nullptr};
+    Node* dirtyTail{nullptr};
+    Node* activeNode{nullptr};
+    std::uint64_t activeGeneration{0};
+    std::size_t attachedCount{0};
+    std::size_t pendingCount{0};
+    std::atomic<std::uint64_t> signals{0};
+    std::atomic<std::uint64_t> mergedSignals{0};
+    std::atomic<std::uint64_t> rejectedSignals{0};
+};
+
+EventLoopControlSource::EventLoopControlSource(
+    const std::shared_ptr<State>& state,
+    std::size_t slot,
+    std::uint64_t generation) noexcept
+    : state_(state), slot_(slot), generation_(generation) {}
+
+PostResult EventLoopControlSource::notify() const noexcept {
+    const auto state = state_.lock();
+    if (!state) {
+        return PostResult::OwnerUnavailable;
+    }
+
+    std::lock_guard lock(state->mutex);
+    if (slot_ >= state->slots.size()) {
+        state->rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::OwnerUnavailable;
+    }
+
+    const auto& slot = state->slots[slot_];
+    if (!slot.active || slot.generation != generation_ || state->loop == nullptr) {
+        state->rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::OwnerUnavailable;
+    }
+
+    const bool isDrainingSelfRearm =
+        state->phase == State::Phase::Draining &&
+        state->loop->isInLoopThread() &&
+        state->activeCallbackSlot == slot_;
+    if (state->phase == State::Phase::Shutdown ||
+        (state->phase == State::Phase::Draining && !isDrainingSelfRearm)) {
+        state->rejectedNotifications.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::Shutdown;
+    }
+
+    const std::size_t wordIndex = slot_ / 64;
+    const std::uint64_t mask = std::uint64_t{1} << (slot_ % 64);
+    const bool alreadyPending = (state->pendingWords[wordIndex] & mask) != 0;
+    state->notifications.fetch_add(1, std::memory_order_relaxed);
+    if (alreadyPending) {
+        state->mergedNotifications.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        state->pendingWords[wordIndex] |= mask;
+        ++state->pendingCount;
+        state->pendingPeak =
+            (std::max)(state->pendingPeak, state->pendingCount);
+    }
+
+    if (!alreadyPending) {
+        // The shared-state mutex linearizes this dereference against EventLoop
+        // destruction. wakeup() allocates no control work and is safe
+        // cross-thread. A merged notification needs no additional wakeup.
+        state->loop->wakeup();
+    }
+    return PostResult::Accepted;
+}
+
+EventLoopLifecycleSource::EventLoopLifecycleSource(
+    const std::shared_ptr<State>& state,
+    const std::shared_ptr<Node>& node,
+    std::uint64_t generation) noexcept
+    : state_(state), node_(node), generation_(generation) {}
+
+PostResult EventLoopLifecycleSource::signal() const noexcept {
+    const auto state = state_.lock();
+    const auto node = node_.lock();
+    if (!state || !node) {
+        return PostResult::OwnerUnavailable;
+    }
+
+    std::lock_guard lock(state->mutex);
+    if (state->loop == nullptr ||
+        !node->attached ||
+        node->generation != generation_) {
+        state->rejectedSignals.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::OwnerUnavailable;
+    }
+
+    const bool isDrainingSelfSignal =
+        (state->phase == EventLoopPhase::Quiescing ||
+         state->phase == EventLoopPhase::FinalDraining) &&
+        state->loop->isInLoopThread() &&
+        state->activeNode == node.get() &&
+        state->activeGeneration == generation_;
+    if (state->phase == EventLoopPhase::Shutdown ||
+        (state->phase != EventLoopPhase::Running &&
+         !isDrainingSelfSignal)) {
+        state->rejectedSignals.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::Shutdown;
+    }
+
+    state->signals.fetch_add(1, std::memory_order_relaxed);
+    if (node->dirty) {
+        state->mergedSignals.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::Accepted;
+    }
+
+    node->dirty = true;
+    node->pendingGeneration = generation_;
+    node->dirtyNext = nullptr;
+    if (state->dirtyTail == nullptr) {
+        state->dirtyHead = node.get();
+    } else {
+        state->dirtyTail->dirtyNext = node.get();
+    }
+    state->dirtyTail = node.get();
+    ++state->pendingCount;
+
+    // The lifecycle-state lock linearizes this dereference with EventLoop
+    // destruction. The embedded dirty link means signal allocates no queue
+    // node, and one wakeup is sufficient for the newly committed generation.
+    state->loop->wakeup();
+    return PostResult::Accepted;
+}
+
 EventLoopExecutor::EventLoopExecutor(const std::shared_ptr<State>& state) noexcept
     : state_(state), id_(state ? state->id : 0) {}
 
-bool EventLoopExecutor::tryQueue(Functor callback) const {
-    if (!callback) return false;
+PostResult EventLoopExecutor::postFunctor(Functor callback) const noexcept {
+    if (!callback) return PostResult::QueueFull;
     const auto state = state_.lock();
-    if (!state) return false;
-    std::lock_guard lock(state->mutex);
-    if (!state->accepting || state->loop == nullptr) return false;
-    return state->loop->tryQueueInLoop(std::move(callback));
+    if (!state) return PostResult::OwnerUnavailable;
+    try {
+        std::lock_guard lock(state->mutex);
+        if (state->loop == nullptr) return PostResult::OwnerUnavailable;
+        if (!state->accepting) return PostResult::Shutdown;
+        return state->loop->tryQueueInLoop(std::move(callback))
+            ? PostResult::Accepted
+            : PostResult::QueueFull;
+    } catch (...) {
+        return PostResult::QueueFull;
+    }
+}
+
+bool EventLoopExecutor::tryQueue(Functor callback) const {
+    return postFunctor(std::move(callback)) == PostResult::Accepted;
 }
 
 bool EventLoopExecutor::available() const noexcept {
@@ -80,26 +283,44 @@ void EventLoopOptions::validate() const {
         throw std::invalid_argument(
             "EventLoop per-iteration functor budget must be within queue capacity");
     }
+    if (maxControlSources > kMaxControlSources) {
+        throw std::invalid_argument(
+            "EventLoop control-source capacity exceeds the supported bound");
+    }
+    if (maxLifecycleCallbacksPerIteration == 0) {
+        throw std::invalid_argument(
+            "EventLoop lifecycle callback budget must be positive");
+    }
 }
 
 EventLoop::EventLoop(EventLoopOptions options)
     : looping_(false),
       quit_(false),
+      phase_(EventLoopPhase::Running),
       eventHandling_(false),
+      activeBatchEpoch_(0),
       callingPendingFunctors_(false),
       threadId_(std::this_thread::get_id()),
+      options_(validatedEventLoopOptions(options)),
       executorState_(std::make_shared<EventLoopExecutor::State>(this)),
+      controlState_(
+          std::make_shared<EventLoopControlSource::State>(
+              this,
+              options_.maxControlSources)),
+      lifecycleState_(
+          std::make_shared<EventLoopLifecycleSource::State>(
+              this,
+              options_.maxLifecycleNodes)),
+      controlDrainWords_(controlState_->pendingWords.size(), 0),
       poller_(Poller::newDefaultPoller(this)),
       timerQueue_(std::make_unique<TimerQueue>(this)),
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
       currentActiveChannel_(nullptr),
-      options_(options),
       pendingFunctorPeak_(0),
       wakeupCount_(0),
       rejectedFunctorCount_(0),
       callbackExceptionCount_(0) {
-    options_.validate();
     if (t_loopInThisThread != nullptr) {
         throw std::runtime_error("another EventLoop already exists in this thread");
     }
@@ -117,9 +338,17 @@ EventLoop::~EventLoop() {
         LOG_FATAL << "EventLoop destroyed while loop() is still running";
     }
     {
-        std::lock_guard lock(executorState_->mutex);
+        std::unique_lock executorLock(executorState_->mutex);
+        std::unique_lock controlLock(controlState_->mutex);
+        std::unique_lock lifecycleLock(lifecycleState_->mutex);
         executorState_->accepting = false;
+        executorState_->drainingAccepted = false;
         executorState_->loop = nullptr;
+        controlState_->phase = EventLoopControlSource::State::Phase::Shutdown;
+        controlState_->loop = nullptr;
+        lifecycleState_->phase = EventLoopPhase::Shutdown;
+        lifecycleState_->loop = nullptr;
+        phase_.store(EventLoopPhase::Shutdown, std::memory_order_release);
     }
     wakeupChannel_->disableAll();
     wakeupChannel_->remove();
@@ -133,23 +362,17 @@ void EventLoop::loop() {
 
     while (!quit_) {
         activeChannels_.clear();
-        pollReturnTime_ = poller_->poll(timerQueue_->pollTimeoutMs(10000), &activeChannels_);
-        eventHandling_ = true;
-        for (Channel* channel : activeChannels_) {
-            currentActiveChannel_ = channel;
-            try {
-                channel->handleEvent(pollReturnTime_);
-            } catch (...) {
-                handleCallbackException(
-                    EventLoopCallbackSource::ChannelEvent,
-                    std::current_exception());
-            }
-        }
-        currentActiveChannel_ = nullptr;
-        eventHandling_ = false;
+        const int pollTimeout =
+            (hasPendingControlSources() || hasPendingLifecycleNodes())
+            ? 0
+            : timerQueue_->pollTimeoutMs(10000);
+        pollReturnTime_ = poller_->poll(pollTimeout, &activeChannels_);
+        dispatchActiveChannels();
         for (auto& exception : timerQueue_->handleExpired(gamenet::base::now())) {
             handleCallbackException(EventLoopCallbackSource::Timer, exception);
         }
+        doControlSources();
+        doLifecycleNodes();
         doPendingFunctors(options_.maxFunctorsPerIteration);
     }
 
@@ -159,29 +382,106 @@ void EventLoop::loop() {
         executorState_->drainingAccepted = true;
     }
 
+    // Quiescing keeps consuming backend completions while draining every
+    // operation accepted before quit. The zero-timeout poll is essential on
+    // IOCP: CancelIoEx publishes completion packets rather than synchronously
+    // completing connection-owned operation storage.
     while (true) {
-        bool hasPending = false;
-        {
-            std::lock_guard lock(mutex_);
-            hasPending = !pendingFunctors_.empty();
+        activeChannels_.clear();
+        pollReturnTime_ = poller_->poll(0, &activeChannels_);
+        dispatchActiveChannels();
+
+        const bool hasPending = hasPendingFunctors();
+        const bool hasControl = hasPendingControlSources();
+        if (hasControl) {
+            doControlSources();
         }
-        if (!hasPending) {
+        if (hasPendingLifecycleNodes()) {
+            doLifecycleNodes();
+        }
+        if (hasPending) {
+            doPendingFunctors(options_.maxFunctorsPerIteration);
+        }
+
+        if (!hasPendingFunctors() &&
+            !hasPendingControlSources() &&
+            !hasPendingLifecycleNodes() &&
+            !poller_->hasPendingCompletionOperations()) {
             break;
         }
-        doPendingFunctors(options_.maxFunctorsPerIteration);
     }
 
     {
-        std::lock_guard lock(executorState_->mutex);
+        std::lock_guard lifecycleLock(lifecycleState_->mutex);
+        lifecycleState_->phase = EventLoopPhase::FinalDraining;
+        phase_.store(
+            EventLoopPhase::FinalDraining,
+            std::memory_order_release);
+    }
+
+    // Seal the backend/lifecycle quiet point and run one final accepted-work
+    // fixed point. A self-rearmed internal callback remains legal, but no
+    // external producer can enter after Quiescing linearized.
+    while (true) {
+        if (poller_->hasPendingCompletionOperations()) {
+            activeChannels_.clear();
+            pollReturnTime_ = poller_->poll(0, &activeChannels_);
+            dispatchActiveChannels();
+        }
+        if (hasPendingControlSources()) {
+            doControlSources();
+        }
+        if (hasPendingLifecycleNodes()) {
+            doLifecycleNodes();
+        }
+        if (hasPendingFunctors()) {
+            doPendingFunctors(options_.maxFunctorsPerIteration);
+        }
+        if (!hasPendingFunctors() &&
+            !hasPendingControlSources() &&
+            !hasPendingLifecycleNodes() &&
+            !poller_->hasPendingCompletionOperations()) {
+            break;
+        }
+    }
+
+    {
+        // Publish final-drain completion and both internal admission planes as
+        // one state transition. Repeated quit cannot resurrect owner identity.
+        std::unique_lock executorLock(executorState_->mutex);
+        std::unique_lock controlLock(controlState_->mutex);
+        std::unique_lock lifecycleLock(lifecycleState_->mutex);
         executorState_->drainingAccepted = false;
+        controlState_->phase = EventLoopControlSource::State::Phase::Shutdown;
+        lifecycleState_->phase = EventLoopPhase::Shutdown;
+        phase_.store(EventLoopPhase::Shutdown, std::memory_order_release);
     }
 
     looping_ = false;
 }
 
 void EventLoop::quit() {
-    quit_ = true;
-    if (!isInLoopThread()) {
+    const bool crossThread = !isInLoopThread();
+    // Keep executor->control->lifecycle lock order shared with final shutdown
+    // and destruction so all admission planes observe one transition.
+    std::unique_lock executorLock(executorState_->mutex);
+    std::unique_lock controlLock(controlState_->mutex);
+    std::unique_lock lifecycleLock(lifecycleState_->mutex);
+    executorState_->accepting = false;
+    if (controlState_->phase == EventLoopControlSource::State::Phase::Shutdown ||
+        lifecycleState_->phase == EventLoopPhase::Shutdown) {
+        executorState_->drainingAccepted = false;
+        quit_.store(true, std::memory_order_relaxed);
+        return;
+    }
+    executorState_->drainingAccepted = true;
+    controlState_->phase = EventLoopControlSource::State::Phase::Draining;
+    lifecycleState_->phase = EventLoopPhase::Quiescing;
+    phase_.store(EventLoopPhase::Quiescing, std::memory_order_release);
+    quit_.store(true, std::memory_order_relaxed);
+    if (crossThread) {
+        // Keep the shared-state lock across wakeup so EventLoop destruction
+        // cannot invalidate Poller/wakeup storage until this call returns.
         wakeup();
     }
 }
@@ -248,6 +548,201 @@ std::uint64_t EventLoop::rejectedFunctorCount() const noexcept {
     return rejectedFunctorCount_.load(std::memory_order_relaxed);
 }
 
+EventLoopControlSource EventLoop::registerControlSource(Functor cb) {
+    assertInLoopThread();
+    if (looping_) {
+        throw std::logic_error(
+            "EventLoop control sources must be registered before loop() starts");
+    }
+    if (!cb) {
+        throw std::invalid_argument(
+            "EventLoop control source requires a non-empty callback");
+    }
+
+    auto callback = std::make_shared<Functor>(std::move(cb));
+    std::lock_guard lock(controlState_->mutex);
+    if (controlState_->phase !=
+        EventLoopControlSource::State::Phase::Accepting) {
+        throw std::logic_error(
+            "EventLoop control-source registration is closed");
+    }
+
+    for (std::size_t slotIndex = 0;
+         slotIndex < controlState_->slots.size();
+         ++slotIndex) {
+        auto& slot = controlState_->slots[slotIndex];
+        if (slot.active) {
+            continue;
+        }
+
+        ++slot.generation;
+        if (slot.generation == 0) {
+            ++slot.generation;
+        }
+        slot.callback = std::move(callback);
+        slot.active = true;
+        return EventLoopControlSource(
+            controlState_,
+            slotIndex,
+            slot.generation);
+    }
+
+    throw std::length_error(
+        "EventLoop control-source registration capacity is exhausted");
+}
+
+void EventLoop::unregisterControlSource(
+    const EventLoopControlSource& source) {
+    assertInLoopThread();
+    const auto state = source.state_.lock();
+    if (!state || state.get() != controlState_.get()) {
+        return;
+    }
+
+    std::shared_ptr<Functor> callback;
+    {
+        std::lock_guard lock(state->mutex);
+        if (source.slot_ >= state->slots.size()) {
+            return;
+        }
+
+        auto& slot = state->slots[source.slot_];
+        if (!slot.active || slot.generation != source.generation_) {
+            return;
+        }
+
+        const std::size_t wordIndex = source.slot_ / 64;
+        const std::uint64_t mask =
+            std::uint64_t{1} << (source.slot_ % 64);
+        if ((state->pendingWords[wordIndex] & mask) != 0) {
+            state->pendingWords[wordIndex] &= ~mask;
+            --state->pendingCount;
+        }
+
+        callback = std::move(slot.callback);
+        slot.active = false;
+        ++slot.generation;
+        if (slot.generation == 0) {
+            ++slot.generation;
+        }
+    }
+}
+
+std::size_t EventLoop::pendingControlSourceCount() const {
+    std::lock_guard lock(controlState_->mutex);
+    return controlState_->pendingCount;
+}
+
+std::uint64_t EventLoop::controlNotificationCount() const noexcept {
+    return controlState_->notifications.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EventLoop::mergedControlNotificationCount() const noexcept {
+    return controlState_->mergedNotifications.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EventLoop::rejectedControlNotificationCount() const noexcept {
+    return controlState_->rejectedNotifications.load(
+        std::memory_order_relaxed);
+}
+
+EventLoopLifecycleSource EventLoop::attachLifecycleNode(Functor cb) {
+    assertInLoopThread();
+    if (!cb) {
+        throw std::invalid_argument(
+            "EventLoop lifecycle node requires a non-empty callback");
+    }
+
+    auto callback = std::make_shared<Functor>(std::move(cb));
+    auto node = std::make_shared<EventLoopLifecycleSource::Node>();
+    node->callback = std::move(callback);
+
+    std::lock_guard lock(lifecycleState_->mutex);
+    if (lifecycleState_->phase != EventLoopPhase::Running ||
+        lifecycleState_->loop == nullptr) {
+        throw std::logic_error(
+            "EventLoop lifecycle-node attachment is closed");
+    }
+    if (lifecycleState_->nodes.size() >= lifecycleState_->maxNodes) {
+        throw std::length_error(
+            "EventLoop lifecycle-node capacity is exhausted");
+    }
+    if (lifecycleState_->nextNodeId == 0) {
+        throw std::overflow_error(
+            "EventLoop lifecycle-node identity is exhausted");
+    }
+
+    node->id = lifecycleState_->nextNodeId++;
+    lifecycleState_->nodes.emplace(node->id, node);
+    ++lifecycleState_->attachedCount;
+    return EventLoopLifecycleSource(
+        lifecycleState_,
+        node,
+        node->generation);
+}
+
+void EventLoop::detachLifecycleNode(
+    const EventLoopLifecycleSource& source) {
+    assertInLoopThread();
+    const auto state = source.state_.lock();
+    const auto node = source.node_.lock();
+    if (!state || !node || state.get() != lifecycleState_.get()) {
+        return;
+    }
+
+    std::shared_ptr<EventLoopLifecycleSource::Node> retired;
+    {
+        std::lock_guard lock(state->mutex);
+        if (!node->attached || node->generation != source.generation_) {
+            return;
+        }
+
+        node->attached = false;
+        --state->attachedCount;
+        ++node->generation;
+        if (node->generation == 0) {
+            ++node->generation;
+        }
+
+        // A dirty/active generation owns committed callback work. Keep its
+        // node in the registry until the owner-thread drain reaches silence.
+        if (!node->dirty && !node->active) {
+            const auto found = state->nodes.find(node->id);
+            if (found != state->nodes.end() &&
+                found->second.get() == node.get()) {
+                retired = std::move(found->second);
+                state->nodes.erase(found);
+            }
+        }
+    }
+}
+
+std::size_t EventLoop::attachedLifecycleNodeCount() const {
+    std::lock_guard lock(lifecycleState_->mutex);
+    return lifecycleState_->attachedCount;
+}
+
+std::size_t EventLoop::pendingLifecycleNodeCount() const {
+    std::lock_guard lock(lifecycleState_->mutex);
+    return lifecycleState_->pendingCount;
+}
+
+std::uint64_t EventLoop::lifecycleSignalCount() const noexcept {
+    return lifecycleState_->signals.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EventLoop::mergedLifecycleSignalCount() const noexcept {
+    return lifecycleState_->mergedSignals.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EventLoop::rejectedLifecycleSignalCount() const noexcept {
+    return lifecycleState_->rejectedSignals.load(std::memory_order_relaxed);
+}
+
+EventLoopPhase EventLoop::phase() const noexcept {
+    return phase_.load(std::memory_order_acquire);
+}
+
 EventLoopExecutor EventLoop::executor() const noexcept {
     return EventLoopExecutor(executorState_);
 }
@@ -299,12 +794,49 @@ void EventLoop::wakeup() {
 
 void EventLoop::updateChannel(Channel* channel) {
     assertInLoopThread();
+    if (channel == nullptr || channel->ownerLoop() != this) {
+        throw std::invalid_argument(
+            "EventLoop::updateChannel requires a Channel owned by this loop");
+    }
+    const bool newRegistration = !channel->addedToLoop_;
     poller_->updateChannel(channel);
+    if (newRegistration) {
+        channel->addedToLoop_ = true;
+        channel->advanceRegistrationGeneration();
+    }
 }
 
 void EventLoop::removeChannel(Channel* channel) {
     assertInLoopThread();
+    if (channel == nullptr || channel->ownerLoop() != this) {
+        throw std::invalid_argument(
+            "EventLoop::removeChannel requires a Channel owned by this loop");
+    }
+    if (!channel->addedToLoop_) {
+        throw std::logic_error(
+            "EventLoop::removeChannel requires an active registration");
+    }
+    if (!channel->isNoneEvent()) {
+        throw std::logic_error(
+            "EventLoop::removeChannel requires disabled interests");
+    }
+    if (!poller_->hasChannel(channel)) {
+        throw std::logic_error(
+            "EventLoop::removeChannel registration identity mismatch");
+    }
+
     poller_->removeChannel(channel);
+
+    if (eventHandling_ && channel->activeBatchEpoch_ == activeBatchEpoch_) {
+        const std::size_t index = channel->activeBatchIndex_;
+        if (index >= activeChannels_.size() ||
+            activeChannels_[index] != channel) {
+            LOG_FATAL << "EventLoop active Channel batch membership is corrupt";
+        }
+        activeChannels_[index] = nullptr;
+    }
+    channel->addedToLoop_ = false;
+    channel->advanceRegistrationGeneration();
 }
 
 void EventLoop::preserveSocketAssociation(SocketFd sockfd) {
@@ -312,14 +844,91 @@ void EventLoop::preserveSocketAssociation(SocketFd sockfd) {
     poller_->preserveSocketAssociation(sockfd);
 }
 
+void EventLoop::forgetSocketAssociation(SocketFd sockfd) noexcept {
+    if (!isInLoopThread()) {
+        LOG_FATAL << "EventLoop socket association rollback used from a different thread";
+    }
+#ifdef _WIN32
+    if (auto* iocp = dynamic_cast<IocpPoller*>(poller_.get())) {
+        iocp->forgetSocketAssociation(sockfd);
+    }
+#else
+    (void)sockfd;
+#endif
+}
+
 void EventLoop::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
     assertInLoopThread();
     poller_->retainCompletionOperation(operation, std::move(lifetime));
 }
 
+void EventLoop::trackCompletionOperation(void* operation) {
+    assertInLoopThread();
+    poller_->trackCompletionOperation(operation);
+}
+
 bool EventLoop::hasChannel(Channel* channel) {
     assertInLoopThread();
     return poller_->hasChannel(channel);
+}
+
+void EventLoop::dispatchActiveChannels() {
+    assertInLoopThread();
+    if (eventHandling_) {
+        throw std::logic_error("EventLoop active Channel dispatch cannot re-enter");
+    }
+
+    ++activeBatchEpoch_;
+    if (activeBatchEpoch_ == 0) {
+        ++activeBatchEpoch_;
+    }
+
+    for (std::size_t index = 0; index < activeChannels_.size(); ++index) {
+        Channel* channel = activeChannels_[index];
+        if (channel == nullptr) {
+            continue;
+        }
+        if (channel->activeBatchEpoch_ == activeBatchEpoch_) {
+            LOG_FATAL << "Poller returned one Channel more than once in an active batch";
+        }
+        channel->activeBatchEpoch_ = activeBatchEpoch_;
+        channel->activeBatchIndex_ = index;
+    }
+
+    eventHandling_ = true;
+    for (Channel* channel : activeChannels_) {
+        if (channel == nullptr) {
+            continue;
+        }
+        currentActiveChannel_ = channel;
+        try {
+            channel->handleEvent(pollReturnTime_);
+        } catch (...) {
+            handleCallbackException(
+                EventLoopCallbackSource::ChannelEvent,
+                std::current_exception());
+        }
+        currentActiveChannel_ = nullptr;
+        retiredCurrentChannel_.reset();
+    }
+    eventHandling_ = false;
+}
+
+void EventLoop::retireCurrentChannel(
+    std::unique_ptr<Channel> channel) noexcept {
+    if (!channel) {
+        return;
+    }
+    if (!isInLoopThread()) {
+        LOG_FATAL << "EventLoop current Channel retirement used from a different thread";
+    }
+    if (!eventHandling_ || currentActiveChannel_ != channel.get()) {
+        return;
+    }
+    if (retiredCurrentChannel_) {
+        LOG_FATAL << "EventLoop current Channel retirement slot is already occupied";
+    }
+    retiredCurrentChannel_ = std::move(channel);
 }
 
 bool EventLoop::isInLoopThread() const noexcept {
@@ -342,6 +951,191 @@ void EventLoop::handleRead(gamenet::base::Timestamp receiveTime) {
     sample.loop = this;
     sample.wakeupCount = wakeupCount_.load(std::memory_order_relaxed);
     emitEventLoopMetric(sample);
+}
+
+bool EventLoop::hasPendingControlSources() const {
+    std::lock_guard lock(controlState_->mutex);
+    return controlState_->pendingCount != 0;
+}
+
+bool EventLoop::hasPendingLifecycleNodes() const {
+    std::lock_guard lock(lifecycleState_->mutex);
+    return lifecycleState_->pendingCount != 0;
+}
+
+bool EventLoop::hasPendingFunctors() const {
+    std::lock_guard lock(mutex_);
+    return !pendingFunctors_.empty();
+}
+
+void EventLoop::doControlSources() {
+    assertInLoopThread();
+
+    std::size_t pendingCount = 0;
+    std::size_t pendingPeak = 0;
+    {
+        std::lock_guard lock(controlState_->mutex);
+        std::copy(
+            controlState_->pendingWords.begin(),
+            controlState_->pendingWords.end(),
+            controlDrainWords_.begin());
+        std::fill(
+            controlState_->pendingWords.begin(),
+            controlState_->pendingWords.end(),
+            std::uint64_t{0});
+        pendingCount = controlState_->pendingCount;
+        controlState_->pendingCount = 0;
+        pendingPeak = controlState_->pendingPeak;
+        controlState_->pendingPeak = 0;
+    }
+
+    if (pendingCount == 0) {
+        return;
+    }
+
+    for (std::size_t wordIndex = 0;
+         wordIndex < controlDrainWords_.size();
+         ++wordIndex) {
+        auto word = controlDrainWords_[wordIndex];
+        while (word != 0) {
+            const auto bitIndex =
+                static_cast<std::size_t>(std::countr_zero(word));
+            const std::size_t slotIndex = wordIndex * 64 + bitIndex;
+            word &= word - 1;
+
+            std::shared_ptr<Functor> callback;
+            {
+                std::lock_guard lock(controlState_->mutex);
+                if (slotIndex >= controlState_->slots.size()) {
+                    continue;
+                }
+                const auto& slot = controlState_->slots[slotIndex];
+                if (!slot.active || !slot.callback) {
+                    continue;
+                }
+                controlState_->activeCallbackSlot = slotIndex;
+                callback = slot.callback;
+            }
+
+            std::exception_ptr exception;
+            try {
+                (*callback)();
+            } catch (...) {
+                exception = std::current_exception();
+            }
+
+            {
+                std::lock_guard lock(controlState_->mutex);
+                if (controlState_->activeCallbackSlot == slotIndex) {
+                    controlState_->activeCallbackSlot =
+                        EventLoopControlSource::State::kNoActiveSlot;
+                }
+            }
+
+            if (exception) {
+                handleCallbackException(
+                    EventLoopCallbackSource::Control,
+                    exception);
+            }
+        }
+        controlDrainWords_[wordIndex] = 0;
+    }
+
+    EventLoopMetricSample sample;
+    sample.event = EventLoopMetricEvent::ControlSourcesDrained;
+    sample.pendingControlSources = pendingCount;
+    sample.pendingControlSourcePeak =
+        (std::max)(pendingPeak, pendingCount);
+    sample.wakeupCount = wakeupCount_.load(std::memory_order_relaxed);
+    emitEventLoopMetric(sample);
+}
+
+void EventLoop::doLifecycleNodes() {
+    assertInLoopThread();
+
+    std::size_t roundCount = 0;
+    {
+        std::lock_guard lock(lifecycleState_->mutex);
+        roundCount = std::min(
+            options_.maxLifecycleCallbacksPerIteration,
+            lifecycleState_->pendingCount);
+    }
+
+    for (std::size_t index = 0; index < roundCount; ++index) {
+        std::shared_ptr<EventLoopLifecycleSource::Node> node;
+        std::shared_ptr<Functor> callback;
+        std::uint64_t callbackGeneration = 0;
+        {
+            std::lock_guard lock(lifecycleState_->mutex);
+            auto* dirty = lifecycleState_->dirtyHead;
+            if (dirty == nullptr) {
+                break;
+            }
+
+            lifecycleState_->dirtyHead = dirty->dirtyNext;
+            if (lifecycleState_->dirtyHead == nullptr) {
+                lifecycleState_->dirtyTail = nullptr;
+            }
+            dirty->dirtyNext = nullptr;
+            dirty->dirty = false;
+            --lifecycleState_->pendingCount;
+
+            const auto found =
+                lifecycleState_->nodes.find(dirty->id);
+            if (found == lifecycleState_->nodes.end() ||
+                found->second.get() != dirty) {
+                LOG_FATAL << "EventLoop lifecycle dirty-set identity is corrupt";
+            }
+
+            node = found->second;
+            callback = node->callback;
+            callbackGeneration = node->pendingGeneration;
+            node->pendingGeneration = 0;
+            node->active = true;
+            lifecycleState_->activeNode = node.get();
+            lifecycleState_->activeGeneration = callbackGeneration;
+        }
+
+        std::exception_ptr exception;
+        try {
+            (*callback)();
+        } catch (...) {
+            exception = std::current_exception();
+        }
+
+        {
+            std::shared_ptr<EventLoopLifecycleSource::Node> retired;
+            {
+                std::lock_guard lock(lifecycleState_->mutex);
+                node->active = false;
+                if (lifecycleState_->activeNode == node.get()) {
+                    lifecycleState_->activeNode = nullptr;
+                    lifecycleState_->activeGeneration = 0;
+                }
+                if (!node->attached && !node->dirty) {
+                    const auto found =
+                        lifecycleState_->nodes.find(node->id);
+                    if (found != lifecycleState_->nodes.end() &&
+                        found->second.get() == node.get()) {
+                        retired = std::move(found->second);
+                        lifecycleState_->nodes.erase(found);
+                    }
+                }
+            }
+        }
+
+        if (exception) {
+            handleCallbackException(
+                EventLoopCallbackSource::Lifecycle,
+                exception);
+        }
+    }
+
+    if (hasPendingLifecycleNodes()) {
+        // The remaining intrusive entries are already allocated and linked.
+        // A wakeup requests another fair loop turn without queue admission.
+        wakeup();
+    }
 }
 
 void EventLoop::doPendingFunctors(std::size_t maxCount) {
@@ -396,6 +1190,12 @@ void EventLoop::emitEventLoopMetric(EventLoopMetricSample sample) {
         return;
     }
     sample.loop = this;
+    sample.controlNotifications =
+        controlState_->notifications.load(std::memory_order_relaxed);
+    sample.mergedControlNotifications =
+        controlState_->mergedNotifications.load(std::memory_order_relaxed);
+    sample.rejectedControlNotifications =
+        controlState_->rejectedNotifications.load(std::memory_order_relaxed);
     sample.callbackExceptions = callbackExceptionCount_.load(std::memory_order_relaxed);
     try {
         eventLoopMetricCallback_(sample);
@@ -430,14 +1230,14 @@ void EventLoop::handleCallbackException(
                 .source = source,
                 .exception = exception,
             }) == EventLoopCallbackExceptionAction::Quit) {
-            quit_ = true;
+            quit();
         }
     } catch (const std::exception& error) {
         LOG_ERROR << "EventLoop callback exception handler threw: " << error.what();
-        quit_ = true;
+        quit();
     } catch (...) {
         LOG_ERROR << "EventLoop callback exception handler threw a non-standard exception";
-        quit_ = true;
+        quit();
     }
 }
 

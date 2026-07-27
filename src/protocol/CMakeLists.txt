@@ -1,4 +1,4 @@
-add_library(gamenet_protocol
+add_library(gamenet_protocol STATIC
     PacketFramer.cc
 )
 add_library(GameNet::protocol ALIAS gamenet_protocol)

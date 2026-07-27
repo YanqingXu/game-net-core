@@ -89,7 +89,10 @@ Core-module change gate:
 
 These intents apply to the current migrated core:
 
+- `intents/usecases/production_endurance.intent.md`
+- `intents/usecases/production_candidate_release.intent.md`
 - `intents/usecases/core_performance_baseline.intent.md`
+- `intents/modules/metrics_exporter.intent.md`
 - `intents/modules/logger.intent.md`
 - `intents/modules/channel.intent.md`
 - `intents/modules/buffer.intent.md`
@@ -132,7 +135,6 @@ These design assets do not authorize expanding current scope:
 - `intents/modules/game_gateway_security.intent.md`
 - `intents/modules/http.intent.md`
 - `intents/modules/kcp_transport.intent.md`
-- `intents/modules/metrics_exporter.intent.md`
 - `intents/modules/path_mtu_cache.intent.md`
 - `intents/modules/path_mtu_signal_authentication.intent.md`
 - `intents/modules/platform_path_mtu_signal.intent.md`

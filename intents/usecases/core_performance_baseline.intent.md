@@ -11,8 +11,9 @@ artifact_kind: benchmark
 ## 1. Intent
 The core performance baseline is a reproducible, opt-in engineering tool for
 measuring the current Reactor/TCP implementation on Linux epoll and Windows
-IOCP. It records comparable evidence without turning timing thresholds into
-correctness tests or expanding the installed `GameNet::core` API.
+IOCP. The executable records raw measurements without embedding timing
+thresholds or expanding the installed `GameNet::core` API; the Phase 6 workflow
+applies reviewed same-runner relative regression budgets outside the executable.
 
 ---
 
@@ -21,21 +22,23 @@ correctness tests or expanding the installed `GameNet::core` API.
 - exercise the public TcpServer/TcpConnection path over loopback TCP
 - measure echo round-trip latency and application-byte throughput
 - measure process working-set growth while holding idle connections
-- observe working-set growth and high-water notifications for slow-reading clients
+- observe working-set growth, bounded output admission, high/low-water read
+  throttling, and recovery for slow-reading clients
 - report connection count, EventLoop worker count, backend, completion mode,
   build type, parameters, and measurements as one versioned JSON document
-- provide a manual-only workflow that captures the same fixed Release scenario
-  set as raw Linux and Windows artifacts from one commit
+- provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
+  and 4/16-slow-client Release matrix three times for both baseline and candidate
 - return a non-zero exit code when setup, I/O, timeout, or schema production fails
 
 ---
 
 ## 3. Non-Responsibilities
-- is not a CTest and defines no pass/fail performance threshold
+- is not a CTest and embeds no pass/fail performance threshold
 - does not claim cross-machine scores are directly comparable
 - does not install a benchmark library or add public headers
 - does not implement a backpressure policy, memory cap, metrics subsystem, or
-  alternate IOCP completion-drain strategy
+  alternate IOCP completion-drain strategy; it observes the Core policy
+  configured on `TcpServer`
 - does not benchmark HTTP, protocol framing, TLS, UDP, KCP, or game-server layers
 
 ---
@@ -55,19 +58,29 @@ correctness tests or expanding the installed `GameNet::core` API.
 
 ### `slow-client`
 - clients connect with a deliberately small receive buffer and do not read
-- each accepted connection is offered the configured payload from its owner loop
-- report offered bytes, high-water callback count, and working-set change after settling
-- describe the result as observation of the current notification-only behavior,
-  not proof of a bounded output policy
+- each accepted connection calls `trySend()` with the configured payload from
+  its owner loop and records the exact admission result
+- hold reads until the memory sample, then drain accepted output so write
+  completion can observe read-throttle recovery
+- report requested, accepted, and rejected bytes; rejection reasons; configured
+  low/high/hard output thresholds and input limit; pending-output peak;
+  pause/resume observations; high-water callback count; and working-set change
+- the `--high-water` scenario parameter configures both read-throttle policy and
+  high-water notification; the low-water threshold is the recorded half-value
+- fail semantic validation if requested bytes do not equal accepted plus
+  rejected bytes
 
 ---
 
 ## 5. Output Contract
 - stdout contains exactly one JSON document with schema
-  `gamenet.core_benchmark.v1`; diagnostics use stderr
+  `gamenet.core_benchmark.v2`; diagnostics use stderr
 - every scenario reports `platform`, `backend`, `completion_mode`, and `build_type`
 - every scenario reports configured `connections` and `event_loop_threads`
 - measurement keys remain present across scenarios; values that do not apply are `null`
+- the regression runner may ingest the frozen `v1` baseline schema and current
+  `v2` candidate schema, but candidate artifacts and semantic validation require
+  the v2 bounded-admission fields
 - Windows reports the current single-completion
   `GetQueuedCompletionStatus` mode; Linux reports the batched `epoll_wait` mode
 - raw JSON output is the durable comparison artifact; documentation summaries
@@ -99,9 +112,14 @@ correctness tests or expanding the installed `GameNet::core` API.
 - use Release builds for recorded baseline numbers
 - compare runs only when scenario parameters, build type, backend/completion mode,
   host context, and command are recorded
+- production-candidate regression compares baseline and candidate only on the
+  same runner, uses three-sample medians, and retains both raw sample sets
 - working-set deltas are process-level observations and include allocator/runtime effects
 - loopback results are regression baselines, not production network capacity claims
 - IOCP single-versus-batched completion performance remains a future implementation comparison
+- the frozen v1 baseline and v2 candidate are compared only on their common
+  reviewed performance metrics; v2 admission/accounting fields are validated
+  independently and are not inferred for v1 samples
 
 ---
 
@@ -110,7 +128,7 @@ correctness tests or expanding the installed `GameNet::core` API.
   active intent, non-CTest status, scenario/schema fields, backend reporting,
   process-memory sampling, documentation commands, and CI guard parity
 - `tests/ci/test_core_benchmark_workflow.py` verifies the manual-only trigger,
-  paired Release platform jobs, fixed scenario set, JSON validation, and artifacts
+  paired Release platform jobs, expanded fixed matrix, JSON validation, and artifacts
 - the guard runs in ordinary CI and long-soak preflight, but the benchmark executable
   is intentionally not run as a correctness gate
 
@@ -121,5 +139,8 @@ correctness tests or expanding the installed `GameNet::core` API.
 - Is each reported number defined precisely enough to compare later?
 - Are EventLoop, TcpServer, TcpConnection, and client-socket owners unambiguous?
 - Can callbacks or driver threads race on benchmark-owned result state?
-- Does slow-client output avoid claiming a memory cap that core does not implement?
+- Does slow-client output describe the configured Core hard limit without
+  turning one loopback run into a production capacity claim?
+- Does slow-client accounting prove requested = accepted + rejected and expose
+  the configured Core hard limit?
 - Are Release command, platform details, and raw JSON retained with recorded evidence?
