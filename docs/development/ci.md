@@ -388,8 +388,13 @@ has only a `workflow_dispatch` trigger, rejects refs other than
 dedicated labels `[self-hosted, windows, x64, gamenet-windows]`. Its matrix runs
 Debug and Release serially on the single runner, verifies the complete
 102-test inventory, executes the repository guards, installs the package,
-runs the external consumer, and retains configuration-specific evidence for
-90 days.
+runs the external consumer, and uses deliberately short `b` and `c` build
+directories to remain below the legacy Windows `MAX_PATH` limit.
+
+Each configuration writes its evidence manifest to the job log and job summary.
+The workflow also attempts to retain the full configuration-specific evidence
+artifact for 90 days, but that upload is non-blocking because repository or
+account storage quota exhaustion must not override the build and test result.
 
 This fallback does not run for `pull_request` or `push`. The repository is
 public, so the Windows runner must not be exposed to unreviewed PR-controlled
