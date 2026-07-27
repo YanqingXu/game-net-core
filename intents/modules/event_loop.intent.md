@@ -27,6 +27,13 @@ EventLoop is the heart of reactor execution in game-net-core.
 - host a separately bounded set of pre-registered internal control sources;
   each source owns one coalescing mailbox bit that cannot be consumed by
   normal or reserved pending functors
+- own one dynamic lifecycle hub for runtime-created reactor participants;
+  lifecycle nodes attach/detach on the owner thread while cross-thread signals
+  use an intrusive dirty set and allocate no queue node
+- drive the explicit loop shutdown state machine
+  `Running -> Quiescing -> FinalDraining -> Shutdown`
+- during Windows quiescing, continue zero-timeout IOCP polling until both
+  backend completion obligations and lifecycle-hub work are silent
 - maintain thread-affinity discipline
 - provide runInLoop / queueInLoop API
 - provide a copyable, non-owning `EventLoopExecutor` that can reject queued work
@@ -78,7 +85,7 @@ EventLoop is the heart of reactor execution in game-net-core.
   separately bounded reserve and throws explicitly when total capacity is full
 - `queueInLoop` and its reserve remain legacy/data-plane facilities and do not
   provide lifecycle progress guarantees; internal lifecycle work uses a
-  pre-registered control source instead
+  pre-registered control source or a dynamic lifecycle node instead
 - control-source registration is owner-thread-only, happens before `loop()`,
   cannot exceed the configured `maxControlSources`, and rejects configurations
   above the supported 65,536-source storage bound before allocation
@@ -101,6 +108,38 @@ EventLoop is the heart of reactor execution in game-net-core.
 - the control plane becomes Shutdown only after its pending bitset is empty;
   handles whose EventLoop no longer exists return
   `PostResult::OwnerUnavailable`
+- runtime-created lifecycle participants attach through the source-private
+  lifecycle registry on the owner thread; attach is fallible and bounded by
+  `maxLifecycleNodes`, and allocation happens only during attach
+- a lifecycle source contains a node generation. `signal()` takes no
+  allocation path, and under the hub lock either commits the matching
+  generation to the intrusive dirty set or returns Shutdown/OwnerUnavailable
+- `PostResult::Accepted` from lifecycle `signal()` is a committed-notify
+  guarantee: the matching callback executes at least once before that
+  generation can be reclaimed, even when detach or quit races the signal
+- repeated signals for one dirty generation coalesce; a callback that signals
+  itself is deferred to a later lifecycle round and is never invoked
+  recursively
+- detach is owner-thread-only, invalidates the generation before returning,
+  and stale copied sources cannot dirty a replacement node (ABA protection)
+- detach never releases callback/node storage while a committed notification
+  or callback frame for that generation remains outstanding; reclamation
+  occurs after the owner-thread drain observes both detached and clean
+- lifecycle draining is budgeted by
+  `maxLifecycleCallbacksPerIteration`; remaining dirty nodes request another
+  loop turn through wakeup/self-reschedule without using the pending-functor
+  queue
+- lifecycle callbacks are internal control work, not user callbacks, and must
+  be idempotent because multiple external events may coalesce into one visit
+- quit first publishes Quiescing and seals new external executor/control/
+  lifecycle admission while preserving signals committed before the
+  transition
+- Quiescing continues I/O completion consumption and lifecycle draining;
+  FinalDraining begins only after no backend completion obligation and no
+  lifecycle dirty/detaching node remains
+- FinalDraining executes already-accepted normal functors and permitted
+  self-rearmed control/lifecycle work to a fixed point; Shutdown is published
+  only after all three admission planes are closed and silent
 - normal iterations execute at most `maxFunctorsPerIteration`; accepted
   remainder is preserved and the loop is woken for another I/O/timer-aware
   iteration
@@ -126,12 +165,16 @@ Default v1 loop direction:
    invalidated by earlier callbacks
 3. dispatch expired timers
 4. execute one round of pending control sources
-5. execute pending functors
-6. repeat until quit requested
+5. execute one budgeted round of dirty lifecycle nodes
+6. execute pending functors
+7. repeat until quit requested
 
-If quit is observed, EventLoop may stop polling new iterations,
-but it should still drain already-queued pending functors and control-source
-notifications accepted before the quit transition before leaving loop().
+If quit is observed, EventLoop enters Quiescing. Linux may use a zero-timeout
+poll to establish backend silence; Windows must continue zero-timeout IOCP
+polling while retained or participant-owned completion obligations exist.
+Only after backend and lifecycle silence may the loop enter FinalDraining and
+drain already-accepted pending functors plus committed control/lifecycle work
+before publishing Shutdown.
 
 If this order changes, docs/tests/contracts must be updated.
 
@@ -149,8 +192,16 @@ Typical API direction:
 - source-private detail::EventLoopControlRegistry::unregisterSource(
   EventLoopControlSource)
 - EventLoopControlSource::notify() -> PostResult
+- source-private detail::EventLoopLifecycleRegistry::attach(Functor)
+  -> EventLoopLifecycleSource
+- source-private detail::EventLoopLifecycleRegistry::detach(
+  EventLoopLifecycleSource)
+- EventLoopLifecycleSource::signal() -> PostResult
 - pendingFunctorCount() / rejectedFunctorCount() snapshots
 - pendingControlSourceCount() / mergedControlNotificationCount() snapshots
+- attachedLifecycleNodeCount() / pendingLifecycleNodeCount() /
+  mergedLifecycleSignalCount() snapshots
+- phase() -> EventLoopPhase
 - executor() -> EventLoopExecutor
 - setCallbackExceptionHandler(EventLoopCallbackExceptionHandler)
 - callbackExceptionCount()
@@ -177,8 +228,12 @@ Additional APIs can be added later for richer timer and coroutine features.
 - tryQueueInLoop and EventLoopExecutor return false at normal-capacity saturation
 - control-source registration and unregistration are owner-thread-only;
   `notify()` is thread-safe and non-throwing
+- lifecycle attach/detach are owner-thread-only; `signal()` is thread-safe,
+  non-throwing, allocation-free, and generation checked
 - control-source callbacks are owner-thread-only and user/data work must not be
   routed through this internal lifecycle facility
+- lifecycle callbacks execute only on the owner thread; callback targets are
+  retained by hub-owned node storage until detach reclamation
 - cross-thread enqueue must ensure wakeup when loop may be blocked
 - pending functor queue flush occurs on owner thread only
 - cross-thread-observed pending functor execution state is atomic or synchronized
@@ -227,6 +282,20 @@ EventLoop should explicitly handle:
 - an exception from one control callback is observed as
   `EventLoopCallbackSource::Control` and cannot skip other sources from the
   same round
+- lifecycle attach capacity/allocation failure is reported before a participant
+  is published and the participant must roll back owner-thread construction
+- lifecycle `signal()` returns Accepted only after the node is linked dirty or
+  found already dirty for the same generation; detach/quit cannot revoke that
+  committed work
+- a stale/detached lifecycle source returns OwnerUnavailable and cannot dirty a
+  node that reused storage
+- lifecycle callback exceptions follow the internal callback-exception policy,
+  preserve later dirty nodes, and still permit detach reclamation
+- Quiescing must not block waiting for completion packets; each pass uses
+  zero-timeout backend polling and a bounded lifecycle drain, then repeats
+  while either side reports progress or an outstanding obligation
+- Shutdown with a non-silent lifecycle hub or retained IOCP completion
+  obligation is a contract violation
 
 v1 should prefer predictable behavior over over-complicated generic error models.
 
@@ -273,6 +342,27 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   dequeue width
 - current-Channel internal retirement remains available when normal and
   reserved pending-functor capacity are both full
+- lifecycle attach/detach generation invalidates stale handles and prevents
+  ABA when node storage is reused
+- a signal committed before detach executes exactly once-or-coalesced before
+  that generation is reclaimed; a signal linearized after detach returns
+  OwnerUnavailable
+- normal-plus-reserved saturation cannot reject a lifecycle signal
+- more dirty lifecycle nodes than one drain budget are processed across
+  self-rescheduled rounds without starving a ready Channel or timer
+- callback self-signal is non-recursive and callback detach is reclaimed only
+  after its active frame returns
+- quit racing committed lifecycle work either drains Accepted work or rejects
+  it before commitment; no accepted generation is stranded
+- Windows cancel plus quit continues polling until the real
+  `ERROR_OPERATION_ABORTED` completion is consumed and the lifecycle node
+  becomes silent
+- `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies
+  committed-notify, intrusive dirty coalescing, detach-generation ABA
+  protection, saturation isolation, budgeted self-reschedule, callback
+  re-entry, and quit linearization
+- `tests/integration/tcp/test_iocp_quit_completion_drain.cpp` verifies the
+  Windows cancel/quit completion-drain fixed point
 - `tests/contract/event_loop/test_event_loop_control_saturation.cpp` verifies
   bounded registration, saturation isolation, coalescing, non-recursive
   re-arming, callback-exception containment, and quit linearization

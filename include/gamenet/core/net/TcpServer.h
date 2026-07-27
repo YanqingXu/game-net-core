@@ -9,6 +9,7 @@
 #include "gamenet/core/net/CallbackException.h"
 #include "gamenet/core/net/EventLoopThreadPool.h"
 #include "gamenet/core/net/InetAddress.h"
+#include "gamenet/core/net/PostResult.h"
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/TcpConnectionOptions.h"
 #include "gamenet/core/net/TimerId.h"
@@ -24,10 +25,12 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace gamenet::net {
 
 class EventLoop;
+class EventLoopLifecycleSource;
 
 enum class TcpServerStopOutcome {
     Drained,
@@ -109,6 +112,7 @@ public:
     void setMessageCallback(MessageCallback cb);
     void setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t highWaterMark);
     void setWriteCompleteCallback(WriteCompleteCallback cb);
+    void setCloseInfoCallback(CloseInfoCallback cb);
     void setConnectionBackpressureOptions(TcpConnectionBackpressureOptions options);
     void setAcceptErrorCallback(AcceptorErrorCallback cb);
     void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
@@ -132,8 +136,29 @@ public:
 
 private:
     struct GracefulStopState;
+    struct AggregateStopState;
+    struct WorkerStopParticipant;
 
     void stopInLoop();
+    void driveStopLifecycleInLoop();
+    void registerWorkerStopParticipant(EventLoop* workerLoop);
+    void beginAggregateStopInLoop(
+        const std::shared_ptr<GracefulStopState>& gracefulState,
+        TcpServerStopOutcome outcome,
+        bool force);
+    void requestAggregateForceInLoop(TcpServerStopOutcome outcome);
+    void consumeWorkerStopNotificationsInLoop();
+    void finishAggregateStopInLoop();
+    void releaseWorkerConnectionsInLoop(
+        const std::shared_ptr<WorkerStopParticipant>& participant,
+        std::uint64_t generation);
+    PostResult signalStopLifecycle() noexcept;
+    static void driveWorkerStopParticipant(
+        const std::shared_ptr<WorkerStopParticipant>& participant);
+    static void workerConnectionClosed(
+        const std::shared_ptr<WorkerStopParticipant>& participant,
+        std::uint64_t generation,
+        const TcpConnectionPtr& connection);
     void beginGracefulStopInLoop(
         const std::shared_ptr<GracefulStopState>& state,
         TcpServerStopOptions options);
@@ -172,6 +197,7 @@ private:
     MessageCallback messageCallback_;
     HighWaterMarkCallback highWaterMarkCallback_;
     WriteCompleteCallback writeCompleteCallback_;
+    CloseInfoCallback closeInfoCallback_;
     ThreadInitCallback threadInitCallback_;
     AcceptorErrorCallback acceptErrorCallback_;
     TcpConnectionCallbackExceptionHandler callbackExceptionHandler_;
@@ -209,6 +235,13 @@ private:
     std::atomic<std::uint64_t> authenticationTimeouts_{0};
     std::atomic<std::uint64_t> activeAdmissionConnections_{0};
     std::shared_ptr<void> lifetimeToken_{std::make_shared<int>(0)};
+    mutable std::mutex stopLifecycleMutex_;
+    std::shared_ptr<EventLoopLifecycleSource> stopLifecycleSource_;
+    std::atomic<bool> immediateStopRequested_{false};
+    std::uint64_t nextStopGeneration_{1};
+    std::vector<std::shared_ptr<WorkerStopParticipant>>
+        workerStopParticipants_;
+    std::shared_ptr<AggregateStopState> aggregateStopState_;
     mutable std::mutex gracefulStopMutex_;
     std::shared_ptr<GracefulStopState> gracefulStopState_;
 };

@@ -1,6 +1,7 @@
 # game-net-core 推荐开发路线
 
 > 基线日期：2026-07-26
+> 当前执行检查点：2026-07-27
 > 主线基线：`main@2b1be4343f7c478eb40542451f30aad8ca474003`
 > 候选分支：`codex/phase6-production-candidate@b3443182d0606792df44a12bcb08927e767bc060`
 > 执行分支：`codex/assessment-roadmap-execution`
@@ -8,7 +9,7 @@
 ## 0. 执行进度
 
 本路线已经进入实施，而不是仅保留为建议。当前本地执行检查点的
-CTest 清单为 **94 项（8 unit、78 contract、8 integration）**：
+CTest 清单为 **102 项（8 unit、85 contract、9 integration）**：
 
 - M0 Phase 6 草案已快进整合到执行分支并完成代码审计，M0 的本地实现
   与门禁已经闭环；stable tag 仍受独立 maintainer 评审、许可决策和最终
@@ -52,8 +53,8 @@ CTest 清单为 **94 项（8 unit、78 contract、8 integration）**：
 - Channel/EventLoop/Poller 已完成 active-batch 代际与精确身份校验：
   批次中被移除/销毁的 Channel 不会继续分发旧 readiness，同一 fd 的陈旧
   remove 不会误删新注册；
-- 当前最终工作树已重新配置、全量构建并通过 Debug/Release CTest
-  **94/94**；测试标签为 unit 8、contract 78、integration 8、
+- 上一提交检查点的工作树已重新配置、全量构建并通过 Debug/Release CTest
+  **94/94**；当时的测试标签为 unit 8、contract 78、integration 8、
   threading 67、lifecycle 73。此前 active-batch Debug/Release 各 50 次
   重复亦通过；27 个 Python guard 文件所覆盖的仓库逻辑门禁、public API
   v2 manifest/diff 和 CTest 标签/数量核验均通过；
@@ -65,27 +66,29 @@ CTest 清单为 **94 项（8 unit、78 contract、8 integration）**：
 - benchmark v2 已在最终两项 P1 修复的直接前一 runtime revision 上通过
   echo、2×8 MiB accepted slow-client、2×32 MiB overload 三类独立
   validator；由于 P1 修复再次改变 runtime，严格的最终 SHA 性能证据仍需
-  下次冻结候选时重跑，不能把该结果冒充为最终 artifact 的性能证明。
+  下次冻结候选时重跑，不能把该结果冒充为最终 artifact 的性能证明；
+- M1 的四个剩余切片已按依赖顺序在当前工作树完成：EventLoop 动态
+  lifecycle hub、`Running → Quiescing → FinalDraining → Shutdown` 与
+  IOCP completion 静默、TcpConnection 显式 close/drain、TcpServer
+  worker aggregate/BaseReleased/ack/join，以及结构化 close reason 和
+  独立 `TcpClientControl`；
+- 当前工作树的 Windows MSVC Debug 与 Release 已分别全量通过
+  **102/102** CTest；21 个本轮相关 Python 静态合同通过，public API v2
+  manifest/diff 通过，隔离安装包的 Release consumer 通过 CTest 1/1。
 
-M1 尚未完成。下一实施切片按以下顺序推进：
-
-1. 每个 EventLoop 一个动态节点 lifecycle hub，控制请求在 queue 饱和时仍
-   可无分配合并；
-2. EventLoop IOCP quiescing、TcpConnection 显式 socket close 与
-   completion-drain 终态；
-3. TcpServer worker aggregate stop，以及
-   `worker cleanup → base bookkeeping → BaseReleased → worker ack → join`
-   握手；
-4. 结构化 close reason 和析构后安全的独立 `TcpClientControl` handle。
+M1 的本地 runtime 实现与直接合同现已闭环。尚未完成的是冻结候选 SHA
+之后的跨平台、sanitizer/TSan、性能与 24/72 小时耐久证据重跑，以及独立
+maintainer 的 API、性能和发布工具人工评审。因此当前仍不得创建 stable
+tag，也不得把历史 `b344318` 耐久记录当作本轮 runtime 的最终证明。
 
 独立 maintainer 的 API、性能和发布工具人工评审仍是稳定候选门禁；当前
 执行不得据此创建 stable tag。
 
-### 0.1 本次收敛检查点与下次续接
+### 0.1 上一收敛检查点与本轮执行结果
 
-本次按用户要求在 `codex/assessment-roadmap-execution` 分支收敛、提交并
-推送全部本地修改。该远端分支尖端就是下一次工作的唯一代码基线；不要从
-未包含这些 M0/M1 原语的旧 `main` 或 Phase 6 候选重新开始。
+上一轮按用户要求在 `codex/assessment-roadmap-execution` 分支收敛、提交
+并推送了当时的全部本地修改。该远端分支尖端是本轮工作的代码基线；没有
+从未包含这些 M0/M1 原语的旧 `main` 或 Phase 6 候选重新开始。
 
 已冻结到本检查点的范围：
 
@@ -95,17 +98,7 @@ M1 尚未完成。下一实施切片按以下顺序推进：
 3. Connector/TcpClient 请求代际、回调重入、显式 reconnect、事务式 IOCP
    fd 接管，以及对应的 deterministic contract tests。
 
-明确未完成、不得误报为已实现的范围：
-
-1. EventLoop lifecycle hub 尚未编码；
-2. EventLoop 退出时尚未进入 IOCP quiescing poll，因此 CancelIoEx 后的完成
-   包仍可能无法在 final drain 内被消费；
-3. TcpConnection 显式 socket close/completion drain 终态尚未完成；
-4. TcpServer 多 worker aggregate stop/BaseReleased/worker ack/join 握手、
-   结构化 close reason 和独立 `TcpClientControl` 尚未实现；
-5. 当前 runtime 修改后的 24h/72h endurance 尚未重跑，stable tag 仍禁止。
-
-下一次应直接从“每个 EventLoop 一个 lifecycle hub”开始，顺序不可倒置：
+该检查点留下的实施顺序不可倒置。本轮已严格按原顺序完成：
 
 1. 先更新 `event_loop`、`tcp_connection`、`tcp_server` intents 与三份 rules；
 2. 先写 lifecycle committed-notify、dirty-set/detach-generation、queue
@@ -115,10 +108,19 @@ M1 尚未完成。下一实施切片按以下顺序推进：
 4. 再把 EventLoop 状态推进为
    `Running → Quiescing → FinalDraining → Shutdown`，在 Windows 持续 poll
    直到 IOCP completion 与 lifecycle hub 同时静默；
-5. 最后接入 TcpConnection 和 TcpServer 三方/聚合停服握手，完成后才能声称
-   M1 闭环。
+5. 最后接入 TcpConnection、TcpServer 三方/聚合停服握手、结构化 close
+   reason 和析构后安全的 `TcpClientControl`，并补齐 public API manifest、
+   安装消费和文档证据。
 
-本检查点提交前的最终复验记录：
+仍然明确未完成、不得误报为已验证的范围：
+
+1. 当前 runtime 修改后的 24h/72h endurance 尚未重跑；
+2. 当前 runtime 的 Linux、ASan/UBSan、TSan、repeat-50 和跨平台性能证据
+   尚未绑定到冻结候选 SHA；
+3. 独立 maintainer 的 API、性能和发布工具人工评审尚未完成；
+4. stable tag 仍禁止。
+
+上一提交检查点的最终复验记录（历史 94 项清单）：
 
 - Debug：重新配置和全目标构建成功，CTest 94/94，0 失败；
 - Release：重新配置和全目标构建成功，CTest 94/94，0 失败；
@@ -134,6 +136,18 @@ M1 尚未完成。下一实施切片按以下顺序推进：
 - 隔离安装包的外部 consumer 配置、Release 构建、直接运行和 CTest 1/1
   均通过，其 SHA-256 为
   `3449C593E790E1243DB38738B06811B68F787F34176FC2C31C1E7365C92F1BFF`。
+
+当前未提交工作树的本地复验记录：
+
+- Windows MSVC Debug：全目标构建成功，CTest 102/102，0 失败；
+- Windows MSVC Release：全目标构建成功，CTest 102/102，0 失败；
+- 21 个本轮相关 Python 静态合同、public API manifest 和确定性
+  compatibility diff 均通过；
+- `cmake --install` 后的隔离 Release consumer 可配置、构建并通过
+  CTest 1/1；`TcpClientControl.h` 与 `TcpConnectionClose.h` 均出现在
+  安装树；
+- 以上仅是本地实现闭环证据，不替代冻结 SHA 所需的远端、sanitizer、
+  性能和 24/72 小时耐久证据。
 
 ## 1. 目标与当前判断
 

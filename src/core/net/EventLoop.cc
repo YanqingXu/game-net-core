@@ -20,6 +20,7 @@
 #include <memory>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -83,6 +84,38 @@ struct EventLoopControlSource::State {
     std::atomic<std::uint64_t> rejectedNotifications{0};
 };
 
+struct EventLoopLifecycleSource::Node {
+    std::shared_ptr<EventLoop::Functor> callback;
+    Node* dirtyNext{nullptr};
+    std::uint64_t id{0};
+    std::uint64_t generation{1};
+    std::uint64_t pendingGeneration{0};
+    bool attached{true};
+    bool dirty{false};
+    bool active{false};
+};
+
+struct EventLoopLifecycleSource::State {
+    State(EventLoop* loopValue, std::size_t maxNodesValue)
+        : loop(loopValue), maxNodes(maxNodesValue) {}
+
+    mutable std::mutex mutex;
+    EventLoop* loop;
+    EventLoopPhase phase{EventLoopPhase::Running};
+    const std::size_t maxNodes;
+    std::uint64_t nextNodeId{1};
+    std::unordered_map<std::uint64_t, std::shared_ptr<Node>> nodes;
+    Node* dirtyHead{nullptr};
+    Node* dirtyTail{nullptr};
+    Node* activeNode{nullptr};
+    std::uint64_t activeGeneration{0};
+    std::size_t attachedCount{0};
+    std::size_t pendingCount{0};
+    std::atomic<std::uint64_t> signals{0};
+    std::atomic<std::uint64_t> mergedSignals{0};
+    std::atomic<std::uint64_t> rejectedSignals{0};
+};
+
 EventLoopControlSource::EventLoopControlSource(
     const std::shared_ptr<State>& state,
     std::size_t slot,
@@ -136,6 +169,64 @@ PostResult EventLoopControlSource::notify() const noexcept {
         // cross-thread. A merged notification needs no additional wakeup.
         state->loop->wakeup();
     }
+    return PostResult::Accepted;
+}
+
+EventLoopLifecycleSource::EventLoopLifecycleSource(
+    const std::shared_ptr<State>& state,
+    const std::shared_ptr<Node>& node,
+    std::uint64_t generation) noexcept
+    : state_(state), node_(node), generation_(generation) {}
+
+PostResult EventLoopLifecycleSource::signal() const noexcept {
+    const auto state = state_.lock();
+    const auto node = node_.lock();
+    if (!state || !node) {
+        return PostResult::OwnerUnavailable;
+    }
+
+    std::lock_guard lock(state->mutex);
+    if (state->loop == nullptr ||
+        !node->attached ||
+        node->generation != generation_) {
+        state->rejectedSignals.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::OwnerUnavailable;
+    }
+
+    const bool isDrainingSelfSignal =
+        (state->phase == EventLoopPhase::Quiescing ||
+         state->phase == EventLoopPhase::FinalDraining) &&
+        state->loop->isInLoopThread() &&
+        state->activeNode == node.get() &&
+        state->activeGeneration == generation_;
+    if (state->phase == EventLoopPhase::Shutdown ||
+        (state->phase != EventLoopPhase::Running &&
+         !isDrainingSelfSignal)) {
+        state->rejectedSignals.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::Shutdown;
+    }
+
+    state->signals.fetch_add(1, std::memory_order_relaxed);
+    if (node->dirty) {
+        state->mergedSignals.fetch_add(1, std::memory_order_relaxed);
+        return PostResult::Accepted;
+    }
+
+    node->dirty = true;
+    node->pendingGeneration = generation_;
+    node->dirtyNext = nullptr;
+    if (state->dirtyTail == nullptr) {
+        state->dirtyHead = node.get();
+    } else {
+        state->dirtyTail->dirtyNext = node.get();
+    }
+    state->dirtyTail = node.get();
+    ++state->pendingCount;
+
+    // The lifecycle-state lock linearizes this dereference with EventLoop
+    // destruction. The embedded dirty link means signal allocates no queue
+    // node, and one wakeup is sufficient for the newly committed generation.
+    state->loop->wakeup();
     return PostResult::Accepted;
 }
 
@@ -196,11 +287,16 @@ void EventLoopOptions::validate() const {
         throw std::invalid_argument(
             "EventLoop control-source capacity exceeds the supported bound");
     }
+    if (maxLifecycleCallbacksPerIteration == 0) {
+        throw std::invalid_argument(
+            "EventLoop lifecycle callback budget must be positive");
+    }
 }
 
 EventLoop::EventLoop(EventLoopOptions options)
     : looping_(false),
       quit_(false),
+      phase_(EventLoopPhase::Running),
       eventHandling_(false),
       activeBatchEpoch_(0),
       callingPendingFunctors_(false),
@@ -211,6 +307,10 @@ EventLoop::EventLoop(EventLoopOptions options)
           std::make_shared<EventLoopControlSource::State>(
               this,
               options_.maxControlSources)),
+      lifecycleState_(
+          std::make_shared<EventLoopLifecycleSource::State>(
+              this,
+              options_.maxLifecycleNodes)),
       controlDrainWords_(controlState_->pendingWords.size(), 0),
       poller_(Poller::newDefaultPoller(this)),
       timerQueue_(std::make_unique<TimerQueue>(this)),
@@ -240,11 +340,15 @@ EventLoop::~EventLoop() {
     {
         std::unique_lock executorLock(executorState_->mutex);
         std::unique_lock controlLock(controlState_->mutex);
+        std::unique_lock lifecycleLock(lifecycleState_->mutex);
         executorState_->accepting = false;
         executorState_->drainingAccepted = false;
         executorState_->loop = nullptr;
         controlState_->phase = EventLoopControlSource::State::Phase::Shutdown;
         controlState_->loop = nullptr;
+        lifecycleState_->phase = EventLoopPhase::Shutdown;
+        lifecycleState_->loop = nullptr;
+        phase_.store(EventLoopPhase::Shutdown, std::memory_order_release);
     }
     wakeupChannel_->disableAll();
     wakeupChannel_->remove();
@@ -259,13 +363,16 @@ void EventLoop::loop() {
     while (!quit_) {
         activeChannels_.clear();
         const int pollTimeout =
-            hasPendingControlSources() ? 0 : timerQueue_->pollTimeoutMs(10000);
+            (hasPendingControlSources() || hasPendingLifecycleNodes())
+            ? 0
+            : timerQueue_->pollTimeoutMs(10000);
         pollReturnTime_ = poller_->poll(pollTimeout, &activeChannels_);
         dispatchActiveChannels();
         for (auto& exception : timerQueue_->handleExpired(gamenet::base::now())) {
             handleCallbackException(EventLoopCallbackSource::Timer, exception);
         }
         doControlSources();
+        doLifecycleNodes();
         doPendingFunctors(options_.maxFunctorsPerIteration);
     }
 
@@ -275,32 +382,79 @@ void EventLoop::loop() {
         executorState_->drainingAccepted = true;
     }
 
+    // Quiescing keeps consuming backend completions while draining every
+    // operation accepted before quit. The zero-timeout poll is essential on
+    // IOCP: CancelIoEx publishes completion packets rather than synchronously
+    // completing connection-owned operation storage.
     while (true) {
-        bool hasPending = false;
-        {
-            std::lock_guard lock(mutex_);
-            hasPending = !pendingFunctors_.empty();
-        }
+        activeChannels_.clear();
+        pollReturnTime_ = poller_->poll(0, &activeChannels_);
+        dispatchActiveChannels();
+
+        const bool hasPending = hasPendingFunctors();
         const bool hasControl = hasPendingControlSources();
-        if (!hasPending && !hasControl) {
-            break;
-        }
         if (hasControl) {
             doControlSources();
+        }
+        if (hasPendingLifecycleNodes()) {
+            doLifecycleNodes();
         }
         if (hasPending) {
             doPendingFunctors(options_.maxFunctorsPerIteration);
         }
+
+        if (!hasPendingFunctors() &&
+            !hasPendingControlSources() &&
+            !hasPendingLifecycleNodes() &&
+            !poller_->hasPendingCompletionOperations()) {
+            break;
+        }
     }
 
     {
-        // Publish final-drain completion and control shutdown as one state
-        // transition. A concurrent/repeated quit must observe both together
-        // and cannot resurrect executor owner-drain identity.
+        std::lock_guard lifecycleLock(lifecycleState_->mutex);
+        lifecycleState_->phase = EventLoopPhase::FinalDraining;
+        phase_.store(
+            EventLoopPhase::FinalDraining,
+            std::memory_order_release);
+    }
+
+    // Seal the backend/lifecycle quiet point and run one final accepted-work
+    // fixed point. A self-rearmed internal callback remains legal, but no
+    // external producer can enter after Quiescing linearized.
+    while (true) {
+        if (poller_->hasPendingCompletionOperations()) {
+            activeChannels_.clear();
+            pollReturnTime_ = poller_->poll(0, &activeChannels_);
+            dispatchActiveChannels();
+        }
+        if (hasPendingControlSources()) {
+            doControlSources();
+        }
+        if (hasPendingLifecycleNodes()) {
+            doLifecycleNodes();
+        }
+        if (hasPendingFunctors()) {
+            doPendingFunctors(options_.maxFunctorsPerIteration);
+        }
+        if (!hasPendingFunctors() &&
+            !hasPendingControlSources() &&
+            !hasPendingLifecycleNodes() &&
+            !poller_->hasPendingCompletionOperations()) {
+            break;
+        }
+    }
+
+    {
+        // Publish final-drain completion and both internal admission planes as
+        // one state transition. Repeated quit cannot resurrect owner identity.
         std::unique_lock executorLock(executorState_->mutex);
         std::unique_lock controlLock(controlState_->mutex);
+        std::unique_lock lifecycleLock(lifecycleState_->mutex);
         executorState_->drainingAccepted = false;
         controlState_->phase = EventLoopControlSource::State::Phase::Shutdown;
+        lifecycleState_->phase = EventLoopPhase::Shutdown;
+        phase_.store(EventLoopPhase::Shutdown, std::memory_order_release);
     }
 
     looping_ = false;
@@ -308,19 +462,22 @@ void EventLoop::loop() {
 
 void EventLoop::quit() {
     const bool crossThread = !isInLoopThread();
-    // Keep the executor->control lock order shared with final shutdown and
-    // destruction. This makes the two admission planes and final-drain owner
-    // identity one observable transition.
+    // Keep executor->control->lifecycle lock order shared with final shutdown
+    // and destruction so all admission planes observe one transition.
     std::unique_lock executorLock(executorState_->mutex);
     std::unique_lock controlLock(controlState_->mutex);
+    std::unique_lock lifecycleLock(lifecycleState_->mutex);
     executorState_->accepting = false;
-    if (controlState_->phase == EventLoopControlSource::State::Phase::Shutdown) {
+    if (controlState_->phase == EventLoopControlSource::State::Phase::Shutdown ||
+        lifecycleState_->phase == EventLoopPhase::Shutdown) {
         executorState_->drainingAccepted = false;
         quit_.store(true, std::memory_order_relaxed);
         return;
     }
     executorState_->drainingAccepted = true;
     controlState_->phase = EventLoopControlSource::State::Phase::Draining;
+    lifecycleState_->phase = EventLoopPhase::Quiescing;
+    phase_.store(EventLoopPhase::Quiescing, std::memory_order_release);
     quit_.store(true, std::memory_order_relaxed);
     if (crossThread) {
         // Keep the shared-state lock across wakeup so EventLoop destruction
@@ -489,6 +646,103 @@ std::uint64_t EventLoop::rejectedControlNotificationCount() const noexcept {
         std::memory_order_relaxed);
 }
 
+EventLoopLifecycleSource EventLoop::attachLifecycleNode(Functor cb) {
+    assertInLoopThread();
+    if (!cb) {
+        throw std::invalid_argument(
+            "EventLoop lifecycle node requires a non-empty callback");
+    }
+
+    auto callback = std::make_shared<Functor>(std::move(cb));
+    auto node = std::make_shared<EventLoopLifecycleSource::Node>();
+    node->callback = std::move(callback);
+
+    std::lock_guard lock(lifecycleState_->mutex);
+    if (lifecycleState_->phase != EventLoopPhase::Running ||
+        lifecycleState_->loop == nullptr) {
+        throw std::logic_error(
+            "EventLoop lifecycle-node attachment is closed");
+    }
+    if (lifecycleState_->nodes.size() >= lifecycleState_->maxNodes) {
+        throw std::length_error(
+            "EventLoop lifecycle-node capacity is exhausted");
+    }
+    if (lifecycleState_->nextNodeId == 0) {
+        throw std::overflow_error(
+            "EventLoop lifecycle-node identity is exhausted");
+    }
+
+    node->id = lifecycleState_->nextNodeId++;
+    lifecycleState_->nodes.emplace(node->id, node);
+    ++lifecycleState_->attachedCount;
+    return EventLoopLifecycleSource(
+        lifecycleState_,
+        node,
+        node->generation);
+}
+
+void EventLoop::detachLifecycleNode(
+    const EventLoopLifecycleSource& source) {
+    assertInLoopThread();
+    const auto state = source.state_.lock();
+    const auto node = source.node_.lock();
+    if (!state || !node || state.get() != lifecycleState_.get()) {
+        return;
+    }
+
+    std::shared_ptr<EventLoopLifecycleSource::Node> retired;
+    {
+        std::lock_guard lock(state->mutex);
+        if (!node->attached || node->generation != source.generation_) {
+            return;
+        }
+
+        node->attached = false;
+        --state->attachedCount;
+        ++node->generation;
+        if (node->generation == 0) {
+            ++node->generation;
+        }
+
+        // A dirty/active generation owns committed callback work. Keep its
+        // node in the registry until the owner-thread drain reaches silence.
+        if (!node->dirty && !node->active) {
+            const auto found = state->nodes.find(node->id);
+            if (found != state->nodes.end() &&
+                found->second.get() == node.get()) {
+                retired = std::move(found->second);
+                state->nodes.erase(found);
+            }
+        }
+    }
+}
+
+std::size_t EventLoop::attachedLifecycleNodeCount() const {
+    std::lock_guard lock(lifecycleState_->mutex);
+    return lifecycleState_->attachedCount;
+}
+
+std::size_t EventLoop::pendingLifecycleNodeCount() const {
+    std::lock_guard lock(lifecycleState_->mutex);
+    return lifecycleState_->pendingCount;
+}
+
+std::uint64_t EventLoop::lifecycleSignalCount() const noexcept {
+    return lifecycleState_->signals.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EventLoop::mergedLifecycleSignalCount() const noexcept {
+    return lifecycleState_->mergedSignals.load(std::memory_order_relaxed);
+}
+
+std::uint64_t EventLoop::rejectedLifecycleSignalCount() const noexcept {
+    return lifecycleState_->rejectedSignals.load(std::memory_order_relaxed);
+}
+
+EventLoopPhase EventLoop::phase() const noexcept {
+    return phase_.load(std::memory_order_acquire);
+}
+
 EventLoopExecutor EventLoop::executor() const noexcept {
     return EventLoopExecutor(executorState_);
 }
@@ -608,6 +862,11 @@ void EventLoop::retainCompletionOperation(void* operation, std::shared_ptr<void>
     poller_->retainCompletionOperation(operation, std::move(lifetime));
 }
 
+void EventLoop::trackCompletionOperation(void* operation) {
+    assertInLoopThread();
+    poller_->trackCompletionOperation(operation);
+}
+
 bool EventLoop::hasChannel(Channel* channel) {
     assertInLoopThread();
     return poller_->hasChannel(channel);
@@ -699,6 +958,16 @@ bool EventLoop::hasPendingControlSources() const {
     return controlState_->pendingCount != 0;
 }
 
+bool EventLoop::hasPendingLifecycleNodes() const {
+    std::lock_guard lock(lifecycleState_->mutex);
+    return lifecycleState_->pendingCount != 0;
+}
+
+bool EventLoop::hasPendingFunctors() const {
+    std::lock_guard lock(mutex_);
+    return !pendingFunctors_.empty();
+}
+
 void EventLoop::doControlSources() {
     assertInLoopThread();
 
@@ -779,6 +1048,94 @@ void EventLoop::doControlSources() {
         (std::max)(pendingPeak, pendingCount);
     sample.wakeupCount = wakeupCount_.load(std::memory_order_relaxed);
     emitEventLoopMetric(sample);
+}
+
+void EventLoop::doLifecycleNodes() {
+    assertInLoopThread();
+
+    std::size_t roundCount = 0;
+    {
+        std::lock_guard lock(lifecycleState_->mutex);
+        roundCount = std::min(
+            options_.maxLifecycleCallbacksPerIteration,
+            lifecycleState_->pendingCount);
+    }
+
+    for (std::size_t index = 0; index < roundCount; ++index) {
+        std::shared_ptr<EventLoopLifecycleSource::Node> node;
+        std::shared_ptr<Functor> callback;
+        std::uint64_t callbackGeneration = 0;
+        {
+            std::lock_guard lock(lifecycleState_->mutex);
+            auto* dirty = lifecycleState_->dirtyHead;
+            if (dirty == nullptr) {
+                break;
+            }
+
+            lifecycleState_->dirtyHead = dirty->dirtyNext;
+            if (lifecycleState_->dirtyHead == nullptr) {
+                lifecycleState_->dirtyTail = nullptr;
+            }
+            dirty->dirtyNext = nullptr;
+            dirty->dirty = false;
+            --lifecycleState_->pendingCount;
+
+            const auto found =
+                lifecycleState_->nodes.find(dirty->id);
+            if (found == lifecycleState_->nodes.end() ||
+                found->second.get() != dirty) {
+                LOG_FATAL << "EventLoop lifecycle dirty-set identity is corrupt";
+            }
+
+            node = found->second;
+            callback = node->callback;
+            callbackGeneration = node->pendingGeneration;
+            node->pendingGeneration = 0;
+            node->active = true;
+            lifecycleState_->activeNode = node.get();
+            lifecycleState_->activeGeneration = callbackGeneration;
+        }
+
+        std::exception_ptr exception;
+        try {
+            (*callback)();
+        } catch (...) {
+            exception = std::current_exception();
+        }
+
+        {
+            std::shared_ptr<EventLoopLifecycleSource::Node> retired;
+            {
+                std::lock_guard lock(lifecycleState_->mutex);
+                node->active = false;
+                if (lifecycleState_->activeNode == node.get()) {
+                    lifecycleState_->activeNode = nullptr;
+                    lifecycleState_->activeGeneration = 0;
+                }
+                if (!node->attached && !node->dirty) {
+                    const auto found =
+                        lifecycleState_->nodes.find(node->id);
+                    if (found != lifecycleState_->nodes.end() &&
+                        found->second.get() == node.get()) {
+                        retired = std::move(found->second);
+                        lifecycleState_->nodes.erase(found);
+                    }
+                }
+            }
+        }
+
+        if (exception) {
+            handleCallbackException(
+                EventLoopCallbackSource::Lifecycle,
+                exception);
+        }
+    }
+
+    if (hasPendingLifecycleNodes()) {
+        // The remaining intrusive entries are already allocated and linked.
+        // A wakeup requests another fair loop turn without queue admission.
+        wakeup();
+    }
 }
 
 void EventLoop::doPendingFunctors(std::size_t maxCount) {

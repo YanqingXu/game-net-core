@@ -10,6 +10,7 @@
 #include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "gamenet/core/net/TcpClientControl.h"
 #include "gamenet/core/net/TcpConnectionOptions.h"
 
 #include <atomic>
@@ -46,6 +47,7 @@ public:
     void connect();
     void disconnect();
     void stop();
+    TcpClientControl control() const noexcept;
 
     void enableRetry();
     void disableRetry();
@@ -58,6 +60,7 @@ public:
     void setConnectionCallback(ConnectionCallback cb);
     void setMessageCallback(MessageCallback cb);
     void setWriteCompleteCallback(WriteCompleteCallback cb);
+    void setCloseInfoCallback(CloseInfoCallback cb);
     void setConnectionBackpressureOptions(TcpConnectionBackpressureOptions options);
     void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
     void setTerminalConnectFailureCallback(TerminalConnectFailureCallback cb);
@@ -75,6 +78,7 @@ private:
     bool isLatestAcceptedOperation(std::uint64_t generation) const;
     void newConnection(SocketFd sockfd);
     void removeConnection(const TcpConnectionPtr& conn);
+    void driveControlInLoop();
 
     EventLoop* loop_;
     EventLoopExecutor ownerExecutor_;
@@ -83,6 +87,7 @@ private:
     ConnectionCallback connectionCallback_;
     MessageCallback messageCallback_;
     WriteCompleteCallback writeCompleteCallback_;
+    CloseInfoCallback closeInfoCallback_;
     TcpConnectionCallbackExceptionHandler callbackExceptionHandler_;
     TerminalConnectFailureCallback terminalConnectFailureCallback_;
     std::atomic<bool> retry_{false};
@@ -102,6 +107,7 @@ private:
     mutable std::mutex mutex_;
     TcpConnectionPtr connection_;
     TcpConnectionBackpressureOptions backpressureOptions_;
+    std::shared_ptr<TcpClientControl::State> controlState_;
 };
 
 }  // namespace gamenet::net

@@ -6,6 +6,7 @@
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
+#include "detail/EventLoopLifecycleRegistry.h"
 
 #include <cassert>
 #include <exception>
@@ -15,6 +16,74 @@
 #include <utility>
 
 namespace gamenet::net {
+
+namespace {
+
+constexpr unsigned kControlConnect = 1;
+constexpr unsigned kControlDisconnect = 2;
+constexpr unsigned kControlStop = 3;
+
+}  // namespace
+
+struct TcpClientControl::State {
+    std::mutex mutex;
+    TcpClient* target{nullptr};
+    bool accepting{true};
+    unsigned pendingOperation{0};
+    std::uint64_t nextGeneration{1};
+    std::uint64_t pendingGeneration{0};
+    EventLoopLifecycleSource source;
+};
+
+TcpClientControl::TcpClientControl(std::shared_ptr<State> state) noexcept
+    : state_(std::move(state)) {}
+
+PostResult TcpClientControl::post(unsigned operation) const noexcept {
+    const auto state = state_;
+    if (!state) {
+        return PostResult::OwnerUnavailable;
+    }
+
+    std::lock_guard lock(state->mutex);
+    if (!state->accepting || state->target == nullptr) {
+        return PostResult::OwnerUnavailable;
+    }
+    if (state->nextGeneration == 0) {
+        return PostResult::Shutdown;
+    }
+
+    const std::uint64_t generation = state->nextGeneration++;
+    state->pendingOperation = operation;
+    state->pendingGeneration = generation;
+    const PostResult result = state->source.signal();
+    if (result != PostResult::Accepted &&
+        state->pendingGeneration == generation) {
+        state->pendingOperation = 0;
+        state->pendingGeneration = 0;
+    }
+    return result;
+}
+
+PostResult TcpClientControl::tryConnect() const noexcept {
+    return post(kControlConnect);
+}
+
+PostResult TcpClientControl::tryDisconnect() const noexcept {
+    return post(kControlDisconnect);
+}
+
+PostResult TcpClientControl::tryStop() const noexcept {
+    return post(kControlStop);
+}
+
+bool TcpClientControl::available() const noexcept {
+    const auto state = state_;
+    if (!state) {
+        return false;
+    }
+    std::lock_guard lock(state->mutex);
+    return state->accepting && state->target != nullptr;
+}
 
 TcpClient::TcpClient(EventLoop* loop, const InetAddress& serverAddr, std::string name)
     : TcpClient(loop, serverAddr, std::move(name), ConnectorOptions{}) {
@@ -46,10 +115,42 @@ TcpClient::TcpClient(
                 handleConnectorEvent(event);
             }
         });
+
+    controlState_ = std::make_shared<TcpClientControl::State>();
+    controlState_->target = this;
+    const auto controlState = controlState_;
+    controlState_->source = detail::EventLoopLifecycleRegistry::attach(
+        *loop_,
+        [controlState] {
+            TcpClient* target = nullptr;
+            {
+                std::lock_guard lock(controlState->mutex);
+                if (controlState->accepting) {
+                    target = controlState->target;
+                }
+            }
+            if (target != nullptr) {
+                target->driveControlInLoop();
+            }
+        });
 }
 
 TcpClient::~TcpClient() {
     loop_->assertInLoopThread();
+    const auto controlState = controlState_;
+    if (controlState) {
+        {
+            std::lock_guard lock(controlState->mutex);
+            controlState->accepting = false;
+            controlState->target = nullptr;
+            controlState->pendingOperation = 0;
+            controlState->pendingGeneration = 0;
+        }
+        detail::EventLoopLifecycleRegistry::detach(
+            *loop_,
+            controlState->source);
+        controlState_.reset();
+    }
     {
         std::lock_guard lock(admissionMutex_);
         lifetimeToken_.reset();
@@ -275,6 +376,10 @@ void TcpClient::stop() {
     (void)tryStop();
 }
 
+TcpClientControl TcpClient::control() const noexcept {
+    return TcpClientControl(controlState_);
+}
+
 void TcpClient::enableRetry() {
     setRetry(true);
 }
@@ -340,6 +445,10 @@ void TcpClient::setWriteCompleteCallback(WriteCompleteCallback cb) {
     writeCompleteCallback_ = std::move(cb);
 }
 
+void TcpClient::setCloseInfoCallback(CloseInfoCallback cb) {
+    closeInfoCallback_ = std::move(cb);
+}
+
 void TcpClient::setConnectionBackpressureOptions(
     TcpConnectionBackpressureOptions options) {
     options.validate();
@@ -359,6 +468,40 @@ void TcpClient::setTerminalConnectFailureCallback(
     TerminalConnectFailureCallback cb) {
     loop_->assertInLoopThread();
     terminalConnectFailureCallback_ = std::move(cb);
+}
+
+void TcpClient::driveControlInLoop() {
+    loop_->assertInLoopThread();
+    const auto controlState = controlState_;
+    if (!controlState) {
+        return;
+    }
+
+    unsigned operation = 0;
+    {
+        std::lock_guard lock(controlState->mutex);
+        if (!controlState->accepting ||
+            controlState->target != this) {
+            return;
+        }
+        operation = controlState->pendingOperation;
+        controlState->pendingOperation = 0;
+        controlState->pendingGeneration = 0;
+    }
+
+    switch (operation) {
+        case kControlConnect:
+            (void)tryConnect();
+            break;
+        case kControlDisconnect:
+            (void)tryDisconnect();
+            break;
+        case kControlStop:
+            (void)tryStop();
+            break;
+        default:
+            break;
+    }
 }
 
 bool TcpClient::isLatestAcceptedOperation(std::uint64_t generation) const {
@@ -572,6 +715,7 @@ void TcpClient::newConnection(SocketFd sockfd) {
     conn->setConnectionCallback(connectionCallback_);
     conn->setMessageCallback(messageCallback_);
     conn->setWriteCompleteCallback(writeCompleteCallback_);
+    conn->setCloseInfoCallback(closeInfoCallback_);
     conn->setCallbackExceptionHandler(callbackExceptionHandler_);
 
     std::weak_ptr<void> lifetime = lifetimeToken_;
@@ -638,7 +782,12 @@ void TcpClient::removeConnection(const TcpConnectionPtr& conn) {
         pendingReconnectRequestId_ = 0;
     }
 
-    loop_->queueInLoop([conn] { conn->connectDestroyed(); });
+    // Explicit socket close permits the numeric handle to be reused
+    // immediately. Remove the old Channel before a re-entrant reconnect can
+    // create/register a replacement with that same value. EventLoop's active-
+    // batch invalidation keeps inline current-Channel removal safe while this
+    // callback frame retains the TcpConnection.
+    conn->connectDestroyed();
 
     if (pendingReconnectRequestId != 0 &&
         activeConnectRequestId_.load(std::memory_order_relaxed) ==

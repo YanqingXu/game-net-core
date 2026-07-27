@@ -5,6 +5,7 @@
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "detail/ConnectionBackpressureController.h"
+#include "detail/EventLoopLifecycleRegistry.h"
 
 #include "gamenet/core/base/Logger.h"
 
@@ -12,10 +13,37 @@
 #include "platform/IocpTcpTransport.h"
 #endif
 
+#include <cerrno>
 #include <stdexcept>
 #include <utility>
 
 namespace gamenet::net {
+
+namespace {
+
+constexpr std::uint64_t kCloseInfoPublished =
+    std::uint64_t{1} << 63;
+constexpr std::uint64_t kCloseReasonMask =
+    std::uint64_t{0xFF} << 32;
+
+std::uint64_t packCloseInfo(
+    TcpConnectionCloseReason reason,
+    int nativeError) noexcept {
+    return kCloseInfoPublished |
+        (static_cast<std::uint64_t>(reason) << 32) |
+        static_cast<std::uint32_t>(nativeError);
+}
+
+TcpConnectionCloseInfo unpackCloseInfo(std::uint64_t bits) noexcept {
+    return TcpConnectionCloseInfo{
+        .reason = static_cast<TcpConnectionCloseReason>(
+            (bits & kCloseReasonMask) >> 32),
+        .nativeError = static_cast<int>(
+            static_cast<std::int32_t>(bits & 0xFFFFFFFFu)),
+    };
+}
+
+}  // namespace
 
 void TcpConnectionBackpressureOptions::validate() const {
     detail::ConnectionBackpressureController::validateThresholds(
@@ -73,11 +101,11 @@ const InetAddress& TcpConnection::peerAddress() const noexcept {
 }
 
 bool TcpConnection::connected() const noexcept {
-    return state_.load(std::memory_order_relaxed) == kConnected;
+    return state_.load(std::memory_order_acquire) == kConnected;
 }
 
 bool TcpConnection::disconnected() const noexcept {
-    return state_.load(std::memory_order_relaxed) == kDisconnected;
+    return state_.load(std::memory_order_acquire) == kDisconnected;
 }
 
 void TcpConnection::send(std::string_view message) {
@@ -150,18 +178,39 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
 }
 
 void TcpConnection::shutdown() {
-    auto self = shared_from_this();
-    loop_->runInLoop([self] {
-        if (self->state_.load(std::memory_order_relaxed) == kConnected) {
-            self->setState(kDisconnecting);
-            self->shutdownInLoop();
-        }
-    });
+    (void)tryShutdown();
 }
 
 void TcpConnection::forceClose() {
-    auto self = shared_from_this();
-    loop_->runInLoop([self] { self->forceCloseInLoop(); });
+    (void)tryForceClose();
+}
+
+PostResult TcpConnection::tryShutdown() {
+    const StateE state = state_.load(std::memory_order_acquire);
+    if (state == kDisconnected) {
+        return PostResult::Shutdown;
+    }
+    publishCloseInfo(TcpConnectionCloseReason::GracefulShutdown);
+    gracefulShutdownRequested_.store(true, std::memory_order_release);
+    if (loop_->isInLoopThread()) {
+        driveLifecycleInLoop();
+        return PostResult::Accepted;
+    }
+    return signalLifecycle();
+}
+
+PostResult TcpConnection::tryForceClose() {
+    const StateE state = state_.load(std::memory_order_acquire);
+    if (state == kDisconnected) {
+        return PostResult::Shutdown;
+    }
+    publishCloseInfo(TcpConnectionCloseReason::ForcedShutdown);
+    forceCloseRequested_.store(true, std::memory_order_release);
+    if (loop_->isInLoopThread()) {
+        driveLifecycleInLoop();
+        return PostResult::Accepted;
+    }
+    return signalLifecycle();
 }
 
 void TcpConnection::setTcpNoDelay(bool on) {
@@ -207,6 +256,26 @@ std::uint64_t TcpConnection::droppedNotificationCount() const noexcept {
     return droppedNotificationCount_.load(std::memory_order_relaxed);
 }
 
+std::optional<TcpConnectionCloseInfo>
+TcpConnection::closeInfo() const noexcept {
+    const auto bits = closeInfoBits_.load(std::memory_order_acquire);
+    if ((bits & kCloseInfoPublished) == 0) {
+        return std::nullopt;
+    }
+    return unpackCloseInfo(bits);
+}
+
+TcpConnectionClosePhase TcpConnection::closePhase() const noexcept {
+    return closePhase_.load(std::memory_order_acquire);
+}
+
+bool TcpConnection::socketClosed() const noexcept {
+    const auto phase = closePhase();
+    return phase == TcpConnectionClosePhase::SocketClosed ||
+        phase == TcpConnectionClosePhase::CompletionDraining ||
+        phase == TcpConnectionClosePhase::Closed;
+}
+
 bool TcpConnection::readingPausedByBackpressure() const {
     loop_->assertInLoopThread();
     return !backpressure_->readingEnabled();
@@ -233,6 +302,11 @@ void TcpConnection::setCloseCallback(CloseCallback cb) {
     closeCallback_ = std::move(cb);
 }
 
+void TcpConnection::setCloseInfoCallback(CloseInfoCallback cb) {
+    loop_->assertInLoopThread();
+    closeInfoCallback_ = std::move(cb);
+}
+
 void TcpConnection::setCallbackExceptionHandler(
     TcpConnectionCallbackExceptionHandler cb) {
     loop_->assertInLoopThread();
@@ -247,6 +321,42 @@ void TcpConnection::connectEstablished() {
     channel_->tie(shared_from_this());
     channel_->enableReading();
     channelAdded_ = true;
+    EventLoopLifecycleSource attachedSource;
+    bool lifecycleAttached = false;
+    try {
+        const auto weakSelf = weak_from_this();
+        attachedSource = detail::EventLoopLifecycleRegistry::attach(
+            *loop_,
+            [weakSelf] {
+                if (const auto self = weakSelf.lock()) {
+                    self->driveLifecycleInLoop();
+                }
+            });
+        lifecycleAttached = true;
+        auto sharedSource =
+            std::make_shared<EventLoopLifecycleSource>(attachedSource);
+        std::lock_guard lock(lifecycleSourceMutex_);
+        lifecycleSource_ = std::move(sharedSource);
+    } catch (...) {
+        if (lifecycleAttached) {
+            detail::EventLoopLifecycleRegistry::detach(
+                *loop_,
+                attachedSource);
+        }
+        if (!channel_->isNoneEvent()) {
+            channel_->disableAll();
+        }
+        if (!channelRemoved_) {
+            channel_->remove();
+            channelRemoved_ = true;
+        }
+        channelAdded_ = false;
+        socket_->close();
+        closePhase_.store(
+            TcpConnectionClosePhase::Closed,
+            std::memory_order_release);
+        throw;
+    }
     setState(kConnected);
     backpressure_->configure(
         backpressureOptions_.highWaterMarkBytes,
@@ -273,6 +383,8 @@ void TcpConnection::connectEstablished() {
             reportCallbackException(
                 TcpConnectionCallbackSource::Established,
                 std::current_exception());
+            publishCloseInfo(
+                TcpConnectionCloseReason::CallbackFailure);
             handleClose();
         }
     }
@@ -298,7 +410,12 @@ void TcpConnection::connectDestroyed() {
         setState(kDisconnected);
     }
     if (!channelAdded_) {
+        socket_->close();
+        closePhase_.store(
+            TcpConnectionClosePhase::Closed,
+            std::memory_order_release);
         channelRemoved_ = true;
+        detachLifecycleNode();
         return;
     }
     if (!channel_->isNoneEvent()) {
@@ -308,6 +425,7 @@ void TcpConnection::connectDestroyed() {
         channel_->remove();
         channelRemoved_ = true;
     }
+    detachLifecycleNode();
 }
 
 void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
@@ -334,6 +452,8 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
                 reportCallbackException(
                     TcpConnectionCallbackSource::Message,
                     std::current_exception());
+                publishCloseInfo(
+                    TcpConnectionCloseReason::CallbackFailure);
                 handleClose();
                 return;
             }
@@ -361,6 +481,7 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
         return;
     }
     if (n == 0) {
+        publishCloseInfo(TcpConnectionCloseReason::PeerEof);
         handleClose();
         return;
     }
@@ -427,19 +548,61 @@ void TcpConnection::handleClose() {
     if (state_.load(std::memory_order_relaxed) == kDisconnected) {
         return;
     }
+    publishCloseInfo(TcpConnectionCloseReason::PeerEof);
+    beginCloseInLoop();
+}
 
+void TcpConnection::beginCloseInLoop() {
+    loop_->assertInLoopThread();
+    if (state_.load(std::memory_order_relaxed) == kDisconnected) {
+        return;
+    }
+    if (!closeInfo()) {
+        publishCloseInfo(TcpConnectionCloseReason::InternalError);
+    }
+
+    setState(kDisconnecting);
+    auto phase = closePhase_.load(std::memory_order_relaxed);
+    if (phase == TcpConnectionClosePhase::Open) {
+        closePhase_.store(
+            TcpConnectionClosePhase::Closing,
+            std::memory_order_release);
+        phase = TcpConnectionClosePhase::Closing;
+    }
+
+    bool hasPendingOperations = false;
 #ifdef _WIN32
-    if (iocpTransport_->hasPendingOperations()) {
+    hasPendingOperations = iocpTransport_->hasPendingOperations();
+    if (hasPendingOperations) {
         if (!forceClosePending_) {
             forceCloseGuard_ = shared_from_this();
         }
         forceClosePending_ = true;
-        setState(kDisconnecting);
         iocpTransport_->cancelPendingOperations(channel_->fd());
-        return;
     }
 #endif
 
+    if (!socketClosed()) {
+        if (!hasPendingOperations && !channel_->isNoneEvent()) {
+            channel_->disableAll();
+        }
+        socket_->close();
+        closePhase_.store(
+            hasPendingOperations
+                ? TcpConnectionClosePhase::CompletionDraining
+                : TcpConnectionClosePhase::SocketClosed,
+            std::memory_order_release);
+    }
+
+    if (hasPendingOperations) {
+        return;
+    }
+    if (!channel_->isNoneEvent()) {
+        channel_->disableAll();
+    }
+    closePhase_.store(
+        TcpConnectionClosePhase::SocketClosed,
+        std::memory_order_release);
     finishClose();
 }
 
@@ -453,7 +616,15 @@ void TcpConnection::finishClose() {
     forceClosePending_ = false;
     backpressure_->onClosed();
     clearBufferedOutputInLoop();
-    channel_->disableAll();
+    if (!socketClosed()) {
+        socket_->close();
+    }
+    if (!channel_->isNoneEvent()) {
+        channel_->disableAll();
+    }
+    closePhase_.store(
+        TcpConnectionClosePhase::Closed,
+        std::memory_order_release);
 
     auto self = shared_from_this();
     if (connectionCallback_) {
@@ -462,6 +633,15 @@ void TcpConnection::finishClose() {
         } catch (...) {
             reportCallbackException(
                 TcpConnectionCallbackSource::Disconnected,
+                std::current_exception());
+        }
+    }
+    if (closeInfoCallback_) {
+        try {
+            closeInfoCallback_(self, *closeInfo());
+        } catch (...) {
+            reportCallbackException(
+                TcpConnectionCallbackSource::CloseInfo,
                 std::current_exception());
         }
     }
@@ -486,6 +666,17 @@ void TcpConnection::handleError(int savedErrno) {
     loop_->assertInLoopThread();
     const int err = savedErrno != 0 ? savedErrno : sockets::getSocketError(channel_->fd());
     LOG_ERROR << "TcpConnection error on " << name_ << ": " << err << " " << sockets::errorMessage(err);
+    const bool reset =
+#ifdef _WIN32
+        err == WSAECONNRESET || err == WSAECONNABORTED;
+#else
+        err == ECONNRESET || err == ECONNABORTED;
+#endif
+    publishCloseInfo(
+        reset
+            ? TcpConnectionCloseReason::Reset
+            : TcpConnectionCloseReason::InternalError,
+        err);
     handleClose();
 }
 
@@ -564,7 +755,7 @@ void TcpConnection::sendReservedInLoop(const char* data, std::size_t len) {
 
 void TcpConnection::shutdownInLoop() {
     loop_->assertInLoopThread();
-    if (!channel_->isWriting()) {
+    if (!socketClosed() && !channel_->isWriting()) {
         socket_->shutdownWrite();
     }
 }
@@ -573,7 +764,22 @@ void TcpConnection::forceCloseInLoop() {
     loop_->assertInLoopThread();
     const StateE state = state_.load(std::memory_order_relaxed);
     if (state == kConnected || state == kDisconnecting) {
-        handleClose();
+        beginCloseInLoop();
+    }
+}
+
+void TcpConnection::driveLifecycleInLoop() {
+    loop_->assertInLoopThread();
+    if (forceCloseRequested_.exchange(false, std::memory_order_acq_rel)) {
+        forceCloseInLoop();
+    }
+    if (gracefulShutdownRequested_.exchange(
+            false,
+            std::memory_order_acq_rel)) {
+        if (state_.load(std::memory_order_relaxed) == kConnected) {
+            setState(kDisconnecting);
+            shutdownInLoop();
+        }
     }
 }
 
@@ -592,6 +798,8 @@ void TcpConnection::queueWriteComplete() noexcept {
                     self->reportCallbackException(
                         TcpConnectionCallbackSource::WriteComplete,
                         std::current_exception());
+                    self->publishCloseInfo(
+                        TcpConnectionCloseReason::CallbackFailure);
                     self->handleClose();
                 }
             })) {
@@ -619,6 +827,8 @@ void TcpConnection::maybeQueueHighWaterMark(
                         self->reportCallbackException(
                             TcpConnectionCallbackSource::HighWaterMark,
                             std::current_exception());
+                        self->publishCloseInfo(
+                            TcpConnectionCloseReason::CallbackFailure);
                         self->handleClose();
                     }
                 })) {
@@ -696,8 +906,73 @@ bool TcpConnection::closeOnInputLimitInLoop() {
     }
     LOG_WARN << "TcpConnection input buffer limit reached on " << name_ << ": "
              << inputBuffer_.readableBytes() << " bytes";
+    publishCloseInfo(TcpConnectionCloseReason::InputLimit);
     handleClose();
     return true;
+}
+
+void TcpConnection::publishCloseInfo(
+    TcpConnectionCloseReason reason,
+    int nativeError) noexcept {
+    std::uint64_t expected = 0;
+    const std::uint64_t desired = packCloseInfo(reason, nativeError);
+    if (closeInfoBits_.compare_exchange_strong(
+            expected,
+            desired,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
+        return;
+    }
+
+    if (nativeError == 0) {
+        return;
+    }
+
+    while ((expected & kCloseInfoPublished) != 0 &&
+           static_cast<std::uint32_t>(expected) == 0) {
+        const auto withNativeError =
+            (expected & ~std::uint64_t{0xFFFFFFFFu}) |
+            static_cast<std::uint32_t>(nativeError);
+        if (closeInfoBits_.compare_exchange_weak(
+                expected,
+                withNativeError,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            return;
+        }
+    }
+}
+
+PostResult TcpConnection::signalLifecycle() noexcept {
+    std::shared_ptr<EventLoopLifecycleSource> source;
+    {
+        std::lock_guard lock(lifecycleSourceMutex_);
+        source = lifecycleSource_;
+    }
+    if (!source) {
+        return PostResult::OwnerUnavailable;
+    }
+    return source->signal();
+}
+
+void TcpConnection::detachLifecycleNode() {
+    loop_->assertInLoopThread();
+    std::shared_ptr<EventLoopLifecycleSource> source;
+    {
+        std::lock_guard lock(lifecycleSourceMutex_);
+        source = lifecycleSource_;
+    }
+    if (!source) {
+        return;
+    }
+
+    detail::EventLoopLifecycleRegistry::detach(*loop_, *source);
+    {
+        std::lock_guard lock(lifecycleSourceMutex_);
+        if (lifecycleSource_ == source) {
+            lifecycleSource_.reset();
+        }
+    }
 }
 
 #ifdef _WIN32
@@ -715,6 +990,8 @@ void TcpConnection::resumeWindowsReadAfterBackpressure() {
             reportCallbackException(
                 TcpConnectionCallbackSource::Message,
                 std::current_exception());
+            publishCloseInfo(
+                TcpConnectionCloseReason::CallbackFailure);
             handleClose();
             return;
         }
@@ -774,7 +1051,7 @@ void TcpConnection::reportCallbackException(
 }
 
 void TcpConnection::setState(StateE state) noexcept {
-    state_.store(state, std::memory_order_relaxed);
+    state_.store(state, std::memory_order_release);
 }
 
 }  // namespace gamenet::net

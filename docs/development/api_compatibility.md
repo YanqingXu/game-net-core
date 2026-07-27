@@ -71,6 +71,20 @@ A deliberate stable API change must update the public contract, direct tests,
 manifest fingerprint, and release notes in one reviewed change. Updating a
 fingerprint alone is not evidence that the change is compatible.
 
+## Current M1 Additive Review
+
+The 2026-07-27 M1 lifecycle closure adds `TcpClientControl.h` and
+`TcpConnectionClose.h` to `stable_core`. It also updates the recorded
+declaration fingerprints for EventLoop/Poller/Socket, TCP callbacks,
+TcpClient/TcpConnection/TcpServer, and callback-exception source reporting.
+Direct lifecycle, saturation, completion-drain, close-reason, detached-handle,
+and install-consumer contracts cover the new surface.
+
+The deterministic comparison against the 0.2 Preview reports a stable-surface
+review requirement and no within-line compatibility-decision requirement.
+That result records an additive 0.3-candidate surface; it does not replace the
+independent maintainer review required before freezing or tagging a release.
+
 The primary Linux CI producer writes
 `ci-evidence/public-api-diff.json` before its evidence manifest is built. The
 existing per-job evidence artifact therefore retains the diff for 90 days and

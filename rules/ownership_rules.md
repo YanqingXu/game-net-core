@@ -13,6 +13,8 @@ It must not blur these roles.
 - EventLoop owns wakeup-related resources it creates
 - EventLoop owns the fixed control-source slot table, pending bitset, and
   registered callback storage
+- EventLoop owns its dynamic lifecycle hub, attached-node registry, intrusive
+  dirty links, generation counters, and callback storage
 - EventLoop does not own business-layer connection semantics
 - EventLoop may temporarily own one already-removed current Channel until its
   active callback frame returns; this narrow retirement lease owns neither the
@@ -28,6 +30,18 @@ It must not blur these roles.
 - EventLoop owns callback storage until unregister or EventLoop destruction
 - Slot generation invalidation prevents copied stale handles from addressing a
   replacement registration
+
+## 2.2 EventLoopLifecycleSource
+- A lifecycle source is a copyable, non-owning, generation-tagged signal
+  capability; it does not extend EventLoop or participant lifetime
+- EventLoop owns an attached node from successful owner-thread attach until
+  detach has invalidated its generation and all committed dirty/callback work
+  for that generation has drained
+- The node embeds its dirty-set link. Cross-thread signal may lock and mutate
+  that link but allocates and owns no queue node
+- Callback storage may retain the participant until detach reclamation; cycles
+  from participant-owned handles back into the participant are forbidden
+- A stale source owns nothing and cannot address reused node storage
 
 ## 3. Poller
 - Poller does not own Channel
@@ -58,6 +72,13 @@ It must not blur these roles.
   referenced backing buffer until exactly one normal, error, or cancellation
   completion is consumed. A synchronous non-pending submission failure creates
   no completion ownership obligation
+- TcpConnection owns its socket until explicit owner-loop close. After close,
+  the IOCP transport and/or Poller retain operation storage until every
+  completion obligation is consumed; object destruction is not the close
+  trigger
+- TcpConnection's lifecycle node may retain the connection close state through
+  completion drain, but it detaches before final connection ownership is
+  released
 
 ## 6. Timer / Scheduled Tasks
 - Timer containers own timer metadata
@@ -65,6 +86,13 @@ It must not blur these roles.
 - Cancellation semantics must be explicit
 - TcpServer owns its graceful-stop coordination state; returned shared futures
   observe the terminal result but do not own TcpServer
+- TcpServer owns base stop-generation bookkeeping and one aggregate participant
+  record per worker; each worker loop owns execution of its aggregate lifecycle
+  node
+- Base connection-map ownership is released before BaseReleased is published;
+  the worker owns Channel/callback cleanup until its generation-tagged ack
+- EventLoopThreadPool/thread objects remain owned until all worker acks have
+  converged and join completes
 - Acceptor owns its retry timer; stop/destruction cancels it before Acceptor
   storage is released
 
@@ -84,6 +112,12 @@ It must not blur these roles.
   replacement Channel is established clears provisional `connection_` and
   request ownership, forgets the IOCP numeric association, and closes the fd
   before Connector settles the failed callback generation
+- A copied TcpClientControl owns only shared mailbox storage and a non-owning
+  EventLoop lifecycle capability. It never owns TcpClient, Connector, a
+  TcpConnection, or EventLoop
+- TcpClient destruction closes that mailbox and detaches its lifecycle node on
+  the owner loop. Handles may outlive the client and observe
+  OwnerUnavailable without dereferencing released client storage
 
 ## 8. Callback Exception State
 - Exception records borrow no callback-owned storage; `std::exception_ptr`
@@ -127,6 +161,10 @@ It must not blur these roles.
 - A stale Channel remove erasing another Channel that reused the same fd
 - A control-source callback capturing an owner whose lifetime is not protected
   through explicit unregister or revocable observation
+- Releasing a lifecycle callback target immediately after detach request while
+  a committed notification/callback frame still owns that generation
+- Letting TcpServer join a worker before its BaseReleased/worker-ack generation
+  has converged
 
 ## 14. Fault and Endurance Evidence
 - each fault cycle owns and closes every raw client socket it creates

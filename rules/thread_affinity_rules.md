@@ -14,6 +14,8 @@ Mutable reactor state belongs to a specific EventLoop thread.
 Cross-thread interaction must go through:
 - runInLoop(...)
 - queueInLoop(...)
+- typed EventLoopExecutor/control-source admission
+- generation-tagged EventLoop lifecycle signal
 - wakeup mechanism
 
 No other direct mutation path is allowed for core loop state.
@@ -53,6 +55,23 @@ No other direct mutation path is allowed for core loop state.
 - User callbacks and business/data work are forbidden from using control
   sources merely to bypass queue admission
 
+## 5.2 EventLoop Lifecycle Hub
+- Lifecycle attach/detach and callback execution are EventLoop owner-thread-only
+- `EventLoopLifecycleSource::signal()` may originate on any thread
+- Signal performs no allocation: under the hub synchronization boundary it
+  generation-checks the node and links its embedded dirty entry at most once
+- Accepted signal is committed before return and must execute before that
+  generation can be reclaimed; detach invalidates later signals but cannot
+  discard an earlier committed signal
+- Dirty callbacks are budgeted. Remainder/self-signal requests a later loop
+  turn through wakeup and never consumes pending-functor capacity
+- Quit transitions Running to Quiescing and seals new external lifecycle
+  admission. The owner continues lifecycle drain and zero-timeout backend poll
+  until both the hub and completion backend are silent
+- FinalDraining runs already-accepted functors and committed internal work to a
+  fixed point; only then may EventLoop publish Shutdown
+- User/data callbacks may not use lifecycle nodes as a priority queue
+
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread
 - handleEvent executes in EventLoop thread unless explicitly documented otherwise
@@ -83,6 +102,13 @@ No other direct mutation path is allowed for core loop state.
 - An accepted explicit connect observed while the current TcpConnection is
   already disconnecting is owner-loop state, separate from automatic retry,
   and survives that old connection's remove callback
+- TcpClientControl calls mutate only their shared generation-tagged mailbox
+  and signal one lifecycle node; they never directly read TcpClient fields
+- The control lifecycle callback snapshots the latest request, releases the
+  mailbox lock, and invokes TcpClient only on the owner loop while the mailbox
+  still publishes a live target
+- TcpClient closes the mailbox and detaches the lifecycle node on the owner
+  loop before destruction, so stale handles return OwnerUnavailable
 
 ## 7. TcpConnection
 - State transitions occur on owning EventLoop thread
@@ -109,6 +135,10 @@ No other direct mutation path is allowed for core loop state.
   on the connection owner loop. A synchronous non-pending submit error
   converges immediately through the owner-loop error/close path and must not be
   converted into a fabricated Channel event
+- TcpConnection socket close, completion-obligation consumption, lifecycle
+  detach, Channel removal, and disconnected publication are owner-loop-only
+- cross-thread terminal requests signal the lifecycle node and do not depend on
+  normal/reserved functor capacity
 
 ## 8. Logger
 - Logger is process-global and is not owned by an EventLoop
@@ -125,6 +155,14 @@ No other direct mutation path is allowed for core loop state.
 - Per-connection shutdown and force-close remain marshaled to each connection's
   owner loop
 - Completion is published only after worker-loop join has converged
+- Base-loop stop admission and each worker aggregate use lifecycle sources, so
+  the number of stop-control signals is bounded by workers rather than
+  connections
+- Worker cleanup signals base bookkeeping without blocking; base publishes
+  generation-tagged BaseReleased only after map/admission release; worker ack
+  follows final Channel/callback cleanup
+- Thread-pool quit/join is forbidden before every current worker generation
+  has acked
 
 ## 10. Listener Error Policy
 - Acceptor and TcpServer accept-error policy callbacks execute on the base /
@@ -178,6 +216,10 @@ No other direct mutation path is allowed for core loop state.
   established no kernel-owned completion obligation
 - Deferring current-Channel destruction through the normal or reserved pending
   functor queue
+- Blocking an EventLoop owner thread while waiting for BaseReleased, worker
+  ack, or an IOCP completion
+- Publishing EventLoop Shutdown while the lifecycle hub or IOCP retained
+  completion set is non-silent
 
 ## 16. Fault and Endurance Drivers
 - fault clients may own and operate their own raw sockets but must not mutate

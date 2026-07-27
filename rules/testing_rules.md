@@ -48,6 +48,12 @@ Contract tests verify:
 - control callback exceptions do not suppress other sources
 - notify-versus-quit races prove Accepted work is drained and rejected work
   returns Shutdown/OwnerUnavailable
+- dynamic lifecycle attach/detach with committed-notify linearization
+- dirty-set coalescing, generation/ABA rejection, callback self-signal, and
+  callback-frame-safe reclamation
+- a dirty population larger than the lifecycle budget self-reschedules while
+  ready I/O/timers retain service
+- Windows cancel-versus-quit consumes the real IOCP completion before Shutdown
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents
@@ -88,6 +94,16 @@ For lifecycle-sensitive modules, tests should include:
 - Connector owner-affinity rejection, callback re-entry, configured-backoff
   restart, and accepted/rejected facade-generation races, including two
   Accepted operations where the latest request supersedes an in-flight attempt
+- TcpConnection explicit socket close and completion-drain terminal state,
+  including first-close-reason-wins and native error preservation
+- TcpServer base and all worker queues saturated while one aggregate stop
+  signal per worker converges through BaseReleased, worker ack, join, and
+  future completion
+- TcpClientControl admitted while the normal and reserved queues are full,
+  latest-generation coalescing on the lifecycle lane, owner-loop execution,
+  detach on destruction, and OwnerUnavailable from surviving handles
+- TcpServer and TcpClient observers receive the exact immutable
+  TcpConnectionCloseInfo published before removal/reconnect decisions
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.
@@ -96,6 +112,15 @@ No public interface should be added without at least one direct contract asserti
 ## 9.1 Change Gate Requirement
 For core modules, the change description must name the specific test file that validates the behavior.
 "covered by tests" is not sufficient.
+
+For lifecycle-hub changes, the named minimum evidence is:
+- `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp`
+- `tests/integration/tcp/test_iocp_quit_completion_drain.cpp`
+- `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
+- `tests/contract/tcp_server/test_tcp_server_saturation_shutdown.cpp`
+
+Repository text guards may enforce presence/registration but cannot substitute
+for executing these runtime contracts on Linux and Windows.
 
 ## 10. Forbidden
 - test only happy path for lifecycle-heavy module

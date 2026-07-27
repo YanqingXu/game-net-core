@@ -4,7 +4,7 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-07-26
+Current production-roadmap audit: 2026-07-27
 
 ## Current Task Goal
 
@@ -30,6 +30,17 @@ server bookkeeping and later admission continue.
 TcpServer now optionally enforces global/per-peer connection limits, a bounded
 per-peer fixed-window attempt rate, and base-loop unauthenticated deadlines;
 all are disabled by default and expose distinct cumulative metrics.
+
+The current M1 worktree closes the remaining local runtime lifecycle slices in
+dependency order. Each EventLoop owns a dynamic lifecycle hub with allocation-
+free cross-thread signals and generation-safe detach; loop shutdown now moves
+through quiescing and final draining and, on IOCP, waits for lifecycle and
+completion silence. TcpConnection has explicit socket-close/completion-drain
+phases and first-writer structured close reasons. TcpServer stop is aggregated
+per worker with a worker-cleanup, base-bookkeeping, BaseReleased, worker-ack,
+and join handshake. TcpClient exposes a detached-lifetime-safe
+TcpClientControl mailbox. These are local implementation and contract results,
+not final frozen-SHA release evidence.
 
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target
@@ -166,13 +177,26 @@ infrastructure-validation records, not evidence for later runtime changes.
 
 ## Verification State
 
-The current worktree configures 94 configured CTest tests: 8 unit tests, 78 contract tests, and 8 integration tests. Phase 4 coverage includes bounded
+The current worktree configures 102 configured CTest tests: 8 unit tests, 85 contract tests, and 9 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, four Pipeline integrations, and four Broadcast
-contracts/integrations. The four current-roadmap additions cover EventLoop
+contracts/integrations. The eight current-roadmap additions cover the EventLoop
+lifecycle hub, IOCP quit/completion drain, TcpConnection explicit close and
+structured reasons, TcpServer aggregate stop/release handshake, and
+TcpClientControl lifetime/close-reason propagation. Existing roadmap coverage
+also includes EventLoop
 control-lane saturation, optional TcpConnection notification saturation,
 Connector/TcpClient typed admission and generation races, and IOCP synchronous
 submission errors.
+
+On 2026-07-27, the current Windows MSVC worktree passed full Debug and Release
+builds and 102/102 CTests in both configurations. The 21 directly relevant
+Python repository/API contracts passed, including the public API manifest and
+deterministic compatibility diff. A clean Release install exposed the two new
+stable Core headers, and the isolated `find_package(GameNetCore)` consumer
+built and passed CTest 1/1. Current runtime changes still require frozen-SHA
+Linux, sanitizer/TSan, repeat, performance, and 24/72-hour endurance evidence
+before any stable promotion.
 
 Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
 `5ebad2c1a4a9487437340935e21f7468140c7e8d`:

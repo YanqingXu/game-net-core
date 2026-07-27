@@ -31,7 +31,7 @@ def main() -> None:
     status_text = migration_status.read_text(encoding="utf-8")
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-07-26", migration_status)
+    require(status_text, "Current production-roadmap audit: 2026-07-27", migration_status)
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(

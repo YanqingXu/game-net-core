@@ -30,6 +30,8 @@ public:
     void preserveSocketAssociation(SocketFd sockfd) override;
     void forgetSocketAssociation(SocketFd sockfd) noexcept;
     void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) override;
+    void trackCompletionOperation(void* operation) override;
+    bool hasPendingCompletionOperations() const noexcept override;
     bool wakeup() override;
 
 private:
@@ -44,6 +46,7 @@ private:
 
     HANDLE iocp_;
     std::unordered_set<SocketFd> associatedFds_;
+    std::unordered_set<void*> outstandingOperations_;
     std::unordered_map<void*, std::shared_ptr<void>> retainedOperations_;
 };
 

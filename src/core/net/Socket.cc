@@ -30,9 +30,7 @@ void setSocketOption(SocketFd sockfd, int level, int option, bool on) {
 Socket::Socket(SocketFd sockfd) : sockfd_(sockfd) {
 }
 
-Socket::~Socket() {
-    sockets::close(sockfd_);
-}
+Socket::~Socket() { close(); }
 
 SocketFd Socket::fd() const noexcept {
     return sockfd_;
@@ -42,6 +40,14 @@ SocketFd Socket::releaseFd() noexcept {
     const SocketFd fd = sockfd_;
     sockfd_ = kInvalidSocket;
     return fd;
+}
+
+void Socket::close() noexcept {
+    if (!sockets::isValid(sockfd_)) {
+        return;
+    }
+    sockets::close(sockfd_);
+    sockfd_ = kInvalidSocket;
 }
 
 void Socket::bindAddress(const InetAddress& localAddr) {

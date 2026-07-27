@@ -18,6 +18,7 @@ enum class EventLoopCallbackSource {
     // Appended to preserve the numeric values of the 0.3 compatibility-line
     // callback sources for consumers that persist diagnostics.
     Control,
+    Lifecycle,
 };
 
 enum class EventLoopCallbackExceptionAction {
@@ -40,6 +41,7 @@ enum class TcpConnectionCallbackSource {
     HighWaterMark,
     WriteComplete,
     Close,
+    CloseInfo,
 };
 
 struct TcpConnectionCallbackException {

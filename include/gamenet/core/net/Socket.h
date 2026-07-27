@@ -19,6 +19,7 @@ public:
     /// Release ownership of the socket fd.  After this call, the Socket
     /// destructor will NOT close the fd.  Returns the released fd.
     SocketFd releaseFd() noexcept;
+    void close() noexcept;
 
     void bindAddress(const InetAddress& localAddr);
     bool tryBindAddress(const InetAddress& localAddr, int* error = nullptr);

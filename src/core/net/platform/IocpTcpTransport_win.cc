@@ -3,6 +3,7 @@
 #ifdef _WIN32
 
 #include "gamenet/core/net/Channel.h"
+#include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
 
 #include <algorithm>
@@ -220,21 +221,31 @@ bool IocpTcpTransport::hasPendingOperations() const noexcept {
 }
 
 void IocpTcpTransport::cancelPendingOperations(SocketFd sockfd) noexcept {
-    auto cancelOne = [sockfd](bool pending, OVERLAPPED* overlapped) noexcept {
+    auto cancelOne =
+        [this, sockfd](bool pending, IocpOperation* operation) noexcept {
         if (!pending) {
             return;
         }
-        if (::CancelIoEx(reinterpret_cast<HANDLE>(sockfd), overlapped) != FALSE) {
+        if (::CancelIoEx(
+                reinterpret_cast<HANDLE>(sockfd),
+                &operation->overlapped) != FALSE) {
+            channel_->ownerLoop()->trackCompletionOperation(operation);
             return;
         }
         const DWORD error = ::GetLastError();
-        if (error == ERROR_NOT_FOUND || error == ERROR_INVALID_HANDLE) {
+        if (error == ERROR_NOT_FOUND) {
+            // The operation may already have completed in the kernel while
+            // its packet is still queued for this owner loop.
+            channel_->ownerLoop()->trackCompletionOperation(operation);
+            return;
+        }
+        if (error == ERROR_INVALID_HANDLE) {
             return;
         }
     };
 
-    cancelOne(readPending_, &readOperation_.overlapped);
-    cancelOne(writePending_, &writeOperation_.overlapped);
+    cancelOne(readPending_, &readOperation_);
+    cancelOne(writePending_, &writeOperation_);
 }
 
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS

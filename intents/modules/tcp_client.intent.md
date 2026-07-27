@@ -19,7 +19,11 @@ all while preserving the same owner-loop discipline as the server side.
 - own one Connector for active connection initiation
 - own one TcpConnection (shared_ptr) after connect succeeds
 - expose connect / disconnect APIs that respect owner-loop threading
+- expose a copyable `TcpClientControl` handle whose storage is independent of
+  TcpClient lifetime and whose requests use the owner EventLoop lifecycle hub
 - deliver connection / message / close / write-complete callbacks to the user
+- propagate the established connection's immutable structured close result to
+  a client observer on the owner loop
 - support configurable retry-on-failure and reconnect-on-disconnect policies
 - coordinate safe teardown of Connector and TcpConnection on destruction
 
@@ -51,6 +55,14 @@ all while preserving the same owner-loop discipline as the server side.
 - Connector Channel and TcpConnection Channel are removed before
   effective destruction
 - reconnect policy is explicit and configurable, never silently hardcoded
+- `TcpClientControl` never owns TcpClient; its mailbox owns only the
+  generation-tagged requested operation and a non-owning lifecycle source
+- destroying TcpClient closes the control mailbox and detaches its lifecycle
+  node on the owner loop before releasing client storage
+- a control request returning Accepted is committed independently of pending-
+  functor saturation and is processed once or superseded by a newer generation
+- a handle call after mailbox closure returns OwnerUnavailable without reading
+  TcpClient storage
 
 ---
 
@@ -60,6 +72,8 @@ all while preserving the same owner-loop discipline as the server side.
 - TcpConnection uses the same owner loop as TcpClient
 - may use TimerQueue (through EventLoop) for reconnect backoff delays
 - user interacts with TcpClient through callbacks set before connect()
+- the lifecycle-node callback is the only path from independent control
+  storage back into live TcpClient state
 
 ---
 
@@ -86,6 +100,10 @@ all while preserving the same owner-loop discipline as the server side.
 - newConnection / removeConnection run on the owner loop thread
 - user callbacks (connection / message / close) fire on the owner loop thread
 - Connector state machine transitions happen on the owner loop thread only
+- `TcpClientControl::tryConnect/tryDisconnect/tryStop` may run on any thread;
+  they update only the shared mailbox and signal its lifecycle source
+- the lifecycle callback snapshots the newest operation, releases the mailbox
+  lock, and only then invokes the live TcpClient facade on the owner loop
 
 ---
 
@@ -94,6 +112,9 @@ all while preserving the same owner-loop discipline as the server side.
 - TcpClient holds TcpConnection via shared_ptr after connect succeeds
 - TcpConnection close callback must prevent use-after-free of TcpClient
   (e.g. via weak capture or explicit guard, same discipline as TcpServer)
+- TcpClient owns the control mailbox while alive, but copied
+  `TcpClientControl` handles may keep the closed mailbox storage alive after
+  TcpClient destruction; neither mailbox nor handle owns TcpClient/EventLoop
 - destruction must run on the owner loop thread to safely clean up
   Channel registrations
 
@@ -148,6 +169,11 @@ all while preserving the same owner-loop discipline as the server side.
 - callback-exception observation is propagated to the active TcpConnection;
   business callback failure follows the same single-connection close policy as
   server-owned connections
+- established close observers receive the same first-wins
+  `TcpConnectionCloseInfo` that TcpConnection publishes; reconnect/stop cannot
+  overwrite an earlier peer or transport error
+- a stale control generation or a signal racing mailbox closure performs no
+  Connector, socket, or callback work
 
 ---
 
@@ -233,6 +259,11 @@ runtime retry enable/disable remains marshaled through the facade.
   a re-entrant explicit connect is attempted
 - typed facade admission distinguishes queue saturation, sealed shutdown, and
   unavailable owner instead of collapsing them to a boolean
+- `tests/contract/tcp_client/test_tcp_client_control_lifetime.cpp` verifies
+  queue-saturation admission, latest-operation coalescing, owner-loop
+  execution, lifecycle detach, and OwnerUnavailable after TcpClient destruction
+- `tests/contract/tcp_client/test_tcp_client_close_reason.cpp` verifies client
+  close-info propagation and first-close-reason preservation
 - a queued request observes an expired TcpClient target and performs no
   callback or socket work
 - `tests/contract/connector/test_connector_thread_contract.cpp` is the direct

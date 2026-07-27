@@ -32,6 +32,13 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - orchestrate ordered shutdown via stop()
 - expose completion-aware graceful stop with bounded drain time and explicit
   drained/forced terminal results
+- register one aggregate stop participant per worker loop so queue saturation
+  admits at most O(worker-count) stop-control signals rather than one queued
+  teardown task per connection
+- coordinate the cross-loop release protocol
+  `worker cleanup -> base bookkeeping -> BaseReleased -> worker ack -> join`
+- propagate each connection's structured close result to server observers and
+  admission/stop accounting
 
 ---
 
@@ -62,6 +69,21 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   are mutated only by the base loop and converge on removal/stop
 - the peer rate table has an explicit finite capacity; an unseen peer is
   rejected rather than allowing abuse tracking itself to grow without bound
+- each worker aggregate has one stop generation; repeated immediate/graceful
+  requests coalesce and stale generations cannot affect a restarted server
+- worker cleanup never waits synchronously for the base loop; it signals one
+  base lifecycle node after its generation becomes locally quiet
+- base bookkeeping erases/releases every matching connection before publishing
+  `BaseReleased(generation)` to that worker
+- a worker ack is published only after it observes BaseReleased, removes all
+  server-owned Channels/callback links for the generation, and can no longer
+  call the base TcpServer
+- thread-pool quit/join starts only after every participating worker has acked;
+  the graceful future becomes ready only after join
+- normal and reserved pending-functor saturation cannot turn a committed
+  graceful/immediate stop into SchedulingFailed; only pre-commit
+  OwnerUnavailable/Shutdown can reject the request, with a defined terminal
+  result and no partially-started stop
 
 ---
 
@@ -72,6 +94,8 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - cross-loop handoff happens only through EventLoop scheduling APIs
 - graceful-stop requests may originate on any thread but orchestration and
   connection-map decisions run on the base loop
+- cross-thread stop admission uses the base loop lifecycle hub; per-worker
+  aggregation uses each worker's lifecycle hub
 - authentication completion may originate on a connection worker loop; the
   request is marshaled to the base loop before deadline state is mutated
 - admission metric callbacks run on the base loop and their exceptions are
@@ -96,6 +120,12 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   executes first wins, and the later task is a no-op
 - stopping or removing a connection cancels its authentication timer and
   releases active-per-peer accounting exactly once
+- an aggregate worker stop signal that returns Accepted must eventually reach
+  worker ack or a documented owner-unavailable rollback; it cannot be dropped
+  because the normal queue is full
+- `BaseReleased` is generation tagged and a stale release/ack is a no-op
+- connection close reasons are preserved through worker cleanup and base map
+  removal; shutdown escalation cannot overwrite an earlier peer/error reason
 
 ---
 
@@ -129,6 +159,14 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   callback containment, continued admission after the failure, finite global
   and per-peer admission, fixed-window rate rejection, bounded peer tracking,
   cross-thread authentication completion, and unauthenticated deadline close
+- `tests/contract/tcp_server/test_tcp_server_saturation_shutdown.cpp` fills
+  normal and reserved queues on the base and every worker, exceeds ordinary
+  queue capacity with live connections, and proves the O(worker-count)
+  aggregate stop, BaseReleased/worker-ack handshake, empty admission state,
+  join, and future completion
+- `tests/contract/tcp_server/test_tcp_server_release_handshake.cpp` verifies
+  generation-tagged worker cleanup, base release before Channel destruction,
+  stale ack rejection, callback re-entry, and exact-once join
 
 ---
 

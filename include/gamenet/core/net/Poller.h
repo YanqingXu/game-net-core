@@ -30,6 +30,10 @@ public:
     virtual void preserveSocketAssociation(SocketFd sockfd);
     // Keep backend operation storage alive until its completion is observed.
     virtual void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime);
+    // Track one kernel-owned completion obligation from successful submission
+    // until the backend dequeues its terminal packet.
+    virtual void trackCompletionOperation(void* operation);
+    virtual bool hasPendingCompletionOperations() const noexcept;
     virtual bool wakeup();
 
     bool hasChannel(Channel* channel) const;

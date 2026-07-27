@@ -1,5 +1,7 @@
 #include <gamenet/core/net/Buffer.h>
 #include <gamenet/core/net/InetAddress.h>
+#include <gamenet/core/net/TcpClientControl.h>
+#include <gamenet/core/net/TcpConnectionClose.h>
 #include <gamenet/core/metrics/MetricsHookRecorder.h>
 #include <gamenet/broadcast/BroadcastMetricsRecorder.h>
 #include <gamenet/broadcast/BroadcastTypes.h>
@@ -42,6 +44,8 @@ int main() {
     buffer.append("ok", 2);
 
     gamenet::net::InetAddress address(0);
+    gamenet::net::TcpClientControl detachedControl;
+    gamenet::net::TcpConnectionCloseInfo closeInfo;
     gamenet::protocol::PacketFramer framer;
     auto frame = framer.encode("installed");
     gamenet::game_logic::GameCommandQueue queue;
@@ -77,6 +81,9 @@ int main() {
         session.state() != gamenet::game_session::SessionState::Online ||
         session.transportId().value != 17 ||
         endpoint->send("installed") != gamenet::transport::EndpointResult::Accepted ||
+        detachedControl.available() ||
+        detachedControl.tryStop() != gamenet::net::PostResult::OwnerUnavailable ||
+        closeInfo.reason != gamenet::net::TcpConnectionCloseReason::InternalError ||
         metrics->counterValue("gamenet.net.connector.connect_success") != 1 ||
         metrics->counterValue("gamenet.game_logic.tick_completed") != 1 ||
         metrics->counterValue("gamenet.broadcast.event.routed") != 1 ||

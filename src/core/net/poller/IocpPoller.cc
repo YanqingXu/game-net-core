@@ -97,6 +97,7 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
     if (operation == nullptr) {
         return now;
     }
+    outstandingOperations_.erase(operation);
     std::shared_ptr<void> completionLifetime;
     const auto retained = retainedOperations_.find(operation);
     if (retained != retainedOperations_.end()) {
@@ -121,6 +122,20 @@ void IocpPoller::retainCompletionOperation(void* operation, std::shared_ptr<void
     if (operation != nullptr && lifetime) {
         retainedOperations_[operation] = std::move(lifetime);
     }
+}
+
+void IocpPoller::trackCompletionOperation(void* operation) {
+    if (operation != nullptr) {
+        outstandingOperations_.insert(operation);
+    }
+}
+
+bool IocpPoller::hasPendingCompletionOperations() const noexcept {
+    // retainedOperations_ is a storage lease and may include a live operation
+    // whose subsystem intentionally outlives loop(). Only operations
+    // explicitly committed to quiescing (for example, CancelIoEx during
+    // TcpConnection close) are shutdown completion obligations.
+    return !outstandingOperations_.empty();
 }
 
 void IocpPoller::updateChannel(Channel* channel) {
