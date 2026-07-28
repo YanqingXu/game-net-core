@@ -323,6 +323,10 @@ jobs:
             echo "::error::LeakSanitizer cannot run while the job shell is traced by PID ${tracer_pid}. Stop the strace/gdb/security tracer on the self-hosted runner and retry."
             exit 1
           fi
+          if [[ "${ptrace_scope}" =~ ^[0-9]+$ ]] && (( ptrace_scope != 0 )); then
+            echo "::error::LeakSanitizer requires kernel.yama.ptrace_scope=0 on this self-hosted runner, but found ${ptrace_scope}. Configure the runner host with 'sudo sysctl kernel.yama.ptrace_scope=0' and retry."
+            exit 1
+          fi
 
       - name: Check repository guards
         run: |

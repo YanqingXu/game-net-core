@@ -363,6 +363,16 @@ def main() -> None:
         "LeakSanitizer cannot run while the job shell is traced",
         workflow,
     )
+    require(
+        self_hosted_sanitizer_preflight,
+        '[[ "${ptrace_scope}" =~ ^[0-9]+$ ]] && (( ptrace_scope != 0 ))',
+        workflow,
+    )
+    require(
+        self_hosted_sanitizer_preflight,
+        "LeakSanitizer requires kernel.yama.ptrace_scope=0",
+        workflow,
+    )
     assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
         "      - name: Check repository guards"
     ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
