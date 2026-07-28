@@ -137,6 +137,9 @@ No other direct mutation path is allowed for core loop state.
   converted into a fabricated Channel event
 - TcpConnection socket close, completion-obligation consumption, lifecycle
   detach, Channel removal, and disconnected publication are owner-loop-only
+- on Linux, TcpConnection disables and removes its Channel registration before
+  explicitly closing the socket, so the released numeric fd cannot collide
+  with a stale Poller entry during callback-driven reconnect
 - cross-thread terminal requests signal the lifecycle node and do not depend on
   normal/reserved functor capacity
 

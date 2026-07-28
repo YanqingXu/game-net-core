@@ -1,4 +1,5 @@
 #include "gamenet/core/net/Buffer.h"
+#include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/SocketTypes.h"
@@ -12,10 +13,30 @@
 #include "support/TestAssert.h"
 
 #include <chrono>
+#include <cerrno>
 #include <memory>
 #include <string_view>
 
 using namespace std::chrono_literals;
+
+namespace {
+
+bool isExpectedPostCloseWriteError(int error) {
+    if (gamenet::net::sockets::isWouldBlock(error) ||
+        gamenet::net::sockets::isInterrupted(error)) {
+        return true;
+    }
+#ifdef _WIN32
+    return error == WSAECONNRESET ||
+        error == WSAECONNABORTED ||
+        error == WSAESHUTDOWN ||
+        error == WSAENOTCONN;
+#else
+    return error == EPIPE || error == ECONNRESET || error == ENOTCONN;
+#endif
+}
+
+}  // namespace
 
 int main() {
     gamenet::net::EventLoop loop;
@@ -43,19 +64,38 @@ int main() {
         GAMENET_TEST_ASSERT(loop.isInLoopThread());
         ++callbacks.closed;
 
+#ifndef _WIN32
+        // Linux close must remove the old Poller identity before releasing the
+        // numeric fd. socketpair() deterministically reuses that lowest free
+        // descriptor, so registering this replacement catches a stale entry
+        // before connectDestroyed() gets a chance to clean it up.
+        gamenet::test::ConnectedSocketPair replacement;
+        GAMENET_TEST_ASSERT(replacement.connectionFd == pair->connectionFd);
+        gamenet::net::Channel replacementChannel(&loop, replacement.connectionFd);
+        replacementChannel.enableReading();
+        GAMENET_TEST_ASSERT(loop.hasChannel(&replacementChannel));
+#endif
+
         // repeated-connect-destroyed-removes-registration: repeated
         // connectDestroyed() calls after forceClose must not double-remove the
-        // Channel or leave a stale readable registration behind.
+        // old Channel or erase a same-fd replacement registration.
         conn->connectDestroyed();
         conn->connectDestroyed();
+
+#ifndef _WIN32
+        GAMENET_TEST_ASSERT(loop.hasChannel(&replacementChannel));
+        replacementChannel.disableAll();
+        replacementChannel.remove();
+        GAMENET_TEST_ASSERT(!loop.hasChannel(&replacementChannel));
+        gamenet::net::sockets::close(replacement.connectionFd);
+        replacement.connectionFd = gamenet::net::kInvalidSocket;
+#endif
 
         constexpr std::string_view payload = "x";
         const ssize_t n = gamenet::net::sockets::write(pair->peerFd, payload.data(), payload.size());
         if (n < 0) {
             const int error = gamenet::net::sockets::lastError();
-            GAMENET_TEST_ASSERT(
-                gamenet::net::sockets::isWouldBlock(error) ||
-                gamenet::net::sockets::isInterrupted(error));
+            GAMENET_TEST_ASSERT(isExpectedPostCloseWriteError(error));
         } else {
             GAMENET_TEST_ASSERT(n == static_cast<ssize_t>(payload.size()));
         }

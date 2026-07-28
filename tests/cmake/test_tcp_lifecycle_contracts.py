@@ -1035,6 +1035,27 @@ def main() -> None:
     require(repeated_destroy_text, "conn->forceClose();", connection_repeated_destroy_test)
     require(
         repeated_destroy_text,
+        '#include "gamenet/core/net/Channel.h"',
+        connection_repeated_destroy_test,
+    )
+    require(
+        repeated_destroy_text,
+        "replacement.connectionFd == pair->connectionFd",
+        connection_repeated_destroy_test,
+    )
+    require(
+        repeated_destroy_text,
+        "replacementChannel.enableReading();",
+        connection_repeated_destroy_test,
+    )
+    require(
+        repeated_destroy_text,
+        "GAMENET_TEST_ASSERT(loop.hasChannel(&replacementChannel));",
+        connection_repeated_destroy_test,
+    )
+    require(repeated_destroy_text, "error == EPIPE", connection_repeated_destroy_test)
+    require(
+        repeated_destroy_text,
         "conn->connectDestroyed();\n        conn->connectDestroyed();",
         connection_repeated_destroy_test,
     )
@@ -1581,6 +1602,11 @@ def main() -> None:
     require(tcp_connection_intent_text, "test_tcp_connection_repeated_force_close.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "repeated teardown does not leave stale registration behind", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_repeated_connect_destroyed.cpp", tcp_connection_intent)
+    require(
+        tcp_connection_intent_text,
+        "before the close callback can\n  reuse the released numeric fd",
+        tcp_connection_intent,
+    )
     require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_soak.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "pending IOCP read/write operations are canceled", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_read.cpp", tcp_connection_intent)
@@ -1607,6 +1633,27 @@ def main() -> None:
     require(tcp_connection_source_text, "cancelPendingOperations", tcp_connection_source)
     require(tcp_connection_source_text, "finishClose", tcp_connection_source)
     require(tcp_connection_source_text, "forceClosePending_", tcp_connection_source)
+    require(
+        tcp_connection_source_text,
+        "void removeChannelRegistrationInLoop(",
+        tcp_connection_source,
+    )
+    require(
+        tcp_connection_source_text,
+        "#ifndef _WIN32\n"
+        "    // epoll registration bookkeeping is keyed by the numeric descriptor.\n"
+        "    // Revoke the old Channel identity before close() makes that descriptor\n"
+        "    // available to a callback-driven reconnect on the same EventLoop.\n"
+        "    removeChannelRegistrationInLoop(\n"
+        "        loop_,\n"
+        "        channel_.get(),\n"
+        "        channelAdded_,\n"
+        "        channelRemoved_);\n"
+        "#endif\n"
+        "\n"
+        "    if (!socketClosed())",
+        tcp_connection_source,
+    )
 
     tcp_connection_header_text = tcp_connection_header.read_text(encoding="utf-8")
     require(tcp_connection_header_text, "forceCloseGuard_", tcp_connection_header)

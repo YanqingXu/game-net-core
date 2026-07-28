@@ -300,6 +300,30 @@ jobs:
             git --version
           } 2>&1 | tee ci-evidence/toolchain.txt
 
+      - name: Verify ASan/UBSan runner environment
+        if: matrix.profile == 'asan-ubsan'
+        run: |
+          set -euo pipefail
+          tracer_pid="$(awk '/^TracerPid:/ { print $2 }' "/proc/${BASHPID}/status")"
+          ptrace_scope="$(
+            cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null ||
+              printf '%s' unavailable
+          )"
+          {
+            echo "bash_pid=${BASHPID}"
+            echo "bash_parent_pid=${PPID}"
+            echo "tracer_pid=${tracer_pid}"
+            echo "yama_ptrace_scope=${ptrace_scope}"
+            if [[ "${tracer_pid}" != "0" ]]; then
+              echo "tracer_process:"
+              ps -o pid=,ppid=,user=,comm=,args= -p "${tracer_pid}" || true
+            fi
+          } 2>&1 | tee ci-evidence/asan-ubsan-runner.txt
+          if [[ "${tracer_pid}" != "0" ]]; then
+            echo "::error::LeakSanitizer cannot run while the job shell is traced by PID ${tracer_pid}. Stop the strace/gdb/security tracer on the self-hosted runner and retry."
+            exit 1
+          fi
+
       - name: Check repository guards
         run: |
           set -euo pipefail

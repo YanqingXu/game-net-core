@@ -334,6 +334,38 @@ def main() -> None:
         workflow,
     )
     require(self_hosted_ci, 'test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', workflow)
+    self_hosted_sanitizer_preflight = step_block(
+        self_hosted_ci, "Verify ASan/UBSan runner environment"
+    )
+    require(
+        self_hosted_sanitizer_preflight,
+        "if: matrix.profile == 'asan-ubsan'",
+        workflow,
+    )
+    require(self_hosted_sanitizer_preflight, '"/proc/${BASHPID}/status"', workflow)
+    require(
+        self_hosted_sanitizer_preflight,
+        "/proc/sys/kernel/yama/ptrace_scope",
+        workflow,
+    )
+    require(
+        self_hosted_sanitizer_preflight,
+        "tracer_pid=${tracer_pid}",
+        workflow,
+    )
+    require(
+        self_hosted_sanitizer_preflight,
+        "ci-evidence/asan-ubsan-runner.txt",
+        workflow,
+    )
+    require(
+        self_hosted_sanitizer_preflight,
+        "LeakSanitizer cannot run while the job shell is traced",
+        workflow,
+    )
+    assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
+        "      - name: Check repository guards"
+    ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
     require(self_hosted_ci, "--expected-total 109", workflow)
     require(self_hosted_ci, "inventory+=(--expect-label threading=82)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)

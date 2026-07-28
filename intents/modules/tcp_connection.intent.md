@@ -96,8 +96,10 @@ inline inside TcpConnection.
 - on Windows, closing the socket does not release transport operation storage;
   `CompletionDraining` remains attached to the EventLoop lifecycle hub until
   every kernel-owned completion obligation has been consumed
-- on Linux, explicit socket close and Channel removal can normally converge in
-  the same lifecycle visit, while preserving identical callback/result order
+- on Linux, Channel interest disable and Poller removal complete on the owner
+  loop before explicit socket close releases the numeric fd; both operations
+  normally converge in the same lifecycle visit, while preserving identical
+  callback/result order
 - disconnected and close callbacks run only after the socket is closed and
   completion obligations are zero; TcpServer/TcpClient removal observes the
   structured close result
@@ -273,8 +275,10 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_force_close.cpp`
   verifies repeated forceClose teardown remains single-shot
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_connect_destroyed.cpp`
-  verifies repeated connectDestroyed teardown does not leave stale
-  registration behind after forceClose
+  verifies forceClose removes the Linux Channel before the close callback can
+  reuse the released numeric fd for a replacement registration, and repeated
+  connectDestroyed teardown does not remove that replacement or leave stale
+  registration behind
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_force_close_soak.cpp`
   repeats cross-thread forceClose and verifies teardown marshals to the owner
   loop without duplicating callbacks

@@ -76,6 +76,9 @@ It must not blur these roles.
   the IOCP transport and/or Poller retain operation storage until every
   completion obligation is consumed; object destruction is not the close
   trigger
+- On Linux, TcpConnection revokes the Poller's non-owning Channel registration
+  before closing and releasing the numeric fd; later connectDestroyed cleanup
+  is idempotent and cannot erase a replacement Channel that reused that fd
 - TcpConnection's lifecycle node may retain the connection close state through
   completion drain, but it detaches before final connection ownership is
   released

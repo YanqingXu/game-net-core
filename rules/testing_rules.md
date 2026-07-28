@@ -96,6 +96,9 @@ For lifecycle-sensitive modules, tests should include:
   Accepted operations where the latest request supersedes an in-flight attempt
 - TcpConnection explicit socket close and completion-drain terminal state,
   including first-close-reason-wins and native error preservation
+- Linux TcpConnection close-callback re-entry with deterministic numeric-fd
+  reuse, proving the old Channel was removed before close publication and a
+  repeated connectDestroyed cannot erase the replacement registration
 - TcpServer base and all worker queues saturated while one aggregate stop
   signal per worker converges through BaseReleased, worker ack, join, and
   future completion

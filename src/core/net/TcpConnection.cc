@@ -43,6 +43,22 @@ TcpConnectionCloseInfo unpackCloseInfo(std::uint64_t bits) noexcept {
     };
 }
 
+void removeChannelRegistrationInLoop(
+    EventLoop* loop,
+    Channel* channel,
+    bool channelAdded,
+    bool& channelRemoved) {
+    loop->assertInLoopThread();
+    if (!channelAdded || channelRemoved) {
+        return;
+    }
+    if (!channel->isNoneEvent()) {
+        channel->disableAll();
+    }
+    channel->remove();
+    channelRemoved = true;
+}
+
 }  // namespace
 
 void TcpConnectionBackpressureOptions::validate() const {
@@ -343,13 +359,11 @@ void TcpConnection::connectEstablished() {
                 *loop_,
                 attachedSource);
         }
-        if (!channel_->isNoneEvent()) {
-            channel_->disableAll();
-        }
-        if (!channelRemoved_) {
-            channel_->remove();
-            channelRemoved_ = true;
-        }
+        removeChannelRegistrationInLoop(
+            loop_,
+            channel_.get(),
+            channelAdded_,
+            channelRemoved_);
         channelAdded_ = false;
         socket_->close();
         closePhase_.store(
@@ -418,13 +432,11 @@ void TcpConnection::connectDestroyed() {
         detachLifecycleNode();
         return;
     }
-    if (!channel_->isNoneEvent()) {
-        channel_->disableAll();
-    }
-    if (!channelRemoved_) {
-        channel_->remove();
-        channelRemoved_ = true;
-    }
+    removeChannelRegistrationInLoop(
+        loop_,
+        channel_.get(),
+        channelAdded_,
+        channelRemoved_);
     detachLifecycleNode();
 }
 
@@ -580,6 +592,17 @@ void TcpConnection::beginCloseInLoop() {
         forceClosePending_ = true;
         iocpTransport_->cancelPendingOperations(channel_->fd());
     }
+#endif
+
+#ifndef _WIN32
+    // epoll registration bookkeeping is keyed by the numeric descriptor.
+    // Revoke the old Channel identity before close() makes that descriptor
+    // available to a callback-driven reconnect on the same EventLoop.
+    removeChannelRegistrationInLoop(
+        loop_,
+        channel_.get(),
+        channelAdded_,
+        channelRemoved_);
 #endif
 
     if (!socketClosed()) {
