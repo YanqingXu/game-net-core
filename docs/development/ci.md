@@ -426,6 +426,26 @@ four sanitizer/build profiles from competing for one runner's CPU and memory;
 each self-hosted build also uses `--parallel 1` so compiler fan-out cannot
 exhaust the endurance host.
 
+LeakSanitizer needs to attach to the sanitizer process while collecting thread
+roots. The dedicated trusted runner must therefore persist Yama
+`kernel.yama.ptrace_scope=0`; merely observing `TracerPid: 0` is insufficient.
+Configure and verify the host once:
+
+```bash
+printf '%s\n' 'kernel.yama.ptrace_scope=0' |
+  sudo tee /etc/sysctl.d/99-gamenet-lsan.conf
+sudo sysctl -p /etc/sysctl.d/99-gamenet-lsan.conf
+test "$(cat /proc/sys/kernel/yama/ptrace_scope)" = 0
+```
+
+This weakens same-UID ptrace isolation for the host, so it belongs only on the
+dedicated trusted endurance runner and must not be copied to a shared or
+untrusted-execution machine. The ASan/UBSan profile records `TracerPid` and
+`ptrace_scope` in `ci-evidence/asan-ubsan-runner.txt` and fails before repository
+guards or compilation when the shell is traced or the numeric Yama scope is not
+zero. Leak detection remains enabled; the gate must not be made green with
+`ASAN_OPTIONS=detect_leaks=0`.
+
 After configure, `tools/verify_ctest_inventory.py` records the complete 109-test
 JSON inventory and requires `threading=82`, `game_pipeline=7`, and
 `broadcast=5` before either repeat begins. Adding or relabeling a test must
