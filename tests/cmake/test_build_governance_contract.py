@@ -147,8 +147,9 @@ def main() -> None:
     )
 
     soak_workflow_text = soak_workflow.read_text(encoding="utf-8")
-    assert soak_workflow_text.count(guard_command_linux) == 1, (
-        "the long-soak workflow must run the build-governance guard exactly once"
+    assert soak_workflow_text.count(guard_command_linux) == 2, (
+        "the long-soak repeat and self-hosted CI jobs must each run the "
+        "build-governance guard"
     )
 
 

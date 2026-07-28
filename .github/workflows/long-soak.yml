@@ -418,7 +418,7 @@ jobs:
           python3 tools/write_ci_evidence.py \
             --evidence-root ci-evidence \
             --output ci-evidence/manifest.json \
-            --artifact-name "linux-self-hosted-${GAMENET_PROFILE}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" \
+            --artifact-name "linux-self-hosted-${GAMENET_PROFILE}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" \
             --require-canonical-artifact-name \
             --command "cmake configure ${GAMENET_PROFILE}" \
             --command "verify CTest inventory 109 ${GAMENET_CTEST_LABEL}" \
@@ -444,7 +444,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-self-hosted-${{ matrix.profile }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: linux-self-hosted-${{ matrix.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
           retention-days: 90

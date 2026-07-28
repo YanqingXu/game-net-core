@@ -340,6 +340,11 @@ def main() -> None:
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
     require(self_hosted_ci, "--expected-total 1", workflow)
     require(self_hosted_ci, "python3 tools/compare_public_api_manifest.py", workflow)
+    require(
+        self_hosted_ci,
+        "python3 tests/cmake/test_build_governance_contract.py",
+        workflow,
+    )
 
     self_hosted_manifest = step_block(
         self_hosted_ci, "Write self-hosted CI evidence manifest"
@@ -349,7 +354,7 @@ def main() -> None:
     require(self_hosted_manifest, "--require-canonical-artifact-name", workflow)
     require(
         self_hosted_manifest,
-        '--artifact-name "linux-self-hosted-${GAMENET_PROFILE}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"',
+        '--artifact-name "linux-self-hosted-${GAMENET_PROFILE}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"',
         workflow,
     )
     require(
@@ -370,7 +375,7 @@ def main() -> None:
     require(self_hosted_upload, "uses: actions/upload-artifact@v4", workflow)
     require(
         self_hosted_upload,
-        "name: linux-self-hosted-${{ matrix.profile }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+        "name: linux-self-hosted-${{ matrix.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
         workflow,
     )
     require(self_hosted_upload, "if-no-files-found: error", workflow)
