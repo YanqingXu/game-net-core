@@ -416,6 +416,14 @@ defaults to repeat 50. The 60-second per-test timeout applies to both gates:
   Phase 4 lifecycle, handoff, ordering, and fanout failures are visible as a
   dedicated result.
 
+The same workflow's `ci` mode runs a serial four-profile matrix on that
+self-hosted runner: Debug and Release execute all 109 tests plus the installed
+package consumer, ASan/UBSan executes all 109 tests, and TSan executes the exact
+82-test threading inventory. Every profile verifies the immutable checkout SHA,
+public API diff and repository guards, then writes and uploads its own
+attempt-bound `gamenet.ci_evidence.v1` artifact. Serial execution prevents the
+four sanitizer/build profiles from competing for one runner's CPU and memory.
+
 After configure, `tools/verify_ctest_inventory.py` records the complete 109-test
 JSON inventory and requires `threading=82`, `game_pipeline=7`, and
 `broadcast=5` before either repeat begins. Adding or relabeling a test must

@@ -8,6 +8,7 @@ on:
         required: true
         type: choice
         options:
+          - ci
           - repeat
           - candidate-24h
           - release-72h
@@ -224,6 +225,227 @@ jobs:
             long-soak-evidence/threading-repeat-evidence.json
             long-soak-evidence/phase4-repeat-evidence.json
             long-soak-evidence/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  linux-self-hosted-ci:
+    name: Linux self-hosted CI (${{ matrix.profile }})
+    if: inputs.mode == 'ci'
+    runs-on: [self-hosted, linux, x64, gamenet-endurance]
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - profile: debug
+            build_type: Debug
+            sanitizer_flag: ""
+            ctest_label: ""
+            install_consumer: true
+          - profile: release
+            build_type: Release
+            sanitizer_flag: ""
+            ctest_label: ""
+            install_consumer: true
+          - profile: asan-ubsan
+            build_type: Debug
+            sanitizer_flag: -DGAMENET_ENABLE_ASAN_UBSAN=ON
+            ctest_label: ""
+            install_consumer: false
+          - profile: tsan
+            build_type: Debug
+            sanitizer_flag: -DGAMENET_ENABLE_TSAN=ON
+            ctest_label: threading
+            install_consumer: false
+
+    env:
+      GAMENET_PROFILE: ${{ matrix.profile }}
+      GAMENET_BUILD_TYPE: ${{ matrix.build_type }}
+      GAMENET_SANITIZER_FLAG: ${{ matrix.sanitizer_flag }}
+      GAMENET_CTEST_LABEL: ${{ matrix.ctest_label }}
+      GAMENET_BUILD_DIR: build-self-hosted-${{ matrix.profile }}
+      GAMENET_CONSUMER_DIR: consumer-self-hosted-${{ matrix.profile }}
+
+    steps:
+      - name: Checkout frozen candidate
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Record toolchain and identity evidence
+        run: |
+          set -euo pipefail
+          mkdir -p ci-evidence
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          {
+            echo "profile=${GAMENET_PROFILE}"
+            echo "candidate_sha=${GITHUB_SHA}"
+            uname -a
+            cmake --version
+            ctest --version
+            c++ --version
+            python3 --version
+            git --version
+          } 2>&1 | tee ci-evidence/toolchain.txt
+
+      - name: Check repository guards
+        run: |
+          set -euo pipefail
+          python3 tests/scope/test_scope_guard.py
+          python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
+          python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
+          python3 tools/compare_public_api_manifest.py \
+            --output ci-evidence/public-api-diff.json
+          python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_endurance_gate.py
+          python3 tests/cmake/test_sanitizer_flags.py
+          python3 tests/cmake/test_install_package_contract.py
+          python3 tests/cmake/test_packet_framer_fuzz_contract.py
+          python3 tests/cmake/test_core_benchmark_contract.py
+          python3 tests/cmake/test_phase4_benchmark_contract.py
+          python3 tests/cmake/test_logger_thread_contract.py
+          python3 tests/cmake/test_event_loop_contracts.py
+          python3 tests/cmake/test_event_loop_thread_pool_contracts.py
+          python3 tests/cmake/test_migration_status_contract.py
+          python3 tests/cmake/test_msvc_utf8_contract.py
+          python3 tests/cmake/test_platform_backend_contract.py
+          python3 tests/cmake/test_build_governance_contract.py
+          python3 tests/cmake/test_tcp_lifecycle_contracts.py
+          python3 tests/cmake/test_tcp_connection_context_contract.py
+          python3 tests/cmake/test_tcp_connection_thread_contract.py
+          python3 tests/cmake/test_timer_queue_contracts.py
+          python3 tests/cmake/test_threading_gate_contracts.py
+          python3 tests/cmake/test_windows_iocp_milestone_contract.py
+          python3 tests/cmake/test_windows_iocp_data_path_contract.py
+          python3 tests/cmake/test_release_safe_tests.py
+          python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
+          python3 tests/ci/test_core_benchmark_workflow.py
+          python3 tests/ci/test_phase4_benchmark_workflow.py
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          configure=(
+            cmake -S . -B "${GAMENET_BUILD_DIR}"
+            "-DCMAKE_BUILD_TYPE=${GAMENET_BUILD_TYPE}"
+            -DGAMENET_BUILD_TESTING=ON
+            -DGAMENET_ENABLE_TLS=OFF
+            -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+          )
+          if [[ -n "${GAMENET_SANITIZER_FLAG}" ]]; then
+            configure+=("${GAMENET_SANITIZER_FLAG}")
+          fi
+          "${configure[@]}"
+
+      - name: Verify CTest inventory
+        run: |
+          set -euo pipefail
+          inventory=(
+            python3 tools/verify_ctest_inventory.py
+            --test-dir "${GAMENET_BUILD_DIR}"
+            --expected-total 109
+            --output ci-evidence/ctest-inventory.json
+          )
+          if [[ "${GAMENET_PROFILE}" == "tsan" ]]; then
+            inventory+=(--expect-label threading=82)
+          fi
+          "${inventory[@]}"
+
+      - name: Build
+        run: cmake --build "${GAMENET_BUILD_DIR}" --parallel 4
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          test_command=(
+            ctest --test-dir "${GAMENET_BUILD_DIR}"
+            --output-on-failure
+            --timeout 60
+            --output-junit "${PWD}/ci-evidence/ctest-junit.xml"
+            --output-log "${PWD}/ci-evidence/ctest.log"
+          )
+          if [[ -n "${GAMENET_CTEST_LABEL}" ]]; then
+            test_command+=(-L "${GAMENET_CTEST_LABEL}")
+          fi
+          "${test_command[@]}"
+
+      - name: Install and verify package consumer
+        if: matrix.install_consumer
+        run: |
+          set -euo pipefail
+          cmake --install "${GAMENET_BUILD_DIR}" \
+            --prefix "${PWD}/${GAMENET_BUILD_DIR}/_install"
+          cmake -S tests/cmake/install_consumer \
+            -B "${GAMENET_CONSUMER_DIR}" \
+            "-DCMAKE_BUILD_TYPE=${GAMENET_BUILD_TYPE}" \
+            "-DCMAKE_PREFIX_PATH=${PWD}/${GAMENET_BUILD_DIR}/_install"
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir "${GAMENET_CONSUMER_DIR}" \
+            --expected-total 1 \
+            --output ci-evidence/install-consumer-inventory.json
+          cmake --build "${GAMENET_CONSUMER_DIR}" --parallel 4
+          ctest --test-dir "${GAMENET_CONSUMER_DIR}" \
+            --output-on-failure \
+            --timeout 60 \
+            --output-junit "${PWD}/ci-evidence/install-consumer-junit.xml" \
+            --output-log "${PWD}/ci-evidence/install-consumer-ctest.log"
+
+      - name: Write self-hosted CI evidence manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_PR_HEAD_SHA: ""
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root ci-evidence \
+            --output ci-evidence/manifest.json \
+            --artifact-name "linux-self-hosted-${GAMENET_PROFILE}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" \
+            --require-canonical-artifact-name \
+            --command "cmake configure ${GAMENET_PROFILE}" \
+            --command "verify CTest inventory 109 ${GAMENET_CTEST_LABEL}" \
+            --command "cmake build ${GAMENET_PROFILE}" \
+            --command "ctest ${GAMENET_PROFILE} ${GAMENET_CTEST_LABEL}"
+
+      - name: Publish self-hosted CI evidence summary
+        if: always()
+        run: |
+          manifest=ci-evidence/manifest.json
+          if [[ ! -f "${manifest}" ]]; then
+            echo "CI evidence manifest is unavailable." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          {
+            echo "## Linux self-hosted ${GAMENET_PROFILE} evidence"
+            echo '```json'
+            cat "${manifest}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload self-hosted CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-self-hosted-${{ matrix.profile }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ci-evidence/
           if-no-files-found: error
           retention-days: 90
 

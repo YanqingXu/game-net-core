@@ -129,6 +129,7 @@ def main() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
+    require(workflow_text, "          - ci", workflow)
     require(workflow_text, 'default: "50"', workflow)
     require(workflow_text, 'default: "60"', workflow)
     assert "\n  push:" not in workflow_text, "long-soak must not run on push"
@@ -298,6 +299,71 @@ def main() -> None:
     assert job.index(repeat_evidence) < job.index(manifest) < job.index(upload), (
         "long-soak manifest must hash verified repeat evidence before artifact upload"
     )
+
+    self_hosted_ci = job_block(workflow_text, "linux-self-hosted-ci")
+    require(self_hosted_ci, "if: inputs.mode == 'ci'", workflow)
+    require(
+        self_hosted_ci,
+        "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
+        workflow,
+    )
+    require(self_hosted_ci, "fail-fast: false", workflow)
+    require(self_hosted_ci, "max-parallel: 1", workflow)
+    for profile in ("debug", "release", "asan-ubsan", "tsan"):
+        require(self_hosted_ci, f"profile: {profile}", workflow)
+    require(
+        self_hosted_ci,
+        "sanitizer_flag: -DGAMENET_ENABLE_ASAN_UBSAN=ON",
+        workflow,
+    )
+    require(
+        self_hosted_ci,
+        "sanitizer_flag: -DGAMENET_ENABLE_TSAN=ON",
+        workflow,
+    )
+    require(self_hosted_ci, "ctest_label: threading", workflow)
+    require(self_hosted_ci, 'test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', workflow)
+    require(self_hosted_ci, "--expected-total 109", workflow)
+    require(self_hosted_ci, "inventory+=(--expect-label threading=82)", workflow)
+    require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
+    require(self_hosted_ci, "if: matrix.install_consumer", workflow)
+    require(self_hosted_ci, "--expected-total 1", workflow)
+    require(self_hosted_ci, "python3 tools/compare_public_api_manifest.py", workflow)
+
+    self_hosted_manifest = step_block(
+        self_hosted_ci, "Write self-hosted CI evidence manifest"
+    )
+    require(self_hosted_manifest, "if: always()", workflow)
+    require(self_hosted_manifest, "python3 tools/write_ci_evidence.py", workflow)
+    require(self_hosted_manifest, "--require-canonical-artifact-name", workflow)
+    require(
+        self_hosted_manifest,
+        '--artifact-name "linux-self-hosted-${GAMENET_PROFILE}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"',
+        workflow,
+    )
+    require(
+        self_hosted_manifest,
+        'GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"',
+        workflow,
+    )
+    require(
+        self_hosted_manifest,
+        'GAMENET_CI_STATUS: "${{ job.status }}"',
+        workflow,
+    )
+
+    self_hosted_upload = step_block(
+        self_hosted_ci, "Upload self-hosted CI evidence"
+    )
+    require(self_hosted_upload, "if: always()", workflow)
+    require(self_hosted_upload, "uses: actions/upload-artifact@v4", workflow)
+    require(
+        self_hosted_upload,
+        "name: linux-self-hosted-${{ matrix.profile }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+        workflow,
+    )
+    require(self_hosted_upload, "if-no-files-found: error", workflow)
+    require(self_hosted_upload, "retention-days: 90", workflow)
 
     production_job = job_block(workflow_text, "linux-production-endurance")
     require(
