@@ -12,6 +12,7 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 
@@ -354,6 +355,8 @@ int main() {
     gamenet::examples::GameServerPipeline* pipelineObserver = nullptr;
     bool stopQueued = false;
     bool stopCompleted = false;
+    gamenet::net::TcpServerStopFuture pipelineStopFuture;
+    std::optional<gamenet::net::TcpServerStopResult> pipelineStopResult;
     gamenet::examples::GameServerPipeline pipeline(
         &loop,
         gamenet::net::InetAddress(0, true),
@@ -372,13 +375,23 @@ int main() {
                     gamenet::examples::GameServerPipelineShutdownTestPeer::pendingAuthenticationAttempt(
                         *pipelineObserver);
                 GAMENET_TEST_ASSERT(!pendingAttempt.expired());
-                pipelineObserver->stop();
+                pipelineStopFuture = pipelineObserver->stopGracefully(
+                    gamenet::net::TcpServerStopOptions{.drainTimeout = 500ms});
                 stopCompleted = true;
                 GAMENET_TEST_ASSERT(
                     gamenet::examples::GameServerPipelineShutdownTestPeer::pendingAuthenticationTimers(
                         *pipelineObserver) == 0);
                 GAMENET_TEST_ASSERT(pendingAttempt.expired());
-                loop.runAfter(150ms, [&] { loop.quit(); });
+                auto pollCompletion = std::make_shared<std::function<void()>>();
+                *pollCompletion = [&, pollCompletion] {
+                    if (pipelineStopFuture.wait_for(0ms) == std::future_status::ready) {
+                        pipelineStopResult = pipelineStopFuture.get();
+                        loop.quit();
+                        return;
+                    }
+                    loop.runAfter(5ms, *pollCompletion);
+                };
+                loop.runAfter(5ms, *pollCompletion);
             });
          }});
     pipelineObserver = &pipeline;
@@ -399,6 +412,9 @@ int main() {
     loop.loop();
 
     GAMENET_TEST_ASSERT(stopQueued && stopCompleted);
+    GAMENET_TEST_ASSERT(pipelineStopResult.has_value());
+    GAMENET_TEST_ASSERT(
+        pipelineStopResult->outcome == gamenet::net::TcpServerStopOutcome::Drained);
     GAMENET_TEST_ASSERT(pipeline.activeSessionCount() == 0);
     bool restartRejected = false;
     try {

@@ -1,15 +1,15 @@
 # game-net-core 推荐开发路线
 
 > 基线日期：2026-07-26
-> 当前执行检查点：2026-07-27
-> 主线基线：`main@2b1be4343f7c478eb40542451f30aad8ca474003`
-> 候选分支：`codex/phase6-production-candidate@b3443182d0606792df44a12bcb08927e767bc060`
-> 执行分支：`codex/assessment-roadmap-execution`
+> 当前执行检查点：2026-07-28
+> 主线基线：`main@3c19033f1bc6aa0195c6e90e6fdbce85601fae91`
+> 候选分支：`codex/m2-phase4-phase5-alignment`
+> 执行分支：`codex/m2-phase4-phase5-alignment`
 
 ## 0. 执行进度
 
 本路线已经进入实施，而不是仅保留为建议。当前本地执行检查点的
-CTest 清单为 **102 项（8 unit、85 contract、9 integration）**：
+CTest 清单为 **109 项（8 unit、89 contract、12 integration）**：
 
 - M0 Phase 6 草案已快进整合到执行分支并完成代码审计，M0 的本地实现
   与门禁已经闭环；stable tag 仍受独立 maintainer 评审、许可决策和最终
@@ -73,14 +73,29 @@ CTest 清单为 **102 项（8 unit、85 contract、9 integration）**：
   worker aggregate/BaseReleased/ack/join，以及结构化 close reason 和
   独立 `TcpClientControl`；
 - 当前工作树的 Windows MSVC Debug 与 Release 已分别全量通过
-  **102/102** CTest；当前标签为 threading 75、lifecycle 81；21 个本轮
-  相关 Python 静态合同通过，public API v2
-  manifest/diff 通过，隔离安装包的 Release consumer 通过 CTest 1/1。
+  **109/109** CTest；Windows AddressSanitizer 也通过 **109/109**；当前
+  标签为 threading 82、lifecycle 88、game_pipeline 7、broadcast 5；
+  31 个 Python 静态合同通过，public API v2 manifest/diff 通过，隔离
+  安装包的 Release consumer 通过 CTest 1/1；
+- M2 已引入统一 `DispatchResult`，SessionManager、Pipeline、endpoint 与
+  Broadcast 的跨层失败均有明确终态；Pipeline 的 continuation/auth/logic/
+  output 饱和会关闭或拒绝，不再留下黑洞连接；
+- Session binding generation 已贯穿 command、handler 前校验、output 与
+  stale disconnect；duplicate replace/reject-new、三物理 loop、真实 TCP
+  heartbeat/idle 和 graceful stop 均有集成合同；
+- Broadcast 已具备 per-owner task/bytes、global bytes、优先级 shedding、
+  完整 reason counts 与异步终态计数；focused Pipeline/Broadcast 12 项测试
+  repeat-50 共 600 次通过；
+- `PlayerSession` 构造/修改已私有化，Broadcast 改用 immutable target；
+  O(N) 会话回收已建立 scan-only 与 full-expiry 的 10k/100k/1M Release
+  规模基准。
 
-M1 的本地 runtime 实现与直接合同现已闭环。尚未完成的是冻结候选 SHA
-之后的跨平台、sanitizer/TSan、性能与 24/72 小时耐久证据重跑，以及独立
-maintainer 的 API、性能和发布工具人工评审。因此当前仍不得创建 stable
-tag，也不得把历史 `b344318` 耐久记录当作本轮 runtime 的最终证明。
+M1/M2 的本地 runtime 实现与直接合同现已闭环。尚未完成的是冻结候选 SHA
+之后的 Linux Debug/Release、Linux ASan/UBSan、TSan、跨平台性能与 24/72
+小时耐久证据重跑，以及独立 maintainer 的 API、性能和发布工具人工评审。
+因此当前仍不得创建 stable tag，也不得把历史 `b344318` 耐久记录当作本轮
+runtime 的最终证明。Windows 的 `GAMENET_ENABLE_ASAN_UBSAN=ON` 在 MSVC
+只提供 AddressSanitizer，不能替代 Linux UBSan 或 TSan。
 
 独立 maintainer 的 API、性能和发布工具人工评审仍是稳定候选门禁；当前
 执行不得据此创建 stable tag。
@@ -88,8 +103,9 @@ tag，也不得把历史 `b344318` 耐久记录当作本轮 runtime 的最终证
 ### 0.1 上一收敛检查点与本轮执行结果
 
 上一轮按用户要求在 `codex/assessment-roadmap-execution` 分支收敛、提交
-并推送了当时的全部本地修改。该远端分支尖端是本轮工作的代码基线；没有
-从未包含这些 M0/M1 原语的旧 `main` 或 Phase 6 候选重新开始。
+并推送了当时的全部本地修改；这些结果随后进入当前
+`main@3c19033f1bc6aa0195c6e90e6fdbce85601fae91` 基线。本轮 M2 直接从该
+main 基线开始，没有从缺少 M0/M1 原语的历史提交重新开始。
 
 已冻结到本检查点的范围：
 
@@ -138,17 +154,51 @@ tag，也不得把历史 `b344318` 耐久记录当作本轮 runtime 的最终证
   均通过，其 SHA-256 为
   `3449C593E790E1243DB38738B06811B68F787F34176FC2C31C1E7365C92F1BFF`。
 
-当前未提交工作树的本地复验记录：
+当前 M2 候选的本地复验记录：
 
-- Windows MSVC Debug：全目标构建成功，CTest 102/102，0 失败；
-- Windows MSVC Release：全目标构建成功，CTest 102/102，0 失败；
-- 21 个本轮相关 Python 静态合同、public API manifest 和确定性
+- Windows MSVC Debug：全目标构建成功，CTest 109/109，0 失败；
+- Windows MSVC Release：全目标构建成功，CTest 109/109，0 失败；
+- Windows MSVC RelWithDebInfo + AddressSanitizer：CTest 109/109，0 失败；
+- 31 个 Python 静态合同、public API manifest 和确定性
   compatibility diff 均通过；
 - `cmake --install` 后的隔离 Release consumer 可配置、构建并通过
-  CTest 1/1；`TcpClientControl.h` 与 `TcpConnectionClose.h` 均出现在
-  安装树；
-- 以上仅是本地实现闭环证据，不替代冻结 SHA 所需的远端、sanitizer、
-  性能和 24/72 小时耐久证据。
+  CTest 1/1；新增 `DispatchResult.h` 与更新后的 Phase 4 headers 均出现
+  在安装树；
+- focused `game_pipeline|broadcast` 12 项测试 repeat-50，共 600 次执行
+  全部通过；
+- Release 会话规模基准：
+
+  | 场景 | 10k | 100k | 1M |
+  |---|---:|---:|---:|
+  | O(N) scan-only | 0.10 ms | 5.95 ms | 70.01 ms |
+  | O(N) scan + 全量 expiry/close | 3.17 ms | 59.63 ms | 797.36 ms |
+
+  六次运行的 considered/expired/remaining/close-request 计数均精确匹配；
+- 当前 Windows 环境没有可用 Linux/WSL Clang 工具链；Linux ASan/UBSan、
+  TSan 与 repeat-50 将由冻结 SHA 的 GitHub CI 和
+  `[self-hosted, linux, x64, gamenet-endurance]` runner 执行。本地结果不
+  替代远端 Linux、sanitizer/TSan、跨平台性能和 24/72 小时耐久证据。
+
+### 0.2 M2 本地执行检查点
+
+M2 的 6.1～6.6 实现项已经完成，6.7 的本机可执行矩阵已经闭环：
+
+1. `DispatchResult` 统一上层异步失败；SessionManager 的三种 post API
+   保证 Accepted 后 terminal callback 恰好一次；
+2. Pipeline 对 continuation、认证、management/logic/output/endpoint
+   handoff 的拒绝执行明确 close/drop 策略，并使用 Core admission、
+   authentication marker、backpressure、callback exception 和 graceful
+   stop future；
+3. immutable `SessionBinding` generation 在 handler 前与 output 前双重
+   校验，rebind/offline/expiry/shutdown 都先撤销旧 generation；
+4. Broadcast 对每种拒绝原因分别计数，并在跨 plan、跨 owner 情况下执行
+   task/byte/global outstanding 预算和高低优先级 shedding；
+5. private `PlayerSession` mutation、immutable `BroadcastTarget`、真实 TCP
+   heartbeat/idle 路径和 O(N) expiry 规模基准已经落地。
+
+M2 还不能作为“冻结候选已验收”关闭：Linux ASan/UBSan、82 项 threading
+TSan、冻结 SHA 的 Linux/Windows CI 与远端 repeat/evidence artifact 仍待
+执行。该证据缺口不否定本地实现完成，但阻止 stable promotion。
 
 ## 1. 目标与当前判断
 
@@ -161,7 +211,7 @@ game-net-core 的目标是成为高性能、通用、可验证的游戏服务器
 - TLS、UDP、KCP 等扩展建立在统一的 ingress、结果模型和背压策略之上；
 - 发布版本具有精确 SHA、兼容性边界、测试证据和可追溯资产。
 
-当前项目已经是一套较成熟的 Reactor/TCP Preview，而不是原型。Core 的正常路径、跨平台功能、线程/生命周期测试和 CI 证据较强；主要差距集中在饱和终态、Windows IOCP 数据路径、大规模公平性、Phase 4/5 上下层语义闭环，以及正式 Gateway 和安全传输。
+当前项目已经是一套较成熟的 Reactor/TCP Preview，而不是原型。Core 的正常路径、跨平台功能、线程/生命周期测试和 CI 证据较强；M1/M2 本地语义已经闭环，主要差距转为冻结 SHA 的跨平台/TSan/耐久证据、Windows IOCP 数据路径、大规模公平性、正式 Gateway 和安全传输。
 
 下一阶段的核心原则是：
 
@@ -450,6 +500,11 @@ Poller 返回裸 `Channel*` 集合。一个 Channel callback 可能移除并销�
 - Linux/Windows Debug、Release、sanitizer、TSan 和 repeat 证据全绿。
 
 ## 6. M2：Phase 4 / Phase 5 上层语义对齐
+
+> 本地实现状态（2026-07-27）：6.1～6.6 已完成，6.7 的 Windows
+> Debug/Release/AddressSanitizer、真实 TCP 和 focused repeat-50 已通过。
+> 候选验收状态：未完成；仍缺冻结 SHA 的 Linux ASan/UBSan、TSan 与远端
+> 跨平台证据。
 
 ### 6.1 统一异步结果
 

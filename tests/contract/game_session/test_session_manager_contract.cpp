@@ -86,6 +86,13 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<PublicTransportLookup, PublicPlayerLookup>);
 static_assert(std::is_same_v<PublicAuthenticateSession, PublicPlayerLookup>);
 static_assert(std::is_const_v<typename PublicPlayerLookup::element_type>);
+static_assert(!std::is_constructible_v<
+              gamenet::game_session::PlayerSession,
+              gamenet::game_session::SessionId,
+              gamenet::game_session::PlayerId,
+              std::shared_ptr<gamenet::transport::TransportEndpoint>,
+              gamenet::game_session::SessionBindingGeneration,
+              gamenet::game_session::PlayerSession::Clock::time_point>);
 static_assert(!CanMarkOnline<PublicPlayerLookup>);
 static_assert(!CanMarkOffline<PublicPlayerLookup>);
 static_assert(!CanRebind<PublicPlayerLookup>);

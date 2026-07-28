@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 
@@ -49,7 +50,12 @@ def main() -> None:
     )
     require(top_text, "if(GAMENET_BUILD_BENCHMARKS)", top_cmake)
     require(cmake_text, "add_executable(gamenet_phase4_benchmark", benchmark_cmake)
-    for target in ("GameNet::protocol", "GameNet::game_logic", "GameNet::broadcast"):
+    for target in (
+        "GameNet::protocol",
+        "GameNet::game_session",
+        "GameNet::game_logic",
+        "GameNet::broadcast",
+    ):
         require(cmake_text, target, benchmark_cmake)
     require(cmake_text, "GAMENET_BENCHMARK_BUILD_TYPE", benchmark_cmake)
     assert "add_test(" not in cmake_text, "benchmarks must not be registered as CTest"
@@ -76,7 +82,10 @@ def main() -> None:
         '"framing"',
         '"logic-queue"',
         '"broadcast-fanout"',
+        '"session-expiry-scan"',
+        '"session-expiry"',
         "PacketFramer",
+        "SessionManager",
         "LogicLoop",
         "BroadcastRouter",
         "BroadcastDispatcher",
@@ -95,6 +104,10 @@ def main() -> None:
         "broadcast_task_high_watermark",
         "working_set_peak_bytes",
         "working_set_peak_delta_bytes",
+        "session_expiry_ns_per_session",
+        "session_expired",
+        "session_remaining",
+        "session_close_requests",
         "WorkingSetSampler",
         "std::vector<std::jthread> producers",
         "FanoutProbe must outlive owner-loop tasks",
@@ -109,6 +122,7 @@ def main() -> None:
         "gamenet.phase4_benchmark_evidence.v1",
         "validate_framing",
         "validate_logic_queue",
+        "validate_session_expiry",
         "validate_broadcast_fanout",
         "logic accepted count must equal configured messages",
         "broadcast accepted count must equal messages times fanout",
@@ -123,6 +137,9 @@ def main() -> None:
         "--scenario framing",
         "--scenario logic-queue",
         "--scenario broadcast-fanout",
+        "--scenario session-expiry-scan",
+        "--scenario session-expiry",
+        "O(N)",
         "P99",
         "working set",
         "Raw JSON",
@@ -163,6 +180,49 @@ def main() -> None:
         ):
             assert key in measurements, f"missing {key} in {result_file}"
     assert observed_scenarios == {"framing", "logic-queue", "broadcast-fanout"}
+
+    sys.path.insert(0, str(repo_root / "tools"))
+    import validate_phase4_benchmark as phase4_validator
+
+    session_parameters = {
+        "messages": 1000,
+        "payload_bytes": 1,
+        "threads": 1,
+        "batch_size": 1,
+        "fanout": 1,
+        "tick_interval_us": 1000,
+        "timeout_ms": 30000,
+    }
+    for scenario, expired, remaining, closes in (
+        ("session-expiry-scan", 0, 1000, 0),
+        ("session-expiry", 1000, 0, 1000),
+    ):
+        phase4_validator.validate_document(
+            {
+                "schema": "gamenet.phase4_benchmark.v1",
+                "status": "ok",
+                "error": None,
+                "scenario": scenario,
+                "platform": "windows",
+                "backend": "iocp",
+                "build_type": "Release",
+                "parameters": session_parameters,
+                "measurements": {
+                    "elapsed_ms": 1.0,
+                    "operations_per_second": 1_000_000.0,
+                    "session_expiry_ns_per_session": 1000.0,
+                    "session_visited": 1000,
+                    "session_expired": expired,
+                    "session_remaining": remaining,
+                    "session_close_requests": closes,
+                },
+            },
+            scenario,
+            "windows",
+            "iocp",
+            "Release",
+            Path(f"{scenario}.json"),
+        )
 
     linux_guard = "python3 tests/cmake/test_phase4_benchmark_contract.py"
     windows_guard = "python tests/cmake/test_phase4_benchmark_contract.py"

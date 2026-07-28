@@ -67,13 +67,8 @@ int main() {
     auto endpoint = std::make_shared<RecordingEndpoint>(
         gamenet::transport::TransportSessionId{42},
         &loop);
-    auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-        7,
-        "player-7",
-        endpoint,
-        gamenet::game_session::PlayerSession::Clock::now());
-    session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> targets{session};
+    std::vector<gamenet::broadcast::BroadcastTarget> targets{
+        gamenet::broadcast::BroadcastTarget(endpoint)};
 
     auto broadcastMetrics = gamenet::broadcast::makeBroadcastMetricsCallback(tagged);
     gamenet::broadcast::BroadcastRouter router(&loop, {}, broadcastMetrics);

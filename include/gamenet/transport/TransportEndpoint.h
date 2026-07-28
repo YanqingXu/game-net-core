@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gamenet/core/DispatchResult.h"
 #include "gamenet/core/net/EventLoopExecutor.h"
 
 #include <cstdint>
@@ -44,6 +45,31 @@ public:
     virtual gamenet::net::EventLoopExecutor ownerExecutor() const noexcept = 0;
     virtual EndpointResult send(std::string_view bytes) = 0;
     virtual EndpointResult close(CloseReason reason) = 0;
+    // Terminal control path. Concrete transports with a control/lifecycle lane
+    // override this for cross-thread progress. The generic fallback is inline
+    // only and rejects a cross-thread request rather than hiding normal-queue
+    // scheduling.
+    virtual gamenet::DispatchResult requestClose(CloseReason reason) noexcept {
+        const auto executor = ownerExecutor();
+        if (!executor.isInOwnerThread()) {
+            return executor.available()
+                ? gamenet::DispatchResult::PolicyRejected
+                : gamenet::DispatchResult::OwnerUnavailable;
+        }
+        switch (close(reason)) {
+        case EndpointResult::Accepted:
+            return gamenet::DispatchResult::Accepted;
+        case EndpointResult::Closed:
+            return gamenet::DispatchResult::EndpointClosed;
+        case EndpointResult::OwnerUnavailable:
+            return gamenet::DispatchResult::OwnerUnavailable;
+        case EndpointResult::Overloaded:
+            return gamenet::DispatchResult::EndpointOverloaded;
+        case EndpointResult::WrongThread:
+            return gamenet::DispatchResult::PolicyRejected;
+        }
+        return gamenet::DispatchResult::PolicyRejected;
+    }
     // Cross-thread-safe snapshot observer. Implementations must not expose
     // unsynchronized owner-loop state through this query.
     virtual bool isOpen() const noexcept = 0;

@@ -134,6 +134,70 @@ def validate_logic_queue(
     )
 
 
+def validate_session_expiry(
+    parameters: dict[str, Any],
+    measurements: dict[str, Any],
+    elapsed_ms: float,
+    expire_all: bool,
+) -> None:
+    sessions = require_positive_count(parameters.get("messages"), "session expiry sessions")
+    operations_per_second = require_positive_number(
+        measurements.get("operations_per_second"),
+        "session expiry operations/s",
+    )
+    ns_per_session = require_positive_number(
+        measurements.get("session_expiry_ns_per_session"),
+        "session expiry nanoseconds per session",
+    )
+    require(
+        math.isclose(
+            operations_per_second * ns_per_session,
+            1_000_000_000.0,
+            rel_tol=0.001,
+            abs_tol=0.05,
+        ),
+        "session expiry operations/s and normalized time are inconsistent",
+    )
+    expected_ns_per_session = elapsed_ms * 1_000_000.0 / sessions
+    require(
+        math.isclose(
+            ns_per_session,
+            expected_ns_per_session,
+            rel_tol=0.001,
+            abs_tol=500.0 / sessions + 0.051,
+        ),
+        "session expiry normalized time does not match elapsed time and session count",
+    )
+    visited = require_nonnegative_count(
+        measurements.get("session_visited"), "session expiry visited"
+    )
+    expired = require_nonnegative_count(
+        measurements.get("session_expired"), "session expiry expired"
+    )
+    remaining = require_nonnegative_count(
+        measurements.get("session_remaining"), "session expiry remaining"
+    )
+    close_requests = require_nonnegative_count(
+        measurements.get("session_close_requests"), "session expiry close requests"
+    )
+    require(visited == sessions, "session expiry visited count must equal configured sessions")
+    expected_expired = sessions if expire_all else 0
+    expected_remaining = 0 if expire_all else sessions
+    expected_close_requests = sessions if expire_all else 0
+    require(
+        expired == expected_expired,
+        "session expiry expired count does not match the selected scale scenario",
+    )
+    require(
+        remaining == expected_remaining,
+        "session expiry remaining count does not match the selected scale scenario",
+    )
+    require(
+        close_requests == expected_close_requests,
+        "session expiry close-request count does not match the selected scale scenario",
+    )
+
+
 def tasks_per_broadcast_iteration(fanout: int, threads: int, batch_size: int) -> int:
     base, extra = divmod(fanout, threads)
     return sum(
@@ -227,6 +291,13 @@ def validate_document(
         validate_framing(parameters, measurements, elapsed_ms)
     elif expected_scenario == "logic-queue":
         validate_logic_queue(parameters, measurements, elapsed_ms)
+    elif expected_scenario in ("session-expiry-scan", "session-expiry"):
+        validate_session_expiry(
+            parameters,
+            measurements,
+            elapsed_ms,
+            expected_scenario == "session-expiry",
+        )
     else:
         validate_broadcast_fanout(parameters, measurements, elapsed_ms)
     return root

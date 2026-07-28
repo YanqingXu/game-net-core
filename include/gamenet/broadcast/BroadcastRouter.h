@@ -1,8 +1,6 @@
 #pragma once
 
 #include "gamenet/broadcast/BroadcastTypes.h"
-#include "gamenet/game_session/PlayerSession.h"
-
 #include <cstddef>
 #include <memory>
 #include <span>
@@ -25,7 +23,7 @@ public:
 
     BroadcastPlan route(
         std::shared_ptr<const std::string> payload,
-        std::span<const std::shared_ptr<const gamenet::game_session::PlayerSession>> targets,
+        std::span<const BroadcastTarget> targets,
         BroadcastPriority priority = BroadcastPriority::Normal) const;
 
 private:

@@ -14,10 +14,10 @@ source_paths: tests/integration/benchmark/test_game_server_metrics_smoke.cpp;tes
 ## Intent
 
 The Phase 4 performance baseline is a reproducible, opt-in engineering tool for
-measuring protocol framing, logic-queue delay, and broadcast fanout. The
-executable records raw evidence without embedded thresholds; the Phase 6
-workflow applies reviewed same-runner relative regression budgets without
-expanding any installed library API.
+measuring protocol framing, logic-queue delay, broadcast fanout, and
+SessionManager idle-expiry scale. The executable records raw evidence without
+embedded thresholds; the Phase 6 workflow applies reviewed same-runner relative
+regression budgets without expanding any installed library API.
 
 ## Scenario Contracts
 
@@ -52,6 +52,24 @@ expanding any installed library API.
 - A dedicated sampler thread observes process working set only; it never reads
   or mutates EventLoop, session, endpoint, router, or dispatcher state.
 
+### `session-expiry-scan` and `session-expiry`
+
+- The process main thread owns one `EventLoop`, one `SessionManager`, every
+  benchmark endpoint, and all session indexes.
+- `messages` is the number of sessions created before timing.
+  `session-expiry-scan` keeps them active to isolate the current O(N) full-index
+  scan; `session-expiry` makes all of them idle so the timed interval also
+  includes both-index removal, binding revocation, endpoint close request, and
+  expired endpoint/session release.
+- Report exact considered/expired/remaining/close-request counts, operations
+  per second, and nanoseconds per considered session. A scan run must keep every
+  session and issue no close; an expiry run must remove every session and issue
+  exactly one `IdleTimeout` close per endpoint.
+- This scale-study scenario establishes the O(N) baseline that must be measured
+  before choosing a timer wheel, bucketed index, or heap. It is intentionally
+  excluded from the frozen three-scenario Phase 6 paired evidence set until a
+  reviewed cross-platform baseline and regression budget are added.
+
 ## Threading And Ownership
 
 - The benchmark executable owns all configuration, payloads, samples, worker
@@ -60,6 +78,9 @@ expanding any installed library API.
 - Logic handlers run on the logic owner loop and may update main-thread-owned
   samples because that owner is the process main thread. Producer threads are
   joined before `LogicLoop` destruction.
+- Session expiry setup and measurement run entirely on the process main thread,
+  which is both the EventLoop and SessionManager owner. Endpoint close requests
+  therefore complete inline without cross-loop scheduling.
 - Broadcast endpoint `send` callbacks execute only on their endpoint executor.
   Cross-loop completion and sample aggregation use atomics, a mutex, and a
   condition variable; no callback waits synchronously for another loop.

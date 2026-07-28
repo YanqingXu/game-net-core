@@ -148,6 +148,19 @@ It must not blur these roles.
   sink exporter
 - MetricsSnapshot owns value copies and may outlive the exporter
 
+## 11.1 Session, Pipeline, And Broadcast
+- SessionManager exclusively constructs and mutates PlayerSession
+- Shared const PlayerSession views are owner-loop observations only;
+  SessionBinding, SessionSnapshot and BroadcastTarget are the cross-loop value
+  surfaces
+- A SessionBinding shares only revocable generation state. It owns no
+  SessionManager, PlayerSession, endpoint, EventLoop or business object
+- Pipeline connection state owns pending-auth frames and one immutable current
+  binding; queued commands own value copies of that binding
+- Broadcast plans temporarily share endpoint/payload ownership. Dispatcher
+  reservations own accounting obligations until queue rollback or endpoint-loop
+  task completion, and release exactly once
+
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists

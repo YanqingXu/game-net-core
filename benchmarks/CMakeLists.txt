@@ -9,6 +9,7 @@ add_executable(gamenet_phase4_benchmark
 target_link_libraries(gamenet_core_benchmark PRIVATE GameNet::core)
 target_link_libraries(gamenet_phase4_benchmark PRIVATE
     GameNet::protocol
+    GameNet::game_session
     GameNet::game_logic
     GameNet::broadcast
 )

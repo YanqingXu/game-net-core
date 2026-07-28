@@ -22,7 +22,7 @@ BroadcastRouter::BroadcastRouter(
 
 BroadcastPlan BroadcastRouter::route(
     std::shared_ptr<const std::string> payload,
-    std::span<const std::shared_ptr<const gamenet::game_session::PlayerSession>> targets,
+    std::span<const BroadcastTarget> targets,
     BroadcastPriority priority) const {
     managementLoop_->assertInLoopThread();
     if (!payload) {
@@ -31,53 +31,58 @@ BroadcastPlan BroadcastRouter::route(
 
     BroadcastPlan plan;
     plan.payload_ = std::move(payload);
+    plan.priority_ = priority;
     std::unordered_set<std::uint64_t> seen;
     std::unordered_map<std::uint64_t, std::size_t> batchIndexes;
+    const auto drop = [this, &plan](
+                          BroadcastReason reason,
+                          gamenet::transport::TransportSessionId id) {
+        ++plan.dropped_;
+        ++plan.reasonCounts_[reasonIndex(reason)];
+        emit(
+            BroadcastMetricEvent::Dropped,
+            reason,
+            id,
+            plan.payload_->size());
+    };
 
-    for (const auto& session : targets) {
-        if (!session || session->state() != gamenet::game_session::SessionState::Online) {
-            ++plan.dropped_;
-            emit(
-                BroadcastMetricEvent::Dropped,
-                BroadcastReason::OfflineSession,
-                session ? session->transportId() : gamenet::transport::TransportSessionId{},
-                plan.payload_->size());
+    for (const auto& target : targets) {
+        if (!target.eligible()) {
+            drop(BroadcastReason::OfflineSession, target.id());
             continue;
         }
-        const auto endpoint = session->endpoint();
+        const auto endpoint = target.endpoint();
+        if (!endpoint) {
+            drop(BroadcastReason::InvalidPlan, {});
+            continue;
+        }
         const auto id = endpoint->id();
         if (!seen.insert(id.value).second) {
-            ++plan.dropped_;
-            emit(BroadcastMetricEvent::Dropped, BroadcastReason::DuplicateEndpoint, id, plan.payload_->size());
+            drop(BroadcastReason::DuplicateEndpoint, id);
             continue;
         }
         if (plan.accepted_ >= limits_.hardFanout) {
-            ++plan.dropped_;
-            emit(BroadcastMetricEvent::Dropped, BroadcastReason::FanoutHardLimit, id, plan.payload_->size());
+            drop(BroadcastReason::FanoutHardLimit, id);
             continue;
         }
         if (plan.payload_->size() > limits_.hardBytes / (plan.accepted_ + 1)) {
-            ++plan.dropped_;
-            emit(BroadcastMetricEvent::Dropped, BroadcastReason::ByteHardLimit, id, plan.payload_->size());
+            drop(BroadcastReason::ByteHardLimit, id);
             continue;
         }
         if (priority == BroadcastPriority::Low &&
             (plan.accepted_ >= limits_.softFanout ||
              (plan.accepted_ + 1 != 0 &&
               plan.payload_->size() > limits_.softBytes / (plan.accepted_ + 1)))) {
-            ++plan.dropped_;
-            emit(BroadcastMetricEvent::Dropped, BroadcastReason::LowPrioritySoftLimit, id, plan.payload_->size());
+            drop(BroadcastReason::LowPrioritySoftLimit, id);
             continue;
         }
         const auto ownerExecutor = endpoint->ownerExecutor();
         if (!ownerExecutor.available()) {
-            ++plan.dropped_;
-            emit(BroadcastMetricEvent::Dropped, BroadcastReason::OwnerUnavailable, id, plan.payload_->size());
+            drop(BroadcastReason::OwnerUnavailable, id);
             continue;
         }
         if (!endpoint->isOpen()) {
-            ++plan.dropped_;
-            emit(BroadcastMetricEvent::Dropped, BroadcastReason::EndpointClosed, id, plan.payload_->size());
+            drop(BroadcastReason::EndpointClosed, id);
             continue;
         }
 
@@ -98,7 +103,15 @@ void BroadcastRouter::emit(
     gamenet::transport::TransportSessionId id,
     std::size_t payloadBytes) const {
     if (metricCallback_) {
-        metricCallback_({.event = event, .reason = reason, .transportId = id, .payloadBytes = payloadBytes});
+        try {
+            metricCallback_({
+                .event = event,
+                .reason = reason,
+                .transportId = id,
+                .payloadBytes = payloadBytes});
+        } catch (...) {
+            // Metrics are observational and must not alter routing admission.
+        }
     }
 }
 

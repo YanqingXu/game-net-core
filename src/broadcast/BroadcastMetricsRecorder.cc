@@ -29,9 +29,19 @@ std::string_view reasonName(BroadcastReason reason) noexcept {
     case BroadcastReason::LowPrioritySoftLimit: return "low_priority_soft_limit";
     case BroadcastReason::DispatchTaskByteLimit: return "dispatch_task_byte_limit";
     case BroadcastReason::EndpointClosed: return "endpoint_closed";
+    case BroadcastReason::EndpointOverloaded: return "endpoint_overloaded";
     case BroadcastReason::OwnerUnavailable: return "owner_unavailable";
+    case BroadcastReason::OwnerShutdown: return "owner_shutdown";
+    case BroadcastReason::DispatchQueueFull: return "dispatch_queue_full";
+    case BroadcastReason::OwnerOutstandingTaskLimit:
+        return "owner_outstanding_task_limit";
+    case BroadcastReason::OwnerOutstandingByteLimit:
+        return "owner_outstanding_byte_limit";
+    case BroadcastReason::GlobalOutstandingByteLimit:
+        return "global_outstanding_byte_limit";
     case BroadcastReason::InvalidPlan: return "invalid_plan";
     case BroadcastReason::SendRejected: return "send_rejected";
+    case BroadcastReason::Count: return "count";
     }
     return "unknown";
 }

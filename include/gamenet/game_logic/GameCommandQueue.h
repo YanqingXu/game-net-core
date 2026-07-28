@@ -14,6 +14,7 @@ enum class SubmitResult {
     QueueFull,
     PayloadTooLarge,
     Stopped,
+    StaleBinding,
 };
 
 struct QueueLimits {
@@ -31,6 +32,8 @@ struct QueueSnapshot {
     std::size_t rejectedFull{};
     std::size_t rejectedPayload{};
     std::size_t rejectedStopped{};
+    std::size_t rejectedStale{};
+    std::size_t droppedStale{};
     std::size_t droppedOnStop{};
     std::size_t droppedBytesOnStop{};
     bool accepting{};

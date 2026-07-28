@@ -89,6 +89,8 @@ private:
     gamenet::net::TimerId timer_;
     std::size_t tickCount_{};
     std::atomic<LogicLoopState> state_{LogicLoopState::Created};
+    std::atomic<std::size_t> rejectedStale_{0};
+    std::atomic<std::size_t> droppedStale_{0};
 };
 
 }  // namespace gamenet::game_logic

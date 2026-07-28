@@ -16,6 +16,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -26,6 +27,7 @@ namespace gamenet::examples {
 
 class GameServerPipelineTestPeer;
 class GameServerPipelineShutdownTestPeer;
+class GameServerPipelineM2TestPeer;
 
 enum class GameServerPipelineStage {
     Io,
@@ -41,6 +43,17 @@ struct GameServerPipelineOptions {
     gamenet::game_session::DuplicateLoginPolicy duplicateLoginPolicy{
         gamenet::game_session::DuplicateLoginPolicy::ReplaceExisting};
     std::chrono::steady_clock::duration authenticationDelay{};
+    gamenet::net::TcpServerAdmissionOptions admissionOptions{
+        .unauthenticatedTimeout = std::chrono::seconds(5)};
+    gamenet::net::TcpConnectionBackpressureOptions connectionBackpressure{};
+    gamenet::net::TcpConnectionCallbackExceptionHandler callbackExceptionHandler;
+    gamenet::game_logic::LogicLoopOptions logicOptions{
+        .tickInterval = std::chrono::milliseconds(5),
+        .maxCommandsPerTick = 64};
+    std::chrono::steady_clock::duration sessionIdleTimeout{
+        std::chrono::minutes(2)};
+    std::chrono::steady_clock::duration sessionSweepInterval{
+        std::chrono::seconds(1)};
     // Borrowed when non-null. A distinct logic loop must already be running and
     // accepting before Pipeline construction, and must outlive Pipeline stop
     // and destruction. Stop/destroy Pipeline on the management loop before the
@@ -65,6 +78,11 @@ public:
     // logic callback and destroys the internal LogicLoop on that owner.
     void start();
     void stop();
+    // Stops upper-layer admission synchronously and returns the Core completion
+    // future. The future becomes ready after connection cleanup and worker-loop
+    // join converge; callers must not wait for it on the management loop.
+    gamenet::net::TcpServerStopFuture stopGracefully(
+        gamenet::net::TcpServerStopOptions options = {});
     const gamenet::net::InetAddress& listenAddress() const noexcept;
     std::size_t activeSessionCount() const;
 
@@ -74,6 +92,7 @@ private:
     // production API.
     friend class GameServerPipelineTestPeer;
     friend class GameServerPipelineShutdownTestPeer;
+    friend class GameServerPipelineM2TestPeer;
 
     enum class AuthenticationState {
         Unauthenticated,
@@ -91,11 +110,15 @@ private:
 
     struct ConnectionState {
         explicit ConnectionState(
-            std::shared_ptr<gamenet::transport::TransportEndpoint> endpointValue)
-            : endpoint(std::move(endpointValue)) {}
+            std::shared_ptr<gamenet::transport::TransportEndpoint> endpointValue,
+            std::weak_ptr<gamenet::net::TcpConnection> connectionValue = {})
+            : endpoint(std::move(endpointValue)),
+              connection(std::move(connectionValue)) {}
 
         std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint;
+        std::weak_ptr<gamenet::net::TcpConnection> connection;
         gamenet::game_session::SessionId sessionId{};
+        gamenet::game_session::SessionBinding binding;
         AuthenticationState authentication{AuthenticationState::Unauthenticated};
         std::deque<std::string> pendingAuthFrames;
         std::size_t pendingAuthBytes{};
@@ -115,7 +138,8 @@ private:
         std::function<void(std::vector<std::string>)> deliver);
     void onConnected(
         std::string connectionName,
-        std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint);
+        std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint,
+        std::weak_ptr<gamenet::net::TcpConnection> connection = {});
     void onDisconnected(
         const std::string& connectionName,
         gamenet::transport::TransportSessionId transportId);
@@ -132,14 +156,14 @@ private:
         const std::string& connectionName,
         const std::shared_ptr<gamenet::transport::TransportEndpoint>& endpoint,
         std::string playerId);
-    bool submitCommand(ConnectionState& state, std::string payload);
+    gamenet::DispatchResult submitCommand(ConnectionState& state, std::string payload);
     void handleLogicOutput(gamenet::game_logic::GameCommand command);
     void runOnLogicLoopAndWait(
         std::function<void()> callback,
         std::atomic<bool>* waitActive = nullptr);
     void closeConnection(ConnectionState& state, gamenet::transport::CloseReason reason);
     void cancelAuthenticationTimer(ConnectionState& state);
-    void sendFrame(
+    gamenet::DispatchResult sendFrame(
         const std::shared_ptr<gamenet::transport::TransportEndpoint>& endpoint,
         std::string payload);
 
@@ -152,11 +176,13 @@ private:
     gamenet::net::EventLoopExecutor logicExecutor_;
     std::unique_ptr<gamenet::game_logic::LogicLoop> logic_;
     gamenet::protocol::PacketFramer encoder_;
+    std::optional<gamenet::net::TimerId> sessionSweepTimer_;
     std::unordered_map<std::string, ConnectionState> connections_;
     std::shared_ptr<std::atomic<std::uint64_t>> nextTransportId_;
     // Published only after distinct-owner stop work has been admitted and
     // cleared after its completion; the shutdown friend seam observes it.
     std::atomic<bool> logicStopWaitActive_{false};
+    gamenet::net::TcpServerStopFuture serverStopFuture_;
     bool started_{false};
     bool stopped_{false};
 };

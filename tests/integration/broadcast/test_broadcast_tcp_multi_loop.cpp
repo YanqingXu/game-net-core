@@ -86,17 +86,10 @@ void verifyReconnectAndMultiLoopDelivery() {
             GAMENET_TEST_ASSERT(
                 endpoints[0]->ownerExecutor().id() != endpoints[1]->ownerExecutor().id());
 
-            std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> sessions;
-            sessions.reserve(endpoints.size());
-            for (std::size_t index = 0; index < endpoints.size(); ++index) {
-                auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-                    static_cast<gamenet::game_session::SessionId>(
-                        (cycle - 1) * 2 + static_cast<int>(index) + 1),
-                    "tcp-broadcast-" + std::to_string(cycle) + "-" + std::to_string(index),
-                    endpoints[index],
-                    gamenet::game_session::PlayerSession::Clock::now());
-                session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
-                sessions.push_back(std::move(session));
+            std::vector<gamenet::broadcast::BroadcastTarget> targets;
+            targets.reserve(endpoints.size());
+            for (const auto& activeEndpoint : endpoints) {
+                targets.emplace_back(activeEndpoint);
             }
 
             const auto payload =
@@ -104,7 +97,7 @@ void verifyReconnectAndMultiLoopDelivery() {
             gamenet::broadcast::BroadcastRouter router(&loop);
             gamenet::broadcast::BroadcastDispatcher dispatcher(
                 {.maxEndpointsPerTask = 1, .maxBytesPerTask = 64});
-            auto plan = router.route(payload, sessions);
+            auto plan = router.route(payload, targets);
             const auto summary = dispatcher.dispatch(std::move(plan));
             GAMENET_TEST_ASSERT(summary.scheduledEndpoints == 2);
             GAMENET_TEST_ASSERT(summary.scheduledTasks == 2);
@@ -262,16 +255,10 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
             GAMENET_TEST_ASSERT(
                 slowEndpoint->ownerExecutor().id() != normalEndpoint->ownerExecutor().id());
 
-            std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> sessions;
-            sessions.reserve(2);
+            std::vector<gamenet::broadcast::BroadcastTarget> targets;
+            targets.reserve(2);
             for (const auto& activeEndpoint : {slowEndpoint, normalEndpoint}) {
-                auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-                    activeEndpoint->id().value,
-                    "real-slow-peer-" + std::to_string(activeEndpoint->id().value),
-                    activeEndpoint,
-                    gamenet::game_session::PlayerSession::Clock::now());
-                session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
-                sessions.push_back(std::move(session));
+                targets.emplace_back(activeEndpoint);
             }
 
             gamenet::broadcast::BroadcastRouter router(
@@ -289,7 +276,7 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
                 bytes.append(messageBytes - prefix.size(), static_cast<char>('a' + sequence));
                 expectedBytes.append(bytes);
                 auto plan = router.route(
-                    std::make_shared<const std::string>(std::move(bytes)), sessions);
+                    std::make_shared<const std::string>(std::move(bytes)), targets);
                 const auto summary = dispatcher.dispatch(std::move(plan));
                 GAMENET_TEST_ASSERT(summary.scheduledEndpoints == 2);
                 GAMENET_TEST_ASSERT(summary.scheduledTasks == 2);

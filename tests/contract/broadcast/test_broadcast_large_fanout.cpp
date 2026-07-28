@@ -3,7 +3,6 @@
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
-#include "gamenet/game_session/PlayerSession.h"
 #include "gamenet/transport/TransportEndpoint.h"
 #include "support/FutureTest.h"
 #include "support/TestAssert.h"
@@ -85,9 +84,9 @@ int main() {
     std::promise<void> completed;
     auto completedFuture = completed.get_future();
     std::vector<std::shared_ptr<OrderedEndpoint>> endpoints;
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> sessions;
+    std::vector<gamenet::broadcast::BroadcastTarget> targets;
     endpoints.reserve(endpointCount);
-    sessions.reserve(endpointCount);
+    targets.reserve(endpointCount);
     for (std::size_t index = 0; index < endpointCount; ++index) {
         auto endpoint = std::make_shared<OrderedEndpoint>(
             index + 1,
@@ -96,14 +95,8 @@ int main() {
             expectedSends,
             &completed,
             index == 0);
-        auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-            index + 1,
-            "fanout-player-" + std::to_string(index),
-            endpoint,
-            gamenet::game_session::PlayerSession::Clock::now());
-        session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
+        targets.emplace_back(endpoint);
         endpoints.push_back(std::move(endpoint));
-        sessions.push_back(std::move(session));
     }
 
     gamenet::broadcast::BroadcastRouter router(
@@ -116,7 +109,7 @@ int main() {
         {.maxEndpointsPerTask = 32, .maxBytesPerTask = 512});
     for (std::size_t sequence = 0; sequence < messageCount; ++sequence) {
         const auto payload = std::make_shared<const std::string>(std::to_string(sequence));
-        auto plan = router.route(payload, sessions);
+        auto plan = router.route(payload, targets);
         const auto summary = dispatcher.dispatch(std::move(plan));
         GAMENET_TEST_ASSERT(summary.scheduledEndpoints == endpointCount);
         GAMENET_TEST_ASSERT(summary.scheduledTasks == endpointCount / 32);

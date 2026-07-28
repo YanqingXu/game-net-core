@@ -1,3 +1,4 @@
+#include <gamenet/core/DispatchResult.h>
 #include <gamenet/core/net/Buffer.h>
 #include <gamenet/core/net/InetAddress.h>
 #include <gamenet/core/net/TcpClientControl.h>
@@ -51,6 +52,8 @@ int main() {
     gamenet::game_logic::GameCommandQueue queue;
     gamenet::game_logic::GameCommand command;
     command.payload = "command";
+    std::shared_ptr<const gamenet::game_session::PlayerSession> sessionView;
+    gamenet::DispatchResult dispatchResult = gamenet::DispatchResult::Accepted;
     gamenet::broadcast::BroadcastMetric metric;
     auto metrics = std::make_shared<gamenet::metrics::InMemoryMetricsExporter>();
     auto connectorMetrics = gamenet::metrics::MetricsHookRecorder(metrics).makeConnectorCallback();
@@ -60,12 +63,7 @@ int main() {
     auto broadcastMetrics = gamenet::broadcast::makeBroadcastMetricsCallback(metrics);
     broadcastMetrics(metric);
     auto endpoint = std::make_shared<InstalledEndpoint>();
-    gamenet::game_session::PlayerSession session(
-        23,
-        "installed-player",
-        endpoint,
-        gamenet::game_session::PlayerSession::Clock::now());
-    session.markOnline(gamenet::game_session::PlayerSession::Clock::now());
+    gamenet::broadcast::BroadcastTarget target(endpoint);
 
     bool rejectedNullTcpConnection = false;
     try {
@@ -77,9 +75,11 @@ int main() {
 
     if (buffer.readableBytes() != 2 || address.port() != 0 || !frame ||
         queue.submit(std::move(command)) != gamenet::game_logic::SubmitResult::Accepted ||
+        sessionView ||
+        dispatchResult != gamenet::DispatchResult::Accepted ||
         metric.reason != gamenet::broadcast::BroadcastReason::None ||
-        session.state() != gamenet::game_session::SessionState::Online ||
-        session.transportId().value != 17 ||
+        !target.eligible() ||
+        target.id().value != 17 ||
         endpoint->send("installed") != gamenet::transport::EndpointResult::Accepted ||
         detachedControl.available() ||
         detachedControl.tryStop() != gamenet::net::PostResult::OwnerUnavailable ||

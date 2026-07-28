@@ -63,6 +63,8 @@ def main() -> None:
     consumer_main_text = consumer_main.read_text(encoding="utf-8")
     require(consumer_main_text, "#include <gamenet/core/net/Buffer.h>", consumer_main)
     require(consumer_main_text, "gamenet::net::Buffer", consumer_main)
+    require(consumer_main_text, "#include <gamenet/core/DispatchResult.h>", consumer_main)
+    require(consumer_main_text, "gamenet::DispatchResult", consumer_main)
     require(consumer_main_text, "#include <gamenet/protocol/PacketFramer.h>", consumer_main)
     require(consumer_main_text, "#include <gamenet/transport/TcpTransportEndpoint.h>", consumer_main)
     require(consumer_main_text, "gamenet::transport::TcpTransportEndpoint", consumer_main)

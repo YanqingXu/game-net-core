@@ -3,7 +3,6 @@
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
-#include "gamenet/game_session/PlayerSession.h"
 #include "support/FutureTest.h"
 #include "support/TestAssert.h"
 
@@ -55,17 +54,11 @@ private:
     std::atomic<std::size_t> sendCalls_{0};
 };
 
-std::shared_ptr<const gamenet::game_session::PlayerSession> makeSession(
-    std::uint64_t id,
+gamenet::broadcast::BroadcastTarget makeTarget(
+    std::uint64_t,
     const std::shared_ptr<ControlledEndpoint>& endpoint,
     bool online = true) {
-    auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-        id,
-        "reason-player-" + std::to_string(id),
-        endpoint,
-        gamenet::game_session::PlayerSession::Clock::now());
-    if (online) session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
-    return session;
+    return gamenet::broadcast::BroadcastTarget(endpoint, {}, online);
 }
 
 }  // namespace
@@ -91,21 +84,21 @@ int main() {
     auto closed = std::make_shared<ControlledEndpoint>(4, firstLoop->executor());
     closed->setOpen(false);
 
-    auto onlineFirst = makeSession(1, first);
-    auto onlineSecond = makeSession(2, second);
-    auto unavailableSession = makeSession(3, unavailable);
-    auto closedSession = makeSession(4, closed);
-    auto offlineSession = makeSession(5, first, false);
+    auto onlineFirst = makeTarget(1, first);
+    auto onlineSecond = makeTarget(2, second);
+    auto unavailableSession = makeTarget(3, unavailable);
+    auto closedSession = makeTarget(4, closed);
+    auto offlineSession = makeTarget(5, first, false);
     const auto payload = std::make_shared<const std::string>("four");
 
     gamenet::broadcast::BroadcastRouter fanoutRouter(
         &managementLoop,
         {.softFanout = 1, .hardFanout = 1, .softBytes = 64, .hardBytes = 64},
         collect);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> fanoutTargets{
+    std::vector<gamenet::broadcast::BroadcastTarget> fanoutTargets{
         onlineFirst, onlineFirst, offlineSession, onlineSecond};
     (void)fanoutRouter.route(payload, fanoutTargets);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> twoOnline{
+    std::vector<gamenet::broadcast::BroadcastTarget> twoOnline{
         onlineFirst, onlineSecond};
     gamenet::broadcast::BroadcastRouter softRouter(
         &managementLoop,
@@ -118,11 +111,11 @@ int main() {
         &managementLoop,
         {.softFanout = 4, .hardFanout = 4, .softBytes = 3, .hardBytes = 3},
         collect);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> firstOnly{onlineFirst};
+    std::vector<gamenet::broadcast::BroadcastTarget> firstOnly{onlineFirst};
     (void)byteRouter.route(payload, firstOnly);
 
     gamenet::broadcast::BroadcastRouter stateRouter(&managementLoop, {}, collect);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> stateTargets{
+    std::vector<gamenet::broadcast::BroadcastTarget> stateTargets{
         unavailableSession, closedSession};
     (void)stateRouter.route(payload, stateTargets);
 
@@ -140,16 +133,16 @@ int main() {
     gamenet::net::EventLoopThread expiringThread;
     auto* expiringLoop = expiringThread.startLoop();
     auto expiring = std::make_shared<ControlledEndpoint>(7, expiringLoop->executor());
-    auto expiringSession = makeSession(7, expiring);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> expiringTarget{
+    auto expiringSession = makeTarget(7, expiring);
+    std::vector<gamenet::broadcast::BroadcastTarget> expiringTarget{
         expiringSession};
     auto deadOwner = stateRouter.route(payload, expiringTarget);
     expiringThread.stop();
     (void)validator.dispatch(std::move(deadOwner));
 
     auto closesAfterRoute = std::make_shared<ControlledEndpoint>(8, firstLoop->executor());
-    auto closesAfterRouteSession = makeSession(8, closesAfterRoute);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> closeTarget{
+    auto closesAfterRouteSession = makeTarget(8, closesAfterRoute);
+    std::vector<gamenet::broadcast::BroadcastTarget> closeTarget{
         closesAfterRouteSession};
     auto closePlan = stateRouter.route(payload, closeTarget);
     closesAfterRoute->setOpen(false);
@@ -168,8 +161,8 @@ int main() {
 
     auto closesAfterAdmission =
         std::make_shared<ControlledEndpoint>(9, firstLoop->executor());
-    auto closesAfterAdmissionSession = makeSession(9, closesAfterAdmission);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> admittedTarget{
+    auto closesAfterAdmissionSession = makeTarget(9, closesAfterAdmission);
+    std::vector<gamenet::broadcast::BroadcastTarget> admittedTarget{
         closesAfterAdmissionSession};
     std::promise<void> taskClosedPromise;
     auto taskClosedFuture = taskClosedPromise.get_future();
@@ -207,8 +200,8 @@ int main() {
                 rejectionPromise.set_value();
             }
         });
-    auto rejectedSession = makeSession(6, rejected);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> rejectedTarget{
+    auto rejectedSession = makeTarget(6, rejected);
+    std::vector<gamenet::broadcast::BroadcastTarget> rejectedTarget{
         rejectedSession};
     auto rejectionPlan = stateRouter.route(payload, rejectedTarget);
     const auto rejectionSummary = rejectionDispatcher.dispatch(std::move(rejectionPlan));

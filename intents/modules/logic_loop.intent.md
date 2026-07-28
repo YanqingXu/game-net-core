@@ -45,13 +45,18 @@ explicit logic `EventLoop` drains a fixed maximum on each tick.
   revoked before object teardown. A strong state reference cannot extend
   execution permission after destruction.
 - `GameCommand` is a value and contains ids, priority, payload, and enqueue time;
-  it contains no `TcpConnection`, endpoint, or business object pointer.
+  it contains no `TcpConnection`, endpoint, or business object pointer. A
+  command may carry an immutable `SessionBinding` capability that only validates
+  `(sessionId, transportId, generation)`.
 
 ## Boundedness
 
 - Queue limits cover command count, aggregate payload bytes, and single payload
   bytes.
 - Results distinguish accepted, queue full, payload too large, and stopped.
+- A tracked binding is checked at submit, immediately before the business
+  handler, and again before output publication. Stale commands are dropped with
+  an explicit counter and never invoke the handler or output callback.
 - Snapshots expose accepted/rejected totals, depth, queued bytes, and high-water
   marks without synchronous logic-loop coordination.
 - `stop()` closes admission, cancels the tick timer, discards queued commands,
@@ -78,6 +83,9 @@ explicit logic `EventLoop` drains a fixed maximum on each tick.
   transitions, missing-handler rejection, duplicate start, restart rejection,
   backlog discard/drop accounting, destruction with a pending tick timer, and
   deterministic owner release from handler/output/metric callbacks.
+- `tests/contract/game_logic/test_logic_loop_binding_generation.cpp` admits a
+  command, supersedes its binding before the tick, and proves no handler/output
+  side effect; it also covers rollover during a handler before output.
 
 ## Migration Provenance
 

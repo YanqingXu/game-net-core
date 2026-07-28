@@ -1,7 +1,7 @@
 # Phase 4 Performance Baseline
 
 `gamenet_phase4_benchmark` is the opt-in Release harness for the active
-PacketFramer, LogicLoop, and Broadcast layers. It emits one
+PacketFramer, SessionManager, LogicLoop, and Broadcast layers. It emits one
 `gamenet.phase4_benchmark.v1` JSON document per invocation. The executable is
 not a CTest, is not installed, and does not define performance thresholds.
 
@@ -64,6 +64,25 @@ The stable parameter object includes fields that are irrelevant to some
 scenarios. For example, `fanout` has no effect on `framing`; it remains present
 so artifacts retain one versioned shape.
 
+`session-expiry-scan` and `session-expiry` are separate scale studies, not part
+of the frozen paired workflow scenario set. Run multiple session counts on the
+same Release build:
+
+```powershell
+& $exe --scenario session-expiry-scan --messages 10000 --payload 1 `
+  --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+& $exe --scenario session-expiry-scan --messages 100000 --payload 1 `
+  --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+& $exe --scenario session-expiry-scan --messages 1000000 --payload 1 `
+  --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+& $exe --scenario session-expiry --messages 10000 --payload 1 `
+  --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+& $exe --scenario session-expiry --messages 100000 --payload 1 `
+  --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+& $exe --scenario session-expiry --messages 1000000 --payload 1 `
+  --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+```
+
 ## Measurements
 
 ### Framing throughput
@@ -87,6 +106,22 @@ rejected, lost, left queued, or not handled before timeout.
 Timer resolution differs by platform. Compare logic P99 only when the OS,
 backend, build/compiler, tick, batch, producer count, payload, and message count
 match.
+
+### Session idle-expiry scale
+
+Both scenarios create `messages` sessions before timing, then time one
+owner-thread `SessionManager::expireIdle` call. `session-expiry-scan` keeps
+every session active to isolate the current O(N) complete player-index scan.
+`session-expiry` makes every session idle, so it also collects expired sessions,
+removes both indexes, revokes each binding, requests `IdleTimeout` close, and
+releases the expired objects. The result records exact considered, expired,
+remaining, and close-request counts, plus operations per second and
+`session_expiry_ns_per_session`.
+
+Use matching binaries and parameters and compare several session counts before
+deciding whether a timer wheel, bucketed expiry index, or heap is justified.
+This scenario is intentionally outside the frozen Phase 6 paired evidence set,
+so its output is scale-study evidence rather than a regression-gate artifact.
 
 ### Broadcast fanout latency and memory
 

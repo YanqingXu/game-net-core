@@ -20,6 +20,10 @@ sections already have narrower active authorization and must be reviewed there:
 - Pipeline pending-auth frame/byte admission:
   `intents/usecases/game_server_pipeline_demo.intent.md`; only the example's
   bounded pre-authentication queue is active, not an end-to-end policy.
+- Phase 4 typed dispatch, binding generation, explicit endpoint failure and
+  cross-plan Broadcast outstanding budgets are active through the PlayerSession,
+  LogicLoop, Broadcast, TransportEndpoint and Pipeline intents. Adaptive
+  end-to-end coordination remains deferred.
 
 Those active intents do not promote the remaining output-send/adaptive policy
 in this file. Implementations must not cite this deferred document as authority.

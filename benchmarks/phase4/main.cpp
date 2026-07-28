@@ -3,7 +3,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
 #include "gamenet/game_logic/LogicLoop.h"
-#include "gamenet/game_session/PlayerSession.h"
+#include "gamenet/game_session/SessionManager.h"
 #include "gamenet/protocol/PacketFramer.h"
 #include "gamenet/transport/TransportEndpoint.h"
 
@@ -64,6 +64,11 @@ struct Result {
     std::optional<std::uint64_t> logicBytesHighWatermark;
     std::optional<std::uint64_t> logicAccepted;
     std::optional<std::uint64_t> logicRejected;
+    std::optional<double> sessionExpiryNsPerSession;
+    std::optional<std::uint64_t> sessionVisited;
+    std::optional<std::uint64_t> sessionExpired;
+    std::optional<std::uint64_t> sessionRemaining;
+    std::optional<std::uint64_t> sessionCloseRequests;
     std::optional<double> broadcastEndpointLatencyP50Us;
     std::optional<double> broadcastEndpointLatencyP99Us;
     std::optional<double> broadcastRouteLatencyP50Us;
@@ -119,8 +124,8 @@ std::size_t parseSize(
 void printUsage(std::ostream& output) {
     output
         << "Usage: gamenet_phase4_benchmark [options]\n"
-        << "  --scenario framing|logic-queue|broadcast-fanout\n"
-        << "  --messages N       frames, commands, or fanout iterations\n"
+        << "  --scenario framing|logic-queue|broadcast-fanout|session-expiry-scan|session-expiry\n"
+        << "  --messages N       frames, commands, fanout iterations, or sessions\n"
         << "  --payload N        payload bytes per item\n"
         << "  --threads N        logic producers or broadcast owner loops\n"
         << "  --batch N          frames/push, commands/tick, or endpoints/task\n"
@@ -158,8 +163,12 @@ Config parseArgs(int argc, char* argv[]) {
         }
     }
     if (config.scenario != "framing" && config.scenario != "logic-queue" &&
-        config.scenario != "broadcast-fanout") {
-        usageError("--scenario must be framing, logic-queue, or broadcast-fanout");
+        config.scenario != "broadcast-fanout" &&
+        config.scenario != "session-expiry-scan" &&
+        config.scenario != "session-expiry") {
+        usageError(
+            "--scenario must be framing, logic-queue, broadcast-fanout, "
+            "session-expiry-scan, or session-expiry");
     }
     return config;
 }
@@ -442,6 +451,112 @@ Result runLogicQueue(const Config& config) {
     return result;
 }
 
+struct SessionExpiryProbe {
+    std::size_t closeRequests{};
+    bool wrongCloseReason{};
+    bool measureCloseRequests{true};
+};
+
+class SessionExpiryEndpoint final : public gamenet::transport::TransportEndpoint {
+public:
+    SessionExpiryEndpoint(
+        std::uint64_t id,
+        gamenet::net::EventLoopExecutor executor,
+        SessionExpiryProbe* probe)
+        : id_{id}, executor_(std::move(executor)), probe_(probe) {}
+
+    gamenet::transport::TransportSessionId id() const noexcept override { return id_; }
+    gamenet::net::EventLoopExecutor ownerExecutor() const noexcept override { return executor_; }
+
+    gamenet::transport::EndpointResult send(std::string_view) override {
+        if (!executor_.isInOwnerThread()) return gamenet::transport::EndpointResult::WrongThread;
+        return open_ ? gamenet::transport::EndpointResult::Accepted
+                     : gamenet::transport::EndpointResult::Closed;
+    }
+
+    gamenet::transport::EndpointResult close(
+        gamenet::transport::CloseReason reason) override {
+        if (!executor_.isInOwnerThread()) return gamenet::transport::EndpointResult::WrongThread;
+        if (!open_) return gamenet::transport::EndpointResult::Closed;
+        open_ = false;
+        if (probe_->measureCloseRequests) {
+            ++probe_->closeRequests;
+            probe_->wrongCloseReason =
+                probe_->wrongCloseReason ||
+                reason != gamenet::transport::CloseReason::IdleTimeout;
+        }
+        return gamenet::transport::EndpointResult::Accepted;
+    }
+
+    bool isOpen() const noexcept override { return open_; }
+
+private:
+    gamenet::transport::TransportSessionId id_;
+    gamenet::net::EventLoopExecutor executor_;
+    SessionExpiryProbe* probe_;
+    bool open_{true};
+};
+
+Result runSessionExpiry(const Config& config) {
+    const bool expireAll = config.scenario == "session-expiry";
+    gamenet::net::EventLoop loop;
+    gamenet::game_session::SessionManager manager(
+        &loop,
+        {.duplicateLogin = gamenet::game_session::DuplicateLoginPolicy::ReplaceExisting,
+         .idleTimeout = 1ms});
+    SessionExpiryProbe probe;
+    const auto expiryNow = gamenet::game_session::SessionManager::Clock::now();
+    const auto activityTime = expireAll ? expiryNow - 2ms : expiryNow;
+
+    for (std::size_t index = 0; index < config.messages; ++index) {
+        auto endpoint = std::make_shared<SessionExpiryEndpoint>(
+            index + 1, loop.executor(), &probe);
+        const auto authenticated = manager.authenticate(
+            "session-expiry-" + std::to_string(index + 1),
+            std::move(endpoint),
+            activityTime);
+        if (authenticated.dispatch != gamenet::DispatchResult::Accepted ||
+            authenticated.status != gamenet::game_session::AuthenticateStatus::Created) {
+            throw std::runtime_error("session-expiry setup failed to create every session");
+        }
+    }
+    if (manager.size() != config.messages) {
+        throw std::runtime_error("session-expiry setup produced an unexpected session count");
+    }
+
+    const auto start = Clock::now();
+    const auto expired = manager.expireIdle(expiryNow);
+    const auto finish = Clock::now();
+    const auto remaining = manager.size();
+    const auto expectedExpired = expireAll ? config.messages : 0;
+    const auto expectedRemaining = expireAll ? 0 : config.messages;
+    const auto expectedCloseRequests = expireAll ? config.messages : 0;
+
+    if (expired != expectedExpired || remaining != expectedRemaining ||
+        probe.closeRequests != expectedCloseRequests || probe.wrongCloseReason) {
+        throw std::runtime_error(
+            "session-expiry benchmark produced inconsistent scan or cleanup counts");
+    }
+
+    const auto seconds = elapsedSeconds(start, finish);
+    if (seconds <= 0.0) {
+        throw std::runtime_error("session-expiry benchmark clock did not advance");
+    }
+    Result result;
+    result.elapsedMs = elapsedMilliseconds(start, finish);
+    result.operationsPerSecond = static_cast<double>(config.messages) / seconds;
+    result.sessionExpiryNsPerSession =
+        std::chrono::duration<double, std::nano>(finish - start).count() /
+        static_cast<double>(config.messages);
+    result.sessionVisited = config.messages;
+    result.sessionExpired = expired;
+    result.sessionRemaining = remaining;
+    result.sessionCloseRequests = probe.closeRequests;
+    probe.measureCloseRequests = false;
+    manager.shutdown();
+    return result;
+}
+
 struct FanoutProbe {
     std::mutex mutex;
     std::condition_variable condition;
@@ -536,22 +651,16 @@ Result runBroadcastFanout(const Config& config) {
     probe.endpointLatencyUs.reserve(checkedMultiply(config.fanout, config.messages, "latency samples"));
     probe.queueLatencyUs.reserve(checkedMultiply(config.fanout, config.messages, "queue samples"));
     std::vector<std::shared_ptr<BenchmarkEndpoint>> endpoints;
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> sessions;
+    std::vector<gamenet::broadcast::BroadcastTarget> targets;
     endpoints.reserve(config.fanout);
-    sessions.reserve(config.fanout);
+    targets.reserve(config.fanout);
     for (std::size_t index = 0; index < config.fanout; ++index) {
         auto endpoint = std::make_shared<BenchmarkEndpoint>(
             index + 1,
             ownerLoops[index % ownerLoops.size()]->executor(),
             &probe);
-        auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-            index + 1,
-            "benchmark-player-" + std::to_string(index),
-            endpoint,
-            gamenet::game_session::PlayerSession::Clock::now());
-        session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
+        targets.emplace_back(endpoint);
         endpoints.push_back(std::move(endpoint));
-        sessions.push_back(std::move(session));
     }
 
     gamenet::broadcast::BroadcastRouter router(
@@ -577,7 +686,7 @@ Result runBroadcastFanout(const Config& config) {
         auto payload = std::make_shared<const std::string>(payloadBytes);
         const auto iterationStart = Clock::now();
         probe.begin(config.fanout, iterationStart);
-        auto plan = router.route(payload, sessions);
+        auto plan = router.route(payload, targets);
         const auto routeFinished = Clock::now();
         routeLatencyUs.push_back(
             std::chrono::duration<double, std::micro>(routeFinished - iterationStart).count());
@@ -608,7 +717,7 @@ Result runBroadcastFanout(const Config& config) {
         throw std::runtime_error("broadcast benchmark did not observe every endpoint send");
     }
 
-    sessions.clear();
+    targets.clear();
     endpoints.clear();
     for (auto& thread : ownerThreads) thread->stop();
 
@@ -733,6 +842,16 @@ void printDocument(
     printOptional(std::cout, result.logicAccepted);
     std::cout << ",\n    \"logic_rejected\": ";
     printOptional(std::cout, result.logicRejected);
+    std::cout << ",\n    \"session_expiry_ns_per_session\": ";
+    printOptional(std::cout, result.sessionExpiryNsPerSession);
+    std::cout << ",\n    \"session_visited\": ";
+    printOptional(std::cout, result.sessionVisited);
+    std::cout << ",\n    \"session_expired\": ";
+    printOptional(std::cout, result.sessionExpired);
+    std::cout << ",\n    \"session_remaining\": ";
+    printOptional(std::cout, result.sessionRemaining);
+    std::cout << ",\n    \"session_close_requests\": ";
+    printOptional(std::cout, result.sessionCloseRequests);
     std::cout << ",\n    \"broadcast_endpoint_latency_p50_us\": ";
     printOptional(std::cout, result.broadcastEndpointLatencyP50Us);
     std::cout << ",\n    \"broadcast_endpoint_latency_p99_us\": ";
@@ -771,6 +890,10 @@ void printDocument(
 Result run(const Config& config) {
     if (config.scenario == "framing") return runFraming(config);
     if (config.scenario == "logic-queue") return runLogicQueue(config);
+    if (config.scenario == "session-expiry-scan" ||
+        config.scenario == "session-expiry") {
+        return runSessionExpiry(config);
+    }
     return runBroadcastFanout(config);
 }
 

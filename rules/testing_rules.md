@@ -104,6 +104,15 @@ For lifecycle-sensitive modules, tests should include:
   detach on destruction, and OwnerUnavailable from surviving handles
 - TcpServer and TcpClient observers receive the exact immutable
   TcpConnectionCloseInfo published before removal/reconnect decisions
+- SessionManager post admission is saturated and shutdown-raced with exact
+  QueueFull/Shutdown/OwnerUnavailable and terminal callback assertions
+- duplicate-login generation rollover is forced after command admission but
+  before Logic handler/output, proving no stale business side effect
+- Pipeline framing continuation, I/O-to-management, auth, logic output and
+  endpoint dispatch rejection each converge to close
+- consecutive Broadcast plans cannot bypass per-owner/global outstanding
+  budgets; every reservation is released on queue rejection, endpoint terminal
+  result and callback exception
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

@@ -3,7 +3,6 @@
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
-#include "gamenet/game_session/PlayerSession.h"
 #include "support/FutureTest.h"
 #include "support/TestAssert.h"
 
@@ -50,15 +49,11 @@ private:
     std::vector<std::string> payloads_;
 };
 
-std::shared_ptr<const gamenet::game_session::PlayerSession> makeSession(
-    std::uint64_t id,
+gamenet::broadcast::BroadcastTarget makeTarget(
+    std::uint64_t,
     const std::shared_ptr<RecordingEndpoint>& endpoint,
     bool online = true) {
-    auto session = std::make_shared<gamenet::game_session::PlayerSession>(
-        id, "player-" + std::to_string(id), endpoint,
-        gamenet::game_session::PlayerSession::Clock::now());
-    if (online) session->markOnline(gamenet::game_session::PlayerSession::Clock::now());
-    return session;
+    return gamenet::broadcast::BroadcastTarget(endpoint, {}, online);
 }
 
 }  // namespace
@@ -75,11 +70,11 @@ int main() {
     auto e2 = std::make_shared<RecordingEndpoint>(2, secondLoop);
     auto e3 = std::make_shared<RecordingEndpoint>(3, firstLoop);
     auto e4 = std::make_shared<RecordingEndpoint>(4, secondLoop);
-    auto s1 = makeSession(1, e1);
-    auto s2 = makeSession(2, e2);
-    auto s3 = makeSession(3, e3);
-    auto s4 = makeSession(4, e4);
-    auto offline = makeSession(5, std::make_shared<RecordingEndpoint>(5, firstLoop), false);
+    auto s1 = makeTarget(1, e1);
+    auto s2 = makeTarget(2, e2);
+    auto s3 = makeTarget(3, e3);
+    auto s4 = makeTarget(4, e4);
+    auto offline = makeTarget(5, std::make_shared<RecordingEndpoint>(5, firstLoop), false);
 
     std::mutex metricsMutex;
     std::vector<gamenet::broadcast::BroadcastMetric> metrics;
@@ -92,7 +87,7 @@ int main() {
         &managementLoop,
         {.softFanout = 2, .hardFanout = 3, .softBytes = 8, .hardBytes = 12},
         metricCallback);
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> targets{
+    std::vector<gamenet::broadcast::BroadcastTarget> targets{
         s1, s1, offline, s2, s3, s4};
     auto payload = std::make_shared<const std::string>("data");
     auto plan = router.route(payload, targets, gamenet::broadcast::BroadcastPriority::Normal);
@@ -127,7 +122,7 @@ int main() {
     GAMENET_TEST_ASSERT(lowPlan.accepted() == 2);
     GAMENET_TEST_ASSERT(lowPlan.dropped() == 1);
 
-    std::vector<std::shared_ptr<const gamenet::game_session::PlayerSession>> oneTarget{s4};
+    std::vector<gamenet::broadcast::BroadcastTarget> oneTarget{s4};
     auto oversizedPlan = router.route(payload, oneTarget);
     gamenet::broadcast::BroadcastDispatcher tinyDispatcher(
         {.maxEndpointsPerTask = 1, .maxBytesPerTask = 3}, metricCallback);

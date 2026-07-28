@@ -55,6 +55,7 @@
       "include/gamenet/transport/TransportEndpoint.h"
     ],
     "stable_core": [
+      "include/gamenet/core/DispatchResult.h",
       "include/gamenet/core/base/Logger.h",
       "include/gamenet/core/base/Timestamp.h",
       "include/gamenet/core/base/noncopyable.h",
@@ -87,6 +88,7 @@
     ]
   },
   "stable_header_fingerprints": {
+    "include/gamenet/core/DispatchResult.h": "1e51dbbb2c2311baaf6d4e6487ba7a7b7324485a7052a0971b3d8378646406c7",
     "include/gamenet/core/base/Logger.h": "7ba3bd6d20360aaa4c77fb0767d4ed10f2f89d3aff0c6462d06d32933063b0b3",
     "include/gamenet/core/base/Timestamp.h": "c668d00e88f50d591a58a7d6eb845f5c0fe7db8296159c098113108827cf1ec1",
     "include/gamenet/core/base/noncopyable.h": "06e896f354470b405c28a955f106e79716b373662e32ef5af9afe35c36c164d2",

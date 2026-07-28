@@ -5,6 +5,7 @@
 #include "gamenet/core/net/TcpConnection.h"
 
 #include <any>
+#include <algorithm>
 #include <future>
 #include <optional>
 #include <stdexcept>
@@ -38,6 +39,33 @@ struct GameServerPipeline::CallbackState {
 
     std::atomic<bool> alive{true};
     std::atomic<std::size_t> logicCallbackDepth{0};
+    std::mutex endpointsMutex;
+    std::unordered_map<
+        std::uint64_t,
+        std::weak_ptr<gamenet::transport::TransportEndpoint>>
+        endpoints;
+
+    void registerEndpoint(
+        const std::shared_ptr<gamenet::transport::TransportEndpoint>& endpoint) {
+        std::lock_guard lock(endpointsMutex);
+        endpoints[endpoint->id().value] = endpoint;
+    }
+    void unregisterEndpoint(gamenet::transport::TransportSessionId id) {
+        std::lock_guard lock(endpointsMutex);
+        endpoints.erase(id.value);
+    }
+    gamenet::DispatchResult requestClose(
+        gamenet::transport::TransportSessionId id,
+        gamenet::transport::CloseReason reason) noexcept {
+        std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint;
+        {
+            std::lock_guard lock(endpointsMutex);
+            const auto found = endpoints.find(id.value);
+            if (found != endpoints.end()) endpoint = found->second.lock();
+        }
+        return endpoint ? endpoint->requestClose(reason)
+                        : gamenet::DispatchResult::EndpointClosed;
+    }
 };
 
 struct GameServerPipeline::IoConnectionState {
@@ -46,7 +74,7 @@ struct GameServerPipeline::IoConnectionState {
     std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint;
     gamenet::net::EventLoopExecutor ownerExecutor;
     std::shared_ptr<CallbackState> callbackState;
-    std::function<void(
+    std::function<gamenet::DispatchResult(
         std::string,
         gamenet::transport::TransportSessionId,
         std::vector<std::string>)>
@@ -67,18 +95,26 @@ GameServerPipeline::GameServerPipeline(
           loop_,
           gamenet::game_session::SessionManager::Options{
               .duplicateLogin = options_.duplicateLoginPolicy,
+              .idleTimeout = options_.sessionIdleTimeout,
           }),
       logicLoop_(options_.logicLoop ? options_.logicLoop : loop_),
       logicExecutor_(logicLoop_->executor()),
       nextTransportId_(std::make_shared<std::atomic<std::uint64_t>>(1)) {
     if (options_.ioThreads < 0 ||
         options_.authenticationDelay < std::chrono::steady_clock::duration::zero() ||
+        options_.sessionIdleTimeout <= std::chrono::steady_clock::duration::zero() ||
+        options_.sessionSweepInterval <= std::chrono::steady_clock::duration::zero() ||
         !logicExecutor_.available()) {
         throw std::invalid_argument(
             "GameServerPipeline requires non-negative IO threads/auth delay and a live logic loop");
     }
 
     server_.setThreadNum(options_.ioThreads);
+    server_.setAdmissionOptions(options_.admissionOptions);
+    server_.setConnectionBackpressureOptions(options_.connectionBackpressure);
+    if (options_.callbackExceptionHandler) {
+        server_.setCallbackExceptionHandler(options_.callbackExceptionHandler);
+    }
     const auto callbackState = callbackState_;
     const auto managementExecutor = loop_->executor();
     const auto stageObserver = options_.stageObserver;
@@ -102,12 +138,15 @@ GameServerPipeline::GameServerPipeline(
                 ioState->ownerExecutor = endpoint->ownerExecutor();
                 ioState->callbackState = callbackState;
                 ioState->deliverFrames =
-                    [this, callbackState, managementExecutor](
+                    [this, callbackState, managementExecutor, endpoint](
                         std::string connectionName,
                         gamenet::transport::TransportSessionId transportId,
-                        std::vector<std::string> frames) mutable {
-                        if (!callbackState->active()) return;
-                        (void)managementExecutor.tryQueue(
+                        std::vector<std::string> frames) mutable
+                        -> gamenet::DispatchResult {
+                        if (!callbackState->active()) {
+                            return gamenet::DispatchResult::Shutdown;
+                        }
+                        const auto posted = managementExecutor.post(
                             [this,
                              callbackState,
                              connectionName = std::move(connectionName),
@@ -117,6 +156,14 @@ GameServerPipeline::GameServerPipeline(
                                     onFrames(connectionName, transportId, std::move(frames));
                                 }
                             });
+                        const auto result = gamenet::dispatchResult(posted);
+                        if (result != gamenet::DispatchResult::Accepted) {
+                            (void)endpoint->requestClose(
+                                result == gamenet::DispatchResult::QueueFull
+                                ? gamenet::transport::CloseReason::Overloaded
+                                : gamenet::transport::CloseReason::GoingAway);
+                        }
+                        return result;
                     };
                 if (!callbackState->active()) {
                     endpoint->close(gamenet::transport::CloseReason::GoingAway);
@@ -128,15 +175,25 @@ GameServerPipeline::GameServerPipeline(
                 auto admit = [this,
                               callbackState,
                               connectionName = std::move(connectionName),
+                              connection,
                               endpoint = std::move(endpoint)]() mutable {
                     if (callbackState->active()) {
-                        onConnected(std::move(connectionName), std::move(endpoint));
+                        onConnected(
+                            std::move(connectionName),
+                            std::move(endpoint),
+                            connection);
                     }
                 };
                 if (managementExecutor.isInOwnerThread()) {
                     admit();
                 } else {
-                    (void)managementExecutor.tryQueue(std::move(admit));
+                    const auto posted = managementExecutor.post(std::move(admit));
+                    if (posted != gamenet::net::PostResult::Accepted) {
+                        (void)ioState->endpoint->requestClose(
+                            posted == gamenet::net::PostResult::QueueFull
+                            ? gamenet::transport::CloseReason::Overloaded
+                            : gamenet::transport::CloseReason::GoingAway);
+                    }
                 }
                 return;
             }
@@ -156,7 +213,10 @@ GameServerPipeline::GameServerPipeline(
             if (managementExecutor.isInOwnerThread()) {
                 disconnect();
             } else {
-                (void)managementExecutor.tryQueue(std::move(disconnect));
+                const auto posted = managementExecutor.post(std::move(disconnect));
+                if (posted != gamenet::net::PostResult::Accepted) {
+                    callbackState->unregisterEndpoint(ioState->endpoint->id());
+                }
             }
         });
 
@@ -185,10 +245,7 @@ GameServerPipeline::GameServerPipeline(
     runOnLogicLoopAndWait([this, callbackState, managementExecutor, stageObserver] {
         auto logic = std::make_unique<gamenet::game_logic::LogicLoop>(
             logicLoop_,
-            gamenet::game_logic::LogicLoopOptions{
-                .tickInterval = std::chrono::milliseconds(5),
-                .maxCommandsPerTick = 64,
-            });
+            options_.logicOptions);
         logic->setHandler(
             [callbackState, stageObserver](gamenet::game_logic::GameCommand command)
                 -> std::optional<gamenet::game_logic::GameCommand> {
@@ -203,10 +260,18 @@ GameServerPipeline::GameServerPipeline(
             [this, callbackState, managementExecutor](
                 gamenet::game_logic::GameCommand command) mutable {
                 if (!callbackState->active()) return;
-                (void)managementExecutor.tryQueue(
+                const auto transportId = command.transportId;
+                const auto posted = managementExecutor.post(
                     [this, callbackState, command = std::move(command)]() mutable {
                         if (callbackState->active()) handleLogicOutput(std::move(command));
                     });
+                if (posted != gamenet::net::PostResult::Accepted) {
+                    (void)callbackState->requestClose(
+                        transportId,
+                        posted == gamenet::net::PostResult::QueueFull
+                        ? gamenet::transport::CloseReason::Overloaded
+                        : gamenet::transport::CloseReason::GoingAway);
+                }
             });
         logic_ = std::move(logic);
     });
@@ -222,16 +287,45 @@ void GameServerPipeline::start() {
     if (started_) return;
     if (stopped_) throw std::logic_error("GameServerPipeline cannot restart after stop");
     runOnLogicLoopAndWait([this] { logic_->start(); });
+    const auto callbackState = callbackState_;
+    sessionSweepTimer_ = loop_->runEvery(options_.sessionSweepInterval, [this, callbackState] {
+        if (!callbackState->active()) return;
+        (void)sessions_.expireIdle();
+        for (auto current = connections_.begin(); current != connections_.end();) {
+            if (current->second.endpoint->isOpen()) {
+                ++current;
+                continue;
+            }
+            cancelAuthenticationTimer(current->second);
+            current->second.authentication = AuthenticationState::Closing;
+            (void)sessions_.offline(current->second.endpoint->id());
+            callbackState->unregisterEndpoint(current->second.endpoint->id());
+            current = connections_.erase(current);
+        }
+    });
     server_.start();
     started_ = true;
 }
 
 void GameServerPipeline::stop() {
+    (void)stopGracefully(gamenet::net::TcpServerStopOptions{
+        .drainTimeout = std::chrono::milliseconds::zero()});
+}
+
+gamenet::net::TcpServerStopFuture GameServerPipeline::stopGracefully(
+    gamenet::net::TcpServerStopOptions options) {
     loop_->assertInLoopThread();
-    if (stopped_) return;
+    if (stopped_) return serverStopFuture_;
     started_ = false;
     stopped_ = true;
     callbackState_->revoke();
+    if (sessionSweepTimer_) {
+        loop_->cancel(*sessionSweepTimer_);
+        sessionSweepTimer_.reset();
+    }
+    // Revocation above closes all upper-layer admission before Core stops
+    // accepting and begins its connection-output drain.
+    serverStopFuture_ = server_.stopGracefully(options);
 
     if (logic_) {
         const auto callbackState = callbackState_;
@@ -248,7 +342,6 @@ void GameServerPipeline::stop() {
             },
             &logicStopWaitActive_);
     }
-    server_.stop();
     for (auto& [name, state] : connections_) {
         (void)name;
         cancelAuthenticationTimer(state);
@@ -256,9 +349,11 @@ void GameServerPipeline::stop() {
         state.pendingAuthFrames.clear();
         state.pendingAuthBytes = 0;
         (void)sessions_.offline(state.endpoint->id());
+        callbackState_->unregisterEndpoint(state.endpoint->id());
     }
     connections_.clear();
     sessions_.shutdown();
+    return serverStopFuture_;
 }
 
 const gamenet::net::InetAddress& GameServerPipeline::listenAddress() const noexcept {
@@ -279,19 +374,28 @@ void GameServerPipeline::handleIoFramerResult(
         result.status == gamenet::protocol::FrameStatus::Faulted) {
         state->closing = true;
         if (state->callbackState->active()) {
-            state->endpoint->close(gamenet::transport::CloseReason::ProtocolError);
+            (void)state->endpoint->requestClose(
+                gamenet::transport::CloseReason::ProtocolError);
         }
         return;
     }
 
     if (!result.frames.empty()) {
-        state->deliverFrames(
+        const auto delivered = state->deliverFrames(
             state->connectionName, state->endpoint->id(), std::move(result.frames));
+        if (delivered != gamenet::DispatchResult::Accepted) {
+            state->closing = true;
+            (void)state->endpoint->requestClose(
+                delivered == gamenet::DispatchResult::QueueFull
+                ? gamenet::transport::CloseReason::Overloaded
+                : gamenet::transport::CloseReason::GoingAway);
+            return;
+        }
     }
     if (!result.needsContinuation || state->continuationQueued) return;
 
     state->continuationQueued = true;
-    if (!state->ownerExecutor.tryQueue([state] {
+    const auto posted = state->ownerExecutor.post([state] {
             state->continuationQueued = false;
             if (!state->callbackState->active()) {
                 state->closing = true;
@@ -300,9 +404,14 @@ void GameServerPipeline::handleIoFramerResult(
             if (!state->closing) {
                 handleIoFramerResult(state, state->framer.push({}));
             }
-        })) {
+        });
+    if (posted != gamenet::net::PostResult::Accepted) {
         state->continuationQueued = false;
         state->closing = true;
+        (void)state->endpoint->requestClose(
+            posted == gamenet::net::PostResult::QueueFull
+            ? gamenet::transport::CloseReason::Overloaded
+            : gamenet::transport::CloseReason::GoingAway);
     }
 }
 
@@ -319,22 +428,27 @@ void GameServerPipeline::injectIoBytesForTesting(
         [deliver = std::move(deliver)](
             std::string,
             gamenet::transport::TransportSessionId,
-            std::vector<std::string> frames) mutable { deliver(std::move(frames)); };
+            std::vector<std::string> frames) mutable {
+            deliver(std::move(frames));
+            return gamenet::DispatchResult::Accepted;
+        };
     handleIoFramerResult(state, state->framer.push(bytes));
 }
 
 void GameServerPipeline::onConnected(
     std::string connectionName,
-    std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint) {
+    std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint,
+    std::weak_ptr<gamenet::net::TcpConnection> connection) {
     loop_->assertInLoopThread();
     if (stopped_ || !callbackState_->active()) {
-        const auto executor = endpoint->ownerExecutor();
-        (void)executor.tryQueue([endpoint = std::move(endpoint)] {
-            endpoint->close(gamenet::transport::CloseReason::GoingAway);
-        });
+        (void)endpoint->requestClose(gamenet::transport::CloseReason::GoingAway);
         return;
     }
-    connections_.try_emplace(std::move(connectionName), std::move(endpoint));
+    callbackState_->registerEndpoint(endpoint);
+    connections_.try_emplace(
+        std::move(connectionName),
+        std::move(endpoint),
+        std::move(connection));
 }
 
 void GameServerPipeline::onDisconnected(
@@ -347,6 +461,7 @@ void GameServerPipeline::onDisconnected(
     cancelAuthenticationTimer(found->second);
     found->second.authentication = AuthenticationState::Closing;
     (void)sessions_.offline(transportId);
+    callbackState_->unregisterEndpoint(transportId);
     connections_.erase(found);
 }
 
@@ -420,6 +535,10 @@ void GameServerPipeline::handleFrame(const std::string& connectionName, std::str
     }
 
     if (state.authentication == AuthenticationState::Online) {
+        if (!sessions_.heartbeat(state.endpoint->id())) {
+            closeConnection(state, gamenet::transport::CloseReason::GoingAway);
+            return;
+        }
         (void)submitCommand(state, std::move(payload));
     }
 }
@@ -436,7 +555,7 @@ void GameServerPipeline::beginAuthentication(
         return;
     }
     const auto callbackState = callbackState_;
-    sessions_.postAuthenticate(
+    const auto dispatch = sessions_.postAuthenticate(
         std::move(playerId),
         endpoint,
         [this, callbackState, connectionName, endpoint](
@@ -445,6 +564,17 @@ void GameServerPipeline::beginAuthentication(
                 completeAuthentication(connectionName, endpoint, std::move(result));
             }
         });
+    if (dispatch != gamenet::DispatchResult::Accepted) {
+        const auto found = connections_.find(connectionName);
+        if (found != connections_.end() &&
+            found->second.endpoint->id() == endpoint->id()) {
+            closeConnection(
+                found->second,
+                dispatch == gamenet::DispatchResult::QueueFull
+                ? gamenet::transport::CloseReason::Overloaded
+                : gamenet::transport::CloseReason::GoingAway);
+        }
+    }
 }
 
 void GameServerPipeline::completeAuthentication(
@@ -460,43 +590,85 @@ void GameServerPipeline::completeAuthentication(
         return;
     }
     auto& state = current->second;
-    if (result.status == gamenet::game_session::AuthenticateStatus::Rejected || !result.session) {
-        closeConnection(state, gamenet::transport::CloseReason::Replaced);
+    if (result.dispatch != gamenet::DispatchResult::Accepted ||
+        result.status == gamenet::game_session::AuthenticateStatus::Rejected ||
+        !result.session) {
+        closeConnection(
+            state,
+            result.dispatch == gamenet::DispatchResult::QueueFull
+            ? gamenet::transport::CloseReason::Overloaded
+            : gamenet::transport::CloseReason::Replaced);
         return;
     }
 
     state.sessionId = result.session->sessionId();
+    state.binding = result.session->binding();
+    if (auto connection = state.connection.lock();
+        connection && !server_.tryMarkConnectionAuthenticated(connection)) {
+        (void)sessions_.offline(endpoint->id());
+        closeConnection(state, gamenet::transport::CloseReason::GoingAway);
+        return;
+    }
     state.authentication = AuthenticationState::Online;
     auto pending = std::move(state.pendingAuthFrames);
     state.pendingAuthBytes = 0;
-    sendFrame(endpoint, "AUTH_OK");
+    if (sendFrame(endpoint, "AUTH_OK") != gamenet::DispatchResult::Accepted) {
+        closeConnection(state, gamenet::transport::CloseReason::Overloaded);
+        return;
+    }
     for (auto& queuedPayload : pending) {
-        if (!submitCommand(state, std::move(queuedPayload))) break;
+        if (submitCommand(state, std::move(queuedPayload)) !=
+            gamenet::DispatchResult::Accepted) {
+            break;
+        }
     }
 }
 
-bool GameServerPipeline::submitCommand(ConnectionState& state, std::string payload) {
+gamenet::DispatchResult GameServerPipeline::submitCommand(
+    ConnectionState& state,
+    std::string payload) {
     if (!callbackState_->active() || !logic_) {
         closeConnection(state, gamenet::transport::CloseReason::GoingAway);
-        return false;
+        return gamenet::DispatchResult::Shutdown;
     }
     gamenet::game_logic::GameCommand command;
     command.sessionId = state.sessionId;
     command.transportId = state.endpoint->id();
+    command.binding = state.binding;
     command.payload = std::move(payload);
-    if (logic_->submit(std::move(command)) != gamenet::game_logic::SubmitResult::Accepted) {
+    const auto submitted = logic_->submit(std::move(command));
+    if (submitted != gamenet::game_logic::SubmitResult::Accepted) {
         closeConnection(state, gamenet::transport::CloseReason::Overloaded);
-        return false;
+        return submitted == gamenet::game_logic::SubmitResult::QueueFull
+            ? gamenet::DispatchResult::QueueFull
+            : submitted == gamenet::game_logic::SubmitResult::Stopped
+                ? gamenet::DispatchResult::Shutdown
+                : gamenet::DispatchResult::PolicyRejected;
     }
-    return true;
+    return gamenet::DispatchResult::Accepted;
 }
 
 void GameServerPipeline::handleLogicOutput(gamenet::game_logic::GameCommand command) {
     loop_->assertInLoopThread();
     if (!callbackState_->active()) return;
+    if (command.binding.tracked() && !command.binding.isCurrent()) return;
     auto session = sessions_.findByTransport(command.transportId);
-    if (!session || session->sessionId() != command.sessionId) return;
-    sendFrame(session->endpoint(), std::move(command.payload));
+    if (!session || session->sessionId() != command.sessionId ||
+        session->binding().generation() != command.binding.generation()) {
+        return;
+    }
+    if (sendFrame(session->endpoint(), std::move(command.payload)) !=
+        gamenet::DispatchResult::Accepted) {
+        const auto found = std::find_if(
+            connections_.begin(),
+            connections_.end(),
+            [&](const auto& entry) {
+                return entry.second.endpoint->id() == command.transportId;
+            });
+        if (found != connections_.end()) {
+            closeConnection(found->second, gamenet::transport::CloseReason::Overloaded);
+        }
+    }
 }
 
 void GameServerPipeline::runOnLogicLoopAndWait(
@@ -537,16 +709,7 @@ void GameServerPipeline::closeConnection(
     state.authentication = AuthenticationState::Closing;
     state.pendingAuthFrames.clear();
     state.pendingAuthBytes = 0;
-    auto endpoint = state.endpoint;
-    const auto executor = endpoint->ownerExecutor();
-    if (executor.isInOwnerThread()) {
-        if (callbackState_->active()) endpoint->close(reason);
-    } else {
-        const auto callbackState = callbackState_;
-        (void)executor.tryQueue([endpoint = std::move(endpoint), callbackState, reason] {
-            if (callbackState->active()) endpoint->close(reason);
-        });
-    }
+    (void)state.endpoint->requestClose(reason);
 }
 
 void GameServerPipeline::cancelAuthenticationTimer(ConnectionState& state) {
@@ -557,27 +720,36 @@ void GameServerPipeline::cancelAuthenticationTimer(ConnectionState& state) {
     state.authenticationAttempt.reset();
 }
 
-void GameServerPipeline::sendFrame(
+gamenet::DispatchResult GameServerPipeline::sendFrame(
     const std::shared_ptr<gamenet::transport::TransportEndpoint>& endpoint,
     std::string payload) {
     auto frame = encoder_.encode(payload);
     const auto callbackState = callbackState_;
     const auto stageObserver = options_.stageObserver;
     if (!frame) {
-        (void)endpoint->ownerExecutor().tryQueue([endpoint, callbackState] {
-            if (callbackState->active()) {
-                endpoint->close(gamenet::transport::CloseReason::ProtocolError);
-            }
-        });
-        return;
+        return endpoint->requestClose(gamenet::transport::CloseReason::ProtocolError);
     }
-    (void)endpoint->ownerExecutor().tryQueue(
+    const auto posted = endpoint->ownerExecutor().post(
         [endpoint, callbackState, stageObserver, frame = std::move(*frame)] {
             if (!callbackState->active()) return;
             if (stageObserver) stageObserver(GameServerPipelineStage::Endpoint);
             if (!callbackState->active()) return;
-            endpoint->send(frame);
+            const auto result = endpoint->send(frame);
+            if (result != gamenet::transport::EndpointResult::Accepted) {
+                (void)endpoint->requestClose(
+                    result == gamenet::transport::EndpointResult::Overloaded
+                    ? gamenet::transport::CloseReason::Overloaded
+                    : gamenet::transport::CloseReason::GoingAway);
+            }
         });
+    const auto result = gamenet::dispatchResult(posted);
+    if (result != gamenet::DispatchResult::Accepted) {
+        (void)endpoint->requestClose(
+            result == gamenet::DispatchResult::QueueFull
+            ? gamenet::transport::CloseReason::Overloaded
+            : gamenet::transport::CloseReason::GoingAway);
+    }
+    return result;
 }
 
 }  // namespace gamenet::examples

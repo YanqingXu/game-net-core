@@ -22,6 +22,7 @@ public:
     gamenet::net::EventLoopExecutor ownerExecutor() const noexcept override;
     EndpointResult send(std::string_view bytes) override;
     EndpointResult close(CloseReason reason) override;
+    gamenet::DispatchResult requestClose(CloseReason reason) noexcept override;
     bool isOpen() const noexcept override;
 
 private:

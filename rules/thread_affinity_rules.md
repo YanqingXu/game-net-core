@@ -204,6 +204,22 @@ No other direct mutation path is allowed for core loop state.
   owner-loop callbacks
 - recorder adapters contain exporter exceptions at the observability boundary
 
+## 14.1 Phase 4/5 Game Handoffs
+- SessionManager/player/session indexes remain management-loop-owned; its
+  cross-thread posts return typed admission and accepted posts publish one
+  terminal result
+- SessionBinding is an immutable cross-thread validation capability; its atomic
+  current-generation check grants no mutation or owner-loop access
+- LogicLoop validates a tracked generation on its owner immediately before
+  handler and output callbacks
+- Pipeline I/O, management, logic and endpoint handoffs must inspect typed
+  admission. A rejected data handoff may request terminal endpoint close through
+  the endpoint control-safe close path but may not mutate endpoint state
+  off-thread
+- Broadcast routing is management-loop-only. Outstanding reservations are
+  synchronized value accounting; endpoint sends still execute only on their
+  endpoint owner loops
+
 ## 15. Forbidden
 - Direct Poller mutation from non-owner thread
 - Direct Channel mutation that changes registration from non-owner thread
@@ -220,6 +236,8 @@ No other direct mutation path is allowed for core loop state.
   ack, or an IOCP completion
 - Publishing EventLoop Shutdown while the lifecycle hub or IOCP retained
   completion set is non-silent
+- Ignoring a Phase 4/5 handoff result or leaving an Authenticating/Online
+  connection live after the handoff required for progress was rejected
 
 ## 16. Fault and Endurance Drivers
 - fault clients may own and operate their own raw sockets but must not mutate

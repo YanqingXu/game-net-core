@@ -87,8 +87,19 @@ LogicStopSummary LogicLoop::stop() {
     };
 }
 
-SubmitResult LogicLoop::submit(GameCommand command) { return queue_.submit(std::move(command)); }
-QueueSnapshot LogicLoop::queueSnapshot() const { return queue_.snapshot(); }
+SubmitResult LogicLoop::submit(GameCommand command) {
+    if (command.binding.tracked() && !command.binding.isCurrent()) {
+        rejectedStale_.fetch_add(1, std::memory_order_relaxed);
+        return SubmitResult::StaleBinding;
+    }
+    return queue_.submit(std::move(command));
+}
+QueueSnapshot LogicLoop::queueSnapshot() const {
+    auto snapshot = queue_.snapshot();
+    snapshot.rejectedStale = rejectedStale_.load(std::memory_order_relaxed);
+    snapshot.droppedStale = droppedStale_.load(std::memory_order_relaxed);
+    return snapshot;
+}
 LogicLoopState LogicLoop::state() const noexcept { return state_.load(std::memory_order_acquire); }
 bool LogicLoop::running() const noexcept { return state() == LogicLoopState::Running; }
 
@@ -101,11 +112,19 @@ void LogicLoop::tick(const std::shared_ptr<LifetimeState>& lifetime) {
     auto commands = queue_.drain(options_.maxCommandsPerTick);
     std::size_t produced = 0;
     for (auto& command : commands) {
+        if (command.binding.tracked() && !command.binding.isCurrent()) {
+            droppedStale_.fetch_add(1, std::memory_order_relaxed);
+            continue;
+        }
         auto handler = handler_;
         auto outputCallback = outputCallback_;
         auto output = handler(std::move(command));
         if (!lifetime->active()) return;
         if (output && outputCallback) {
+            if (output->binding.tracked() && !output->binding.isCurrent()) {
+                droppedStale_.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
             ++produced;
             outputCallback(std::move(*output));
             if (!lifetime->active()) return;
@@ -119,7 +138,7 @@ void LogicLoop::tick(const std::shared_ptr<LifetimeState>& lifetime) {
             .tick = tickCount_,
             .drained = commands.size(),
             .produced = produced,
-            .queue = queue_.snapshot(),
+            .queue = queueSnapshot(),
         };
         metricCallback(metric);
     }

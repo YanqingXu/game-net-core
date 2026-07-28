@@ -22,9 +22,10 @@ state.
 
 - `BroadcastRouter::route` runs on the SessionManager/management loop so session
   lifecycle state is read only by its owner.
-- Route input is the same `shared_ptr<const PlayerSession>` view exposed by
-  `SessionManager`; Broadcast never requires mutable session ownership and can
-  compose directly with authentication/lookup results.
+- Route input is immutable `BroadcastTarget` value data copied on the
+  management loop. Broadcast never observes or aliases a mutable
+  `PlayerSession`; a target carries only endpoint delivery capability and an
+  optional current-generation binding check.
 - Plans own shared payload bytes and endpoint references until dispatch tasks
   finish.
 - `BroadcastDispatcher::dispatch` may be called on the management loop; it
@@ -36,9 +37,13 @@ state.
 - Metrics for routing run on the router caller; scheduled-send metrics run on
   endpoint loops, with `Scheduled` emitted before the matching terminal
   `Sent`/`Dropped` event. Metric callbacks must therefore be thread-safe and must not
-  synchronously wait for another loop.
+  synchronously wait for another loop. Metric exceptions are isolated and do
+  not alter routing, delivery, progress, or outstanding reservations.
 - Endpoint send may re-enter transport/core callbacks on the endpoint loop; no
-  router/dispatcher lock is held.
+  router/dispatcher lock is held. An endpoint exception is contained as
+  `SendRejected` and does not leak an outstanding reservation.
+- Dispatcher accounting is shared thread-safe state, but its mutex is released
+  before EventLoop admission, endpoint calls, metrics, or user callbacks.
 
 ## Backpressure Contract
 
@@ -49,6 +54,18 @@ state.
   have distinct metric reasons.
 - Dispatch tasks are bounded by endpoint count and aggregate payload bytes; a
   single payload above the per-task byte limit is rejected with its own reason.
+- Across consecutive plans, per-owner outstanding task/byte counts and a global
+  outstanding logical-byte count are reserved before queue admission and
+  released exactly once after task completion or admission rollback.
+- `BroadcastDispatcher::shutdown()` is a thread-safe, idempotent admission
+  close. Later chunks/plans are rejected with `OwnerShutdown`; tasks already
+  admitted retain their shared payload and publish normal terminal progress.
+- Low-priority plans are shed at explicit soft outstanding limits. Every
+  QueueFull, Shutdown, OwnerUnavailable, EndpointClosed, EndpointOverloaded and
+  policy rejection has a distinct reason.
+- `DispatchSummary` reports routed/scheduled/accepted/dropped counts and
+  per-reason counts. Its shared progress snapshot includes endpoint-loop
+  terminal send results that occur after `dispatch()` returns.
 
 ## Verification
 
@@ -71,6 +88,10 @@ state.
   synchronously; it does not rely on a fixed post-stop sleep.
 - `tests/contract/broadcast/test_broadcast_large_fanout.cpp` verifies bounded
   high-fanout dispatch and per-endpoint ordering with a slow endpoint present.
+- `tests/contract/broadcast/test_broadcast_outstanding_budget.cpp` verifies
+  per-owner/global reservations across multiple valid plans, exact rollback,
+  low-priority shedding, QueueFull versus Shutdown/OwnerUnavailable mapping,
+  endpoint overload/close reasons, and final zero outstanding state.
 
 ## Migration Provenance
 

@@ -71,6 +71,18 @@ EndpointResult TcpTransportEndpoint::close(CloseReason reason) {
     return EndpointResult::Accepted;
 }
 
+gamenet::DispatchResult TcpTransportEndpoint::requestClose(CloseReason reason) noexcept {
+    auto connection = connection_.lock();
+    if (!connection || connection->disconnected()) {
+        return gamenet::DispatchResult::EndpointClosed;
+    }
+    const auto result =
+        reason == CloseReason::Normal || reason == CloseReason::GoingAway
+        ? connection->tryShutdown()
+        : connection->tryForceClose();
+    return gamenet::dispatchResult(result);
+}
+
 bool TcpTransportEndpoint::isOpen() const noexcept {
     auto connection = connection_.lock();
     return connection && ownerExecutor_.available() && connection->connected();

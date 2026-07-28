@@ -42,6 +42,18 @@ and join handshake. TcpClient exposes a detached-lifetime-safe
 TcpClientControl mailbox. These are local implementation and contract results,
 not final frozen-SHA release evidence.
 
+The current M2 worktree aligns the provisional Phase 4/5 upper layers with
+those Core contracts. Session and Pipeline handoffs now return typed terminal
+results, exact session-binding generations suppress superseded commands and
+outputs, the Pipeline applies Core admission/backpressure/authentication and
+graceful-stop APIs, and heartbeat-driven idle expiry is wired through a real
+TCP integration. Broadcast consumes immutable targets and enforces cross-plan
+per-owner/global outstanding budgets with explicit terminal reason counts.
+The opt-in Phase 4 harness now separately measures O(N) session scan-only and
+full-expiry cleanup at 10k/100k/1M scales before any deadline-index redesign.
+These remain worktree results until final Linux ASan/UBSan, TSan,
+cross-platform, and frozen-SHA evidence is attached.
+
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target
 manifest with a retained `v0.2.0-phase4-preview` snapshot and deterministic
@@ -177,10 +189,10 @@ infrastructure-validation records, not evidence for later runtime changes.
 
 ## Verification State
 
-The current worktree configures 102 configured CTest tests: 8 unit tests, 85 contract tests, and 9 integration tests. Phase 4 coverage includes bounded
+The current worktree has 109 configured CTest tests: 8 unit tests, 89 contract tests, and 12 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
-contracts, four Pipeline integrations, and four Broadcast
-contracts/integrations. The eight current-roadmap additions cover the EventLoop
+contracts, seven Pipeline integrations, and five Broadcast
+contracts/integrations. The current-roadmap additions cover the EventLoop
 lifecycle hub, IOCP quit/completion drain, TcpConnection explicit close and
 structured reasons, TcpServer aggregate stop/release handshake, and
 TcpClientControl lifetime/close-reason propagation. Existing roadmap coverage
@@ -189,14 +201,23 @@ control-lane saturation, optional TcpConnection notification saturation,
 Connector/TcpClient typed admission and generation races, and IOCP synchronous
 submission errors.
 
-On 2026-07-27, the current Windows MSVC worktree passed full Debug and Release
-builds and 102/102 CTests in both configurations. The 21 directly relevant
-Python repository/API contracts passed, including the public API manifest and
-deterministic compatibility diff. A clean Release install exposed the two new
-stable Core headers, and the isolated `find_package(GameNetCore)` consumer
-built and passed CTest 1/1. Current runtime changes still require frozen-SHA
-Linux, sanitizer/TSan, repeat, performance, and 24/72-hour endurance evidence
-before any stable promotion.
+On 2026-07-27, the current Windows MSVC worktree passed full Debug, Release,
+and AddressSanitizer builds and 109/109 CTests in all three configurations.
+The current inventory is unit=8, contract=89, integration=12, threading=82,
+lifecycle=88, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+contracts passed, including the public API manifest and deterministic
+compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
+50 for 600 executions. A clean Release install exposed `DispatchResult` and
+the updated upper-layer headers, and the isolated
+`find_package(GameNetCore)` consumer built and passed CTest 1/1.
+
+The Release `session-expiry-scan` scale study measured 0.10/5.95/70.01 ms for
+10k/100k/1M active sessions; full `session-expiry` scan and cleanup measured
+3.17/59.63/797.36 ms. Every run reported exact considered, expired, remaining,
+and close-request counts. These are local trend samples rather than a reviewed
+regression threshold. Current runtime changes still require a frozen candidate
+SHA plus Linux Debug/Release, Linux ASan/UBSan, Linux TSan, cross-platform
+performance, and 24/72-hour endurance evidence before any stable promotion.
 
 Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
 `5ebad2c1a4a9487437340935e21f7468140c7e8d`:
@@ -213,8 +234,8 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   corpus contains 90 files and no crash artifact. Candidate main-CI run
   `29160903594` repeated the sanitizer-backed fuzz gate successfully and
   retained its SHA-bound log, corpus, dictionary, and artifact evidence.
-- The current Debug inventory includes 75 threading-labeled tests, 81
-  lifecycle-labeled tests, and eight Pipeline/Broadcast tests. These current
+- The current Debug inventory includes 82 threading-labeled tests, 88
+  lifecycle-labeled tests, and twelve Pipeline/Broadcast tests. These current
   runtime changes still require new repeat and remote evidence. On the
   historical `final-v4` tree, its 61-test threading selection passed repeat 50:
   61 x 50 = 3,050 executions with zero failures in 1,777.76 seconds. The
@@ -437,8 +458,8 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. The workflow locks the 85-test inventory, `threading=61`,
-  `game_pipeline=4`, and `broadcast=4`, then verifies the raw result lines for
+  timeout. The workflow locks the 109-test inventory, `threading=82`,
+  `game_pipeline=7`, and `broadcast=5`, then verifies the raw result lines for
   every selected test and exact repeat count. Its two
   `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,
   elapsed time, command, inventory hash, and raw-log hash; the enclosing

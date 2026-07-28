@@ -20,7 +20,8 @@ depending on `TcpConnection`.
 ## Contract
 
 - An endpoint exposes only a stable `TransportSessionId`, `ownerExecutor()`,
-  `send(bytes)`, `close(reason)`, and `isOpen()`.
+  owner-thread `send(bytes)`/`close(reason)`, cross-thread `requestClose(reason)`,
+  and `isOpen()`.
 - It never parses protocol bytes or owns player/business state.
 - `TcpTransportEndpoint` adapts one `TcpConnection` through a weak reference;
   it does not extend the connection lifetime or change connection callbacks.
@@ -32,6 +33,12 @@ depending on `TcpConnection`.
 - `send` and `close` are owner-loop-only and return `WrongThread` rather than
   hiding a second scheduling policy. Callers marshal through the copyable
   `ownerExecutor()` handle and handle rejected admission explicitly.
+- `requestClose` is the narrow terminal-control exception. TCP overrides it
+  with the connection lifecycle lane, so a saturated ordinary queue cannot
+  strand an upper-layer handoff failure. An adapter without a dedicated control
+  lane may close inline on its owner but must reject cross-thread close with a
+  typed result rather than silently using the normal queue. Results distinguish
+  Accepted, Closed, Shutdown, OwnerUnavailable and PolicyRejected.
 - A task successfully admitted before loop shutdown may still call `send` or
   `close` during EventLoop's final accepted-work drain. New tasks are rejected
   once admission closes, and owner operations after that drain report
@@ -71,6 +78,9 @@ depending on `TcpConnection`.
   also keeps the connection object alive after final-drain completion and
   verifies that new scheduling is rejected and direct send/close report
   `OwnerUnavailable`.
+- `tests/contract/transport/test_tcp_transport_endpoint_dispatch.cpp` verifies
+  typed request-close behavior from a non-owner thread while the normal queue
+  is saturated and after owner shutdown.
 
 ## Migration Provenance
 

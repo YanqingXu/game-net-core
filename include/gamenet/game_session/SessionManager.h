@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gamenet/core/DispatchResult.h"
 #include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/game_session/PlayerSession.h"
 
@@ -32,12 +33,14 @@ enum class AuthenticateStatus {
 struct AuthenticateResult {
     AuthenticateStatus status{AuthenticateStatus::Rejected};
     std::shared_ptr<const PlayerSession> session;
+    gamenet::DispatchResult dispatch{gamenet::DispatchResult::PolicyRejected};
 };
 
 class SessionManager {
 public:
     using Clock = PlayerSession::Clock;
     using AuthenticateCallback = std::function<void(AuthenticateResult)>;
+    using MutationCallback = std::function<void(gamenet::DispatchResult)>;
 
     struct Options {
         DuplicateLoginPolicy duplicateLogin{DuplicateLoginPolicy::ReplaceExisting};
@@ -70,19 +73,34 @@ public:
     // sessions Offline, and requests GoingAway close on endpoint owners.
     void shutdown();
 
-    void postAuthenticate(
+    gamenet::DispatchResult postAuthenticate(
         PlayerId playerId,
         std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint,
         AuthenticateCallback callback = {});
-    void postOffline(gamenet::transport::TransportSessionId transportId);
-    void postHeartbeat(gamenet::transport::TransportSessionId transportId);
+    gamenet::DispatchResult postOffline(
+        gamenet::transport::TransportSessionId transportId,
+        MutationCallback callback = {});
+    gamenet::DispatchResult postHeartbeat(
+        gamenet::transport::TransportSessionId transportId,
+        MutationCallback callback = {});
 
 private:
     struct LifetimeState {
-        bool active() const noexcept { return alive.load(std::memory_order_acquire); }
-        void revoke() noexcept { alive.store(false, std::memory_order_release); }
+        bool active() const noexcept {
+            return terminal.load(std::memory_order_acquire) ==
+                gamenet::DispatchResult::Accepted;
+        }
+        gamenet::DispatchResult result() const noexcept {
+            return terminal.load(std::memory_order_acquire);
+        }
+        void revoke(gamenet::DispatchResult result) noexcept {
+            auto expected = gamenet::DispatchResult::Accepted;
+            (void)terminal.compare_exchange_strong(
+                expected, result, std::memory_order_acq_rel);
+        }
 
-        std::atomic<bool> alive{true};
+        std::atomic<gamenet::DispatchResult> terminal{
+            gamenet::DispatchResult::Accepted};
     };
 
     enum class LifecycleState {
@@ -104,6 +122,7 @@ private:
     LifecycleState lifecycleState_{LifecycleState::Running};
     Options options_;
     SessionId nextSessionId_{1};
+    SessionBindingGeneration nextBindingGeneration_{1};
     std::unordered_map<PlayerId, std::shared_ptr<PlayerSession>> byPlayer_;
     std::unordered_map<std::uint64_t, std::shared_ptr<PlayerSession>> byTransport_;
 };

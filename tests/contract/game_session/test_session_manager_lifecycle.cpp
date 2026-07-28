@@ -39,7 +39,9 @@ private:
     std::atomic<bool> open_{true};
 };
 
-class CrossLoopEndpoint final : public gamenet::transport::TransportEndpoint {
+class CrossLoopEndpoint final
+    : public gamenet::transport::TransportEndpoint,
+      public std::enable_shared_from_this<CrossLoopEndpoint> {
 public:
     CrossLoopEndpoint(std::uint64_t id, gamenet::net::EventLoop* ownerLoop)
         : id_{id}, ownerLoop_(ownerLoop), ownerExecutor_(ownerLoop->executor()) {
@@ -65,6 +67,13 @@ public:
         open_.store(false, std::memory_order_release);
         closed_.release();
         return gamenet::transport::EndpointResult::Accepted;
+    }
+    gamenet::DispatchResult requestClose(
+        gamenet::transport::CloseReason reason) noexcept override {
+        const auto posted = ownerExecutor_.post([self = shared_from_this(), reason] {
+            (void)self->close(reason);
+        });
+        return gamenet::dispatchResult(posted);
     }
     bool isOpen() const noexcept override { return open_.load(std::memory_order_acquire); }
 
@@ -94,16 +103,27 @@ private:
 int main() {
     using namespace std::chrono_literals;
     std::atomic<bool> destroyedCallbackRan{false};
+    std::atomic<int> destroyedMutationCallbacks{0};
     {
         gamenet::net::EventLoop loop;
         auto endpoint = std::make_shared<LifetimeEndpoint>(1, &loop);
         auto manager = std::make_unique<gamenet::game_session::SessionManager>(&loop);
         std::thread submitter([&] {
-            manager->postAuthenticate("destroyed", endpoint, [&](auto) {
+            manager->postAuthenticate("destroyed", endpoint, [&](auto result) {
+                GAMENET_TEST_ASSERT(
+                    result.dispatch == gamenet::DispatchResult::OwnerUnavailable);
                 destroyedCallbackRan.store(true, std::memory_order_relaxed);
             });
-            manager->postHeartbeat({1});
-            manager->postOffline({1});
+            manager->postHeartbeat({1}, [&](gamenet::DispatchResult result) {
+                GAMENET_TEST_ASSERT(
+                    result == gamenet::DispatchResult::OwnerUnavailable);
+                destroyedMutationCallbacks.fetch_add(1, std::memory_order_relaxed);
+            });
+            manager->postOffline({1}, [&](gamenet::DispatchResult result) {
+                GAMENET_TEST_ASSERT(
+                    result == gamenet::DispatchResult::OwnerUnavailable);
+                destroyedMutationCallbacks.fetch_add(1, std::memory_order_relaxed);
+            });
         });
         submitter.join();
         manager.reset();
@@ -111,7 +131,9 @@ int main() {
         loop.runAfter(2ms, [&] { loop.quit(); });
         loop.loop();
     }
-    GAMENET_TEST_ASSERT(!destroyedCallbackRan.load(std::memory_order_relaxed));
+    GAMENET_TEST_ASSERT(destroyedCallbackRan.load(std::memory_order_relaxed));
+    GAMENET_TEST_ASSERT(
+        destroyedMutationCallbacks.load(std::memory_order_relaxed) == 2);
 
     {
         gamenet::net::EventLoop loop;
@@ -136,7 +158,9 @@ int main() {
                 destroyingCallbackRan = true;
                 manager.reset();
             });
-        manager->postAuthenticate("revoked-authentication", revokedEndpoint, [&](auto) {
+        manager->postAuthenticate("revoked-authentication", revokedEndpoint, [&](auto result) {
+            GAMENET_TEST_ASSERT(
+                result.dispatch == gamenet::DispatchResult::OwnerUnavailable);
             revokedCallbackRan = true;
         });
         manager->postHeartbeat({20});
@@ -146,7 +170,7 @@ int main() {
         loop.loop();
 
         GAMENET_TEST_ASSERT(destroyingCallbackRan);
-        GAMENET_TEST_ASSERT(!revokedCallbackRan);
+        GAMENET_TEST_ASSERT(revokedCallbackRan);
         GAMENET_TEST_ASSERT(!manager);
         GAMENET_TEST_ASSERT(
             active.session->state() == gamenet::game_session::SessionState::Online);
@@ -177,7 +201,9 @@ int main() {
         std::thread queuedBeforeShutdown([&] {
             manager.postHeartbeat({10});
             manager.postOffline({10});
-            manager.postAuthenticate("queued-before-shutdown", queuedEndpoint, [&](auto) {
+            manager.postAuthenticate("queued-before-shutdown", queuedEndpoint, [&](auto result) {
+                GAMENET_TEST_ASSERT(
+                    result.dispatch == gamenet::DispatchResult::Shutdown);
                 authenticationCallbacks.fetch_add(1, std::memory_order_relaxed);
             });
         });
@@ -215,7 +241,7 @@ int main() {
 
         managementLoop.quit();
         managementLoop.loop();
-        GAMENET_TEST_ASSERT(authenticationCallbacks.load(std::memory_order_relaxed) == 0);
+        GAMENET_TEST_ASSERT(authenticationCallbacks.load(std::memory_order_relaxed) == 1);
         GAMENET_TEST_ASSERT(manager.size() == 0);
         GAMENET_TEST_ASSERT(!manager.findByPlayer("queued-before-shutdown"));
         GAMENET_TEST_ASSERT(!manager.findByPlayer("submitted-after-shutdown"));
@@ -334,7 +360,7 @@ int main() {
                 GAMENET_TEST_ASSERT(!reentryManager.findByTransport({2}));
                 GAMENET_TEST_ASSERT(
                     reentryManager.findByTransport({3}) == rebound.session);
-                GAMENET_TEST_ASSERT(reentryEndpoint->isOpen());
+                GAMENET_TEST_ASSERT(!reentryEndpoint->isOpen());
 
                 reentryLoop.queueInLoop([&] {
                     GAMENET_TEST_ASSERT(!reentryEndpoint->isOpen());

@@ -33,6 +33,11 @@ semantics, not protocol-library responsibilities.
 - The management loop owns authentication state, pending-auth frames, sessions,
   and the connection/session index. Disconnect removes that state before any
   later authentication callback can revive it.
+- Every I/O-to-management, authentication, logic-output-to-management, endpoint
+  send, and endpoint close handoff returns or consumes an explicit
+  `DispatchResult`. QueueFull/Shutdown/OwnerUnavailable never leave a connection
+  in its previous live state: the originating owner requests terminal close
+  through the endpoint's control-safe close path.
 - `LogicLoop` may use the management loop for the minimal configuration or a
   distinct caller-owned logic loop. Startup/stop coordination executes on that
   owner; command submit is thread-safe and outputs marshal back to management.
@@ -56,6 +61,11 @@ semantics, not protocol-library responsibilities.
 - Session callbacks and management-side logic output callbacks may re-enter the
   composition; no queue lock is held.
 - Output is always queued to the endpoint owner loop before `send`.
+- Each online connection stores the exact immutable SessionBinding returned by
+  authentication. Commands carry that generation; LogicLoop validates it before
+  handler and output, and management validates it again before endpoint send.
+  Duplicate replacement therefore suppresses already-queued commands from the
+  superseded connection before any business side effect.
 - The optional example-only stage observer runs on the observed stage thread;
   callers must synchronize shared observer state and must not block another loop.
 - Worker callbacks use independent executor/state values and only dereference
@@ -64,7 +74,17 @@ semantics, not protocol-library responsibilities.
   callback-state reference never extends permission to execute after revocation;
   every cross-loop callback rechecks `alive` immediately before Pipeline access,
   observer invocation, transport send, or transport close.
-- `stop()` is one-shot and may be called synchronously by the Logic-stage
+- `stopGracefully()` is one-shot and returns the Core shared completion future.
+  It atomically closes upper-layer connection/auth/command admission, cancels
+  queued example management/logic work, then delegates connection-output drain
+  and worker cleanup to `TcpServer::stopGracefully()`. The future becomes ready
+  only after that Core cleanup converges; it must not be waited on from the
+  management loop. Deadline expiry escalates through the Core forced result.
+  Compatibility `stop()` requests an immediate zero-deadline completion without
+  blocking the management loop. The example has cancellation semantics for
+  queued application work; a production coordinator that drains application
+  work before transport shutdown remains intentionally deferred.
+- Stop may be requested synchronously by the Logic-stage
   observer when management and logic share one loop. It first atomically revokes
   cross-loop admission, stops LogicLoop on its owner, clears management state,
   and initiates server connection close. If stop re-enters from the current
@@ -75,6 +95,9 @@ semantics, not protocol-library responsibilities.
   returns; callback revocation prevents its remaining output side effects.
 - Endpoint sends require the callback state to remain live after any observer
   returns, so queued or observer-blocked output is canceled once stop revokes it.
+- Construction configures `TcpServer` admission, connection backpressure and
+  callback-exception policy before start. Successful authentication must call
+  `tryMarkConnectionAuthenticated()` and treat rejection as terminal.
 
 ## Scope
 
@@ -109,6 +132,22 @@ semantics, not protocol-library responsibilities.
   verifies worker-I/O handoff, disconnect-before-auth completion, repeated AUTH
   rejection, independent pending-auth frame-count and byte-budget overflow, and
   session cleanup.
+- `tests/integration/game_pipeline/test_game_server_pipeline_saturation.cpp`
+  saturates each physical handoff independently and proves continuation,
+  I/O-to-management, authentication-to-session, command-to-logic,
+  logic-output-to-management, and output-to-endpoint dispatch rejection all
+  close rather than strand a state. It separately proves an admitted endpoint
+  send that reports overload also converges to close.
+- `tests/integration/game_pipeline/test_game_server_pipeline_binding_generation.cpp`
+  covers duplicate replacement with an admitted old command, stale output,
+  stale disconnect and generation rollover before handler side effects.
+- `tests/integration/game_pipeline/test_game_server_pipeline_idle_heartbeat.cpp`
+  keeps a real TCP session alive beyond its idle deadline with application
+  commands, then proves the same session is closed and removed after activity
+  stops.
+- `tests/integration/game_pipeline/test_game_server_pipeline_shutdown.cpp`
+  additionally covers pending auth/command/output during graceful stop and
+  observes completion only after Core worker cleanup.
 
 ## Migration Provenance
 

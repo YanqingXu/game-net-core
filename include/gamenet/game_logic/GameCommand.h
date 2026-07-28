@@ -18,6 +18,7 @@ enum class CommandPriority : std::uint8_t {
 struct GameCommand {
     gamenet::game_session::SessionId sessionId{};
     gamenet::transport::TransportSessionId transportId{};
+    gamenet::game_session::SessionBinding binding;
     std::uint32_t messageId{};
     std::uint64_t requestId{};
     CommandPriority priority{CommandPriority::Normal};

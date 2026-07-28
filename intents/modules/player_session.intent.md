@@ -23,22 +23,35 @@ inventory, combat, map, room, account-provider, or other business data.
   `PlayerSession`, and both player/transport indexes.
 - Direct lookup and mutation APIs are management-loop-only.
 - I/O loops use `postAuthenticate`, `postOffline`, and `postHeartbeat`; these
-  enqueue work and never wait synchronously for the management loop.
+  enqueue work and never wait synchronously for the management loop. Every
+  post returns `DispatchResult`; an Accepted post invokes its optional terminal
+  callback exactly once with the management-side result, including shutdown
+  that linearizes ahead of the queued task.
 - Cross-thread posts use the management loop executor and weakly observe a
   shared `LifetimeState`. That state has an atomic `alive` permission bit which
   shutdown/destruction revokes before facade teardown. Locking or otherwise
   strongly retaining the state only proves the state object still exists; it
   never extends permission to dereference `SessionManager`. Every queued task
   rechecks `alive` immediately before facade access, so work that reaches the
-  loop after revocation becomes a no-op.
+  loop after revocation skips facade access and invokes only its optional
+  terminal callback with the revocation result.
 - Authentication completion callbacks run on the management loop after indexes
   are consistent. They may re-enter management-loop-only APIs; no lock is held.
+- Each successful authentication/rebind publishes a monotonically increasing
+  `SessionBinding(sessionId, transportId, generation)`. Binding tokens are
+  immutable values backed by revocable atomic state, may cross loops, and can
+  only answer whether that exact generation is still current. They expose no
+  mutable session or endpoint state.
 - `SessionManager` keeps mutable session ownership private. Authentication and
   lookup APIs expose `shared_ptr<const PlayerSession>`, so callers cannot rebind
   or change lifecycle state behind the manager's player/transport indexes.
   These views remain management-loop-only: constness is not a cross-thread
   snapshot guarantee, and callers must copy the value data they need before
   handing work to another loop.
+- `PlayerSession` construction and every mutation are private to
+  `SessionManager`. Broadcast and cross-loop consumers receive immutable
+  `SessionSnapshot`/`BroadcastTarget` values rather than aliases to manager-
+  owned session objects.
 - Endpoint close requests are marshaled to each endpoint's owner loop.
 - SessionManager shutdown/destruction occurs on its management loop while that
   loop is alive. Closing executor admission does not relax this owner-thread
@@ -46,14 +59,17 @@ inventory, combat, map, room, account-provider, or other business data.
 - `shutdown()` is a one-shot management-loop transition. It first revokes the
   cross-thread lifetime token, atomically removes both indexes, marks every
   indexed session Offline, and requests `GoingAway` close on each endpoint's
-  owner loop. Repeated shutdown is a no-op. Work queued before revocation and
-  posts submitted after revocation do not run and do not invoke authentication
-  callbacks.
+  owner loop. Repeated shutdown is a no-op. Accepted work queued before
+  revocation invokes its optional terminal callback with `Shutdown`; posts
+  submitted after revocation return `Shutdown` immediately and are not
+  admitted.
 - After shutdown, direct `authenticate`, `offline`, `heartbeat`, and `expireIdle`
   calls cannot mutate session state: they return `Rejected`, `false`, `false`,
-  and zero respectively. Lookups remain available on the management loop and
-  observe the already-empty indexes. A rejected caller-supplied endpoint that
-  was never indexed remains caller-owned.
+  and zero respectively. Cross-thread posts return `Shutdown`; already-Accepted
+  posts receive a `Shutdown` terminal callback without dereferencing the
+  revoked manager. Lookups remain available on the management loop and observe
+  the already-empty indexes. A rejected caller-supplied endpoint that was never
+  indexed remains caller-owned.
 
 ## Lifecycle Invariants
 
@@ -65,19 +81,32 @@ inventory, combat, map, room, account-provider, or other business data.
   endpoint is closed with `ProtocolError`. Re-authentication is `Existing` only
   for the same player and the same endpoint object.
 - Rebind replaces the transport index atomically on the management loop.
+- Rebind revokes the previous binding generation before publishing the new
+  endpoint/index binding. Offline, expiry, shutdown, and replacement revoke the
+  old generation before any endpoint close is requested.
 - A delayed offline event for a replaced transport cannot remove the rebound
   session.
 - Duplicate login behavior is explicit: replace the old endpoint or reject the
   new endpoint.
 - Heartbeat/activity timestamps and idle expiry are session lifecycle state,
   not player business state.
+- Idle expiry currently performs one O(N) scan of the player index. The
+  opt-in `session-expiry` Phase 4 scale benchmark measures the full scan and
+  cleanup path before any timer-wheel, bucket, or heap redesign is considered.
+- A Logic command or output carrying a stale binding generation cannot produce
+  a handler side effect or endpoint send even when it was admitted before a
+  duplicate-login replacement.
 
 ## Verification
 
 - `tests/contract/game_session/test_session_manager_contract.cpp` verifies
   creation, duplicate login policies, transport-id uniqueness, rebind, stale
   disconnect cleanup, heartbeat, idle expiry, read-only public session views,
-  and cross-thread async submit.
+  private construction/mutation, immutable snapshots, generation rollover and
+  cross-thread typed async submit.
+- `tests/contract/game_session/test_session_manager_dispatch.cpp` saturates the
+  management queue and verifies QueueFull, Shutdown, OwnerUnavailable and
+  exactly-once terminal callback behavior for authenticate/offline/heartbeat.
 - `tests/contract/game_session/test_session_manager_lifecycle.cpp` verifies
   queued authenticate/offline/heartbeat after destruction, forces live
   heartbeat/offline producers to remain active until a posted heartbeat has
@@ -90,6 +119,10 @@ inventory, combat, map, room, account-provider, or other business data.
   heartbeat/offline work, destroys the manager from the first authentication
   callback, and proves the remaining work cannot use the still-strongly-held
   but revoked lifetime state to access the destroyed facade.
+- `gamenet_phase4_benchmark --scenario session-expiry-scan|session-expiry`
+  records exact considered/expired/remaining/close counts and normalized
+  scan-only versus scan/cleanup time at configurable session scales; it is
+  opt-in and not a correctness CTest.
 
 ## Migration Provenance
 
