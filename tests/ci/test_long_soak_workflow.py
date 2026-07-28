@@ -148,6 +148,7 @@ def main() -> None:
         workflow,
     )
     require(job, "timeout-minutes: 90", workflow)
+    require(job, "run: cmake --build build-long-soak --parallel 1", workflow)
     require(job, "-DGAMENET_BUILD_TESTING=ON", workflow)
     require(job, "-DGAMENET_ENABLE_TLS=OFF", workflow)
     require(job, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF", workflow)
@@ -322,6 +323,16 @@ def main() -> None:
         workflow,
     )
     require(self_hosted_ci, "ctest_label: threading", workflow)
+    require(
+        self_hosted_ci,
+        'run: cmake --build "${GAMENET_BUILD_DIR}" --parallel 1',
+        workflow,
+    )
+    require(
+        self_hosted_ci,
+        'cmake --build "${GAMENET_CONSUMER_DIR}" --parallel 1',
+        workflow,
+    )
     require(self_hosted_ci, 'test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', workflow)
     require(self_hosted_ci, "--expected-total 109", workflow)
     require(self_hosted_ci, "inventory+=(--expect-label threading=82)", workflow)

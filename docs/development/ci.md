@@ -422,7 +422,9 @@ package consumer, ASan/UBSan executes all 109 tests, and TSan executes the exact
 82-test threading inventory. Every profile verifies the immutable checkout SHA,
 public API diff and repository guards, then writes and uploads its own
 attempt-bound `gamenet.ci_evidence.v1` artifact. Serial execution prevents the
-four sanitizer/build profiles from competing for one runner's CPU and memory.
+four sanitizer/build profiles from competing for one runner's CPU and memory;
+each self-hosted build also uses `--parallel 1` so compiler fan-out cannot
+exhaust the endurance host.
 
 After configure, `tools/verify_ctest_inventory.py` records the complete 109-test
 JSON inventory and requires `threading=82`, `game_pipeline=7`, and
@@ -459,7 +461,7 @@ successful manifest that predates either repeat summary.
 
 ```bash
 cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF
-cmake --build build-long-soak --parallel
+cmake --build build-long-soak --parallel 1
 python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 109 --expect-label threading=82 --expect-label game_pipeline=7 --expect-label broadcast=5 --output long-soak-evidence/ctest-inventory.json
 ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:<repeat> --timeout <timeout_seconds>
 ctest --test-dir build-long-soak --output-on-failure -L "game_pipeline|broadcast" --repeat until-fail:<repeat> --timeout <timeout_seconds>

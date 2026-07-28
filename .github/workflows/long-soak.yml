@@ -140,7 +140,7 @@ jobs:
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
       - name: Build
-        run: cmake --build build-long-soak --parallel
+        run: cmake --build build-long-soak --parallel 1
 
       - name: Verify long-soak test inventory
         run: |
@@ -207,7 +207,7 @@ jobs:
             --artifact-name 'long-soak-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'cmake --build build-long-soak --parallel' \
+            --command 'cmake --build build-long-soak --parallel 1' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 109 --expect-label threading=82 --expect-label game_pipeline=7 --expect-label broadcast=5 --output long-soak-evidence/ctest-inventory.json' \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L game_pipeline|broadcast --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}"
@@ -369,7 +369,7 @@ jobs:
           "${inventory[@]}"
 
       - name: Build
-        run: cmake --build "${GAMENET_BUILD_DIR}" --parallel 4
+        run: cmake --build "${GAMENET_BUILD_DIR}" --parallel 1
 
       - name: Test
         run: |
@@ -400,7 +400,7 @@ jobs:
             --test-dir "${GAMENET_CONSUMER_DIR}" \
             --expected-total 1 \
             --output ci-evidence/install-consumer-inventory.json
-          cmake --build "${GAMENET_CONSUMER_DIR}" --parallel 4
+          cmake --build "${GAMENET_CONSUMER_DIR}" --parallel 1
           ctest --test-dir "${GAMENET_CONSUMER_DIR}" \
             --output-on-failure \
             --timeout 60 \
