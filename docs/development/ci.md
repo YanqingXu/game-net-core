@@ -644,8 +644,10 @@ Linux identifies backend `epoll` and completion mode `epoll_wait_batch`; its
 one/two-worker echo snapshots are 32.337/65.234 MiB/s with P99 97.419/74.229 us,
 the connection working-set delta is 991,232 bytes (3,872 bytes per connection),
 and slow-client working-set delta is 26,562,560 bytes with four high-water
-callbacks. Windows identifies backend `iocp` and completion mode
-`single_get_queued_completion_status`; its one/two-worker snapshots are
+callbacks. Historical Windows Core Preview evidence identifies backend `iocp`
+and completion mode `single_get_queued_completion_status`; current M3
+candidates report `get_queued_completion_status_ex_batch_64`. Its
+one/two-worker snapshots are
 16.188/26.110 MiB/s with P99 162.8/151.3 us, the connection working-set delta
 is 18,137,088 bytes (70,848 bytes per connection), and slow-client working-set
 delta is 67,493,888 bytes with four high-water callbacks. These are raw

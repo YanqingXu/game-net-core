@@ -11,6 +11,7 @@
 
 #ifdef _WIN32
 
+#include <array>
 #include <unordered_set>
 
 namespace gamenet::net {
@@ -41,10 +42,13 @@ private:
     static constexpr int kAdded = 1;
     static constexpr int kDeleted = 2;
     static constexpr ULONG_PTR kWakeupCompletionKey = static_cast<ULONG_PTR>(-1);
+    static constexpr ULONG kCompletionBatchSize = 64;
 
     void associateChannel(Channel* channel);
 
     HANDLE iocp_;
+    std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> deferredEntries_{};
+    ULONG deferredEntryCount_{0};
     std::unordered_set<SocketFd> associatedFds_;
     std::unordered_set<void*> outstandingOperations_;
     std::unordered_map<void*, std::shared_ptr<void>> retainedOperations_;

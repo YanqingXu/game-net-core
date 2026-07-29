@@ -45,8 +45,15 @@ Poller is not channel owner.
 - Poller is only used by owner EventLoop thread
 - backend registration state must be consistent with internal channel bookkeeping
 - removed channels must not continue appearing as valid active channels
-- one poll result contains at most one active entry per Channel; backend event
-  bits are merged before EventLoop dispatch
+- one poll result contains at most one active entry per Channel; readiness
+  backend event bits are merged before EventLoop dispatch, while additional
+  IOCP operations for the same Channel are retained for a later poll round so
+  Channel registration-generation re-entry cannot strand a dequeued operation
+- Windows IOCP dequeues at most 64 completion packets per `poll()` call through
+  `GetQueuedCompletionStatusEx`; backlog remains queued for a later EventLoop
+  iteration so timer, control, lifecycle, and functor phases retain service
+- a wakeup packet is consumed as a scheduling signal but does not end the
+  current IOCP batch or suppress real I/O packets returned beside it
 - backend removal validates both fd and Channel identity before erasing
   bookkeeping, so a stale same-fd remove cannot erase a replacement Channel
 - IOCP completion metadata remains allocated until the completion is dequeued
@@ -63,6 +70,13 @@ Poller is not channel owner.
   association record before the SOCKET value can be reused
 - one dequeued normal, error, or cancellation packet publishes one terminal
   result into its observed operation record
+- multiple dequeued operations for one registered Channel publish only the
+  first operation in the current active list; later operations remain in a
+  fixed-size Poller-owned deferred batch with their outstanding/retained leases
+  intact until a later poll publishes them
+- bytes transferred and the terminal error are captured when the kernel packet
+  is first dequeued, before an earlier callback can close the socket; a deferred
+  operation must not re-query and overwrite that result in a later poll round
 - backend errors must not silently corrupt Poller internal state
 
 ---
@@ -142,8 +156,14 @@ High-risk mistakes:
 - repeated removal and same-fd replacement cannot diverge backend registration
   from the internal Channel map
 - a deterministic multi-entry dispatch harness verifies stale active entries
-  are skipped on both platforms even while the current IOCP backend dequeues
-  one completion per poll call
+  are skipped on both platforms
+- `tests/contract/poller/test_poller_contract.cpp` posts more than one bounded
+  IOCP batch with an interleaved wakeup, verifies the first poll consumes only
+  its fixed budget, verifies the remainder is preserved for the next poll, and
+  proves read/write completions for one Channel are dispatched in separate
+  registration-safe rounds while distinct Channels share one batch; a deferred
+  cancellation keeps its dequeued `ERROR_OPERATION_ABORTED` result even when
+  the first callback removes the Channel before the next poll
 - `tests/contract/acceptor/test_acceptor_contract.cpp` destroys a stopped
   Acceptor while the EventLoop continues polling and guards late IOCP completion
 - `tests/contract/connector/test_connector_retry_stop.cpp` covers ConnectEx

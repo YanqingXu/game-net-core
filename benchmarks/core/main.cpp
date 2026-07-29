@@ -760,7 +760,7 @@ std::string_view backendName() noexcept {
 
 std::string_view completionMode() noexcept {
 #ifdef _WIN32
-    return "single_get_queued_completion_status";
+    return "get_queued_completion_status_ex_batch_64";
 #else
     return "epoll_wait_batch";
 #endif

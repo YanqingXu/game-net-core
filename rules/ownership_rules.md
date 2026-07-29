@@ -49,6 +49,12 @@ It must not blur these roles.
 - Poller backend state must not outlive EventLoop
 - Poller erases a registration only after exact fd-plus-pointer validation; it
   cannot erase a same-fd replacement on behalf of a stale Channel
+- IOCP batch entries are value snapshots and do not acquire Channel ownership.
+  Publishing one entry releases exactly that operation's outstanding/retained
+  backend lease before its Channel callback runs; a same-Channel entry deferred
+  to the next round keeps both leases intact. Its transferred-byte and terminal
+  error result is captured at dequeue time so later socket closure cannot
+  mutate the observation
 
 ## 4. Channel
 - Channel does not own fd by default

@@ -6,6 +6,8 @@ Phase 4 Preview publication checked: 2026-07-12
 
 Current production-roadmap audit: 2026-07-27
 
+Current local M3 implementation checkpoint: 2026-07-29
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -54,6 +56,21 @@ full-expiry cleanup at 10k/100k/1M scales before any deadline-index redesign.
 These remain worktree results until final Linux ASan/UBSan, TSan,
 cross-platform, and frozen-SHA evidence is attached.
 
+The current M3 worktree starts PR-G with one bounded Windows IOCP slice.
+`IocpPoller` now drains `GetQueuedCompletionStatusEx` in fixed batches of at
+most 64 packets. Wakeup packets do not truncate real I/O already present in
+the batch, different Channels may be published together, and extra
+completions for the same Channel are deferred to a later poll round in
+Poller-owned fixed storage while their operation leases remain retained. This
+avoids a read callback registration-generation change suppressing a same-round
+write callback and stranding completion state. The local Windows MSVC Debug
+tree builds in full, all 109 CTest tests pass, the focused IOCP lifecycle slice
+passes 8/8, and the Debug benchmark reports
+`get_queued_completion_status_ex_batch_64`. This is a local implementation
+gate only: wakeup coalescing, buffer/segment ownership, AcceptEx pooling,
+Release performance comparison, and frozen-SHA cross-platform evidence remain
+open.
+
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target
 manifest with a retained `v0.2.0-phase4-preview` snapshot and deterministic
@@ -92,6 +109,11 @@ infrastructure-validation records, not evidence for later runtime changes.
 
 ## Production-Hardening Worktree State
 
+- M3 PR-G has completed its first local IOCP batching slice: fixed-size
+  GQCSEx collection, bounded per-round publication, same-Channel deferral,
+  wakeup coexistence, and exact outstanding-operation retention. The current
+  intent inventory resolves 30 active targets and 120 explicit verification
+  paths; this count does not rewrite the retained M2/historical evidence below.
 - Intent semantics resolve 30 active targets and 94 explicit verification
   paths, with `connection_backpressure_controller` and `graceful_shutdown`
   promoted from deferred design assets to active `GameNet::core`

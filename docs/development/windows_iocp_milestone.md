@@ -33,7 +33,11 @@ passed all five jobs on release commit
 tag `v0.1.0-core-preview`.
 
 The first opt-in Windows MSVC Release performance baseline now records the
-current `single_get_queued_completion_status` mode explicitly. Four loopback
+historical Core Preview `single_get_queued_completion_status` mode explicitly.
+The active M3 line now reports
+`get_queued_completion_status_ex_batch_64`: one poll removes at most 64 packets,
+defers additional packets for the same Channel to a registration-safe later
+round, and yields back to the remaining EventLoop phases. Four loopback
 JSON artifacts cover one-worker and two-worker echo throughput/P50/P99, 256
 idle connections, and four non-reading clients offered 8 MiB each. The raw
 evidence lives under

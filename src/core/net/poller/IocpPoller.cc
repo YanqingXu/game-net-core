@@ -8,6 +8,8 @@
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/platform/IocpOperation.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdlib>
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
 #include <atomic>
@@ -49,6 +51,39 @@ DWORD toTimeout(int timeoutMs) noexcept {
     return timeoutMs < 0 ? INFINITE : static_cast<DWORD>(timeoutMs);
 }
 
+constexpr ULONG_PTR kStatusCancelled = 0xC0000120UL;
+
+DWORD completionError(
+    IocpOperation& operation,
+    bool channelRegistered) noexcept {
+    const ULONG_PTR status = operation.overlapped.Internal;
+    if (status == 0) {
+        return 0;
+    }
+    if (status == kStatusCancelled) {
+        return ERROR_OPERATION_ABORTED;
+    }
+
+    if (channelRegistered && operation.channel != nullptr) {
+        DWORD transferred = 0;
+        DWORD flags = 0;
+        if (::WSAGetOverlappedResult(
+                operation.channel->fd(),
+                &operation.overlapped,
+                &transferred,
+                FALSE,
+                &flags) != FALSE) {
+            return 0;
+        }
+        return static_cast<DWORD>(::WSAGetLastError());
+    }
+
+    // A retained completion whose Channel observer was revoked is terminal
+    // storage cleanup only. Preserve an explicit failure instead of treating
+    // an untranslatable native status as a successful operation.
+    return ERROR_GEN_FAILURE;
+}
+
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
 std::atomic<bool> failNextAssociationPreserve{false};
 std::atomic<bool> failNextReplacementRegistration{false};
@@ -68,51 +103,97 @@ IocpPoller::~IocpPoller() {
 }
 
 gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChannels) {
-    DWORD bytesTransferred = 0;
-    ULONG_PTR completionKey = 0;
-    OVERLAPPED* overlapped = nullptr;
-
-    const BOOL ok = ::GetQueuedCompletionStatus(
-        iocp_,
-        &bytesTransferred,
-        &completionKey,
-        &overlapped,
-        toTimeout(timeoutMs));
-    (void)bytesTransferred;
+    std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> entries{};
+    ULONG removed = 0;
+    BOOL ok = TRUE;
+    const bool processingDeferredEntries = deferredEntryCount_ != 0;
+    if (processingDeferredEntries) {
+        removed = deferredEntryCount_;
+        std::copy_n(
+            deferredEntries_.begin(),
+            removed,
+            entries.begin());
+        deferredEntryCount_ = 0;
+    } else {
+        ok = ::GetQueuedCompletionStatusEx(
+            iocp_,
+            entries.data(),
+            static_cast<ULONG>(entries.size()),
+            &removed,
+            toTimeout(timeoutMs),
+            FALSE);
+    }
 
     const auto now = gamenet::base::now();
-    if (!ok && overlapped == nullptr) {
+    if (!ok) {
         const DWORD error = ::GetLastError();
         if (error != WAIT_TIMEOUT) {
-            iocpDie("GetQueuedCompletionStatus");
+            iocpDie("GetQueuedCompletionStatusEx");
         }
         return now;
     }
 
-    if (completionKey == kWakeupCompletionKey) {
-        return now;
-    }
+    std::array<Channel*, kCompletionBatchSize> publishedChannels{};
+    std::size_t activeCount = 0;
 
-    auto* operation = reinterpret_cast<IocpOperation*>(overlapped);
-    if (operation == nullptr) {
-        return now;
-    }
-    outstandingOperations_.erase(operation);
-    std::shared_ptr<void> completionLifetime;
-    const auto retained = retainedOperations_.find(operation);
-    if (retained != retainedOperations_.end()) {
-        completionLifetime = std::move(retained->second);
-        retainedOperations_.erase(retained);
-    }
-    if (operation->channel == nullptr) return now;
+    for (ULONG index = 0; index < removed; ++index) {
+        const auto& entry = entries[index];
+        if (entry.lpCompletionKey == kWakeupCompletionKey) {
+            continue;
+        }
 
-    operation->bytesTransferred = bytesTransferred;
-    operation->error = ok ? 0 : ::GetLastError();
+        auto* operation =
+            reinterpret_cast<IocpOperation*>(entry.lpOverlapped);
+        if (operation == nullptr) {
+            continue;
+        }
 
-    Channel* channel = operation->channel;
-    const auto it = channels_.find(channel->fd());
-    if (it != channels_.end() && it->second == channel && channel->index() == kAdded) {
+        Channel* channel = operation->channel;
+        const auto registered =
+            channel == nullptr
+            ? channels_.end()
+            : channels_.find(channel->fd());
+        const bool channelRegistered =
+            registered != channels_.end() &&
+            registered->second == channel &&
+            channel->index() == kAdded;
+
+        if (!processingDeferredEntries) {
+            operation->bytesTransferred =
+                entry.dwNumberOfBytesTransferred;
+            operation->error =
+                completionError(*operation, channelRegistered);
+        }
+
+        if (channelRegistered &&
+            std::find(
+                publishedChannels.begin(),
+                publishedChannels.begin() +
+                    static_cast<std::ptrdiff_t>(activeCount),
+                channel) !=
+                publishedChannels.begin() +
+                    static_cast<std::ptrdiff_t>(activeCount)) {
+            if (deferredEntryCount_ >= deferredEntries_.size()) {
+                iocpDie("IOCP deferred completion batch overflow");
+            }
+            deferredEntries_[deferredEntryCount_++] = entry;
+            continue;
+        }
+
+        outstandingOperations_.erase(operation);
+        std::shared_ptr<void> completionLifetime;
+        const auto retained = retainedOperations_.find(operation);
+        if (retained != retainedOperations_.end()) {
+            completionLifetime = std::move(retained->second);
+            retainedOperations_.erase(retained);
+        }
+
+        if (!channelRegistered) {
+            continue;
+        }
+
         channel->setRevents(completionEvents(*operation));
+        publishedChannels[activeCount++] = channel;
         activeChannels->push_back(channel);
     }
     return now;

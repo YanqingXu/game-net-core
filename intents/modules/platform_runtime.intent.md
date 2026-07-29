@@ -69,6 +69,12 @@ This module is not business logic.
 - Each posted `OVERLAPPED`, `WSABUF`, and referenced buffer has stable storage
   owned by the posting module until exactly one normal, error, or cancellation
   completion is consumed. `IocpPoller` only observes that operation storage.
+- Windows IOCP uses `GetQueuedCompletionStatusEx` with a fixed 64-packet
+  dequeue budget. Distinct Channels may share one active batch; additional
+  packets for an already-published Channel keep their operation leases in a
+  fixed deferred batch until a later EventLoop round. Completion bytes and
+  terminal error are captured at first dequeue and are not recomputed after an
+  earlier callback may have closed the socket.
 
 ---
 
@@ -155,7 +161,9 @@ This module is not business logic.
 - `tests/contract/event_loop/test_event_loop.cpp` verifies wakeup and queued functor
   semantics.
 - `tests/contract/poller/test_poller_contract.cpp` verifies backend-neutral poller
-  registration behavior when enabled on the platform.
+  registration behavior and, on Windows, bounded GQCSEx dequeue, wakeup
+  coexistence, exact operation release, distinct-Channel batching, and
+  same-Channel deferral with dequeued-error preservation.
 - TCP client/server/connection contract tests verify socket operation behavior
   through the public path.
 - `tests/contract/socket/test_socket_contract.cpp` runs the Linux peer-close

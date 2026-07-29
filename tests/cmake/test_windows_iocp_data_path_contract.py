@@ -32,6 +32,13 @@ def main() -> None:
         / "tcp_connection"
         / "test_tcp_connection_iocp_sync_error.cpp"
     )
+    poller_contract_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "poller"
+        / "test_poller_contract.cpp"
+    )
     poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
     poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
@@ -140,11 +147,30 @@ def main() -> None:
     )
 
     poller_text = poller_source.read_text(encoding="utf-8")
+    require(poller_text, "GetQueuedCompletionStatusEx", poller_source)
+    require(poller_text, "deferredEntries_", poller_source)
     require(poller_text, "reinterpret_cast<IocpOperation*>", poller_source)
     require(poller_text, "operation->bytesTransferred", poller_source)
     require(poller_text, "IocpOperationKind::Read", poller_source)
     require(poller_text, "IocpOperationKind::Write", poller_source)
     require(poller_text, "associatedFds_", poller_source)
+
+    poller_header_text = poller_header.read_text(encoding="utf-8")
+    require(poller_header_text, "kCompletionBatchSize = 64", poller_header)
+    require(poller_header_text, "deferredEntries_", poller_header)
+
+    poller_contract_text = poller_contract_test.read_text(encoding="utf-8")
+    require(poller_contract_text, "testBoundedIocpBatch", poller_contract_test)
+    require(
+        poller_contract_text,
+        "testSameChannelCompletionDeferral",
+        poller_contract_test,
+    )
+    require(
+        poller_contract_text,
+        "testDeferredCompletionPreservesDequeuedError",
+        poller_contract_test,
+    )
 
     core_cmake_text = core_cmake.read_text(encoding="utf-8")
     require(core_cmake_text, "net/platform/IocpSocketOps_win.cc", core_cmake)

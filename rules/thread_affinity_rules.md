@@ -9,6 +9,8 @@ Mutable reactor state belongs to a specific EventLoop thread.
 - loop() must run only on the owner thread
 - Poller operations must run on the owner thread
 - pending functors are executed on the owner thread
+- Windows completion batches are dequeued, translated, merged, and dispatched
+  only on that EventLoop owner thread
 
 ## 3. Allowed Cross-Thread Interaction
 Cross-thread interaction must go through:
@@ -187,6 +189,8 @@ No other direct mutation path is allowed for core loop state.
 - Wakeup write can be invoked cross-thread
 - Wakeup read/clear is handled in loop thread
 - Wakeup is a scheduling signal, not business event delivery
+- An IOCP wakeup packet may share a dequeue batch with real I/O; consuming the
+  signal must not stop translation of the remaining completion entries
 
 ## 13. TcpServer Admission
 - Global/per-peer active counts, per-peer rate buckets, peer-table expiry, and

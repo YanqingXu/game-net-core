@@ -88,7 +88,7 @@ def main() -> None:
         "backpressure_recovery_seconds",
         "high_water_callbacks",
         "bounded_output_hysteresis",
-        "single_get_queued_completion_status",
+        "get_queued_completion_status_ex_batch_64",
         "epoll_wait_batch",
     ):
         require(source_text, fragment, benchmark_source)

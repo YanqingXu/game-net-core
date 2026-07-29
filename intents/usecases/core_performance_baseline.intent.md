@@ -81,8 +81,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - the regression runner may ingest the frozen `v1` baseline schema and current
   `v2` candidate schema, but candidate artifacts and semantic validation require
   the v2 bounded-admission fields
-- Windows reports the current single-completion
-  `GetQueuedCompletionStatus` mode; Linux reports the batched `epoll_wait` mode
+- Windows reports `get_queued_completion_status_ex_batch_64`; Linux reports
+  the batched `epoll_wait` mode. Historical Windows Core Preview evidence keeps
+  its distinct `single_get_queued_completion_status` value
 - raw JSON output is the durable comparison artifact; documentation summaries
   must identify platform, build type, command, and date
 
@@ -116,7 +117,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
   same runner, uses three-sample medians, and retains both raw sample sets
 - working-set deltas are process-level observations and include allocator/runtime effects
 - loopback results are regression baselines, not production network capacity claims
-- IOCP single-versus-batched completion performance remains a future implementation comparison
+- IOCP single-versus-batched evidence must retain distinct completion-mode
+  values and be compared only on the same runner with matching scenario inputs
 - the frozen v1 baseline and v2 candidate are compared only on their common
   reviewed performance metrics; v2 admission/accounting fields are validated
   independently and are not inferred for v1 samples

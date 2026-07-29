@@ -9,7 +9,10 @@
 
 #ifdef _WIN32
 #include "gamenet/core/net/poller/IocpPoller.h"
+#include "gamenet/core/net/platform/IocpOperation.h"
 #endif
+
+#include <cstddef>
 
 namespace gamenet::net::detail {
 
@@ -54,6 +57,76 @@ public:
 #else
         (void)loop;
         (void)socket;
+        return false;
+#endif
+    }
+
+    static std::size_t completionBatchSize() noexcept {
+#ifdef _WIN32
+        return IocpPoller::kCompletionBatchSize;
+#else
+        return 0;
+#endif
+    }
+
+    static void trackCompletion(
+        EventLoop& loop,
+        IocpOperation* operation) {
+#ifdef _WIN32
+        loop.trackCompletionOperation(operation);
+#else
+        (void)loop;
+        (void)operation;
+#endif
+    }
+
+    static bool postCompletion(
+        EventLoop& loop,
+        IocpOperation* operation,
+        DWORD bytesTransferred) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        if (poller == nullptr || operation == nullptr) {
+            return false;
+        }
+        return ::PostQueuedCompletionStatus(
+                   poller->iocp_,
+                   bytesTransferred,
+                   operation->channel == nullptr
+                       ? 0
+                       : static_cast<ULONG_PTR>(
+                             operation->channel->fd()),
+                   &operation->overlapped) != FALSE;
+#else
+        (void)loop;
+        (void)operation;
+        (void)bytesTransferred;
+        return false;
+#endif
+    }
+
+    static std::size_t pollAndDispatch(EventLoop& loop) {
+#ifdef _WIN32
+        loop.activeChannels_.clear();
+        loop.pollReturnTime_ =
+            loop.poller_->poll(0, &loop.activeChannels_);
+        const std::size_t activeCount =
+            loop.activeChannels_.size();
+        loop.dispatchActiveChannels();
+        return activeCount;
+#else
+        (void)loop;
+        return 0;
+#endif
+    }
+
+    static bool hasPendingCompletionOperations(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        return loop.poller_->hasPendingCompletionOperations();
+#else
+        (void)loop;
         return false;
 #endif
     }

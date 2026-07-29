@@ -58,10 +58,11 @@ $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benc
 ```
 
 The two echo commands provide the first one-worker/two-worker scaling point.
-They do not alter the poller: Windows currently reports
-`single_get_queued_completion_status`, while Linux reports
-`epoll_wait_batch`. A future IOCP batched-drain implementation must use a new
-completion-mode value so its results cannot be confused with this baseline.
+They do not alter the poller. Current Windows candidates report
+`get_queued_completion_status_ex_batch_64`, while Linux reports
+`epoll_wait_batch`. Historical Windows Core Preview artifacts report
+`single_get_queued_completion_status`; the distinct value prevents batched
+candidate results from being confused with that baseline.
 
 ## Scenarios and Measurements
 

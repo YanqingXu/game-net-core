@@ -143,6 +143,9 @@ EventLoop is the heart of reactor execution in game-net-core.
 - normal iterations execute at most `maxFunctorsPerIteration`; accepted
   remainder is preserved and the loop is woken for another I/O/timer-aware
   iteration
+- Windows IOCP polling returns at most one fixed 64-packet completion batch per
+  normal loop iteration; an I/O backlog therefore yields to expired timers,
+  control sources, lifecycle nodes, and pending functors before the next batch
 - one asynchronous callback exception never skips later ready timers or
   already-accepted pending functors, and Channel dispatch always clears its
   in-callback lifetime guard while unwinding
@@ -340,6 +343,10 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - two synthetically captured active Channels exercise pending-peer removal and
   destruction identically on Linux and Windows without depending on IOCP batch
   dequeue width
+- the Windows Poller contract interleaves a wakeup with more than 64 synthetic
+  completions, verifies bounded two-round progress, exact completion-obligation
+  release, distinct-Channel batching, and same-Channel deferral across
+  registration-safe rounds
 - current-Channel internal retirement remains available when normal and
   reserved pending-functor capacity are both full
 - lifecycle attach/detach generation invalidates stale handles and prevents

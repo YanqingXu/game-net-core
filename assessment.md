@@ -1,10 +1,10 @@
 # game-net-core 推荐开发路线
 
 > 基线日期：2026-07-26
-> 当前执行检查点：2026-07-28
-> 主线基线：`main@3c19033f1bc6aa0195c6e90e6fdbce85601fae91`
-> 候选分支：`codex/m2-phase4-phase5-alignment`
-> 执行分支：`codex/m2-phase4-phase5-alignment`
+> 当前执行检查点：2026-07-29
+> 主线基线：`main@15642a25283515e4c3453afd934e95a9cd01db1d`
+> 候选工作树：`main`（M3 首个切片尚未提交）
+> 执行分支：`main`
 
 ## 0. 执行进度
 
@@ -88,14 +88,24 @@ CTest 清单为 **109 项（8 unit、89 contract、12 integration）**：
   repeat-50 共 600 次通过；
 - `PlayerSession` 构造/修改已私有化，Broadcast 改用 immutable target；
   O(N) 会话回收已建立 scan-only 与 full-expiry 的 10k/100k/1M Release
-  规模基准。
+  规模基准；
+- M3/PR-G 的首个独立切片已在本地工作树落地：Windows IOCP Poller 使用
+  `GetQueuedCompletionStatusEx` 固定收割最多 64 个 completion；同一轮对
+  每个 Channel 最多发布一个 active entry，同 Channel 的额外 completion
+  使用 Poller 自有固定数组延后并保留 operation lease；wakeup packet 不会
+  截断同批真实 I/O；
+- 本切片已完成 Windows MSVC Debug 全目标构建与 CTest **109/109**，
+  8 项 IOCP 生命周期定向回归 **8/8**；Debug benchmark 已输出
+  `get_queued_completion_status_ex_batch_64`。这些是本机推进门，不是冻结
+  SHA 的 Release、跨平台性能或远端发布证据。
 
-M1/M2 的本地 runtime 实现与直接合同现已闭环。尚未完成的是冻结候选 SHA
-之后的 Linux Debug/Release、Linux ASan/UBSan、TSan、跨平台性能与 24/72
-小时耐久证据重跑，以及独立 maintainer 的 API、性能和发布工具人工评审。
-因此当前仍不得创建 stable tag，也不得把历史 `b344318` 耐久记录当作本轮
-runtime 的最终证明。Windows 的 `GAMENET_ENABLE_ASAN_UBSAN=ON` 在 MSVC
-只提供 AddressSanitizer，不能替代 Linux UBSan 或 TSan。
+M1/M2 的本地 runtime 实现与直接合同现已闭环，M3 已完成首个 IOCP batching
+切片。尚未完成的是 M3 其余内存与公平性工作，以及冻结候选 SHA 之后的
+Linux Debug/Release、Linux ASan/UBSan、TSan、跨平台性能与 24/72 小时
+耐久证据重跑和独立 maintainer 的 API、性能、发布工具人工评审。因此当前
+仍不得创建 stable tag，也不得把历史 `b344318` 耐久记录当作本轮 runtime
+的最终证明。Windows 的 `GAMENET_ENABLE_ASAN_UBSAN=ON` 在 MSVC 只提供
+AddressSanitizer，不能替代 Linux UBSan 或 TSan。
 
 独立 maintainer 的 API、性能和发布工具人工评审仍是稳定候选门禁；当前
 执行不得据此创建 stable tag。
@@ -103,9 +113,9 @@ runtime 的最终证明。Windows 的 `GAMENET_ENABLE_ASAN_UBSAN=ON` 在 MSVC
 ### 0.1 上一收敛检查点与本轮执行结果
 
 上一轮按用户要求在 `codex/assessment-roadmap-execution` 分支收敛、提交
-并推送了当时的全部本地修改；这些结果随后进入当前
-`main@3c19033f1bc6aa0195c6e90e6fdbce85601fae91` 基线。本轮 M2 直接从该
-main 基线开始，没有从缺少 M0/M1 原语的历史提交重新开始。
+并推送了当时的全部本地修改；M2 后续工作也已合入并推送到当前
+`main@15642a25283515e4c3453afd934e95a9cd01db1d` 基线。本轮 M3 直接从该
+main 基线开始，没有从缺少 M0/M1/M2 原语的历史提交重新开始。
 
 已冻结到本检查点的范围：
 
@@ -199,6 +209,28 @@ M2 的 6.1～6.6 实现项已经完成，6.7 的本机可执行矩阵已经闭�
 M2 还不能作为“冻结候选已验收”关闭：Linux ASan/UBSan、82 项 threading
 TSan、冻结 SHA 的 Linux/Windows CI 与远端 repeat/evidence artifact 仍待
 执行。该证据缺口不否定本地实现完成，但阻止 stable promotion。
+
+### 0.3 M3 首个本地执行检查点
+
+M3 先完成 PR-G 中可独立验收的 IOCP completion batching，不把 buffer pool、
+segmented write、AcceptEx pool 或全局公平性混入同一切片：
+
+1. `IocpPoller` 使用 `GetQueuedCompletionStatusEx`，单次固定最多收割
+   64 个 completion，并在批次边界把执行权交还给 timer、control、
+   lifecycle 与普通 functor；
+2. wakeup packet 只作为控制信号消费，不提前终止同批真实 I/O；
+3. 不同 Channel 可在同轮发布；同一 Channel 的第二个及后续 completion
+   延后到后续 poll round，避免 read callback 改变注册代际后让同轮 write
+   callback 被跳过并遗留 completion 状态；
+4. 延后队列使用 Poller 自有固定容量，不在完成热路径动态分配，并在真正
+   发布 completion 前持续持有 outstanding/retained operation lease；
+5. Windows MSVC Debug 全目标构建成功，CTest 109/109；定向 IOCP 生命周期
+   8/8；Debug benchmark 的 completion mode 已确认是
+   `get_queued_completion_status_ex_batch_64`。
+
+下一切片仍是 PR-G 内部工作：优先选择 wakeup coalescing，再推进稳定
+segment/chunk write ownership、partial completion offset 和 read/AcceptEx
+容量治理。M3 整体尚未完成。
 
 ## 1. 目标与当前判断
 
@@ -648,10 +680,13 @@ Poller 返回裸 `Channel*` 集合。一个 Channel callback 可能移除并销�
 
 ### 7.2 IOCP v2 数据路径
 
+当前状态：首个本地切片已完成固定 64 条 GQCSEx batching、wakeup 同批消费、
+同 Channel 跨轮延后与 operation lease 精确保持；尚未宣告 M3 或 PR-G 完成。
+
 #### 任务
 
-1. `GetQueuedCompletionStatusEx` 批量 drain；
-2. 每轮 completion count/time budget；
+1. `GetQueuedCompletionStatusEx` 批量 drain（固定 64 条本地切片已完成）；
+2. 每轮 completion count/time budget（count budget 已完成，time budget 待做）；
 3. wakeup coalescing，避免每个跨线程任务一个 completion；
 4. 可配置 AcceptEx pre-post pool；
 5. read buffer 改为 slab/pool 或按需小块；
@@ -1101,6 +1136,9 @@ GitHub Actions 的短期 artifact 不能作为唯一长期证据，关键 manife
 - read pool；
 - segmented write；
 - AcceptEx pool。
+
+当前进度：GQCSEx 固定 64 条批量收割及其同 Channel 安全延后合同已完成；
+wakeup coalescing、read pool、segmented write 与 AcceptEx pool 仍待后续切片。
 
 ### PR-H：公平预算与时间轮
 

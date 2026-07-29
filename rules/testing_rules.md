@@ -71,6 +71,10 @@ Contract tests verify:
 - removeChannel unregisters correctly
 - poll returns active channels accurately
 - invalid removal path is detected or guarded
+- Windows bounded batch dequeue with more than 64 completion packets, an
+  interleaved wakeup, exact outstanding-operation release, distinct-Channel
+  batching, same-Channel read/write deferral across poll rounds, and deferred
+  error preservation after the first callback removes the Channel
 - Windows association-preserve and replacement-registration fault injection
   both prove transactional TcpClient rollback and successful fresh reconnect
 
