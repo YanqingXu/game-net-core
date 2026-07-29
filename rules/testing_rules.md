@@ -58,6 +58,8 @@ Contract tests verify:
   indexed slot is invalidated
 - expired-timer and control populations larger than their budgets yield to
   accepted functors and publish exact drained/remaining plus exhausted metrics
+- repeating timers prove legacy fixed-delay ordering and deterministic
+  fixed-rate cadence with an exact maximum catch-up count followed by skip
 - one deterministic sustained-source contract keeps active I/O, timer,
   control, lifecycle, and functor work pending together for multiple rounds;
   every source advances once per round in documented order with callback depth

@@ -135,6 +135,8 @@ It must not blur these roles.
 - Timer containers own timer metadata
 - Scheduled callbacks do not imply ownership of arbitrary target objects
 - Cancellation semantics must be explicit
+- Repeating cadence mode and consecutive catch-up count are TimerQueue-owned
+  metadata; neither creates ownership of the callback's captured targets
 - TcpServer owns its graceful-stop coordination state; returned shared futures
   observe the terminal result but do not own TcpServer
 - TcpServer owns base stop-generation bookkeeping and one aggregate participant

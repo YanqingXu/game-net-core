@@ -8,7 +8,10 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace std::chrono_literals;
 
@@ -119,6 +122,126 @@ int main() {
 
         gamenet::test::waitUntilReady(firedCountFuture, 1s, "repeating timer did not reach cancellation count");
         GAMENET_TEST_ASSERT(firedCountFuture.get() == 3);
+    }
+
+    {
+        gamenet::net::EventLoopThread loopThread;
+        gamenet::net::EventLoop* loop = loopThread.startLoop();
+
+        std::promise<std::vector<std::string>> finished;
+        auto finishedFuture = finished.get_future();
+        auto repeating = std::make_shared<gamenet::net::TimerId>();
+        auto order = std::make_shared<std::vector<std::string>>();
+        auto count = std::make_shared<int>(0);
+
+        loop->runInLoop([loop, repeating, order, count, &finished] {
+            // timer-fixed-delay-contract: a late legacy callback schedules the
+            // next occurrence from completion, so already-ready work runs first.
+            *repeating = loop->runEvery(10ms, [loop, repeating, order, count, &finished] {
+                ++*count;
+                order->push_back("repeat-" + std::to_string(*count));
+                if (*count == 1) {
+                    loop->runAfter(0ms, [order] { order->push_back("sentinel"); });
+                    std::this_thread::sleep_for(60ms);
+                    return;
+                }
+
+                loop->cancel(*repeating);
+                finished.set_value(*order);
+                loop->quit();
+            });
+        });
+
+        gamenet::test::waitUntilReady(
+            finishedFuture,
+            1s,
+            "legacy fixed-delay ordering did not converge");
+        GAMENET_TEST_ASSERT(
+            finishedFuture.get() ==
+            std::vector<std::string>({"repeat-1", "sentinel", "repeat-2"}));
+    }
+
+    {
+        gamenet::net::EventLoopThread loopThread;
+        gamenet::net::EventLoop* loop = loopThread.startLoop();
+
+        std::promise<std::vector<std::string>> finished;
+        auto finishedFuture = finished.get_future();
+        auto repeating = std::make_shared<gamenet::net::TimerId>();
+        auto order = std::make_shared<std::vector<std::string>>();
+        auto count = std::make_shared<int>(0);
+
+        loop->runInLoop([loop, repeating, order, count, &finished] {
+            const gamenet::net::RepeatingTimerOptions options{
+                .mode = gamenet::net::RepeatingTimerMode::FixedRate,
+                .maxCatchUpCallbacks = 2,
+            };
+            // timer-fixed-rate-catch-up-contract: two missed cadence points may
+            // replay; after that the timer skips ahead and yields to sentinel-2.
+            *repeating = loop->runEvery(
+                10ms,
+                [loop, repeating, order, count, &finished] {
+                    ++*count;
+                    order->push_back("repeat-" + std::to_string(*count));
+                    if (*count == 1) {
+                        std::this_thread::sleep_for(80ms);
+                        loop->runAfter(0ms, [loop, repeating, order, &finished] {
+                            order->push_back("sentinel-1");
+                            loop->runAfter(0ms, [loop, repeating, order, &finished] {
+                                order->push_back("sentinel-2");
+                                loop->cancel(*repeating);
+                                finished.set_value(*order);
+                                loop->quit();
+                            });
+                        });
+                    }
+                },
+                options);
+        });
+
+        gamenet::test::waitUntilReady(
+            finishedFuture,
+            1s,
+            "fixed-rate bounded catch-up ordering did not converge");
+        GAMENET_TEST_ASSERT(
+            finishedFuture.get() ==
+            std::vector<std::string>({
+                "repeat-1",
+                "repeat-2",
+                "sentinel-1",
+                "repeat-3",
+                "sentinel-2",
+            }));
+    }
+
+    {
+        gamenet::net::EventLoop loop;
+        bool rejected = false;
+        try {
+            (void)loop.runEvery(
+                10ms,
+                [] {},
+                gamenet::net::RepeatingTimerOptions{
+                    .mode = gamenet::net::RepeatingTimerMode::FixedDelay,
+                    .maxCatchUpCallbacks = 1,
+                });
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        GAMENET_TEST_ASSERT(rejected);
+
+        rejected = false;
+        try {
+            (void)loop.runEvery(
+                10ms,
+                [] {},
+                gamenet::net::RepeatingTimerOptions{
+                    .mode = static_cast<gamenet::net::RepeatingTimerMode>(99),
+                });
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        GAMENET_TEST_ASSERT(rejected);
     }
 
     {

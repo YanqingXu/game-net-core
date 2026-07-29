@@ -22,7 +22,9 @@ thread-affinity and lifecycle discipline.
 - extract at most EventLoop's validated expired-timer budget per loop turn;
   later ready timers remain in the ordered container and keep the next poll
   timeout at zero
-- reschedule repeating timers explicitly
+- reschedule repeating timers with explicit fixed-delay or fixed-rate cadence
+- bound fixed-rate replay with a per-timer maximum consecutive catch-up count;
+  once exhausted, skip missed cadence points and schedule the next future point
 - support cross-thread add/cancel through EventLoop scheduling APIs
 
 ---
@@ -41,6 +43,13 @@ thread-affinity and lifecycle discipline.
 - TimerQueue owns no backend fd; EventLoop owns the poller wakeup mechanism
 - ready timer callbacks run on the owner loop thread
 - repeating timers are only reinserted if they were not canceled
+- the compatibility `runEvery(Duration, Functor)` overload is fixed-delay:
+  callback completion time plus interval determines the next expiration
+- fixed-rate timers derive the next expiration from the prior scheduled point;
+  they execute at most the configured consecutive catch-up count, then skip to
+  the next future cadence point
+- catch-up callbacks are ordinary budgeted timer callbacks on later loop turns,
+  never recursive calls from the current callback frame
 - cancel must prevent future firing, even if requested cross-thread
 - a callback may cancel a later ready timer that was not extracted into the
   current budget; removal from the ordered container prevents its later firing
@@ -84,15 +93,22 @@ Exposed through EventLoop:
 - runAt(Timestamp, Functor)
 - runAfter(Duration, Functor)
 - runEvery(Duration, Functor)
+- runEvery(Duration, Functor, RepeatingTimerOptions)
 - cancel(TimerId)
 
 `TimerId` exists to make cancellation explicit and avoid exposing internal timer pointers.
+`RepeatingTimerOptions` defaults to fixed-delay with zero catch-up so the
+existing overload keeps its historical behavior.
 
 ---
 
 ## 10. Test Contracts
 - one-shot timer fires on the owner loop thread
 - repeating timer fires multiple times and can be canceled
+- legacy fixed-delay waits one interval after a late callback completes
+- fixed-rate preserves scheduled cadence, performs exactly the configured
+  maximum catch-up callbacks, and then skips missed points
+- fixed-delay rejects a non-zero catch-up setting instead of ignoring it
 - cross-thread runAfter marshals back and fires on the owner loop thread
 - cancel before expiration prevents callback execution
 - canceling a ready timer from an earlier ready callback prevents the canceled

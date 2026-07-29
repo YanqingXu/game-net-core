@@ -138,3 +138,14 @@ budgeted drain shape. Direct contracts are
 `tests/contract/poller/test_poller_contract.cpp` and
 `tests/contract/acceptor/test_acceptor_iocp_pool.cpp` for configured-width
 packet, wakeup, Accept, read/write deferral, metric, and obligation evidence.
+
+## Current M3-H2-A Additive Review
+
+M3-H2-A adds `TimerOptions.h` to the stable Core surface and appends
+`EventLoop::runEvery(Duration, Functor, RepeatingTimerOptions)`. The existing
+two-argument overload is unchanged and remains fixed-delay. Fixed-rate callers
+must opt in and choose a finite maximum consecutive catch-up count; zero skips
+all missed cadence points. Adding an overload and a new options type is source
+compatible within the 0.3 line. Direct cadence, bounded catch-up, cancellation,
+and invalid-option contracts live in
+`tests/contract/timer_queue/test_timer_queue.cpp`.

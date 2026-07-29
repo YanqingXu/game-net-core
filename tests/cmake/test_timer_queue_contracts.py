@@ -13,6 +13,7 @@ def main() -> None:
     future_test_helper = repo_root / "tests" / "support" / "FutureTest.h"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     timer_intent = repo_root / "intents" / "modules" / "timer_queue.intent.md"
+    timer_options = repo_root / "include" / "gamenet" / "core" / "net" / "TimerOptions.h"
     migration_status = repo_root / "docs" / "migration_status.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
@@ -25,6 +26,7 @@ def main() -> None:
     future_test_helper_text = future_test_helper.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     timer_intent_text = timer_intent.read_text(encoding="utf-8")
+    timer_options_text = timer_options.read_text(encoding="utf-8")
     migration_text = migration_status.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
@@ -41,6 +43,14 @@ def main() -> None:
     require(timer_test_text, "gamenet::test::waitUntilReady", timer_test)
     require(timer_test_text, "loop->cancel(*second)", timer_test)
     require(timer_test_text, "GAMENET_TEST_ASSERT(!secondFired.load())", timer_test)
+    require(timer_test_text, "timer-fixed-delay-contract", timer_test)
+    require(timer_test_text, "timer-fixed-rate-catch-up-contract", timer_test)
+    require(timer_test_text, ".maxCatchUpCallbacks = 2", timer_test)
+    require(timer_options_text, "RepeatingTimerMode", timer_options)
+    require(timer_options_text, "FixedDelay", timer_options)
+    require(timer_options_text, "FixedRate", timer_options)
+    require(timer_options_text, "maxCatchUpCallbacks", timer_options)
+    require(timer_intent_text, "next future cadence point", timer_intent)
     require(future_test_helper_text, "waitUntilReady", future_test_helper)
     require(future_test_helper_text, "std::future_status::ready", future_test_helper)
     require(future_test_helper_text, "GAMENET_TEST_FAIL", future_test_helper)

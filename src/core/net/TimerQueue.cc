@@ -31,7 +31,50 @@ int ceilMilliseconds(std::chrono::steady_clock::duration delay) {
     return static_cast<int>(std::max<std::int64_t>(1, capped));
 }
 
+gamenet::base::Timestamp nextFixedRateExpiration(
+    gamenet::base::Timestamp previousExpiration,
+    TimerQueue::Duration interval,
+    gamenet::base::Timestamp now,
+    std::size_t maxCatchUpCallbacks,
+    std::size_t* consecutiveCatchUpCallbacks) {
+    auto next = previousExpiration + interval;
+    if (next > now) {
+        *consecutiveCatchUpCallbacks = 0;
+        return next;
+    }
+
+    if (*consecutiveCatchUpCallbacks < maxCatchUpCallbacks) {
+        ++*consecutiveCatchUpCallbacks;
+        return next;
+    }
+
+    *consecutiveCatchUpCallbacks = 0;
+    const auto missedIntervals = (now - next) / interval;
+    next += interval * missedIntervals;
+    if (next <= now) {
+        if (gamenet::base::Timestamp::max() - next < interval) {
+            return gamenet::base::Timestamp::max();
+        }
+        next += interval;
+    }
+    return next;
+}
+
 }  // namespace
+
+void RepeatingTimerOptions::validate() const {
+    switch (mode) {
+        case RepeatingTimerMode::FixedDelay:
+            if (maxCatchUpCallbacks != 0) {
+                throw std::invalid_argument(
+                    "fixed-delay repeating timers do not support catch-up callbacks");
+            }
+            return;
+        case RepeatingTimerMode::FixedRate:
+            return;
+    }
+    throw std::invalid_argument("unknown repeating timer mode");
+}
 
 TimerQueue::TimerQueue(EventLoop* loop)
     : loop_(loop),
@@ -42,8 +85,17 @@ TimerQueue::~TimerQueue() {
     loop_->assertInLoopThread();
 }
 
-TimerId TimerQueue::addTimer(TimerCallback cb, gamenet::base::Timestamp when, Duration interval) {
-    auto timer = std::make_shared<Timer>(std::move(cb), when, interval, nextSequence_.fetch_add(1));
+TimerId TimerQueue::addTimer(
+    TimerCallback cb,
+    gamenet::base::Timestamp when,
+    Duration interval,
+    RepeatingTimerOptions options) {
+    auto timer = std::make_shared<Timer>(
+        std::move(cb),
+        when,
+        interval,
+        options,
+        nextSequence_.fetch_add(1));
     const TimerId timerId(timer->sequence);
 
     if (loop_->isInLoopThread()) {
@@ -170,7 +222,17 @@ std::vector<TimerQueue::TimerPtr> TimerQueue::getExpired(
 void TimerQueue::reset(const std::vector<TimerPtr>& expired, gamenet::base::Timestamp now) {
     for (const auto& timer : expired) {
         if (timer->repeat() && !timer->canceled && timersById_.contains(timer->sequence)) {
-            timer->expiration = now + timer->interval;
+            if (timer->options.mode == RepeatingTimerMode::FixedRate) {
+                timer->expiration = nextFixedRateExpiration(
+                    timer->expiration,
+                    timer->interval,
+                    now,
+                    timer->options.maxCatchUpCallbacks,
+                    &timer->consecutiveCatchUpCallbacks);
+            } else {
+                timer->expiration = now + timer->interval;
+                timer->consecutiveCatchUpCallbacks = 0;
+            }
             insert(timer);
             continue;
         }

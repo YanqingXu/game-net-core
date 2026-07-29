@@ -250,6 +250,7 @@ Typical API direction:
 - runAt(Timestamp, Functor)
 - runAfter(Duration, Functor)
 - runEvery(Duration, Functor)
+- runEvery(Duration, Functor, RepeatingTimerOptions)
 - cancel(TimerId)
 - updateChannel(Channel*)
 - removeChannel(Channel*)

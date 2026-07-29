@@ -90,6 +90,10 @@ No other direct mutation path is allowed for core loop state.
 - Every fairness budget is validated before `loop()` starts. Budget exhaustion
   causes an immediate/non-blocking next turn while timer, control, lifecycle,
   and accepted-functor phases continue between portions
+- Fixed-rate timer catch-up remains normal owner-loop timer work: each replay is
+  reinserted through TimerQueue, consumes a later timer budget slot, and never
+  invokes the callback recursively. Once its configured consecutive catch-up
+  count is exhausted, TimerQueue advances directly to a future cadence point
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

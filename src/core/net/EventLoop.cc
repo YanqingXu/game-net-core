@@ -807,10 +807,22 @@ TimerId EventLoop::runAfter(TimerDuration delay, Functor cb) {
 }
 
 TimerId EventLoop::runEvery(TimerDuration interval, Functor cb) {
+    return runEvery(interval, std::move(cb), RepeatingTimerOptions{});
+}
+
+TimerId EventLoop::runEvery(
+    TimerDuration interval,
+    Functor cb,
+    RepeatingTimerOptions options) {
     if (interval <= TimerDuration::zero()) {
         throw std::invalid_argument("runEvery interval must be positive");
     }
-    return timerQueue_->addTimer(std::move(cb), gamenet::base::now() + interval, interval);
+    options.validate();
+    return timerQueue_->addTimer(
+        std::move(cb),
+        gamenet::base::now() + interval,
+        interval,
+        options);
 }
 
 void EventLoop::cancel(TimerId timerId) {

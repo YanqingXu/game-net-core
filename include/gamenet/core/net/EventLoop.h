@@ -10,6 +10,7 @@
 #include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/core/net/PostResult.h"
 #include "gamenet/core/net/TimerId.h"
+#include "gamenet/core/net/TimerOptions.h"
 #include "gamenet/core/net/platform/Wakeup.h"
 
 #include <atomic>
@@ -159,7 +160,12 @@ public:
     std::uint64_t callbackExceptionCount() const noexcept;
     TimerId runAt(gamenet::base::Timestamp time, Functor cb);
     TimerId runAfter(TimerDuration delay, Functor cb);
+    // Compatibility overload: fixed-delay cadence with no catch-up.
     TimerId runEvery(TimerDuration interval, Functor cb);
+    TimerId runEvery(
+        TimerDuration interval,
+        Functor cb,
+        RepeatingTimerOptions options);
     void cancel(TimerId timerId);
 
     void wakeup();

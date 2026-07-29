@@ -6,6 +6,7 @@
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/base/noncopyable.h"
 #include "gamenet/core/net/TimerId.h"
+#include "gamenet/core/net/TimerOptions.h"
 
 #include <atomic>
 #include <chrono>
@@ -32,7 +33,11 @@ public:
     explicit TimerQueue(EventLoop* loop);
     ~TimerQueue();
 
-    TimerId addTimer(TimerCallback cb, gamenet::base::Timestamp when, Duration interval = Duration::zero());
+    TimerId addTimer(
+        TimerCallback cb,
+        gamenet::base::Timestamp when,
+        Duration interval = Duration::zero(),
+        RepeatingTimerOptions options = {});
     void cancel(TimerId timerId);
 
 private:
@@ -44,10 +49,16 @@ private:
     };
 
     struct Timer {
-        Timer(TimerCallback timerCallback, gamenet::base::Timestamp expirationTime, Duration repeatInterval, std::int64_t id)
+        Timer(
+            TimerCallback timerCallback,
+            gamenet::base::Timestamp expirationTime,
+            Duration repeatInterval,
+            RepeatingTimerOptions repeatingOptions,
+            std::int64_t id)
             : callback(std::move(timerCallback)),
               expiration(expirationTime),
               interval(repeatInterval),
+              options(repeatingOptions),
               sequence(id) {
         }
 
@@ -58,6 +69,8 @@ private:
         TimerCallback callback;
         gamenet::base::Timestamp expiration;
         Duration interval;
+        RepeatingTimerOptions options;
+        std::size_t consecutiveCatchUpCallbacks{0};
         std::int64_t sequence;
         bool canceled{false};
         bool inQueue{true};
