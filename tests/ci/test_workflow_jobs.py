@@ -562,6 +562,7 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
     test = step_block(job, contract.test_step)
     manifest = step_block(job, "Write CI evidence manifest")
     upload = step_block(job, "Upload CI evidence")
+    report = step_block(job, "Report CI evidence upload")
 
     require(inventory, f"{contract.interpreter} tools/verify_ctest_inventory.py")
     require(inventory, f"--test-dir {contract.test_dir}")
@@ -596,12 +597,31 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
     assert manifest.count("--artifact-name") == 1
     assert manifest.count("--command '") == contract.manifest_command_count
 
-    assert upload.startswith("      - name: Upload CI evidence\n        if: always()")
+    assert upload.startswith("      - name: Upload CI evidence\n")
+    require(upload, "id: ci-evidence-upload")
+    require(upload, "if: always()")
+    require(
+        upload,
+        "continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}",
+    )
     require(upload, "uses: actions/upload-artifact@v4")
     require(upload, f"name: {ARTIFACT_NAME}")
     require(upload, "path: ci-evidence/")
     require(upload, "if-no-files-found: error")
     require(upload, "retention-days: 90")
+    require(report, "if: always()")
+    require(
+        report,
+        "GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}",
+    )
+    require(report, "GAMENET_CI_ARTIFACT_POLICY")
+    require(report, "best-effort")
+    require(report, "no retained artifact may be claimed")
+    if contract.interpreter == "python":
+        require(report, "shell: pwsh")
+        require(report, "$env:GITHUB_STEP_SUMMARY")
+    else:
+        require(report, '${GITHUB_STEP_SUMMARY}')
     for junit_path in contract.junit_paths:
         require(job, junit_path)
     assert job.count("--output-junit") == 2 * len(contract.junit_paths), (
@@ -638,8 +658,7 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
         assert "-max_total_time" not in fuzz
         require(fuzz, "2>&1 | tee ci-evidence/fuzz/fuzzer.log")
         assert job.index(test) < job.index(fuzz) < job.index(manifest)
-    assert job.index(manifest) < job.index(upload)
-    assert job.rstrip().endswith("retention-days: 90")
+    assert job.index(manifest) < job.index(upload) < job.index(report)
 
 
 def main() -> None:
@@ -706,7 +725,23 @@ def main() -> None:
     require(workflow, "Windows MSVC IOCP Release build and tests")
     require(workflow, "ci-evidence-set:")
     require(workflow, "Aggregate six-job CI evidence")
-    require(workflow, "runs-on: windows-latest")
+    require(workflow, "GAMENET_CI_ARTIFACT_POLICY")
+    require(workflow, "vars.GAMENET_CI_ARTIFACT_POLICY || 'required'")
+    require(workflow, "vars.GAMENET_CI_RUNNER_MODE == 'self-hosted'")
+    require(workflow, "github.event.pull_request.head.repo.full_name == github.repository")
+    require(workflow, '\'["self-hosted","linux","x64","gamenet-endurance"]\'')
+    require(workflow, '\'["ubuntu-24.04"]\'')
+    require(workflow, '\'["self-hosted","windows","x64","gamenet-windows"]\'')
+    require(workflow, '\'["windows-latest"]\'')
+    assert workflow.count(
+        '\'["self-hosted","linux","x64","gamenet-endurance"]\''
+    ) == 5
+    assert workflow.count('\'["ubuntu-24.04"]\'') == 5
+    assert workflow.count(
+        '\'["self-hosted","windows","x64","gamenet-windows"]\''
+    ) == 2
+    assert workflow.count('\'["windows-latest"]\'') == 2
+    assert workflow.count("- name: Bootstrap self-hosted Windows tool paths") == 2
     require(workflow, "cancel-in-progress: true")
     require(workflow, "python3 tests/scope/test_intent_consistency.py")
     require(workflow, "python3 tests/scope/test_intent_metadata.py")
@@ -826,30 +861,82 @@ def main() -> None:
     require(aggregate_job, "timeout-minutes: 10")
     for job_name in JOB_CONTRACTS:
         require(aggregate_job, f"- {job_name}")
+    producer_results = step_block(aggregate_job, "Verify six producer job results")
+    for job_name in JOB_CONTRACTS:
+        require(producer_results, f"needs['{job_name}'].result")
+    require(producer_results, "all six producer jobs must succeed")
     download = step_block(aggregate_job, "Download six producer evidence artifacts")
+    require(download, "id: producer-evidence-download")
+    require(
+        download,
+        "continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}",
+    )
     require(download, "uses: actions/download-artifact@v4")
     require(download, "pattern: ci-evidence-*-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}")
     require(download, "path: ci-evidence-producers")
     require(download, "merge-multiple: false")
+    availability = step_block(aggregate_job, "Check producer evidence availability")
+    require(availability, "id: producer-evidence-availability")
+    require(availability, "if: always()")
+    require(
+        availability,
+        "GAMENET_CI_ARTIFACT_DOWNLOAD_OUTCOME: "
+        "${{ steps.producer-evidence-download.outcome }}",
+    )
+    require(availability, "producer_count")
+    require(availability, "available=true")
+    require(availability, "available=false")
+    require(availability, "best-effort")
+    require(availability, "Producer job results remain authoritative")
     aggregate = step_block(aggregate_job, "Verify and aggregate six-job evidence")
+    require(aggregate, "id: aggregate-evidence-verification")
+    require(
+        aggregate,
+        "if: steps.producer-evidence-availability.outputs.available == 'true'",
+    )
     require(aggregate, "python3 tools/verify_ci_evidence_set.py")
     require(aggregate, "--input-root ci-evidence-producers")
     require(aggregate, "--output ci-evidence-aggregate/manifest.json")
     aggregate_upload = step_block(aggregate_job, "Upload aggregate CI evidence")
-    require(aggregate_upload, "if: always()")
+    require(aggregate_upload, "id: aggregate-evidence-upload")
+    require(aggregate_upload, "always() &&")
+    require(aggregate_upload, "steps.aggregate-evidence-verification.outcome == 'success'")
+    require(
+        aggregate_upload,
+        "continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}",
+    )
     require(aggregate_upload, "uses: actions/upload-artifact@v4")
     require(aggregate_upload, f"name: {AGGREGATE_ARTIFACT_NAME}")
     require(aggregate_upload, "path: ci-evidence-aggregate/")
     require(aggregate_upload, "if-no-files-found: error")
     require(aggregate_upload, "retention-days: 90")
-    assert aggregate_job.index(download) < aggregate_job.index(aggregate) < aggregate_job.index(aggregate_upload)
+    aggregate_report = step_block(aggregate_job, "Report aggregate CI evidence")
+    require(aggregate_report, "if: always()")
+    require(
+        aggregate_report,
+        "GAMENET_CI_ARTIFACT_AVAILABLE: "
+        "${{ steps.producer-evidence-availability.outputs.available }}",
+    )
+    require(aggregate_report, "No retained aggregate artifact may be claimed")
+    assert (
+        aggregate_job.index(producer_results)
+        < aggregate_job.index(download)
+        < aggregate_job.index(availability)
+        < aggregate_job.index(aggregate)
+        < aggregate_job.index(aggregate_upload)
+        < aggregate_job.index(aggregate_report)
+    )
 
     assert workflow.count("- name: Record toolchain evidence") == len(JOB_CONTRACTS)
     assert workflow.count("- name: Verify CTest inventory") == len(JOB_CONTRACTS)
     assert workflow.count("- name: Write CI evidence manifest") == len(JOB_CONTRACTS)
     assert workflow.count("- name: Upload CI evidence") == len(JOB_CONTRACTS)
+    assert workflow.count("- name: Report CI evidence upload") == len(JOB_CONTRACTS)
     assert workflow.count("uses: actions/upload-artifact@v4") == len(JOB_CONTRACTS) + 1
     assert workflow.count("uses: actions/download-artifact@v4") == 1
+    assert workflow.count(
+        "continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}"
+    ) == len(JOB_CONTRACTS) + 2
     assert workflow.count("--artifact-name") == len(JOB_CONTRACTS)
     assert workflow.count("--require-canonical-artifact-name") == len(JOB_CONTRACTS)
     assert workflow.count(f"name: {ARTIFACT_NAME}") == len(JOB_CONTRACTS)
@@ -884,13 +971,26 @@ def main() -> None:
     require(ci_docs, "checkout_sha")
     require(ci_docs, "pre_upload_status")
     require(ci_docs, "runner")
+    require(ci_docs, "GAMENET_CI_RUNNER_MODE")
+    require(ci_docs, "GAMENET_CI_ARTIFACT_POLICY")
+    require(ci_docs, "best-effort")
+    require(ci_docs, "same-repository")
+    require(ci_docs, "no aggregate evidence")
 
     linux_debug = job_block(workflow, "linux-cmake")
+    linux_asan_ubsan = job_block(workflow, "linux-asan-ubsan")
     windows_debug = job_block(workflow, "windows-msvc")
     windows_release = job_block(workflow, "windows-msvc-release")
 
     require(linux_debug, "cmake --build build-install-consumer --parallel")
     require(linux_debug, "ctest --test-dir build-install-consumer --output-on-failure")
+    asan_runner = step_block(
+        linux_asan_ubsan,
+        "Verify self-hosted ASan/UBSan runner environment",
+    )
+    require(asan_runner, "TracerPid")
+    require(asan_runner, "kernel.yama.ptrace_scope=0")
+    require(asan_runner, "ci-evidence/asan-ubsan-runner.txt")
     require(windows_debug, "cmake --build build-windows-install-consumer --config Debug --parallel")
     require(
         windows_debug,

@@ -16,10 +16,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GAMENET_CI_ARTIFACT_POLICY: ${{ vars.GAMENET_CI_ARTIFACT_POLICY || 'required' }}
+
 jobs:
   linux-cmake:
     name: Linux CMake build and tests
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","linux","x64","gamenet-endurance"]' ||
+        '["ubuntu-24.04"]'
+      ) }}
     timeout-minutes: 30
 
     steps:
@@ -149,7 +159,9 @@ jobs:
             --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log'
 
       - name: Upload CI evidence
+        id: ci-evidence-upload
         if: always()
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -157,9 +169,34 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Report CI evidence upload
+        if: always()
+        env:
+          GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}
+        run: |
+          {
+            echo "## CI evidence upload"
+            echo "- policy: ${GAMENET_CI_ARTIFACT_POLICY}"
+            echo "- outcome: ${GAMENET_CI_ARTIFACT_OUTCOME}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_CI_ARTIFACT_OUTCOME}" != "success" ]]; then
+            if [[ "${GAMENET_CI_ARTIFACT_POLICY}" == "best-effort" ]]; then
+              echo "::warning::CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
+            else
+              echo "::error::Required CI evidence upload failed."
+            fi
+          fi
+
   linux-asan-ubsan:
     name: Linux ASan/UBSan build and tests
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","linux","x64","gamenet-endurance"]' ||
+        '["ubuntu-24.04"]'
+      ) }}
     timeout-minutes: 45
 
     steps:
@@ -188,6 +225,33 @@ jobs:
             clang++ --version
             python3 --version
           } 2>&1 | tee ci-evidence/toolchain.txt
+
+      - name: Verify self-hosted ASan/UBSan runner environment
+        if: >-
+          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+          (github.event_name != 'pull_request' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          set -euo pipefail
+          tracer_pid="$(awk '/^TracerPid:/ { print $2 }' "/proc/${BASHPID}/status")"
+          ptrace_scope="$(
+            cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null ||
+              printf '%s' unavailable
+          )"
+          {
+            echo "bash_pid=${BASHPID}"
+            echo "bash_parent_pid=${PPID}"
+            echo "tracer_pid=${tracer_pid}"
+            echo "yama_ptrace_scope=${ptrace_scope}"
+          } 2>&1 | tee ci-evidence/asan-ubsan-runner.txt
+          if [[ "${tracer_pid}" != "0" ]]; then
+            echo "::error::LeakSanitizer cannot run while the job shell is traced by PID ${tracer_pid}."
+            exit 1
+          fi
+          if [[ "${ptrace_scope}" =~ ^[0-9]+$ ]] && (( ptrace_scope != 0 )); then
+            echo "::error::LeakSanitizer requires kernel.yama.ptrace_scope=0 on this self-hosted runner, but found ${ptrace_scope}."
+            exit 1
+          fi
 
       - name: Check repository guards
         run: |
@@ -308,7 +372,9 @@ jobs:
             --command './build-fuzz/tests/fuzz/gamenet_fuzz_packet_framer ci-evidence/fuzz/corpus -dict=ci-evidence/fuzz/packet_framer.dict -artifact_prefix=ci-evidence/fuzz/artifacts/ -seed=424242 -print_final_stats=1 -runs=1000 -max_len=8192 -timeout=2'
 
       - name: Upload CI evidence
+        id: ci-evidence-upload
         if: always()
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -316,9 +382,34 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Report CI evidence upload
+        if: always()
+        env:
+          GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}
+        run: |
+          {
+            echo "## CI evidence upload"
+            echo "- policy: ${GAMENET_CI_ARTIFACT_POLICY}"
+            echo "- outcome: ${GAMENET_CI_ARTIFACT_OUTCOME}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_CI_ARTIFACT_OUTCOME}" != "success" ]]; then
+            if [[ "${GAMENET_CI_ARTIFACT_POLICY}" == "best-effort" ]]; then
+              echo "::warning::CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
+            else
+              echo "::error::Required CI evidence upload failed."
+            fi
+          fi
+
   linux-tsan:
     name: Linux TSan race-oriented build and tests
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","linux","x64","gamenet-endurance"]' ||
+        '["ubuntu-24.04"]'
+      ) }}
     timeout-minutes: 45
 
     steps:
@@ -425,7 +516,9 @@ jobs:
             --command 'ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
       - name: Upload CI evidence
+        id: ci-evidence-upload
         if: always()
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -433,9 +526,34 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Report CI evidence upload
+        if: always()
+        env:
+          GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}
+        run: |
+          {
+            echo "## CI evidence upload"
+            echo "- policy: ${GAMENET_CI_ARTIFACT_POLICY}"
+            echo "- outcome: ${GAMENET_CI_ARTIFACT_OUTCOME}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_CI_ARTIFACT_OUTCOME}" != "success" ]]; then
+            if [[ "${GAMENET_CI_ARTIFACT_POLICY}" == "best-effort" ]]; then
+              echo "::warning::CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
+            else
+              echo "::error::Required CI evidence upload failed."
+            fi
+          fi
+
   linux-release:
     name: Linux Release build
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","linux","x64","gamenet-endurance"]' ||
+        '["ubuntu-24.04"]'
+      ) }}
     timeout-minutes: 30
 
     steps:
@@ -540,7 +658,9 @@ jobs:
             --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
       - name: Upload CI evidence
+        id: ci-evidence-upload
         if: always()
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -548,9 +668,34 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Report CI evidence upload
+        if: always()
+        env:
+          GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}
+        run: |
+          {
+            echo "## CI evidence upload"
+            echo "- policy: ${GAMENET_CI_ARTIFACT_POLICY}"
+            echo "- outcome: ${GAMENET_CI_ARTIFACT_OUTCOME}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_CI_ARTIFACT_OUTCOME}" != "success" ]]; then
+            if [[ "${GAMENET_CI_ARTIFACT_POLICY}" == "best-effort" ]]; then
+              echo "::warning::CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
+            else
+              echo "::error::Required CI evidence upload failed."
+            fi
+          fi
+
   windows-msvc:
     name: Windows MSVC IOCP build and tests
-    runs-on: windows-latest
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","windows","x64","gamenet-windows"]' ||
+        '["windows-latest"]'
+      ) }}
     timeout-minutes: 45
 
     steps:
@@ -566,6 +711,35 @@ jobs:
           ref: 3eba368475a68f677aae920d4f299b155db23d57
           path: mini_trantor
           persist-credentials: false
+
+      - name: Bootstrap self-hosted Windows tool paths
+        if: >-
+          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+          (github.event_name != 'pull_request' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw "vswhere.exe is required"
+          }
+          $installationPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $installationPath) {
+            throw "Visual Studio C++ tools are required"
+          }
+          $cmakeBin = Join-Path $installationPath `
+            "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $pythonExe = & py -3 -c "import sys; print(sys.executable)"
+          $pythonBin = Split-Path -Parent $pythonExe
+          foreach ($toolPath in @($cmakeBin, $pythonBin)) {
+            if (-not (Test-Path -LiteralPath $toolPath)) {
+              throw "Required tool path is missing: $toolPath"
+            }
+            $toolPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - name: Record toolchain evidence
         shell: pwsh
@@ -694,7 +868,9 @@ jobs:
             --command 'ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
 
       - name: Upload CI evidence
+        id: ci-evidence-upload
         if: always()
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -702,9 +878,35 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Report CI evidence upload
+        if: always()
+        shell: pwsh
+        env:
+          GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}
+        run: |
+          @(
+            "## CI evidence upload"
+            "- policy: $env:GAMENET_CI_ARTIFACT_POLICY"
+            "- outcome: $env:GAMENET_CI_ARTIFACT_OUTCOME"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          if ($env:GAMENET_CI_ARTIFACT_OUTCOME -ne "success") {
+            if ($env:GAMENET_CI_ARTIFACT_POLICY -eq "best-effort") {
+              Write-Host "::warning::CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
+            } else {
+              Write-Host "::error::Required CI evidence upload failed."
+            }
+          }
+
   windows-msvc-release:
     name: Windows MSVC IOCP Release build and tests
-    runs-on: windows-latest
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","windows","x64","gamenet-windows"]' ||
+        '["windows-latest"]'
+      ) }}
     timeout-minutes: 45
 
     steps:
@@ -720,6 +922,35 @@ jobs:
           ref: 3eba368475a68f677aae920d4f299b155db23d57
           path: mini_trantor
           persist-credentials: false
+
+      - name: Bootstrap self-hosted Windows tool paths
+        if: >-
+          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+          (github.event_name != 'pull_request' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw "vswhere.exe is required"
+          }
+          $installationPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $installationPath) {
+            throw "Visual Studio C++ tools are required"
+          }
+          $cmakeBin = Join-Path $installationPath `
+            "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $pythonExe = & py -3 -c "import sys; print(sys.executable)"
+          $pythonBin = Split-Path -Parent $pythonExe
+          foreach ($toolPath in @($cmakeBin, $pythonBin)) {
+            if (-not (Test-Path -LiteralPath $toolPath)) {
+              throw "Required tool path is missing: $toolPath"
+            }
+            $toolPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - name: Record toolchain evidence
         shell: pwsh
@@ -848,13 +1079,34 @@ jobs:
             --command 'ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
 
       - name: Upload CI evidence
+        id: ci-evidence-upload
         if: always()
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
           retention-days: 90
+
+      - name: Report CI evidence upload
+        if: always()
+        shell: pwsh
+        env:
+          GAMENET_CI_ARTIFACT_OUTCOME: ${{ steps.ci-evidence-upload.outcome }}
+        run: |
+          @(
+            "## CI evidence upload"
+            "- policy: $env:GAMENET_CI_ARTIFACT_POLICY"
+            "- outcome: $env:GAMENET_CI_ARTIFACT_OUTCOME"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          if ($env:GAMENET_CI_ARTIFACT_OUTCOME -ne "success") {
+            if ($env:GAMENET_CI_ARTIFACT_POLICY -eq "best-effort") {
+              Write-Host "::warning::CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
+            } else {
+              Write-Host "::error::Required CI evidence upload failed."
+            }
+          }
 
   ci-evidence-set:
     name: Aggregate six-job CI evidence
@@ -866,31 +1118,131 @@ jobs:
       - linux-release
       - windows-msvc
       - windows-msvc-release
-    runs-on: ubuntu-24.04
+    runs-on: >-
+      ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
+        '["self-hosted","linux","x64","gamenet-endurance"]' ||
+        '["ubuntu-24.04"]'
+      ) }}
     timeout-minutes: 10
 
     steps:
+      - name: Verify six producer job results
+        env:
+          LINUX_CMAKE_RESULT: ${{ needs['linux-cmake'].result }}
+          LINUX_ASAN_UBSAN_RESULT: ${{ needs['linux-asan-ubsan'].result }}
+          LINUX_TSAN_RESULT: ${{ needs['linux-tsan'].result }}
+          LINUX_RELEASE_RESULT: ${{ needs['linux-release'].result }}
+          WINDOWS_MSVC_RESULT: ${{ needs['windows-msvc'].result }}
+          WINDOWS_MSVC_RELEASE_RESULT: ${{ needs['windows-msvc-release'].result }}
+        run: |
+          set -euo pipefail
+          failed=0
+          check_result() {
+            local job_name="$1"
+            local job_result="$2"
+            echo "${job_name}=${job_result}"
+            if [[ "${job_result}" != "success" ]]; then
+              echo "::error::${job_name} concluded ${job_result}; all six producer jobs must succeed."
+              failed=1
+            fi
+          }
+          check_result linux-cmake "${LINUX_CMAKE_RESULT}"
+          check_result linux-asan-ubsan "${LINUX_ASAN_UBSAN_RESULT}"
+          check_result linux-tsan "${LINUX_TSAN_RESULT}"
+          check_result linux-release "${LINUX_RELEASE_RESULT}"
+          check_result windows-msvc "${WINDOWS_MSVC_RESULT}"
+          check_result windows-msvc-release "${WINDOWS_MSVC_RELEASE_RESULT}"
+          exit "${failed}"
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download six producer evidence artifacts
+        id: producer-evidence-download
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/download-artifact@v4
         with:
           pattern: ci-evidence-*-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence-producers
           merge-multiple: false
 
+      - name: Check producer evidence availability
+        id: producer-evidence-availability
+        if: always()
+        env:
+          GAMENET_CI_ARTIFACT_DOWNLOAD_OUTCOME: ${{ steps.producer-evidence-download.outcome }}
+        run: |
+          set -euo pipefail
+          producer_count=0
+          if [[ -d ci-evidence-producers ]]; then
+            producer_count="$(
+              find ci-evidence-producers -mindepth 1 -maxdepth 1 -type d |
+                wc -l |
+                tr -d '[:space:]'
+            )"
+          fi
+          {
+            echo "## Six-job CI evidence availability"
+            echo "- policy: ${GAMENET_CI_ARTIFACT_POLICY}"
+            echo "- download outcome: ${GAMENET_CI_ARTIFACT_DOWNLOAD_OUTCOME}"
+            echo "- producer directories: ${producer_count}/6"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_CI_ARTIFACT_DOWNLOAD_OUTCOME}" == "success" &&
+                "${producer_count}" == "6" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "available=false" >> "${GITHUB_OUTPUT}"
+          if [[ "${GAMENET_CI_ARTIFACT_POLICY}" == "best-effort" ]]; then
+            echo "::warning::Complete six-producer artifact evidence is unavailable. Producer job results remain authoritative; no aggregate evidence may be claimed."
+            exit 0
+          fi
+          echo "::error::Required six-producer artifact evidence is unavailable."
+          exit 1
+
       - name: Verify and aggregate six-job evidence
+        id: aggregate-evidence-verification
+        if: steps.producer-evidence-availability.outputs.available == 'true'
         run: >
           python3 tools/verify_ci_evidence_set.py
           --input-root ci-evidence-producers
           --output ci-evidence-aggregate/manifest.json
 
       - name: Upload aggregate CI evidence
-        if: always()
+        id: aggregate-evidence-upload
+        if: >-
+          always() &&
+          steps.aggregate-evidence-verification.outcome == 'success'
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: ci-evidence-set-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence-aggregate/
           if-no-files-found: error
           retention-days: 90
+
+      - name: Report aggregate CI evidence
+        if: always()
+        env:
+          GAMENET_CI_ARTIFACT_AVAILABLE: ${{ steps.producer-evidence-availability.outputs.available }}
+          GAMENET_CI_AGGREGATE_VERIFY_OUTCOME: ${{ steps.aggregate-evidence-verification.outcome }}
+          GAMENET_CI_AGGREGATE_UPLOAD_OUTCOME: ${{ steps.aggregate-evidence-upload.outcome }}
+        run: |
+          {
+            echo "## Aggregate CI evidence"
+            echo "- policy: ${GAMENET_CI_ARTIFACT_POLICY}"
+            echo "- complete producer evidence: ${GAMENET_CI_ARTIFACT_AVAILABLE:-false}"
+            echo "- verification outcome: ${GAMENET_CI_AGGREGATE_VERIFY_OUTCOME}"
+            echo "- upload outcome: ${GAMENET_CI_AGGREGATE_UPLOAD_OUTCOME}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_CI_AGGREGATE_VERIFY_OUTCOME}" == "success" &&
+                "${GAMENET_CI_AGGREGATE_UPLOAD_OUTCOME}" != "success" ]]; then
+            if [[ "${GAMENET_CI_ARTIFACT_POLICY}" == "best-effort" ]]; then
+              echo "::warning::Aggregate CI evidence upload was unavailable. No retained aggregate artifact may be claimed."
+            else
+              echo "::error::Required aggregate CI evidence upload failed."
+            fi
+          fi

@@ -222,10 +222,12 @@ The following `if: always()` upload uses a unique SHA/run/attempt-bound name:
 ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 ```
 
-It uploads the complete `ci-evidence/` directory and treats an absent evidence
-root as an error. Inventory, JUnit, raw CTest logs, toolchain, manifest,
+It uploads the complete `ci-evidence/` directory and, under the default
+`required` artifact policy, treats an absent evidence root or upload failure as
+an error. Inventory, JUnit, raw CTest logs, toolchain, manifest,
 install-consumer evidence where applicable, and ASan fuzz inputs/logs/artifacts
-are retained for 90 days. The primary Linux producer also retains
+are retained for 90 days when the artifact service accepts the upload. The
+primary Linux producer also retains
 `public-api-diff.json`, whose target/header additions, removals, category moves,
 stable fingerprint changes, and compatibility-decision signal are hashed by
 that producer manifest. An early failure may legitimately leave later files
@@ -233,7 +235,9 @@ absent; the manifest hashes only the evidence that was actually produced rather
 than fabricating a passing result.
 
 A seventh, aggregation-only job depends on all six producer jobs and runs even
-when one producer failed. It downloads exactly the current run/attempt producer
+when one producer failed. It first requires all six producer job results to be
+`success`, independently of artifact availability. Under the default
+`required` policy it then downloads exactly the current run/attempt producer
 artifacts and executes `tools/verify_ci_evidence_set.py`. The verifier requires
 the exact six job names and one common checkout/candidate/PR-head/merge/current
 SHA plus run/attempt identity, requires every producer and pre-upload status to
@@ -401,6 +405,43 @@ public, so the Windows runner must not be exposed to unreviewed PR-controlled
 workflow definitions. The manual Windows evidence complements local and
 GitHub-hosted results; it does not replace Linux, ASan/UBSan, TSan, repeat, or
 the six-producer aggregate gate.
+
+### Billing-Safe Main CI Routing
+
+Main `ci` defaults to GitHub-hosted runners and strict artifact retention when
+the repository variables are unset. During an account billing lock that blocks
+GitHub-hosted scheduling, trusted maintainers may temporarily set:
+
+```bash
+gh variable set GAMENET_CI_RUNNER_MODE --body self-hosted
+gh variable set GAMENET_CI_ARTIFACT_POLICY --body best-effort
+```
+
+`GAMENET_CI_RUNNER_MODE=self-hosted` routes the four Linux producers and the
+aggregate job to `[self-hosted, linux, x64, gamenet-endurance]`, and the two
+Windows producers to `[self-hosted, windows, x64, gamenet-windows]`. This route
+is allowed only for `push`, manual dispatch, and a trusted same-repository PR.
+Fork PRs continue to select GitHub-hosted runners so an untrusted workflow
+cannot execute on repository-owned machines. Both dedicated runners must be
+online; the workflow never skips a required platform job.
+
+`GAMENET_CI_ARTIFACT_POLICY=best-effort` changes only artifact upload/download
+handling. Repository guards, configure, inventory, build, CTest, sanitizer,
+package-consumer, and all six producer job-result checks remain mandatory. An
+artifact quota or storage failure is recorded as a warning and raw step
+outcome. When all six complete producer artifacts are unavailable, aggregation
+is intentionally omitted: the run provides no aggregate evidence and must not
+be cited as a `gamenet.ci_evidence_set.v1` or release-evidence result.
+
+Restore the normal gate after the account lock is cleared:
+
+```bash
+gh variable delete GAMENET_CI_RUNNER_MODE
+gh variable delete GAMENET_CI_ARTIFACT_POLICY
+```
+
+Deleting the variables restores `ubuntu-24.04`, `windows-latest`, and the
+`required` artifact policy.
 
 ## Non-Default Long Soak
 
@@ -678,7 +719,10 @@ as well as link time.
 
 ## Current Platform Gate
 
-The active CI gate runs on `ubuntu-24.04` and `windows-latest`.
+The active CI gate defaults to `ubuntu-24.04` and `windows-latest`. The
+temporary billing-safe route documented above preserves the same six producer
+contracts on dedicated Linux and Windows self-hosted runners; it changes
+scheduling and artifact retention policy, not the platform requirements.
 
 Linux/epoll is the Tier 1 release, sanitizer, performance, and endurance
 reference. Windows/IOCP remains a required Tier 2 functional and package
