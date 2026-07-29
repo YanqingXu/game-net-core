@@ -7,9 +7,36 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <set>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
+
+namespace gamenet::net::detail {
+
+class EventLoopThreadPoolSelectionHarness {
+public:
+    static void connectionOpened(
+        EventLoopThreadPool& pool,
+        EventLoop* loop) {
+        pool.recordConnectionOpened(loop);
+    }
+
+    static void connectionClosed(
+        EventLoopThreadPool& pool,
+        EventLoop* loop) {
+        pool.recordConnectionClosed(loop);
+    }
+
+    static std::size_t connectionLoad(
+        const EventLoopThreadPool& pool,
+        EventLoop* loop) {
+        return pool.connectionLoad(loop);
+    }
+};
+
+}  // namespace gamenet::net::detail
 
 int main() {
     {
@@ -50,6 +77,136 @@ int main() {
         GAMENET_TEST_ASSERT(stoppedLoops.size() == 1);
         GAMENET_TEST_ASSERT(stoppedLoops.front() == &baseLoop);
         GAMENET_TEST_ASSERT(pool.getNextLoop() == &baseLoop);
+    }
+
+    {
+        gamenet::net::EventLoop baseLoop;
+        gamenet::net::EventLoopThreadPool pool(&baseLoop, "least-connections");
+        pool.setThreadNum(3);
+        pool.setLoopSelectionPolicy(
+            gamenet::net::EventLoopSelectionPolicy::LeastConnections);
+        pool.start();
+
+        const auto loops = pool.getAllLoops();
+        using Harness =
+            gamenet::net::detail::EventLoopThreadPoolSelectionHarness;
+
+        // event-loop-thread-pool-least-connections-contract: base-loop-owned
+        // load commits and releases determine selection; ties rotate.
+        auto* first = pool.selectLoop();
+        GAMENET_TEST_ASSERT(first == loops[0]);
+        Harness::connectionOpened(pool, first);
+
+        auto* second = pool.selectLoop();
+        GAMENET_TEST_ASSERT(second == loops[1]);
+        Harness::connectionOpened(pool, second);
+
+        auto* third = pool.selectLoop();
+        GAMENET_TEST_ASSERT(third == loops[2]);
+        Harness::connectionOpened(pool, third);
+        Harness::connectionOpened(pool, third);
+
+        GAMENET_TEST_ASSERT(pool.selectLoop() == loops[0]);
+        Harness::connectionClosed(pool, loops[0]);
+        GAMENET_TEST_ASSERT(pool.selectLoop() == loops[0]);
+        GAMENET_TEST_ASSERT(Harness::connectionLoad(pool, loops[0]) == 0);
+        GAMENET_TEST_ASSERT(Harness::connectionLoad(pool, loops[1]) == 1);
+        GAMENET_TEST_ASSERT(Harness::connectionLoad(pool, loops[2]) == 2);
+
+        Harness::connectionClosed(pool, loops[1]);
+        Harness::connectionClosed(pool, loops[2]);
+        Harness::connectionClosed(pool, loops[2]);
+
+        bool underflowRejected = false;
+        try {
+            Harness::connectionClosed(pool, loops[0]);
+        } catch (const std::logic_error&) {
+            underflowRejected = true;
+        }
+        GAMENET_TEST_ASSERT(underflowRejected);
+        pool.stop();
+    }
+
+    {
+        gamenet::net::EventLoop baseLoop;
+        gamenet::net::EventLoopThreadPool pool(&baseLoop, "queue-lag");
+        pool.setThreadNum(2);
+        pool.setLoopSelectionPolicy(
+            gamenet::net::EventLoopSelectionPolicy::QueueLag);
+        pool.start();
+
+        const auto loops = pool.getAllLoops();
+        // Empty-queue ties rotate instead of pinning worker zero.
+        GAMENET_TEST_ASSERT(pool.selectLoop() == loops[0]);
+        GAMENET_TEST_ASSERT(pool.selectLoop() == loops[1]);
+
+        std::promise<void> blockerStarted;
+        auto blockerStartedFuture = blockerStarted.get_future();
+        std::promise<void> releaseBlocker;
+        auto releaseBlockerFuture = releaseBlocker.get_future().share();
+        std::promise<void> queuedWorkFinished;
+        auto queuedWorkFinishedFuture = queuedWorkFinished.get_future();
+
+        loops[0]->queueInLoop(
+            [&blockerStarted, releaseBlockerFuture] {
+                blockerStarted.set_value();
+                releaseBlockerFuture.wait();
+            });
+        gamenet::test::waitUntilReady(
+            blockerStartedFuture,
+            std::chrono::seconds(1),
+            "queue-lag blocker did not start");
+        loops[0]->queueInLoop(
+            [&queuedWorkFinished] { queuedWorkFinished.set_value(); });
+
+        // event-loop-thread-pool-queue-lag-contract: the idle queue wins over
+        // a worker with an older pending functor.
+        GAMENET_TEST_ASSERT(pool.selectLoop() == loops[1]);
+        releaseBlocker.set_value();
+        gamenet::test::waitUntilReady(
+            queuedWorkFinishedFuture,
+            std::chrono::seconds(1),
+            "queue-lag queued work did not finish");
+        pool.stop();
+    }
+
+    {
+        gamenet::net::EventLoop baseLoop;
+        gamenet::net::EventLoopThreadPool pool(&baseLoop, "consistent-hash");
+        pool.setThreadNum(4);
+        pool.setLoopSelectionPolicy(
+            gamenet::net::EventLoopSelectionPolicy::ConsistentHash);
+        pool.start();
+
+        const auto loops = pool.getAllLoops();
+        std::set<gamenet::net::EventLoop*> selectedLoops;
+        for (int index = 0; index < 128; ++index) {
+            const std::string key = "player-" + std::to_string(index);
+            auto* selected = pool.selectLoop(key);
+            // event-loop-thread-pool-consistent-hash-contract: a key is stable
+            // for a fixed indexed worker set.
+            GAMENET_TEST_ASSERT(pool.selectLoop(key) == selected);
+            selectedLoops.insert(selected);
+        }
+        GAMENET_TEST_ASSERT(selectedLoops.size() == loops.size());
+
+        bool emptyKeyRejected = false;
+        try {
+            (void)pool.selectLoop();
+        } catch (const std::invalid_argument&) {
+            emptyKeyRejected = true;
+        }
+        GAMENET_TEST_ASSERT(emptyKeyRejected);
+
+        bool latePolicyRejected = false;
+        try {
+            pool.setLoopSelectionPolicy(
+                gamenet::net::EventLoopSelectionPolicy::RoundRobin);
+        } catch (const std::logic_error&) {
+            latePolicyRejected = true;
+        }
+        GAMENET_TEST_ASSERT(latePolicyRejected);
+        pool.stop();
     }
 
     {

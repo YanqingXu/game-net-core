@@ -16,7 +16,12 @@ EventLoopThread workers and returning loops for connection assignment.
 ## 2. Responsibilities
 - start configured worker EventLoopThread instances
 - expose base loop when zero worker threads are configured
-- hand out worker loops in a predictable round-robin manner
+- select worker loops with an explicitly configured round-robin,
+  least-connections, pending-functor queue-lag, or consistent-hash policy
+- retain exact base-loop-owned active-connection assignment counts for
+  least-connections selection without owning the connections themselves
+- use stable worker indices and deterministic rendezvous hashing for affinity
+  keys; the same key and worker set select the same loop
 - stop all worker loops on explicit request (stop())
 - serve as the final join barrier before TcpServer publishes graceful-stop completion
 
@@ -26,6 +31,8 @@ EventLoopThread workers and returning loops for connection assignment.
 - does not own connection lifecycle directly
 - does not share mutable connection state across loops
 - does not replace EventLoop scheduling semantics
+- does not claim queue-lag includes kernel completions, active I/O, timers, or
+  callback execution time; it observes only pending-functor queue age/count
 
 ---
 
@@ -33,17 +40,26 @@ EventLoopThread workers and returning loops for connection assignment.
 - base loop remains the fallback loop when thread count is zero
 - loop selection is deterministic and bounded by started workers
 - thread-pool control remains on the base loop thread
+- selection policy is immutable after start
+- least-connections counts change exactly once when TcpServer commits or
+  releases a base-map connection assignment
+- equal least-connection and queue-lag scores rotate their first candidate so
+  persistent ties do not pin every assignment to worker zero
+- consistent-hash requires a non-empty affinity key when workers exist
 
 ---
 
 ## 5. Threading Rules
-- start() and getNextLoop() are base-loop-thread operations
+- start(), stop(), selection, policy configuration, and connection-load
+  accounting are base-loop-thread operations
 - worker loops are only used through EventLoop scheduling APIs after publication
 
 ---
 
 ## 6. Failure Semantics
 - repeated selection must not step outside the worker loop array
+- unknown policies, empty consistent-hash keys, foreign loop accounting,
+  connection-count underflow, and policy mutation after start fail explicitly
 - startup should remain explicit about zero-thread and multi-thread behavior
 - partial worker startup failure stops and joins already-published workers,
   clears loop selection state, and rethrows the initialization exception
@@ -54,6 +70,11 @@ EventLoopThread workers and returning loops for connection assignment.
 - zero-thread start keeps work on base loop
 - multi-thread start publishes the configured worker loops
 - getNextLoop rotates through workers predictably
+- least-connections selects the smallest recorded load and releases load exactly
+- queue-lag prefers an empty queue, then the newest oldest-pending timestamp,
+  with pending count and rotating worker order as deterministic tie breakers
+- consistent-hash keeps repeated keys on one worker and distributes a key set
+  without depending on pointer values or implementation-defined `std::hash`
 - stop() quits all worker loops and clears thread/loop containers
 - cross-thread queued work reaches each published worker loop under a light
   soak and does not run on the base loop when workers are configured
@@ -66,4 +87,7 @@ EventLoopThread workers and returning loops for connection assignment.
 ## 8. Review Checklist
 - Is base-loop ownership still clear?
 - Is loop selection deterministic?
+- Are all selector inputs owner-thread snapshots rather than cross-thread
+  mutable connection state?
+- Does every committed TcpServer assignment have one matching load release?
 - Does startup preserve one-loop-per-thread discipline?

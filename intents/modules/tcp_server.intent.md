@@ -68,6 +68,10 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - AcceptEx pre-post depth is immutable after start; increasing transport-level
   accept concurrency does not bypass base-loop admission or transfer accepted-
   fd ownership before the existing admission decision
+- worker-loop selection policy is immutable after start; consistent-hash uses
+  the normalized peer address as its explicit affinity key
+- EventLoopThreadPool active-connection load is committed with base-map
+  insertion and released exactly once with every base-map erase/move path
 - every admission rejection happens while TcpServer still uniquely owns the
   accepted fd, which is then closed exactly once without creating TcpConnection
 - active-per-peer counts, fixed-window rate buckets, and authentication timers
@@ -136,6 +140,8 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 
 ## 7. Test Contracts
 - new connections are assigned to a loop and registered there
+- configured round-robin, least-connections, queue-lag, and consistent-hash
+  policies preserve exact worker assignment/load release
 - close callback removes the connection through the base loop
 - backpressure policy installed by TcpServer pauses and later resumes per-connection reads without breaking ownership rules
 - destruction invalidates delayed removal callbacks safely

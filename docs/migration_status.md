@@ -326,6 +326,14 @@ Windows Debug inventory passed 116/116, and all 33 locally runnable
 repository/API/CI checks passed (32 Python guards plus the structured API
 diff; the migration-provenance verifier remains bound to CI's separately
 checked-out source repository).
+M3-H2-B adds round-robin, least-connections, queue-lag, and stable rendezvous
+consistent-hash selection. Policy and exact connection-load accounting remain
+base-loop-owned; queue-lag reports only synchronized pending-functor age/count,
+and TcpServer uses normalized peer address as the consistent-hash key. The
+selector contract passed 50/50 focused repetitions, the combined
+TcpServer/EventLoopThreadPool lifecycle slice passed 12/12, the full Windows
+Debug inventory passed 116/116, and all 33 locally runnable repository/API/CI
+checks passed.
 The current inventory is unit=8, contract=95, integration=13, threading=89,
 lifecycle=95, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic

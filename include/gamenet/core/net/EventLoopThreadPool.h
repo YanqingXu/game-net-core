@@ -1,19 +1,32 @@
 #pragma once
 
 // EventLoopThreadPool 提供 one-loop-per-thread 的扩展模型。
-// 它在 base loop 线程中启动 worker loops，并按轮转策略返回下一个 loop。
+// 它在 base loop 线程中启动 worker loops，并按显式策略选择连接归属。
 
 #include "gamenet/core/base/noncopyable.h"
 #include "gamenet/core/net/Callbacks.h"
 
 #include <memory>
+#include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace gamenet::net {
 
 class EventLoop;
 class EventLoopThread;
+class TcpServer;
+namespace detail {
+class EventLoopThreadPoolSelectionHarness;
+}
+
+enum class EventLoopSelectionPolicy {
+    RoundRobin,
+    LeastConnections,
+    QueueLag,
+    ConsistentHash,
+};
 
 class EventLoopThreadPool : private gamenet::base::noncopyable {
 public:
@@ -21,20 +34,38 @@ public:
     ~EventLoopThreadPool();
 
     void setThreadNum(int numThreads);
+    void setLoopSelectionPolicy(EventLoopSelectionPolicy policy);
     void start(const ThreadInitCallback& callback = ThreadInitCallback());
     void stop();
 
     EventLoop* getNextLoop();
+    EventLoop* selectLoop(std::string_view affinityKey = {});
     std::vector<EventLoop*> getAllLoops() const;
 
 private:
+    std::size_t selectionLoopCount() const noexcept;
+    EventLoop* selectionLoopAt(std::size_t index) const;
+    std::size_t loopIndex(EventLoop* loop) const;
+    std::size_t selectRoundRobinIndex();
+    std::size_t selectLeastConnectionsIndex();
+    std::size_t selectQueueLagIndex();
+    std::size_t selectConsistentHashIndex(std::string_view affinityKey) const;
+    void recordConnectionOpened(EventLoop* loop);
+    void recordConnectionClosed(EventLoop* loop);
+    std::size_t connectionLoad(EventLoop* loop) const;
+
     EventLoop* baseLoop_;
     std::string name_;
     bool started_;
     int numThreads_;
-    int next_;
+    std::size_t next_;
+    EventLoopSelectionPolicy selectionPolicy_;
+    std::vector<std::size_t> connectionLoads_;
     std::vector<std::unique_ptr<EventLoopThread>> threads_;
     std::vector<EventLoop*> loops_;
+
+    friend class TcpServer;
+    friend class detail::EventLoopThreadPoolSelectionHarness;
 };
 
 }  // namespace gamenet::net

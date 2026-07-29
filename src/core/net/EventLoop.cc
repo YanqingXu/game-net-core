@@ -581,6 +581,15 @@ std::size_t EventLoop::pendingFunctorCount() const {
     return pendingFunctors_.size();
 }
 
+std::pair<std::size_t, gamenet::base::Timestamp>
+EventLoop::pendingFunctorLoadSnapshot() const {
+    std::lock_guard lock(mutex_);
+    if (pendingFunctors_.empty()) {
+        return {0, {}};
+    }
+    return {pendingFunctors_.size(), pendingFunctors_.front().enqueuedAt};
+}
+
 std::uint64_t EventLoop::rejectedFunctorCount() const noexcept {
     return rejectedFunctorCount_.load(std::memory_order_relaxed);
 }

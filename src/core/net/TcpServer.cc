@@ -174,6 +174,10 @@ void TcpServer::setThreadNum(int numThreads) {
     threadPool_->setThreadNum(numThreads);
 }
 
+void TcpServer::setLoopSelectionPolicy(EventLoopSelectionPolicy policy) {
+    threadPool_->setLoopSelectionPolicy(policy);
+}
+
 void TcpServer::setThreadInitCallback(ThreadInitCallback cb) {
     threadInitCallback_ = std::move(cb);
 }
@@ -733,7 +737,11 @@ void TcpServer::releaseWorkerConnectionsInLoop(
     }
 
     for (const auto& connectionName : connectionNames) {
-        if (connections_.erase(connectionName) != 0) {
+        const auto connection = connections_.find(connectionName);
+        if (connection != connections_.end()) {
+            threadPool_->recordConnectionClosed(
+                connection->second->getLoop());
+            connections_.erase(connection);
             releaseConnectionAdmission(connectionName);
         }
     }
@@ -1152,7 +1160,7 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
         return;
     }
 
-    EventLoop* ioLoop = threadPool_->getNextLoop();
+    EventLoop* ioLoop = threadPool_->selectLoop(peerAddress);
     const std::string connName = name_ + "#" + std::to_string(nextConnId_++);
     sockaddr_storage localStorage{};
     if (!sockets::tryGetLocalAddr(pendingSocket.fd(), &localStorage)) {
@@ -1187,6 +1195,7 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
         peerAddr);
     (void)pendingSocket.releaseFd();
     connections_[connName] = connection;
+    threadPool_->recordConnectionOpened(ioLoop);
     trackAcceptedConnection(connection, peerAddress);
 
     std::weak_ptr<void> lifetime = lifetimeToken_;
@@ -1227,15 +1236,19 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
         if (ioLoop == loop_ && !connection->disconnected()) {
             connection->connectDestroyed();
         }
-        connections_.erase(connName);
-        releaseConnectionAdmission(connName);
+        if (connections_.erase(connName) != 0) {
+            threadPool_->recordConnectionClosed(ioLoop);
+            releaseConnectionAdmission(connName);
+        }
     } catch (...) {
         LOG_ERROR << "TcpServer failed to schedule connection establishment with a non-standard exception";
         if (ioLoop == loop_ && !connection->disconnected()) {
             connection->connectDestroyed();
         }
-        connections_.erase(connName);
-        releaseConnectionAdmission(connName);
+        if (connections_.erase(connName) != 0) {
+            threadPool_->recordConnectionClosed(ioLoop);
+            releaseConnectionAdmission(connName);
+        }
     }
 }
 
@@ -1260,6 +1273,7 @@ void TcpServer::removeConnectionInLoop(const TcpConnectionPtr& connection) {
     if (erased == 0) {
         return;
     }
+    threadPool_->recordConnectionClosed(connection->getLoop());
     releaseConnectionAdmission(connection->name());
 
     EventLoop* connectionLoop = connection->getLoop();
@@ -1290,6 +1304,10 @@ bool TcpServer::forceCloseAllConnections() {
     connections_.clear();
     if (connections.empty()) {
         return false;
+    }
+    for (const auto& [name, connection] : connections) {
+        (void)name;
+        threadPool_->recordConnectionClosed(connection->getLoop());
     }
 
     auto remaining = std::make_shared<std::atomic<std::size_t>>(connections.size());
@@ -1336,6 +1354,10 @@ bool TcpServer::forceCloseAllConnectionsForGraceful(
     connections_.clear();
     if (connections.empty()) {
         return false;
+    }
+    for (const auto& [name, connection] : connections) {
+        (void)name;
+        threadPool_->recordConnectionClosed(connection->getLoop());
     }
 
     auto remaining = std::make_shared<std::atomic<std::size_t>>(connections.size());

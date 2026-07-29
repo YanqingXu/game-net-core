@@ -60,6 +60,9 @@ Contract tests verify:
   accepted functors and publish exact drained/remaining plus exhausted metrics
 - repeating timers prove legacy fixed-delay ordering and deterministic
   fixed-rate cadence with an exact maximum catch-up count followed by skip
+- EventLoopThreadPool contracts cover round-robin, exact least-connection load
+  commit/release, pending-functor queue-lag preference with rotating ties, and
+  deterministic non-empty-key consistent hashing
 - one deterministic sustained-source contract keeps active I/O, timer,
   control, lifecycle, and functor work pending together for multiple rounds;
   every source advances once per round in documented order with callback depth

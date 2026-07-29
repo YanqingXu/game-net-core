@@ -69,6 +69,9 @@ The `ci` workflow validates:
 - EventLoopThreadPool contract guard for queued-work race/soak coverage.
 - TimerQueue contract guard for ready-timer cancellation races and explicit
   fixed-delay/fixed-rate bounded catch-up semantics.
+- EventLoopThreadPool contract guard for round-robin, exact least-connection
+  accounting, pending-functor queue-lag selection, and stable rendezvous
+  consistent hashing.
 - Threading gate contract guard for the race-oriented TSan test selection.
 - TcpConnection thread-contract guard for atomic public state observation and
   owner-loop-only callback/socket-option mutation.

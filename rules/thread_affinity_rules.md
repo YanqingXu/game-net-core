@@ -198,6 +198,12 @@ No other direct mutation path is allowed for core loop state.
   follows final Channel/callback cleanup
 - Thread-pool quit/join is forbidden before every current worker generation
   has acked
+- EventLoopThreadPool policy changes, loop selection, and connection-load
+  accounting are base-loop-only. Queue-lag selection may lock each worker's
+  pending-functor queue for a snapshot but never reads worker-owned Channel,
+  timer, connection, or completion state
+- selector decisions never migrate an established connection; the selected
+  loop owns it for its full TcpConnection lifetime
 
 ## 10. Listener Error Policy
 - Acceptor and TcpServer accept-error policy callbacks execute on the base /

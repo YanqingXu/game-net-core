@@ -107,6 +107,7 @@ public:
     ~TcpServer();
 
     void setThreadNum(int numThreads);
+    void setLoopSelectionPolicy(EventLoopSelectionPolicy policy);
     void setThreadInitCallback(ThreadInitCallback cb);
     void setConnectionCallback(ConnectionCallback cb);
     void setMessageCallback(MessageCallback cb);

@@ -149,3 +149,15 @@ all missed cadence points. Adding an overload and a new options type is source
 compatible within the 0.3 line. Direct cadence, bounded catch-up, cancellation,
 and invalid-option contracts live in
 `tests/contract/timer_queue/test_timer_queue.cpp`.
+
+M3-H2-B adds `EventLoopSelectionPolicy`,
+`EventLoopThreadPool::setLoopSelectionPolicy()/selectLoop()`, and
+`TcpServer::setLoopSelectionPolicy()`. Existing `getNextLoop()` remains and
+delegates to the configured selector; the default remains round-robin.
+Least-connections accounting stays source-private between TcpServer and the
+pool, while queue-lag observes only the synchronized pending-functor queue and
+consistent-hash requires an explicit key. These are additive source-compatible
+changes within the 0.3 line. Direct contracts live in
+`tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp`; the
+existing TcpServer stop/release suite enforces zero residual assignment load
+before pool shutdown.

@@ -22,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace gamenet::net {
@@ -32,6 +33,7 @@ class IocpPoller;
 class IocpTcpTransport;
 class Poller;
 class TcpClient;
+class EventLoopThreadPool;
 class TimerQueue;
 namespace detail {
 class EventLoopActiveBatchHarness;
@@ -185,6 +187,7 @@ private:
     friend class IocpPoller;
     friend class IocpTcpTransport;
     friend class TcpClient;
+    friend class EventLoopThreadPool;
     friend class detail::EventLoopActiveBatchHarness;
     friend class detail::EventLoopControlRegistry;
     friend class detail::EventLoopIocpAssociationHarness;
@@ -215,6 +218,8 @@ private:
     bool hasPendingControlSources() const;
     bool hasPendingLifecycleNodes() const;
     bool hasPendingFunctors() const;
+    std::pair<std::size_t, gamenet::base::Timestamp>
+    pendingFunctorLoadSnapshot() const;
     bool tryQueueInLoopImpl(Functor cb, bool allowReserve);
     void emitEventLoopMetric(EventLoopMetricSample sample);
     void handleCallbackException(

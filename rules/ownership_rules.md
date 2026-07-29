@@ -146,6 +146,9 @@ It must not blur these roles.
   the worker owns Channel/callback cleanup until its generation-tagged ack
 - EventLoopThreadPool/thread objects remain owned until all worker acks have
   converged and join completes
+- EventLoopThreadPool owns only per-worker selection metadata and numeric
+  connection-load observations. TcpServer retains connection/map ownership,
+  and each connection's EventLoop assignment remains fixed until release
 - Acceptor owns its retry timer; stop/destruction cancels it before Acceptor
   storage is released
 - on Windows, Acceptor owns one bounded fixed pool and every slot in it; each
