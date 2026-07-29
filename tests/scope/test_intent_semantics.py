@@ -3,10 +3,16 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+
+from intent_inventory import verification_paths
 
 
 PHASE4_ARTIFACTS = {
@@ -386,16 +392,6 @@ def workflow_python_scripts(repo_root: Path) -> set[str]:
         ):
             scripts.add(match.group(1).replace("\\", "/").removeprefix("./"))
     return scripts
-
-
-def verification_paths(body: str) -> set[str]:
-    return {
-        value
-        for value in re.findall(
-            r"(?<![A-Za-z0-9_./-])(tests/[A-Za-z0-9_./-]+\.(?:cpp|py))(?![A-Za-z0-9_./-])",
-            body,
-        )
-    }
 
 
 def transitive_dependencies(inventory: ConfiguredInventory, target: str) -> set[str]:

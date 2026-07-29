@@ -117,17 +117,24 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
 | 6 | Production candidate | Infrastructure validated: API manifest/diff, provisional metrics, same-runner regression tooling, fault injection, and real 24/72-hour Linux endurance all exist; current M0/M1 runtime and contract work means no final candidate SHA is frozen, independent maintainer API/performance/release-tool review remains required, and release evidence must be regenerated after code freeze |
 
+## Current Intent Inventory
+
+This is the only current intent inventory in this document. The migration-status
+contract derives it from `intents/README.md`, every formal intent's front
+matter, and active-body verification paths; checked-in numeric literals are not
+the source of truth.
+
+| Formal | Active | Deferred | Legacy | Explicit verification paths |
+| ---: | ---: | ---: | ---: | ---: |
+| 61 | 30 | 20 | 11 | 124 |
+
 ## Production-Hardening Worktree State
 
 - M3 PR-G has completed its first local IOCP batching slice: fixed-size
   GQCSEx collection, bounded per-round publication, same-Channel deferral,
-  wakeup coexistence, and exact outstanding-operation retention. The current
-  intent inventory resolves 30 active targets and 120 explicit verification
-  paths; this count does not rewrite the retained M2/historical evidence below.
-- Intent semantics resolve 30 active targets and 94 explicit verification
-  paths, with `connection_backpressure_controller` and `graceful_shutdown`
-  promoted from deferred design assets to active `GameNet::core`
-  implementation authority.
+  wakeup coexistence, and exact outstanding-operation retention.
+- `connection_backpressure_controller` and `graceful_shutdown` are active
+  `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
   in-memory aggregation, immutable static labels, deterministic Prometheus
   snapshots, exception-contained Core/Logic/Broadcast recorder adapters, and
@@ -320,8 +327,9 @@ Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
   Session lifecycle coverage keeps live heartbeat and offline producers
   overlapping the management-loop drain and uses per-producer sentinels to prove
   final Offline state and empty indexes only after all posts drain.
-- Intent semantics now resolve all 25 active targets and 74 explicit
-  verification paths. The 16 frozen Core library intents retain only their
+- At the frozen Phase 4 candidate checkpoint, intent semantics resolved all 25
+  active targets and 74 explicit verification paths. The 16 frozen Core
+  library intents retained only their
   documented metadata exemption; seven enriched Phase 4 intents still require
   artifact kind, provenance, and non-empty verification. The dependency guard
   derives the six production library edges from an actual configured CMake
@@ -442,15 +450,17 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
 - Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
-- Intent governance: all 60 formal `*.intent.md` documents now carry ordered
+- Historical intent-governance snapshot (2026-07-06, not the current inventory):
+  all 60 formal `*.intent.md` documents at that checkpoint carried ordered
   `status`, `target`, `migration_source`, and `promote_gate` front matter and
   appear exactly once in the intent index: 25 active contracts, 23 deferred design assets, and 11 legacy source-project stage documents.
   Active bodies reject stale `MINI_ENABLE_*`, `mini::`, `mini/net`, and
   `mini-trantor` contracts. Deferred bodies require an explicit future gate;
   legacy v1/v2/v3/v5/v6 and M1-M32 documents target `historical` with
   `promote_gate: never`, so their old options, test counts, and phase claims are
-  not current repository evidence. The semantic guard dynamically resolves all
-  25 active targets and their 74 explicit verification paths: 69 regular C++
+  not current repository evidence. At that historical checkpoint, the semantic
+  guard dynamically resolved all 25 active targets and their 74 explicit
+  verification paths: 69 regular C++
   CTest sources, one libFuzzer target, and four Python governance tests executed
   by the workflow. Six new active Phase 4 component/use-case intents target
   protocol, transport, game_session, game_logic, broadcast, and the pipeline
@@ -677,8 +687,9 @@ tag:
   callback retains state, synchronous Logic-stage stop cannot destroy an active
   handler, and deterministic tests cover one exact AUTH-plus-command batch and
   a SessionManager submit/drain overlap with two live producers.
-- [x] Intent semantics resolve all 25 active targets and 74 explicit
-  verification paths while preserving 16 documented frozen Core metadata
+- [x] At the frozen Phase 4 candidate checkpoint, intent semantics resolved all
+  25 active targets and 74 explicit verification paths while preserving 16
+  documented frozen Core metadata
   exemptions. Configured-CMake dependency analysis proves the one-way
   production graph and rejects direct and transitive reverse edges.
 - [x] Broadcast routing now enforces Router-only immutable plans, owner

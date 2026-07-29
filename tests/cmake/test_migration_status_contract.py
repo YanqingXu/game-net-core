@@ -1,15 +1,94 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+
+from intent_inventory import IntentInventory, build_inventory
 
 
 def require(text: str, needle: str, source: Path) -> None:
     assert needle in text, f"missing migration status fragment in {source}: {needle}"
 
 
+def verify_current_intent_inventory(
+    status_text: str,
+    inventory: IntentInventory,
+    source: Path,
+) -> None:
+    sections = re.findall(
+        r"^## Current Intent Inventory\s*\n(.*?)(?=^## |\Z)",
+        status_text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert len(sections) == 1, (
+        f"{source} must contain exactly one Current Intent Inventory section"
+    )
+    section = sections[0]
+    normalized_section = " ".join(section.split())
+    require(normalized_section, "`intents/README.md`", source)
+    require(normalized_section, "front matter", source)
+    rows = re.findall(
+        r"^\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|$",
+        section,
+        re.MULTILINE,
+    )
+    assert len(rows) == 1, (
+        f"{source} Current Intent Inventory must contain exactly one numeric data row"
+    )
+    actual = tuple(int(value) for value in rows[0])
+    expected = (
+        inventory.formal,
+        inventory.active,
+        inventory.deferred,
+        inventory.legacy,
+        inventory.verification_paths,
+    )
+    assert actual == expected, (
+        "current intent inventory drift: "
+        f"document={actual}, derived={expected}"
+    )
+
+
+def verify_inventory_tamper_detection(
+    status_text: str,
+    inventory: IntentInventory,
+    source: Path,
+) -> None:
+    values = [
+        inventory.formal,
+        inventory.active,
+        inventory.deferred,
+        inventory.legacy,
+        inventory.verification_paths,
+    ]
+    row = "| " + " | ".join(str(value) for value in values) + " |"
+    assert status_text.count(row) == 1, (
+        f"{source} must contain one canonical current inventory row"
+    )
+    for index, field in enumerate(
+        ("formal", "active", "deferred", "legacy", "verification_paths")
+    ):
+        tampered_values = list(values)
+        tampered_values[index] += 1
+        tampered_row = (
+            "| " + " | ".join(str(value) for value in tampered_values) + " |"
+        )
+        tampered_text = status_text.replace(row, tampered_row, 1)
+        try:
+            verify_current_intent_inventory(tampered_text, inventory, source)
+        except AssertionError:
+            continue
+        raise AssertionError(
+            f"migration status gate accepted tampered {field} inventory"
+        )
+
+
 def main() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = REPO_ROOT
     migration_status = repo_root / "docs" / "migration_status.md"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
@@ -29,6 +108,9 @@ def main() -> None:
     assert configured_test_count > 0, "tests/CMakeLists.txt should configure CTest tests"
 
     status_text = migration_status.read_text(encoding="utf-8")
+    intent_inventory = build_inventory(repo_root)
+    verify_current_intent_inventory(status_text, intent_inventory, migration_status)
+    verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, "Current production-roadmap audit: 2026-07-27", migration_status)
@@ -73,9 +155,6 @@ def main() -> None:
     require(status_text, "Latest recorded race-oriented CI remote green evidence is `ci` #29", migration_status)
     require(status_text, "intent consistency guard", migration_status)
     require(status_text, "intent metadata contract guard", migration_status)
-    require(status_text, "all 60 formal `*.intent.md` documents", migration_status)
-    require(status_text, "30 active targets", migration_status)
-    require(status_text, "94 explicit verification", migration_status)
     require(status_text, "connection_backpressure_controller", migration_status)
     require(status_text, "graceful_shutdown", migration_status)
     require(status_text, "global/per-peer connection limits", migration_status)
@@ -87,7 +166,6 @@ def main() -> None:
     require(status_text, "400/400 Pipeline/Broadcast", migration_status)
     require(status_text, "All seven fixed Windows Release IOCP", migration_status)
     require(status_text, "bound to one frozen commit", migration_status)
-    require(status_text, "11 legacy source-project stage documents", migration_status)
     require(status_text, "promote_gate: never", migration_status)
     require(status_text, "Core benchmark contract guard", migration_status)
     require(status_text, "Logger thread-contract guard", migration_status)
