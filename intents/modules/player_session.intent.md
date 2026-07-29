@@ -63,13 +63,14 @@ inventory, combat, map, room, account-provider, or other business data.
   revocation invokes its optional terminal callback with `Shutdown`; posts
   submitted after revocation return `Shutdown` immediately and are not
   admitted.
-- After shutdown, direct `authenticate`, `offline`, `heartbeat`, and `expireIdle`
-  calls cannot mutate session state: they return `Rejected`, `false`, `false`,
-  and zero respectively. Cross-thread posts return `Shutdown`; already-Accepted
-  posts receive a `Shutdown` terminal callback without dereferencing the
-  revoked manager. Lookups remain available on the management loop and observe
-  the already-empty indexes. A rejected caller-supplied endpoint that was never
-  indexed remains caller-owned.
+- After shutdown, direct `authenticate`, `offline`, `heartbeat`, `expireIdle`,
+  and `expireIdleBatch` calls cannot mutate session state: they return
+  `Rejected`, `false`, `false`, zero, and an empty batch respectively.
+  Cross-thread posts return `Shutdown`; already-Accepted posts receive a
+  `Shutdown` terminal callback without dereferencing the revoked manager.
+  Lookups remain available on the management loop and observe the already-empty
+  indexes. A rejected caller-supplied endpoint that was never indexed remains
+  caller-owned.
 
 ## Lifecycle Invariants
 
@@ -90,9 +91,13 @@ inventory, combat, map, room, account-provider, or other business data.
   new endpoint.
 - Heartbeat/activity timestamps and idle expiry are session lifecycle state,
   not player business state.
-- Idle expiry currently performs one O(N) scan of the player index. The
-  opt-in `session-expiry` Phase 4 scale benchmark measures the full scan and
-  cleanup path before any timer-wheel, bucket, or heap redesign is considered.
+- Each active session owns one manager-controlled, generation-tagged idle
+  deadline. Authentication, rebind, and heartbeat replace it; offline,
+  replacement, expiry, and shutdown cancel it.
+- Idle expiration advances only due non-empty deadline buckets and processes at
+  most the configured per-advance budget. A ready remainder is explicit so the
+  pipeline can continue bounded batches without rescanning the player index or
+  waiting a full sweep interval.
 - A Logic command or output carrying a stale binding generation cannot produce
   a handler side effect or endpoint send even when it was admitted before a
   duplicate-login replacement.
@@ -103,7 +108,8 @@ inventory, combat, map, room, account-provider, or other business data.
   creation, duplicate login policies, transport-id uniqueness, rebind, stale
   disconnect cleanup, heartbeat, idle expiry, read-only public session views,
   private construction/mutation, immutable snapshots, generation rollover and
-  cross-thread typed async submit.
+  cross-thread typed async submit, generation-safe deadline replacement, and
+  bounded same-bucket idle-expiry continuation.
 - `tests/contract/game_session/test_session_manager_dispatch.cpp` saturates the
   management queue and verifies QueueFull, Shutdown, OwnerUnavailable and
   exactly-once terminal callback behavior for authenticate/offline/heartbeat.
@@ -120,9 +126,9 @@ inventory, combat, map, room, account-provider, or other business data.
   callback, and proves the remaining work cannot use the still-strongly-held
   but revoked lifetime state to access the destroyed facade.
 - `gamenet_phase4_benchmark --scenario session-expiry-scan|session-expiry`
-  records exact considered/expired/remaining/close counts and normalized
-  scan-only versus scan/cleanup time at configurable session scales; it is
-  opt-in and not a correctness CTest.
+  records exact due candidates, expired/remaining/close counts, bounded-batch
+  advances, and normalized no-ready-work versus expiration/cleanup time at
+  configurable session scales; it is opt-in and not a correctness CTest.
 
 ## Migration Provenance
 

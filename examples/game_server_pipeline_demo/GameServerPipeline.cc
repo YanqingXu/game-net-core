@@ -290,18 +290,7 @@ void GameServerPipeline::start() {
     const auto callbackState = callbackState_;
     sessionSweepTimer_ = loop_->runEvery(options_.sessionSweepInterval, [this, callbackState] {
         if (!callbackState->active()) return;
-        (void)sessions_.expireIdle();
-        for (auto current = connections_.begin(); current != connections_.end();) {
-            if (current->second.endpoint->isOpen()) {
-                ++current;
-                continue;
-            }
-            cancelAuthenticationTimer(current->second);
-            current->second.authentication = AuthenticationState::Closing;
-            (void)sessions_.offline(current->second.endpoint->id());
-            callbackState->unregisterEndpoint(current->second.endpoint->id());
-            current = connections_.erase(current);
-        }
+        sweepSessions(true);
     });
     server_.start();
     started_ = true;
@@ -322,6 +311,10 @@ gamenet::net::TcpServerStopFuture GameServerPipeline::stopGracefully(
     if (sessionSweepTimer_) {
         loop_->cancel(*sessionSweepTimer_);
         sessionSweepTimer_.reset();
+    }
+    if (sessionSweepContinuation_) {
+        loop_->cancel(*sessionSweepContinuation_);
+        sessionSweepContinuation_.reset();
     }
     // Revocation above closes all upper-layer admission before Core stops
     // accepting and begins its connection-output drain.
@@ -718,6 +711,41 @@ void GameServerPipeline::cancelAuthenticationTimer(ConnectionState& state) {
         state.authenticationTimer.reset();
     }
     state.authenticationAttempt.reset();
+}
+
+void GameServerPipeline::sweepSessions(bool cleanupConnections) {
+    loop_->assertInLoopThread();
+    const auto expiry = sessions_.expireIdleBatch();
+    if (cleanupConnections) {
+        for (auto current = connections_.begin();
+             current != connections_.end();) {
+            if (current->second.endpoint->isOpen()) {
+                ++current;
+                continue;
+            }
+            cancelAuthenticationTimer(current->second);
+            current->second.authentication = AuthenticationState::Closing;
+            (void)sessions_.offline(current->second.endpoint->id());
+            callbackState_->unregisterEndpoint(
+                current->second.endpoint->id());
+            current = connections_.erase(current);
+        }
+    }
+
+    if (!expiry.readyRemaining ||
+        sessionSweepContinuation_.has_value() ||
+        !callbackState_->active()) {
+        return;
+    }
+    const auto callbackState = callbackState_;
+    sessionSweepContinuation_ = loop_->runAfter(
+        std::chrono::steady_clock::duration::zero(),
+        [this, callbackState] {
+            sessionSweepContinuation_.reset();
+            if (callbackState->active()) {
+                sweepSessions(false);
+            }
+        });
 }
 
 gamenet::DispatchResult GameServerPipeline::sendFrame(

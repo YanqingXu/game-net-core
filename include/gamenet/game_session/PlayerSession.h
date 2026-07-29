@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gamenet/core/net/DeadlineQueue.h"
 #include "gamenet/transport/TransportEndpoint.h"
 
 #include <atomic>
@@ -94,6 +95,7 @@ private:
     Clock::time_point lastActivity_;
     SessionBindingGeneration generation_{};
     std::shared_ptr<SessionBinding::State> bindingState_;
+    gamenet::net::DeadlineToken idleDeadline_;
 
     friend class SessionManager;
 };

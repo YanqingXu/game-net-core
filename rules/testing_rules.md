@@ -60,6 +60,9 @@ Contract tests verify:
   accepted functors and publish exact drained/remaining plus exhausted metrics
 - repeating timers prove legacy fixed-delay ordering and deterministic
   fixed-rate cadence with an exact maximum catch-up count followed by skip
+- bucketed deadlines prove no-early expiration, generation-safe replacement,
+  exact budget continuation, large-future-population isolation, clear, and
+  owner-thread enforcement
 - EventLoopThreadPool contracts cover round-robin, exact least-connection load
   commit/release, pending-functor queue-lag preference with rotating ties, and
   deterministic non-empty-key consistent hashing
@@ -116,6 +119,10 @@ For lifecycle-sensitive modules, tests should include:
 - current-Channel retirement under normal-plus-reserved queue saturation
 - finite-limit rejection and accounting release after accepted connection close
 - timeout-versus-success races for deadline-based admission
+- an authentication-deadline population larger than the configured advance
+  budget drains through bounded base-loop continuations with exact accounting
+- a session-idle population larger than the configured advance budget expires
+  without a player-index scan and preserves generation replacement
 - bounded control-plane saturation and final-drain races
 - normal-plus-reserved queue saturation while TcpConnection applies
   backpressure/write-interest before dropping optional notifications, followed

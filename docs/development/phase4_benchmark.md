@@ -109,19 +109,31 @@ match.
 
 ### Session idle-expiry scale
 
-Both scenarios create `messages` sessions before timing, then time one
-owner-thread `SessionManager::expireIdle` call. `session-expiry-scan` keeps
-every session active to isolate the current O(N) complete player-index scan.
-`session-expiry` makes every session idle, so it also collects expired sessions,
-removes both indexes, revokes each binding, requests `IdleTimeout` close, and
-releases the expired objects. The result records exact considered, expired,
-remaining, and close-request counts, plus operations per second and
-`session_expiry_ns_per_session`.
+Both scenarios create `messages` sessions before timing, then advance the
+owner-thread bucketed idle-deadline index. The compatibility-named
+`session-expiry-scan` scenario keeps every session active, so it measures a
+no-ready-bucket advance without visiting the player index. `session-expiry`
+makes every session idle and advances bounded batches until no ready deadline
+remains; it also removes both indexes, revokes each binding, requests
+`IdleTimeout` close, and releases the expired objects. `session_visited` now
+means due candidates extracted from deadline buckets, so it is zero for the
+no-ready case and equals `messages` for full expiration. The normalized time
+still uses the configured population so different scales remain comparable.
 
-Use matching binaries and parameters and compare several session counts before
-deciding whether a timer wheel, bucketed expiry index, or heap is justified.
-This scenario is intentionally outside the frozen Phase 6 paired evidence set,
-so its output is scale-study evidence rather than a regression-gate artifact.
+Use matching binaries and parameters and compare several session counts to
+measure no-ready isolation, full-expiration cleanup, and bounded-batch cost.
+These scenarios remain outside the frozen Phase 6 paired evidence set, so their
+output is scale-study evidence rather than a regression-gate artifact.
+
+The local M3-H2-C same-runner comparison rebuilt baseline `437f294` and the
+candidate with MSVC Release, then alternated seven 10k/100k runs and three 1M
+runs per scenario. No-ready medians changed from 0.102/5.446/71.340 ms to
+0.0003/0.0003/0.0004 ms at 10k/100k/1M. Full-expiration medians changed from
+2.949/58.419/780.003 ms to 3.9042/64.9958/740.6443 ms. This confirms that
+future populations are isolated from each advance; it also records the
+bucket/index overhead for small full-cleanup populations instead of hiding it.
+These local measurements are evidence for the H2-C design decision, not a
+cross-platform threshold.
 
 ### Broadcast fanout latency and memory
 

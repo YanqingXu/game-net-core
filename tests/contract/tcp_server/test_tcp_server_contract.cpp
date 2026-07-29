@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 using namespace std::chrono_literals;
 
@@ -419,6 +420,64 @@ int main() {
         GAMENET_TEST_ASSERT(
             (events & admissionEventBit(
                 gamenet::net::TcpServerAdmissionEvent::RejectedPerPeerRateLimit)) != 0);
+    }
+
+    {
+        constexpr std::size_t connectionCount = 5;
+
+        gamenet::net::EventLoop deadlineLoop;
+        gamenet::net::TcpServer deadlineServer(
+            &deadlineLoop,
+            gamenet::net::InetAddress(0, true),
+            "authentication-deadline-budget-server");
+        deadlineServer.setThreadNum(1);
+        deadlineServer.setAdmissionOptions(gamenet::net::TcpServerAdmissionOptions{
+            .unauthenticatedTimeout = 60ms,
+            .authenticationDeadlineResolution = 5ms,
+            .maxAuthenticationTimeoutsPerAdvance = 2,
+        });
+        deadlineServer.start();
+
+        std::atomic<bool> deadlineClientSucceeded{false};
+        std::thread deadlineClient([&] {
+            std::vector<gamenet::net::SocketFd> clients;
+            clients.reserve(connectionCount);
+            for (std::size_t index = 0; index < connectionCount; ++index) {
+                clients.push_back(
+                    gamenet::test::connectTestClient(deadlineServer.listenAddress()));
+            }
+
+            const bool allAccepted = callbackTestWaitUntil([&] {
+                return deadlineServer.admissionStats().accepted == connectionCount;
+            });
+            const bool allTimedOut = allAccepted && callbackTestWaitUntil([&] {
+                const auto stats = deadlineServer.admissionStats();
+                return stats.authenticationTimedOut == connectionCount &&
+                    stats.activeConnections == 0;
+            });
+
+            bool allClosed = allTimedOut;
+            for (const auto client : clients) {
+                allClosed = callbackTestWaitForClose(client) && allClosed;
+                gamenet::test::closeTestSocket(client);
+            }
+
+            deadlineClientSucceeded.store(allAccepted && allTimedOut && allClosed);
+            deadlineServer.stop();
+            deadlineLoop.quit();
+        });
+
+        gamenet::test::runLoopWithTimeout(
+            deadlineLoop,
+            5s,
+            "timed out waiting for bounded authentication deadline batches");
+        deadlineClient.join();
+
+        const auto stats = deadlineServer.admissionStats();
+        GAMENET_TEST_ASSERT(deadlineClientSucceeded.load());
+        GAMENET_TEST_ASSERT(stats.accepted == connectionCount);
+        GAMENET_TEST_ASSERT(stats.authenticationTimedOut == connectionCount);
+        GAMENET_TEST_ASSERT(stats.activeConnections == 0);
     }
 
     return 0;

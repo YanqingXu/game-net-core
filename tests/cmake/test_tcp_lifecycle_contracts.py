@@ -1620,7 +1620,7 @@ def main() -> None:
         "It does not implement a general connection idle timeout",
         tcp_server_intent,
     )
-    require(tcp_server_intent_text, "M3 deadline-bucket/time-wheel", tcp_server_intent)
+    require(tcp_server_intent_text, "DeadlineQueue substrate is active", tcp_server_intent)
     assert (
         "optionally coordinate per-connection idle-timeout policy" not in
         tcp_server_intent_text
@@ -1771,12 +1771,19 @@ def main() -> None:
     require(tcp_server_header_text, "maxConnectionAttemptsPerPeerPerWindow", tcp_server_header)
     require(tcp_server_header_text, "maxTrackedPeerAddresses", tcp_server_header)
     require(tcp_server_header_text, "unauthenticatedTimeout", tcp_server_header)
+    require(tcp_server_header_text, "authenticationDeadlineResolution", tcp_server_header)
+    require(tcp_server_header_text, "maxAuthenticationTimeoutsPerAdvance", tcp_server_header)
+    require(tcp_server_header_text, "authenticationDeadlineQueue_", tcp_server_header)
     require(tcp_server_header_text, "tryMarkConnectionAuthenticated", tcp_server_header)
     require(tcp_server_header_text, "TcpServerAdmissionStats admissionStats", tcp_server_header)
     require(tcp_server_source_text, "prunePeerRateBuckets", tcp_server_source)
     require(tcp_server_source_text, "RejectedPeerTrackingCapacity", tcp_server_source)
     require(tcp_server_source_text, "releaseConnectionAdmission", tcp_server_source)
     require(tcp_server_source_text, "clearConnectionAdmission", tcp_server_source)
+    require(tcp_server_source_text, "ensureAuthenticationDeadlineDriver", tcp_server_source)
+    require(tcp_server_source_text, "driveAuthenticationDeadlines", tcp_server_source)
+    require(tcp_server_source_text, "authenticationDeadlineQueue_->advance(now)", tcp_server_source)
+    assert "runAfter(admissionOptions_.unauthenticatedTimeout" not in tcp_server_source_text
 
     require(tcp_connection_header_text, "void setCallbackExceptionHandler", tcp_connection_header)
     require(tcp_connection_source_text, "TcpConnectionCallbackSource::Message", tcp_connection_source)
@@ -1795,6 +1802,9 @@ def main() -> None:
     require(server_contract_text, "rejectedPerPeerLimit == 1", server_contract_test)
     require(server_contract_text, "rejectedPerPeerRateLimit == 1", server_contract_test)
     require(server_contract_text, "authenticationTimedOut == 1", server_contract_test)
+    require(server_contract_text, "authentication-deadline-budget-server", server_contract_test)
+    require(server_contract_text, ".maxAuthenticationTimeoutsPerAdvance = 2", server_contract_test)
+    require(server_contract_text, "stats.authenticationTimedOut == connectionCount", server_contract_test)
     require(server_contract_text, "tryMarkConnectionAuthenticated", server_contract_test)
     require(server_contract_text, "admission metric failure must be contained", server_contract_test)
 

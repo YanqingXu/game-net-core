@@ -12,6 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -42,6 +43,15 @@ void TcpServerAdmissionOptions::validate() const {
     if (unauthenticatedTimeout < std::chrono::milliseconds::zero()) {
         throw std::invalid_argument(
             "TcpServer unauthenticated timeout must not be negative");
+    }
+    if (authenticationDeadlineResolution <=
+        std::chrono::milliseconds::zero()) {
+        throw std::invalid_argument(
+            "TcpServer authentication deadline resolution must be positive");
+    }
+    if (maxAuthenticationTimeoutsPerAdvance == 0) {
+        throw std::invalid_argument(
+            "TcpServer authentication deadline budget must be positive");
     }
 }
 
@@ -1011,50 +1021,139 @@ bool TcpServer::admitPeer(const std::string& peerAddress) {
 
 void TcpServer::trackAcceptedConnection(
     const TcpConnectionPtr& connection,
-    const std::string& peerAddress) {
+    const std::string& peerAddress,
+    DeadlineKey deadlineKey) {
     loop_->assertInLoopThread();
     const std::string& connectionName = connection->name();
-    peerByConnection_[connectionName] = peerAddress;
-    ++activeConnectionsByPeer_[peerAddress];
-    acceptedConnections_.fetch_add(1, std::memory_order_relaxed);
-    activeAdmissionConnections_.fetch_add(1, std::memory_order_relaxed);
+    const auto [peerByConnection, insertedConnectionPeer] =
+        peerByConnection_.emplace(connectionName, peerAddress);
+    if (!insertedConnectionPeer) {
+        throw std::logic_error(
+            "TcpServer connection admission identity already exists");
+    }
+    decltype(activeConnectionsByPeer_)::iterator peerCount;
+    try {
+        peerCount =
+            activeConnectionsByPeer_.try_emplace(peerAddress, 0).first;
+    } catch (...) {
+        peerByConnection_.erase(peerByConnection);
+        throw;
+    }
+    ++peerCount->second;
 
-    if (admissionOptions_.unauthenticatedTimeout >
-        std::chrono::milliseconds::zero()) {
-        std::weak_ptr<void> lifetime = lifetimeToken_;
-        std::weak_ptr<TcpConnection> weakConnection = connection;
-        authenticationTimers_[connectionName] = loop_->runAfter(
-            admissionOptions_.unauthenticatedTimeout,
-            [this, lifetime, weakConnection, connectionName, peerAddress] {
-                if (!lifetime.lock()) {
-                    return;
-                }
-                const auto timer = authenticationTimers_.find(connectionName);
-                if (timer == authenticationTimers_.end()) {
-                    return;
-                }
-                authenticationTimers_.erase(timer);
-
-                const auto current = connections_.find(connectionName);
-                const auto connection = weakConnection.lock();
-                if (current == connections_.end() || !connection ||
-                    current->second != connection) {
-                    return;
-                }
-
-                authenticationTimeouts_.fetch_add(1, std::memory_order_relaxed);
-                emitAdmissionMetric(
-                    TcpServerAdmissionEvent::AuthenticationTimedOut,
-                    peerAddress,
-                    connectionName);
-                connection->forceClose();
-            });
+    try {
+        if (admissionOptions_.unauthenticatedTimeout >
+            std::chrono::milliseconds::zero()) {
+            ensureAuthenticationDeadlineDriver();
+            const auto token = authenticationDeadlineQueue_->schedule(
+                deadlineKey,
+                gamenet::base::now() +
+                    admissionOptions_.unauthenticatedTimeout);
+            try {
+                authenticationDeadlines_[connectionName] = token;
+            } catch (...) {
+                (void)authenticationDeadlineQueue_->cancel(token);
+                throw;
+            }
+        }
+    } catch (...) {
+        if (peerCount->second <= 1) {
+            activeConnectionsByPeer_.erase(peerCount);
+        } else {
+            --peerCount->second;
+        }
+        peerByConnection_.erase(peerByConnection);
+        throw;
     }
 
+    acceptedConnections_.fetch_add(1, std::memory_order_relaxed);
+    activeAdmissionConnections_.fetch_add(1, std::memory_order_relaxed);
     emitAdmissionMetric(
         TcpServerAdmissionEvent::Accepted,
         peerAddress,
         connectionName);
+}
+
+void TcpServer::ensureAuthenticationDeadlineDriver() {
+    loop_->assertInLoopThread();
+    if (authenticationDeadlineQueue_) {
+        return;
+    }
+
+    authenticationDeadlineQueue_ = std::make_unique<DeadlineQueue>(
+        loop_,
+        DeadlineQueueOptions{
+            .resolution =
+                admissionOptions_.authenticationDeadlineResolution,
+            .maxExpiredPerAdvance =
+                admissionOptions_.maxAuthenticationTimeoutsPerAdvance,
+        });
+    std::weak_ptr<void> lifetime = lifetimeToken_;
+    authenticationDeadlineDriver_ = loop_->runEvery(
+        admissionOptions_.authenticationDeadlineResolution,
+        [this, lifetime] {
+            if (lifetime.lock()) {
+                driveAuthenticationDeadlines();
+            }
+        },
+        RepeatingTimerOptions{
+            .mode = RepeatingTimerMode::FixedRate,
+            .maxCatchUpCallbacks = 0,
+        });
+}
+
+void TcpServer::driveAuthenticationDeadlines() {
+    loop_->assertInLoopThread();
+    if (!authenticationDeadlineQueue_) {
+        return;
+    }
+
+    const auto now = gamenet::base::now();
+    auto ready = authenticationDeadlineQueue_->advance(now);
+    for (const auto& expiration : ready.expired) {
+        const std::string connectionName =
+            name_ + "#" + std::to_string(expiration.token.key);
+        const auto deadline =
+            authenticationDeadlines_.find(connectionName);
+        if (deadline == authenticationDeadlines_.end() ||
+            deadline->second != expiration.token) {
+            continue;
+        }
+        authenticationDeadlines_.erase(deadline);
+
+        const auto current = connections_.find(connectionName);
+        if (current == connections_.end()) {
+            continue;
+        }
+        const auto connection = current->second;
+        const auto peer = peerByConnection_.find(connectionName);
+        const std::string peerAddress =
+            peer == peerByConnection_.end()
+            ? std::string{}
+            : peer->second;
+
+        authenticationTimeouts_.fetch_add(1, std::memory_order_relaxed);
+        emitAdmissionMetric(
+            TcpServerAdmissionEvent::AuthenticationTimedOut,
+            peerAddress,
+            connectionName);
+        connection->forceClose();
+    }
+
+    if (!ready.readyRemaining ||
+        authenticationDeadlineContinuation_.valid() ||
+        !authenticationDeadlineQueue_) {
+        return;
+    }
+    std::weak_ptr<void> lifetime = lifetimeToken_;
+    authenticationDeadlineContinuation_ = loop_->runAfter(
+        EventLoop::TimerDuration::zero(),
+        [this, lifetime] {
+            authenticationDeadlineContinuation_ = {};
+            if (lifetime.lock()) {
+                driveAuthenticationDeadlines();
+            }
+        });
 }
 
 void TcpServer::markConnectionAuthenticatedInLoop(
@@ -1065,12 +1164,15 @@ void TcpServer::markConnectionAuthenticatedInLoop(
         return;
     }
 
-    const auto timer = authenticationTimers_.find(connection->name());
-    if (timer == authenticationTimers_.end()) {
+    const auto deadline =
+        authenticationDeadlines_.find(connection->name());
+    if (deadline == authenticationDeadlines_.end()) {
         return;
     }
-    loop_->cancel(timer->second);
-    authenticationTimers_.erase(timer);
+    if (authenticationDeadlineQueue_) {
+        (void)authenticationDeadlineQueue_->cancel(deadline->second);
+    }
+    authenticationDeadlines_.erase(deadline);
 
     authenticatedConnections_.fetch_add(1, std::memory_order_relaxed);
     const auto peer = peerByConnection_.find(connection->name());
@@ -1083,10 +1185,12 @@ void TcpServer::markConnectionAuthenticatedInLoop(
 void TcpServer::releaseConnectionAdmission(
     const std::string& connectionName) {
     loop_->assertInLoopThread();
-    const auto timer = authenticationTimers_.find(connectionName);
-    if (timer != authenticationTimers_.end()) {
-        loop_->cancel(timer->second);
-        authenticationTimers_.erase(timer);
+    const auto deadline = authenticationDeadlines_.find(connectionName);
+    if (deadline != authenticationDeadlines_.end()) {
+        if (authenticationDeadlineQueue_) {
+            (void)authenticationDeadlineQueue_->cancel(deadline->second);
+        }
+        authenticationDeadlines_.erase(deadline);
     }
 
     const auto peer = peerByConnection_.find(connectionName);
@@ -1107,11 +1211,19 @@ void TcpServer::releaseConnectionAdmission(
 
 void TcpServer::clearConnectionAdmission() {
     loop_->assertInLoopThread();
-    for (const auto& [name, timer] : authenticationTimers_) {
-        (void)name;
-        loop_->cancel(timer);
+    if (authenticationDeadlineDriver_.valid()) {
+        loop_->cancel(authenticationDeadlineDriver_);
+        authenticationDeadlineDriver_ = {};
     }
-    authenticationTimers_.clear();
+    if (authenticationDeadlineContinuation_.valid()) {
+        loop_->cancel(authenticationDeadlineContinuation_);
+        authenticationDeadlineContinuation_ = {};
+    }
+    if (authenticationDeadlineQueue_) {
+        authenticationDeadlineQueue_->clear();
+        authenticationDeadlineQueue_.reset();
+    }
+    authenticationDeadlines_.clear();
     peerByConnection_.clear();
     activeConnectionsByPeer_.clear();
     peerRateBuckets_.clear();
@@ -1161,7 +1273,13 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
     }
 
     EventLoop* ioLoop = threadPool_->selectLoop(peerAddress);
-    const std::string connName = name_ + "#" + std::to_string(nextConnId_++);
+    if (nextConnId_ == std::numeric_limits<std::uint64_t>::max()) {
+        LOG_ERROR << "TcpServer connection identity space exhausted";
+        return;
+    }
+    const DeadlineKey connectionDeadlineKey = nextConnId_++;
+    const std::string connName =
+        name_ + "#" + std::to_string(connectionDeadlineKey);
     sockaddr_storage localStorage{};
     if (!sockets::tryGetLocalAddr(pendingSocket.fd(), &localStorage)) {
         const int error = sockets::lastError();
@@ -1196,7 +1314,23 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
     (void)pendingSocket.releaseFd();
     connections_[connName] = connection;
     threadPool_->recordConnectionOpened(ioLoop);
-    trackAcceptedConnection(connection, peerAddress);
+    try {
+        trackAcceptedConnection(
+            connection,
+            peerAddress,
+            connectionDeadlineKey);
+    } catch (const std::exception& error) {
+        LOG_ERROR << "TcpServer failed to track accepted connection: "
+                  << error.what();
+        connections_.erase(connName);
+        threadPool_->recordConnectionClosed(ioLoop);
+        return;
+    } catch (...) {
+        LOG_ERROR << "TcpServer failed to track accepted connection with a non-standard exception";
+        connections_.erase(connName);
+        threadPool_->recordConnectionClosed(ioLoop);
+        return;
+    }
 
     std::weak_ptr<void> lifetime = lifetimeToken_;
     CloseCallback closeCallback = [this, lifetime](const TcpConnectionPtr& conn) {

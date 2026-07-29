@@ -294,7 +294,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 116 configured CTest tests: 8 unit tests, 95 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 117 configured CTest tests: 8 unit tests, 96 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -334,21 +334,36 @@ selector contract passed 50/50 focused repetitions, the combined
 TcpServer/EventLoopThreadPool lifecycle slice passed 12/12, the full Windows
 Debug inventory passed 116/116, and all 33 locally runnable repository/API/CI
 checks passed.
-The current inventory is unit=8, contract=95, integration=13, threading=89,
-lifecycle=95, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+M3-H2-C adds one callback-free, owner-loop DeadlineQueue with upward bucket
+quantization, generation-safe replacement/cancel, and a finite per-advance
+budget. TcpServer authentication deadlines now share one driver and bounded
+continuations; SessionManager idle deadlines share the same index, and the
+Pipeline continues ready batches without rescanning its connection map. The
+three focused DeadlineQueue/TcpServer/SessionManager contracts each passed
+20/20 repetitions, the complete Windows Debug inventory passed 117/117, and
+all 31 Python repository guards plus the public-manifest verifier and
+structured API diff passed. Same-runner MSVC Release medians versus baseline
+`437f294` reduced no-ready session expiry from 0.102/5.446/71.340 ms to
+0.0003/0.0003/0.0004 ms at 10k/100k/1M sessions. Full-expiration cleanup
+medians were 2.949/58.419/780.003 ms before and
+3.9042/64.9958/740.6443 ms after; the bucket index intentionally optimizes
+future-population isolation while keeping cleanup bounded, not every small-
+population expire-all case.
+The current inventory is unit=8, contract=96, integration=13, threading=90,
+lifecycle=96, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and
 the updated upper-layer headers, and the isolated
 `find_package(GameNetCore)` consumer built and passed CTest 1/1.
 
-The Release `session-expiry-scan` scale study measured 0.10/5.95/70.01 ms for
-10k/100k/1M active sessions; full `session-expiry` scan and cleanup measured
-3.17/59.63/797.36 ms. Every run reported exact considered, expired, remaining,
-and close-request counts. These are local trend samples rather than a reviewed
-regression threshold. Current runtime changes still require a frozen candidate
-SHA plus Linux Debug/Release, Linux ASan/UBSan, Linux TSan, cross-platform
-performance, and 24/72-hour endurance evidence before any stable promotion.
+The pre-H2-C Release `session-expiry-scan` scale study measured
+0.10/5.95/70.01 ms for 10k/100k/1M active sessions; full scan and cleanup
+measured 3.17/59.63/797.36 ms. Those historical samples and the H2-C comparison
+above are local trends rather than reviewed regression thresholds. Current
+runtime changes still require a frozen candidate SHA plus Linux Debug/Release,
+Linux ASan/UBSan, Linux TSan, cross-platform performance, and 24/72-hour
+endurance evidence before any stable promotion.
 
 Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate
 `5ebad2c1a4a9487437340935e21f7468140c7e8d`:

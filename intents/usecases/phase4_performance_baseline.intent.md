@@ -57,18 +57,20 @@ regression budgets without expanding any installed library API.
 - The process main thread owns one `EventLoop`, one `SessionManager`, every
   benchmark endpoint, and all session indexes.
 - `messages` is the number of sessions created before timing.
-  `session-expiry-scan` keeps them active to isolate the current O(N) full-index
-  scan; `session-expiry` makes all of them idle so the timed interval also
-  includes both-index removal, binding revocation, endpoint close request, and
-  expired endpoint/session release.
-- Report exact considered/expired/remaining/close-request counts, operations
-  per second, and nanoseconds per considered session. A scan run must keep every
-  session and issue no close; an expiry run must remove every session and issue
-  exactly one `IdleTimeout` close per endpoint.
-- This scale-study scenario establishes the O(N) baseline that must be measured
-  before choosing a timer wheel, bucketed index, or heap. It is intentionally
-  excluded from the frozen three-scenario Phase 6 paired evidence set until a
-  reviewed cross-platform baseline and regression budget are added.
+  The compatibility-named `session-expiry-scan` scenario keeps them active and
+  measures a no-ready-bucket advance; `session-expiry` makes all of them idle,
+  repeatedly advances the bounded deadline budget until ready work is empty,
+  and also includes both-index removal, binding revocation, endpoint close
+  request, and expired endpoint/session release.
+- Report exact due-candidate/expired/remaining/close-request counts, operations
+  per second, and nanoseconds normalized by configured population. A no-ready
+  run must visit no session, keep every session, and issue no close; an expiry
+  run must remove every session and issue exactly one `IdleTimeout` close per
+  endpoint.
+- This scale-study scenario compares the bucketed deadline index's no-ready and
+  full-expiration paths across population sizes. It is intentionally excluded
+  from the frozen three-scenario Phase 6 paired evidence set until a reviewed
+  cross-platform baseline and regression budget are added.
 
 ## Threading And Ownership
 

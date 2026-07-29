@@ -6,6 +6,7 @@ set(GAMENET_CORE_SOURCES
     metrics/MetricsHookRecorder.cc
     net/Channel.cc
     net/Connector.cc
+    net/DeadlineQueue.cc
     net/detail/ConnectionBackpressureController.cc
     net/EventLoop.cc
     net/EventLoopThread.cc

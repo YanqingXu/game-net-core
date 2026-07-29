@@ -180,10 +180,14 @@ def validate_session_expiry(
     close_requests = require_nonnegative_count(
         measurements.get("session_close_requests"), "session expiry close requests"
     )
-    require(visited == sessions, "session expiry visited count must equal configured sessions")
     expected_expired = sessions if expire_all else 0
+    expected_visited = sessions if expire_all else 0
     expected_remaining = 0 if expire_all else sessions
     expected_close_requests = sessions if expire_all else 0
+    require(
+        visited == expected_visited,
+        "session expiry due-candidate count does not match the selected scale scenario",
+    )
     require(
         expired == expected_expired,
         "session expiry expired count does not match the selected scale scenario",

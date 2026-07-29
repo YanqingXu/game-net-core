@@ -94,6 +94,9 @@ No other direct mutation path is allowed for core loop state.
   reinserted through TimerQueue, consumes a later timer budget slot, and never
   invokes the callback recursively. Once its configured consecutive catch-up
   count is exhausted, TimerQueue advances directly to a future cadence point
+- DeadlineQueue is owner-loop-only. A driver may be one TimerQueue timer, but
+  logical targets never receive one timer callback each; expiration policy runs
+  after a budgeted advance returns generation-tagged values to the owner
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread
@@ -244,9 +247,12 @@ No other direct mutation path is allowed for core loop state.
 
 ## 13. TcpServer Admission
 - Global/per-peer active counts, per-peer rate buckets, peer-table expiry, and
-  unauthenticated timers belong to the server base EventLoop
+  the authentication DeadlineQueue/driver belong to the server base EventLoop
 - Worker-loop authentication completion is a request marshaled through the
   base-loop executor; base-loop execution order resolves deadline races
+- A driver advance extracts only its configured budget. If ready deadlines
+  remain, one base-loop continuation advances another batch; no per-connection
+  callback is submitted to a worker or the general functor queue
 - Admission metric callbacks execute on the base loop and may not move socket
   or connection lifecycle work onto an arbitrary caller thread
 

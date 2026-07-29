@@ -161,3 +161,13 @@ changes within the 0.3 line. Direct contracts live in
 `tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp`; the
 existing TcpServer stop/release suite enforces zero residual assignment load
 before pool shutdown.
+
+M3-H2-C adds the stable Core `DeadlineQueue.h` surface and appends optional
+deadline-resolution and per-advance-budget fields to
+`TcpServerAdmissionOptions`; existing aggregate initialization remains valid
+because the new fields are trailing and preserve defaults. `DeadlineQueue` is
+callback-free and owner-loop-only: consumers retain target ownership and use
+generation-tagged values for cancellation. SessionManager/PlayerSession remain
+provisional while adopting the same substrate. Direct Core contracts live in
+`tests/contract/timer_queue/test_deadline_queue.cpp`; TcpServer and
+SessionManager contracts verify bounded backlog continuation and cleanup.

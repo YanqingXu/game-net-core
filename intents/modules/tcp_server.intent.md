@@ -74,8 +74,12 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   insertion and released exactly once with every base-map erase/move path
 - every admission rejection happens while TcpServer still uniquely owns the
   accepted fd, which is then closed exactly once without creating TcpConnection
-- active-per-peer counts, fixed-window rate buckets, and authentication timers
-  are mutated only by the base loop and converge on removal/stop
+- active-per-peer counts, fixed-window rate buckets, and the bucketed
+  authentication-deadline index are mutated only by the base loop and converge
+  on removal/stop
+- all unauthenticated connections share one periodic deadline driver; one
+  advance extracts at most the configured timeout budget and ready remainder
+  is continued without waiting a full driver interval
 - the peer rate table has an explicit finite capacity; an unseen peer is
   rejected rather than allowing abuse tracking itself to grow without bound
 - each worker aggregate has one stop generation; repeated immediate/graceful
@@ -127,8 +131,8 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   rejections have distinct counters/events; disabled limits reject nothing
 - if authentication completion and its deadline race, whichever base-loop task
   executes first wins, and the later task is a no-op
-- stopping or removing a connection cancels its authentication timer and
-  releases active-per-peer accounting exactly once
+- stopping or removing a connection cancels its generation-tagged
+  authentication deadline and releases active-per-peer accounting exactly once
 - an aggregate worker stop signal that returns Accepted must eventually reach
   worker ack or a documented owner-unavailable rollback; it cannot be dropped
   because the normal queue is full
@@ -169,7 +173,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   server-level observer propagation, per-connection isolation, disconnect-
   callback containment, continued admission after the failure, finite global
   and per-peer admission, fixed-window rate rejection, bounded peer tracking,
-  cross-thread authentication completion, and unauthenticated deadline close
+  cross-thread authentication completion, unauthenticated deadline close, and
+  complete continuation of a same-bucket population larger than the per-
+  advance timeout budget
 - `tests/contract/tcp_server/test_tcp_server_saturation_shutdown.cpp` fills
   normal and reserved queues on the base and every worker, exceeds ordinary
   queue capacity with live connections, and proves the O(worker-count)
@@ -188,8 +194,9 @@ deadline that is canceled when the accepted connection is explicitly marked
 authenticated. It does not implement a general connection idle timeout, and
 this intent must not present one as current behavior.
 
-A scalable general idle policy is deferred to the M3 deadline-bucket/time-wheel
-work. Its first promoted form should be read-idle and must define:
+The callback-free, generation-tagged DeadlineQueue substrate is active for
+authentication and session-idle deadlines, but TcpServer still has no general
+connection read-idle policy. Its first promoted form should define:
 
 - activity timestamps updated by the TcpConnection owner loop;
 - generation-tagged deadlines so stale expiry work cannot close a replacement
@@ -197,8 +204,9 @@ work. Its first promoted form should be read-idle and must define:
 - convergence through the normal close/remove and structured-reason path;
 - ordering against peer close, force close, graceful stop, authentication
   deadline, heartbeat, and an optional explicit activity refresh;
-- bounded 10k/100k deadline-storm memory and loop-lag evidence rather than one
-  allocation-heavy timer object per connection.
+- bounded 10k/100k deadline-storm memory and loop-lag evidence while reusing
+  the shared bucketed deadline substrate rather than creating one TimerQueue
+  callback per connection.
 
 ---
 
@@ -208,5 +216,5 @@ work. Its first promoted form should be read-idle and must define:
 - Are shutdown and connection removal still explicit and predictable?
 - Is the unauthenticated admission deadline kept distinct from the deferred
   general read-idle policy?
-- Can any rejected attempt or repeated stop leave a live authentication timer,
-  peer count, or unbounded peer-rate record behind?
+- Can any rejected attempt or repeated stop leave a live authentication
+  deadline, driver, peer count, or unbounded peer-rate record behind?

@@ -10,23 +10,34 @@ def require(text: str, needle: str, source: Path) -> None:
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     timer_test = repo_root / "tests" / "contract" / "timer_queue" / "test_timer_queue.cpp"
+    deadline_test = (
+        repo_root / "tests" / "contract" / "timer_queue" / "test_deadline_queue.cpp"
+    )
     future_test_helper = repo_root / "tests" / "support" / "FutureTest.h"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     timer_intent = repo_root / "intents" / "modules" / "timer_queue.intent.md"
     timer_options = repo_root / "include" / "gamenet" / "core" / "net" / "TimerOptions.h"
+    deadline_header = (
+        repo_root / "include" / "gamenet" / "core" / "net" / "DeadlineQueue.h"
+    )
+    deadline_source = repo_root / "src" / "core" / "net" / "DeadlineQueue.cc"
     migration_status = repo_root / "docs" / "migration_status.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
 
     assert timer_test.exists(), f"missing TimerQueue contract test: {timer_test}"
+    assert deadline_test.exists(), f"missing DeadlineQueue contract test: {deadline_test}"
     assert future_test_helper.exists(), f"missing future wait test helper: {future_test_helper}"
 
     timer_test_text = timer_test.read_text(encoding="utf-8")
+    deadline_test_text = deadline_test.read_text(encoding="utf-8")
     future_test_helper_text = future_test_helper.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     timer_intent_text = timer_intent.read_text(encoding="utf-8")
     timer_options_text = timer_options.read_text(encoding="utf-8")
+    deadline_header_text = deadline_header.read_text(encoding="utf-8")
+    deadline_source_text = deadline_source.read_text(encoding="utf-8")
     migration_text = migration_status.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
@@ -51,11 +62,31 @@ def main() -> None:
     require(timer_options_text, "FixedRate", timer_options)
     require(timer_options_text, "maxCatchUpCallbacks", timer_options)
     require(timer_intent_text, "next future cadence point", timer_intent)
+    require(timer_intent_text, "callback-free bucketed index", timer_intent)
+    require(timer_intent_text, "future populations are not scanned", timer_intent)
+    require(deadline_header_text, "struct DeadlineToken", deadline_header)
+    require(deadline_header_text, "DeadlineAdvanceResult advance", deadline_header)
+    require(
+        deadline_source_text,
+        "using BucketMap = std::map<gamenet::base::Timestamp, Bucket>",
+        deadline_source,
+    )
+    require(deadline_source_text, "maxExpiredPerAdvance", deadline_source)
+    assert "std::function" not in deadline_header_text
+    for fragment in (
+        "deadline-queue-no-early-contract",
+        "deadline-queue-budget-contract",
+        "deadline-queue-generation-contract",
+        "deadline-queue-future-isolation-contract",
+        "key <= 10000",
+    ):
+        require(deadline_test_text, fragment, deadline_test)
     require(future_test_helper_text, "waitUntilReady", future_test_helper)
     require(future_test_helper_text, "std::future_status::ready", future_test_helper)
     require(future_test_helper_text, "GAMENET_TEST_FAIL", future_test_helper)
     require(tests_cmake_text, "contract timer_queue", tests_cmake)
     require(tests_cmake_text, "test_timer_queue.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_deadline_queue.cpp threading lifecycle", tests_cmake)
     require(migration_text, "TimerQueue ready-timer cancellation race", migration_status)
 
     guard_command = "python3 tests/cmake/test_timer_queue_contracts.py"

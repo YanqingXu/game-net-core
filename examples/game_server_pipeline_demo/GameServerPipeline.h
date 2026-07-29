@@ -163,6 +163,7 @@ private:
         std::atomic<bool>* waitActive = nullptr);
     void closeConnection(ConnectionState& state, gamenet::transport::CloseReason reason);
     void cancelAuthenticationTimer(ConnectionState& state);
+    void sweepSessions(bool cleanupConnections);
     gamenet::DispatchResult sendFrame(
         const std::shared_ptr<gamenet::transport::TransportEndpoint>& endpoint,
         std::string payload);
@@ -177,6 +178,7 @@ private:
     std::unique_ptr<gamenet::game_logic::LogicLoop> logic_;
     gamenet::protocol::PacketFramer encoder_;
     std::optional<gamenet::net::TimerId> sessionSweepTimer_;
+    std::optional<gamenet::net::TimerId> sessionSweepContinuation_;
     std::unordered_map<std::string, ConnectionState> connections_;
     std::shared_ptr<std::atomic<std::uint64_t>> nextTransportId_;
     // Published only after distinct-owner stop work has been admitted and

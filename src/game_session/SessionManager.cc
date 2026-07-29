@@ -16,9 +16,22 @@ SessionManager::SessionManager(gamenet::net::EventLoop* ownerLoop, Options optio
     : ownerLoop_(ownerLoop),
       ownerExecutor_(ownerLoop ? ownerLoop->executor() : gamenet::net::EventLoopExecutor{}),
       lifetimeState_(std::make_shared<LifetimeState>()),
-      options_(options) {
+      options_(options),
+      idleDeadlines_(ownerLoop
+              ? std::make_unique<gamenet::net::DeadlineQueue>(
+                    ownerLoop,
+                    gamenet::net::DeadlineQueueOptions{
+                        .resolution = options.idleDeadlineResolution,
+                        .maxExpiredPerAdvance =
+                            options.maxIdleExpirationsPerAdvance,
+                    })
+              : nullptr) {
     if (!ownerLoop_) {
         throw std::invalid_argument("SessionManager requires an owner loop");
+    }
+    if (options_.idleTimeout <= Clock::duration::zero()) {
+        throw std::invalid_argument(
+            "SessionManager idle timeout must be positive");
     }
 }
 
@@ -68,6 +81,9 @@ AuthenticateResult SessionManager::authenticate(
             nextBindingGeneration_++,
             now));
         session->markOnline(now);
+        session->idleDeadline_ = idleDeadlines_->schedule(
+            session->transportId().value,
+            now + options_.idleTimeout);
         byTransport_[session->transportId().value] = session;
         byPlayer_[session->playerId()] = session;
         return {
@@ -79,6 +95,9 @@ AuthenticateResult SessionManager::authenticate(
     auto session = existing->second;
     if (session->transportId() == endpoint->id()) {
         session->refreshBinding(nextBindingGeneration_++, now);
+        session->idleDeadline_ = idleDeadlines_->schedule(
+            session->transportId().value,
+            now + options_.idleTimeout);
         return {
             .status = AuthenticateStatus::Existing,
             .session = std::move(session),
@@ -92,8 +111,12 @@ AuthenticateResult SessionManager::authenticate(
     }
 
     auto previousEndpoint = session->endpoint();
+    (void)idleDeadlines_->cancel(session->idleDeadline_);
     byTransport_.erase(session->transportId().value);
     session->rebind(std::move(endpoint), nextBindingGeneration_++, now);
+    session->idleDeadline_ = idleDeadlines_->schedule(
+        session->transportId().value,
+        now + options_.idleTimeout);
     byTransport_[session->transportId().value] = session;
     closeEndpoint(std::move(previousEndpoint), gamenet::transport::CloseReason::Replaced);
     return {
@@ -131,27 +154,55 @@ bool SessionManager::heartbeat(
         return false;
     }
     session->heartbeat(now);
+    session->idleDeadline_ = idleDeadlines_->schedule(
+        session->transportId().value,
+        now + options_.idleTimeout);
     return true;
 }
 
 std::size_t SessionManager::expireIdle(Clock::time_point now) {
+    std::size_t expired = 0;
+    bool readyRemaining = false;
+    do {
+        const auto batch = expireIdleBatch(now);
+        expired += batch.expired;
+        readyRemaining = batch.readyRemaining;
+    } while (readyRemaining);
+    return expired;
+}
+
+IdleExpirationResult SessionManager::expireIdleBatch(
+    Clock::time_point now) {
     assertOwner();
     if (lifecycleState_ != LifecycleState::Running) {
-        return 0;
+        return {};
     }
-    std::vector<std::shared_ptr<PlayerSession>> expired;
-    for (const auto& [playerId, session] : byPlayer_) {
-        (void)playerId;
-        if (now - session->lastActivity() >= options_.idleTimeout) {
-            expired.push_back(session);
+
+    auto ready = idleDeadlines_->advance(now);
+    std::size_t expired = 0;
+    for (const auto& expiration : ready.expired) {
+        auto session = findMutableByTransport(
+            {expiration.token.key});
+        if (!session ||
+            session->idleDeadline_ != expiration.token) {
+            continue;
         }
-    }
-    for (const auto& session : expired) {
+        if (now - session->lastActivity() < options_.idleTimeout) {
+            session->idleDeadline_ = idleDeadlines_->schedule(
+                session->transportId().value,
+                session->lastActivity() + options_.idleTimeout);
+            continue;
+        }
+
         auto endpoint = session->endpoint();
         eraseSession(session);
         closeEndpoint(std::move(endpoint), gamenet::transport::CloseReason::IdleTimeout);
+        ++expired;
     }
-    return expired.size();
+    return {
+        .expired = expired,
+        .readyRemaining = ready.readyRemaining,
+    };
 }
 
 std::shared_ptr<const PlayerSession> SessionManager::findByPlayer(const PlayerId& playerId) const {
@@ -194,6 +245,7 @@ void SessionManager::shutdown() {
     }
     byTransport_.clear();
     byPlayer_.clear();
+    idleDeadlines_->clear();
 
     for (auto& endpoint : endpoints) {
         closeEndpoint(std::move(endpoint), gamenet::transport::CloseReason::GoingAway);
@@ -299,6 +351,8 @@ void SessionManager::closeEndpoint(
 }
 
 void SessionManager::eraseSession(const std::shared_ptr<PlayerSession>& session) {
+    (void)idleDeadlines_->cancel(session->idleDeadline_);
+    session->idleDeadline_ = {};
     byTransport_.erase(session->transportId().value);
     const auto player = byPlayer_.find(session->playerId());
     if (player != byPlayer_.end() && player->second == session) {

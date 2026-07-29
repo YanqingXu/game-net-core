@@ -7,6 +7,7 @@
 #include "gamenet/core/net/Acceptor.h"
 #include "gamenet/core/net/Callbacks.h"
 #include "gamenet/core/net/CallbackException.h"
+#include "gamenet/core/net/DeadlineQueue.h"
 #include "gamenet/core/net/EventLoopThreadPool.h"
 #include "gamenet/core/net/InetAddress.h"
 #include "gamenet/core/net/PostResult.h"
@@ -65,6 +66,8 @@ struct TcpServerAdmissionOptions {
     std::size_t maxTrackedPeerAddresses{65536};
     // Zero disables the authentication deadline.
     std::chrono::milliseconds unauthenticatedTimeout{0};
+    std::chrono::milliseconds authenticationDeadlineResolution{10};
+    std::size_t maxAuthenticationTimeoutsPerAdvance{1024};
 
     void validate() const;
 };
@@ -177,7 +180,10 @@ private:
     bool admitPeer(const std::string& peerAddress);
     void trackAcceptedConnection(
         const TcpConnectionPtr& connection,
-        const std::string& peerAddress);
+        const std::string& peerAddress,
+        DeadlineKey deadlineKey);
+    void ensureAuthenticationDeadlineDriver();
+    void driveAuthenticationDeadlines();
     void markConnectionAuthenticatedInLoop(const TcpConnectionPtr& connection);
     void releaseConnectionAdmission(const std::string& connectionName);
     void clearConnectionAdmission();
@@ -207,7 +213,7 @@ private:
     TcpServerAdmissionMetricCallback admissionMetricCallback_;
     std::atomic<bool> started_{false};
     bool stopped_{false};
-    int nextConnId_{1};
+    std::uint64_t nextConnId_{1};
     std::size_t highWaterMark_{0};
     TcpConnectionBackpressureOptions backpressureOptions_;
     std::unordered_map<std::string, TcpConnectionPtr> connections_;
@@ -224,7 +230,10 @@ private:
     };
     std::unordered_map<std::string, std::size_t> activeConnectionsByPeer_;
     std::unordered_map<std::string, std::string> peerByConnection_;
-    std::unordered_map<std::string, TimerId> authenticationTimers_;
+    std::unordered_map<std::string, DeadlineToken> authenticationDeadlines_;
+    std::unique_ptr<DeadlineQueue> authenticationDeadlineQueue_;
+    TimerId authenticationDeadlineDriver_;
+    TimerId authenticationDeadlineContinuation_;
     std::unordered_map<std::string, PeerRateBucket> peerRateBuckets_;
     std::deque<PeerRateExpiry> peerRateExpiries_;
     std::uint64_t nextPeerRateGeneration_{1};

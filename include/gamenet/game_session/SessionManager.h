@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gamenet/core/DispatchResult.h"
+#include "gamenet/core/net/DeadlineQueue.h"
 #include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/game_session/PlayerSession.h"
 
@@ -36,6 +37,11 @@ struct AuthenticateResult {
     gamenet::DispatchResult dispatch{gamenet::DispatchResult::PolicyRejected};
 };
 
+struct IdleExpirationResult {
+    std::size_t expired{0};
+    bool readyRemaining{false};
+};
+
 class SessionManager {
 public:
     using Clock = PlayerSession::Clock;
@@ -45,6 +51,8 @@ public:
     struct Options {
         DuplicateLoginPolicy duplicateLogin{DuplicateLoginPolicy::ReplaceExisting};
         Clock::duration idleTimeout{std::chrono::minutes(2)};
+        Clock::duration idleDeadlineResolution{std::chrono::milliseconds(1)};
+        std::size_t maxIdleExpirationsPerAdvance{1024};
     };
 
     explicit SessionManager(gamenet::net::EventLoop* ownerLoop);
@@ -62,6 +70,8 @@ public:
         gamenet::transport::TransportSessionId transportId,
         Clock::time_point now = Clock::now());
     std::size_t expireIdle(Clock::time_point now = Clock::now());
+    IdleExpirationResult expireIdleBatch(
+        Clock::time_point now = Clock::now());
 
     // Returned const views remain management-loop-affine. Constness prevents
     // index-breaking mutation; it does not make PlayerSession a cross-thread snapshot.
@@ -121,6 +131,7 @@ private:
     std::shared_ptr<LifetimeState> lifetimeState_;
     LifecycleState lifecycleState_{LifecycleState::Running};
     Options options_;
+    std::unique_ptr<gamenet::net::DeadlineQueue> idleDeadlines_;
     SessionId nextSessionId_{1};
     SessionBindingGeneration nextBindingGeneration_{1};
     std::unordered_map<PlayerId, std::shared_ptr<PlayerSession>> byPlayer_;

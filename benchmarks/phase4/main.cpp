@@ -525,7 +525,13 @@ Result runSessionExpiry(const Config& config) {
     }
 
     const auto start = Clock::now();
-    const auto expired = manager.expireIdle(expiryNow);
+    std::size_t expired = 0;
+    bool readyRemaining = false;
+    do {
+        const auto batch = manager.expireIdleBatch(expiryNow);
+        expired += batch.expired;
+        readyRemaining = batch.readyRemaining;
+    } while (readyRemaining);
     const auto finish = Clock::now();
     const auto remaining = manager.size();
     const auto expectedExpired = expireAll ? config.messages : 0;
@@ -535,7 +541,7 @@ Result runSessionExpiry(const Config& config) {
     if (expired != expectedExpired || remaining != expectedRemaining ||
         probe.closeRequests != expectedCloseRequests || probe.wrongCloseReason) {
         throw std::runtime_error(
-            "session-expiry benchmark produced inconsistent scan or cleanup counts");
+            "session-expiry benchmark produced inconsistent deadline or cleanup counts");
     }
 
     const auto seconds = elapsedSeconds(start, finish);
@@ -548,7 +554,7 @@ Result runSessionExpiry(const Config& config) {
     result.sessionExpiryNsPerSession =
         std::chrono::duration<double, std::nano>(finish - start).count() /
         static_cast<double>(config.messages);
-    result.sessionVisited = config.messages;
+    result.sessionVisited = expired;
     result.sessionExpired = expired;
     result.sessionRemaining = remaining;
     result.sessionCloseRequests = probe.closeRequests;
@@ -800,7 +806,7 @@ void printDocument(
     const Result& result,
     std::string_view status,
     std::string_view error = {}) {
-    std::cout << std::fixed << std::setprecision(3)
+    std::cout << std::fixed << std::setprecision(6)
               << "{\n"
               << "  \"schema\": \"gamenet.phase4_benchmark.v1\",\n"
               << "  \"status\": \"" << status << "\",\n"

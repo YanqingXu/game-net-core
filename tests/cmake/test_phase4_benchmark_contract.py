@@ -139,7 +139,7 @@ def main() -> None:
         "--scenario broadcast-fanout",
         "--scenario session-expiry-scan",
         "--scenario session-expiry",
-        "O(N)",
+        "no-ready-bucket",
         "P99",
         "working set",
         "Raw JSON",
@@ -193,9 +193,9 @@ def main() -> None:
         "tick_interval_us": 1000,
         "timeout_ms": 30000,
     }
-    for scenario, expired, remaining, closes in (
-        ("session-expiry-scan", 0, 1000, 0),
-        ("session-expiry", 1000, 0, 1000),
+    for scenario, visited, expired, remaining, closes in (
+        ("session-expiry-scan", 0, 0, 1000, 0),
+        ("session-expiry", 1000, 1000, 0, 1000),
     ):
         phase4_validator.validate_document(
             {
@@ -211,7 +211,7 @@ def main() -> None:
                     "elapsed_ms": 1.0,
                     "operations_per_second": 1_000_000.0,
                     "session_expiry_ns_per_session": 1000.0,
-                    "session_visited": 1000,
+                    "session_visited": visited,
                     "session_expired": expired,
                     "session_remaining": remaining,
                     "session_close_requests": closes,

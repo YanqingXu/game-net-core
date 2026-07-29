@@ -12,6 +12,9 @@ TimerQueue provides owner-loop timer scheduling for one EventLoop.
 It lets EventLoop compute the next poll timeout, then translates elapsed
 deadlines into ordered timer callback dispatch while preserving reactor
 thread-affinity and lifecycle discipline.
+The same module also provides DeadlineQueue, a callback-free bucketed index for
+large homogeneous connection/session deadline populations that are driven by
+one owner-loop timer or an explicit owner-loop sweep.
 
 ---
 
@@ -26,6 +29,10 @@ thread-affinity and lifecycle discipline.
 - bound fixed-rate replay with a per-timer maximum consecutive catch-up count;
   once exhausted, skip missed cadence points and schedule the next future point
 - support cross-thread add/cancel through EventLoop scheduling APIs
+- quantize large logical deadline populations into configured-resolution
+  buckets instead of allocating one TimerQueue callback per target
+- schedule/reschedule one active deadline per numeric key with generation-safe
+  cancellation and a configured expiration budget per advance
 
 ---
 
@@ -34,6 +41,8 @@ thread-affinity and lifecycle discipline.
 - does not own arbitrary user objects captured by timer callbacks
 - does not provide business retry / timeout policy by itself
 - does not bypass EventLoop quit and teardown semantics
+- DeadlineQueue does not invoke callbacks, own connections/sessions, or create
+  its own driver timer
 
 ---
 
@@ -53,6 +62,14 @@ thread-affinity and lifecycle discipline.
 - cancel must prevent future firing, even if requested cross-thread
 - a callback may cancel a later ready timer that was not extracted into the
   current budget; removal from the ordered container prevents its later firing
+- one DeadlineQueue belongs to one owner EventLoop; every operation is
+  owner-loop-only
+- a DeadlineKey has at most one active entry; reschedule publishes a new
+  generation, and stale tokens cannot cancel its replacement
+- deadline quantization rounds up, so a bucket never expires a target before
+  its requested deadline and lateness is bounded by one resolution interval
+- advance visits only ready non-empty buckets and extracts at most the
+  configured budget; future populations are not scanned
 
 ---
 
@@ -62,6 +79,8 @@ thread-affinity and lifecycle discipline.
 - EventLoop calls handleExpired(now, maxCount) after active I/O dispatch
 - relies on EventLoop runInLoop / queueInLoop for cross-thread add/cancel
 - may later provide scheduling substrate for connection idle timeout or delayed shutdown features
+- TcpServer authentication deadlines and SessionManager idle deadlines use
+  DeadlineQueue while retaining their own target ownership and close policy
 
 ---
 
@@ -70,12 +89,14 @@ thread-affinity and lifecycle discipline.
 - public timer APIs on EventLoop may be called cross-thread, but must marshal into the owner loop
 - timer callbacks execute in the owner loop thread only
 - timeout calculation and expired timer dispatch happen in the owner loop thread only
+- DeadlineQueue schedule/cancel/advance/inspection are owner-loop-only
 
 ---
 
 ## 7. Ownership Rules
 - EventLoop owns TimerQueue
 - TimerQueue owns timer metadata entries
+- DeadlineQueue owns bucket/index metadata only
 - Timer callbacks borrow any captured objects; they must not imply hidden ownership transfer
 
 ---
@@ -85,6 +106,8 @@ thread-affinity and lifecycle discipline.
 - cancel of an already-fired or unknown timer is a safe no-op
 - quit during timer callback processing must not abandon already-accepted owner-loop work
 - TimerQueue destruction must tolerate an empty or partially canceled timer set
+- invalid DeadlineQueue resolution/budget fail explicitly; stale-token cancel
+  is a safe no-op
 
 ---
 
@@ -95,6 +118,7 @@ Exposed through EventLoop:
 - runEvery(Duration, Functor)
 - runEvery(Duration, Functor, RepeatingTimerOptions)
 - cancel(TimerId)
+- DeadlineQueue::schedule/cancel/advance/clear/size/nextBucketDeadline
 
 `TimerId` exists to make cancellation explicit and avoid exposing internal timer pointers.
 `RepeatingTimerOptions` defaults to fixed-delay with zero catch-up so the
@@ -116,6 +140,11 @@ existing overload keeps its historical behavior.
 - a ready population larger than the configured per-iteration budget retains
   order, yields to later EventLoop phases, and reports exact remaining work
 - timer queue teardown owns only timer metadata and does not leave backend registration behind
+- bucket quantization never fires early; same-key replacement rejects a stale
+  cancel; ready populations larger than the advance budget retain exact
+  continuation state
+- a large future population plus a small ready population advances only the
+  ready buckets, and cross-thread mutation is rejected
 
 ---
 

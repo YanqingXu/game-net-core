@@ -137,6 +137,8 @@ It must not blur these roles.
 - Cancellation semantics must be explicit
 - Repeating cadence mode and consecutive catch-up count are TimerQueue-owned
   metadata; neither creates ownership of the callback's captured targets
+- DeadlineQueue owns only key/generation/deadline bucket metadata. Returned
+  expirations are values and own no connection, session, callback, or EventLoop
 - TcpServer owns its graceful-stop coordination state; returned shared futures
   observe the terminal result but do not own TcpServer
 - TcpServer owns base stop-generation bookkeeping and one aggregate participant
@@ -201,11 +203,13 @@ It must not blur these roles.
 
 ## 9. TcpServer Admission State
 - TcpServer owns admission counters, active-per-peer bookkeeping, bounded rate
-  buckets, expiry records, and unauthenticated TimerIds
+  buckets, authentication deadline tokens, their DeadlineQueue, and its single
+  driver/continuation TimerIds
 - A rate bucket owns only a peer address value and finite attempt metadata; it
   never owns a connection or socket
-- Authentication timers borrow TcpServer through the existing revocable
-  lifetime token and are canceled on authentication, removal, stop, or destroy
+- DeadlineQueue entries own only key/generation/deadline metadata. TcpServer's
+  connection map remains the sole target lookup, and authentication, removal,
+  stop, or destroy cancels the corresponding token/driver
 - Rejected accepted sockets remain owned by TcpServer's local Socket guard and
   are closed exactly once before the callback returns
 

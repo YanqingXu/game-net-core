@@ -4,7 +4,9 @@
 #include "support/TestAssert.h"
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <type_traits>
@@ -149,6 +151,45 @@ int main() {
         GAMENET_TEST_ASSERT(first->closeReason() == gamenet::transport::CloseReason::Replaced);
         GAMENET_TEST_ASSERT(!second->isOpen());
         GAMENET_TEST_ASSERT(second->closeReason() == gamenet::transport::CloseReason::IdleTimeout);
+    }
+
+    {
+        gamenet::net::EventLoop loop;
+        gamenet::game_session::SessionManager manager(
+            &loop,
+            {
+                .duplicateLogin =
+                    gamenet::game_session::DuplicateLoginPolicy::ReplaceExisting,
+                .idleTimeout = 10ms,
+                .idleDeadlineResolution = 1ms,
+                .maxIdleExpirationsPerAdvance = 3,
+            });
+        const auto start =
+            gamenet::game_session::SessionManager::Clock::now();
+        for (std::uint64_t index = 0; index < 10; ++index) {
+            auto endpoint =
+                std::make_shared<FakeEndpoint>(100 + index, &loop);
+            GAMENET_TEST_ASSERT(
+                manager.authenticate(
+                    "bucket-player-" + std::to_string(index),
+                    endpoint,
+                    start).status == AuthenticateStatus::Created);
+        }
+
+        // session-idle-deadline-budget-contract: a same-bucket population is
+        // removed in exact bounded batches without scanning the player index.
+        std::size_t expired = 0;
+        std::size_t batches = 0;
+        bool readyRemaining = false;
+        do {
+            const auto result = manager.expireIdleBatch(start + 20ms);
+            expired += result.expired;
+            readyRemaining = result.readyRemaining;
+            ++batches;
+        } while (readyRemaining);
+        GAMENET_TEST_ASSERT(expired == 10);
+        GAMENET_TEST_ASSERT(batches == 4);
+        GAMENET_TEST_ASSERT(manager.size() == 0);
     }
 
     {
