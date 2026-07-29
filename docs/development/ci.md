@@ -426,6 +426,22 @@ four sanitizer/build profiles from competing for one runner's CPU and memory;
 each self-hosted build also uses `--parallel 1` so compiler fan-out cannot
 exhaust the endurance host.
 
+The `ci_artifact_policy` dispatch input applies only to that four-profile
+self-hosted `ci` matrix. It defaults to `best-effort`: artifact upload is still
+attempted, but an unavailable GitHub artifact service, storage quota, or account
+billing lock encountered after the self-hosted job has started is reported as a
+workflow warning and does not replace a successful build/test result with an
+upload failure. Selecting `required` restores the strict upload gate. The job
+summary always records the selected policy and the raw upload outcome. An
+account-level lock that prevents GitHub from scheduling the workflow at all
+cannot be bypassed by repository YAML.
+
+Best-effort success proves only the logged repository guards, build, CTest, and
+package-consumer result. If upload failed, it does not provide retained artifact
+evidence and must not be cited as satisfying a formal artifact or release
+evidence gate. Repeat-soak and 24/72-hour production-endurance uploads remain
+strict and are not affected by this input.
+
 LeakSanitizer needs to attach to the sanitizer process while collecting thread
 roots. The dedicated trusted runner must therefore persist Yama
 `kernel.yama.ptrace_scope=0`; merely observing `TracerPid: 0` is insufficient.

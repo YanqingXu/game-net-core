@@ -21,6 +21,14 @@ on:
         description: Per-test timeout in seconds
         required: true
         default: "60"
+      ci_artifact_policy:
+        description: Artifact upload policy for the self-hosted ci matrix
+        required: true
+        type: choice
+        options:
+          - best-effort
+          - required
+        default: best-effort
       candidate_run_id:
         description: Successful candidate-24h run id required by release-72h
         required: false
@@ -469,13 +477,34 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload self-hosted CI evidence
+        id: self-hosted-ci-evidence-upload
         if: always()
+        continue-on-error: ${{ inputs.ci_artifact_policy == 'best-effort' }}
         uses: actions/upload-artifact@v4
         with:
           name: linux-self-hosted-${{ matrix.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
           retention-days: 90
+
+      - name: Report self-hosted CI artifact upload
+        if: always()
+        env:
+          GAMENET_ARTIFACT_POLICY: ${{ inputs.ci_artifact_policy }}
+          GAMENET_ARTIFACT_OUTCOME: ${{ steps.self-hosted-ci-evidence-upload.outcome }}
+        run: |
+          {
+            echo "## Self-hosted CI artifact upload"
+            echo "- policy: ${GAMENET_ARTIFACT_POLICY}"
+            echo "- outcome: ${GAMENET_ARTIFACT_OUTCOME}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${GAMENET_ARTIFACT_OUTCOME}" != "success" ]]; then
+            if [[ "${GAMENET_ARTIFACT_POLICY}" == "best-effort" ]]; then
+              echo "::warning::Self-hosted CI tests completed, but evidence upload was unavailable. The job result follows the build and test gates; no retained artifact may be claimed."
+            else
+              echo "::error::Required self-hosted CI evidence upload failed."
+            fi
+          fi
 
   linux-production-endurance:
     name: Linux production endurance (${{ inputs.mode }})

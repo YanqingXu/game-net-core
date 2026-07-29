@@ -132,6 +132,11 @@ def main() -> None:
     require(workflow_text, "          - ci", workflow)
     require(workflow_text, 'default: "50"', workflow)
     require(workflow_text, 'default: "60"', workflow)
+    require(workflow_text, "      ci_artifact_policy:", workflow)
+    require(workflow_text, "Artifact upload policy for the self-hosted ci matrix", workflow)
+    require(workflow_text, "          - best-effort", workflow)
+    require(workflow_text, "          - required", workflow)
+    require(workflow_text, "        default: best-effort", workflow)
     assert "\n  push:" not in workflow_text, "long-soak must not run on push"
     assert "\n  pull_request:" not in workflow_text, "long-soak must not run on pull_request"
     permissions = re.search(r"(?m)^permissions:\n(?P<body>(?:  [^\n]+\n)+)", workflow_text)
@@ -292,6 +297,9 @@ def main() -> None:
         require(upload, evidence_path, workflow)
     require(upload, "if-no-files-found: error", workflow)
     require(upload, "retention-days: 90", workflow)
+    assert "continue-on-error:" not in upload, (
+        "repeat-soak retained evidence upload must remain strict"
+    )
     for producer_step in (inventory, threading_repeat, phase4_repeat, repeat_evidence):
         assert job.index(producer_step) < job.index(manifest), (
             "long-soak manifest must be written only after inventory, repeats, and "
@@ -414,6 +422,12 @@ def main() -> None:
         self_hosted_ci, "Upload self-hosted CI evidence"
     )
     require(self_hosted_upload, "if: always()", workflow)
+    require(self_hosted_upload, "id: self-hosted-ci-evidence-upload", workflow)
+    require(
+        self_hosted_upload,
+        "continue-on-error: ${{ inputs.ci_artifact_policy == 'best-effort' }}",
+        workflow,
+    )
     require(self_hosted_upload, "uses: actions/upload-artifact@v4", workflow)
     require(
         self_hosted_upload,
@@ -422,6 +436,28 @@ def main() -> None:
     )
     require(self_hosted_upload, "if-no-files-found: error", workflow)
     require(self_hosted_upload, "retention-days: 90", workflow)
+    self_hosted_upload_report = step_block(
+        self_hosted_ci, "Report self-hosted CI artifact upload"
+    )
+    require(self_hosted_upload_report, "if: always()", workflow)
+    require(
+        self_hosted_upload_report,
+        "GAMENET_ARTIFACT_POLICY: ${{ inputs.ci_artifact_policy }}",
+        workflow,
+    )
+    require(
+        self_hosted_upload_report,
+        "GAMENET_ARTIFACT_OUTCOME: ${{ steps.self-hosted-ci-evidence-upload.outcome }}",
+        workflow,
+    )
+    require(
+        self_hosted_upload_report,
+        "The job result follows the build and test gates; no retained artifact may be claimed.",
+        workflow,
+    )
+    assert self_hosted_ci.index(self_hosted_upload) < self_hosted_ci.index(
+        self_hosted_upload_report
+    ), "self-hosted artifact outcome must be reported after the upload attempt"
 
     production_job = job_block(workflow_text, "linux-production-endurance")
     require(
@@ -488,6 +524,9 @@ def main() -> None:
         production_job, "Upload production endurance evidence"
     )
     require(production_upload, f"name: {production_artifact_name}", workflow)
+    assert "continue-on-error:" not in production_upload, (
+        "production endurance retained evidence upload must remain strict"
+    )
 
     candidate_download = step_block(
         production_job, "Download retained candidate-24h evidence"
@@ -536,6 +575,21 @@ def main() -> None:
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
     require(ci_docs_text, "82 threading-labeled tests", ci_docs)
     require(ci_docs_text, "12 Pipeline/Broadcast tests", ci_docs)
+    require(ci_docs_text, "`ci_artifact_policy`", ci_docs)
+    require(ci_docs_text, "defaults to `best-effort`", ci_docs)
+    require(ci_docs_text, "Selecting `required` restores the strict upload gate", ci_docs)
+    require(
+        ci_docs_text,
+        "An\naccount-level lock that prevents GitHub from scheduling the workflow at all\n"
+        "cannot be bypassed by repository YAML",
+        ci_docs,
+    )
+    require(ci_docs_text, "does not provide retained artifact\nevidence", ci_docs)
+    require(
+        ci_docs_text,
+        "Repeat-soak and 24/72-hour production-endurance uploads remain\nstrict",
+        ci_docs,
+    )
     require(ci_docs_text, "kernel.yama.ptrace_scope=0", ci_docs)
     require(ci_docs_text, "/etc/sysctl.d/99-gamenet-lsan.conf", ci_docs)
     require(ci_docs_text, "ci-evidence/asan-ubsan-runner.txt", ci_docs)
