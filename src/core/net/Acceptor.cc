@@ -328,6 +328,17 @@ void Acceptor::closePendingAccept() noexcept {
     if (!iocpAccept_) {
         return;
     }
+    if (iocpAccept_->pending) {
+        // postAccept() retained storage only after a real kernel submission.
+        // Mark the separate shutdown obligation before cancellation/handle
+        // close so immediate EventLoop quit cannot pass the backend quiet point.
+        loop_->trackCompletionOperation(&iocpAccept_->operation);
+        if (sockets::isValid(acceptSocket_.fd())) {
+            (void)::CancelIoEx(
+                reinterpret_cast<HANDLE>(acceptSocket_.fd()),
+                &iocpAccept_->operation.overlapped);
+        }
+    }
     iocpAccept_->pending = false;
     iocpAccept_->operation.channel = nullptr;
     if (sockets::isValid(iocpAccept_->accepted)) {

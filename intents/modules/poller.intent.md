@@ -58,6 +58,12 @@ Poller is not channel owner.
   bookkeeping, so a stale same-fd remove cannot erase a replacement Channel
 - IOCP completion metadata remains allocated until the completion is dequeued
   or the owning Poller closes; late canceled completions observe no Channel
+- retained storage and shutdown completion obligations are separate: retention
+  protects operation bytes, while only an explicitly tracked, successfully
+  submitted kernel operation keeps EventLoop final drain open
+- obligation tracking is idempotent and allocation-free after submission;
+  dequeue clears it exactly once, including packets whose Channel observer was
+  already revoked
 - IOCP only activates a Channel for a packet actually dequeued from the
   completion port; a synchronous overlapped-submission failure is returned to
   the posting owner and is never represented by fabricated `revents`
@@ -178,6 +184,9 @@ High-risk mistakes:
 - `tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp`
   distinguishes synchronous submit failure from a real queued cancellation
   completion and verifies both converge exactly once through TcpConnection
+- `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
+  verifies AcceptEx/ConnectEx retained and outstanding counts converge to zero
+  across cancel plus immediate quit
 
 ---
 

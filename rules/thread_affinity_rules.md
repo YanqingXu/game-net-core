@@ -11,6 +11,9 @@ Mutable reactor state belongs to a specific EventLoop thread.
 - pending functors are executed on the owner thread
 - Windows completion batches are dequeued, translated, merged, and dispatched
   only on that EventLoop owner thread
+- Windows AcceptEx/ConnectEx submission, cancellation, Channel-observer
+  revocation, and completion-obligation tracking are owner-thread-only; final
+  drain performs only zero-timeout owner-thread polls
 
 ## 3. Allowed Cross-Thread Interaction
 Cross-thread interaction must go through:

@@ -24,6 +24,7 @@ struct IocpOperation {
     Channel* channel{nullptr};
     DWORD bytesTransferred{0};
     DWORD error{0};
+    bool shutdownObligation{false};
 };
 
 }  // namespace gamenet::net

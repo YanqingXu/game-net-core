@@ -1900,6 +1900,11 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_event_loop_lifecycle_hub.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_iocp_quit_completion_drain.cpp threading lifecycle", tests_cmake)
+    require(
+        tests_cmake_text,
+        "test_iocp_accept_connect_quit_completion_drain.cpp threading lifecycle",
+        tests_cmake,
+    )
     require(tests_cmake_text, "contract tcp_server", tests_cmake)
     require(tests_cmake_text, "contract tcp_client", tests_cmake)
     require(tests_cmake_text, "contract tcp_connection", tests_cmake)

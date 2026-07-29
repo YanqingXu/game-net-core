@@ -64,12 +64,22 @@ completions for the same Channel are deferred to a later poll round in
 Poller-owned fixed storage while their operation leases remain retained. This
 avoids a read callback registration-generation change suppressing a same-round
 write callback and stranding completion state. The local Windows MSVC Debug
-tree builds in full, all 109 CTest tests pass, the focused IOCP lifecycle slice
+tree builds in full, all 110 CTest tests pass, the focused IOCP lifecycle slice
 passes 8/8, and the Debug benchmark reports
 `get_queued_completion_status_ex_batch_64`. This is a local implementation
 gate only: wakeup coalescing, buffer/segment ownership, AcceptEx pooling,
 Release performance comparison, and frozen-SHA cross-platform evidence remain
 open.
+
+M3-L0 now closes the AcceptEx/ConnectEx immediate-quit final-drain gap.
+Successfully submitted pending operations keep storage retention separate from
+an allocation-free, idempotent shutdown obligation. Acceptor and Connector mark
+that obligation before cancellation; `ERROR_NOT_FOUND` cannot bypass the real
+queued packet, while synchronous non-pending submission failures create no
+phantom obligation. The Windows MSVC Debug worktree passes the focused IOCP
+lifecycle slice 8/8, the complete lifecycle gate 89/89, the full CTest inventory
+110/110, and all 34 repository guards. These remain local development-gate
+results rather than Release, sanitizer, performance, or frozen-SHA evidence.
 
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target
@@ -211,7 +221,7 @@ infrastructure-validation records, not evidence for later runtime changes.
 
 ## Verification State
 
-The current worktree has 109 configured CTest tests: 8 unit tests, 89 contract tests, and 12 integration tests. Phase 4 coverage includes bounded
+The current worktree has 110 configured CTest tests: 8 unit tests, 89 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -225,8 +235,8 @@ submission errors.
 
 On 2026-07-27, the current Windows MSVC worktree passed full Debug, Release,
 and AddressSanitizer builds and 109/109 CTests in all three configurations.
-The current inventory is unit=8, contract=89, integration=12, threading=82,
-lifecycle=88, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+The current inventory is unit=8, contract=89, integration=13, threading=83,
+lifecycle=89, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and
@@ -480,7 +490,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. The workflow locks the 109-test inventory, `threading=82`,
+  timeout. The workflow locks the 110-test inventory, `threading=83`,
   `game_pipeline=7`, and `broadcast=5`, then verifies the raw result lines for
   every selected test and exact repeat count. Its two
   `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,

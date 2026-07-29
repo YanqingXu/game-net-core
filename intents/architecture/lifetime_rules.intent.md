@@ -119,6 +119,19 @@ A connection should not disappear while loop still believes it is actively regis
 
 ---
 
+## 8.1 Windows Completion Lifetime
+- a successfully submitted overlapped operation owns one kernel completion
+  packet and keeps its operation storage alive until that packet is dequeued
+- storage retention and EventLoop shutdown obligation are distinct; canceling
+  a pending operation marks the obligation before closing handles or revoking
+  its Channel observer
+- synchronous non-pending submission failure owns no completion packet and
+  creates no obligation
+- `ERROR_NOT_FOUND` from cancellation does not prove completion consumption;
+  the queued packet remains responsible for releasing the obligation
+
+---
+
 ## 9. Destruction Thread Intent
 Where destruction affects loop-owned state,
 the destruction path should respect owner-thread assumptions.
@@ -148,6 +161,8 @@ destruction should be coordinated through loop thread rather than arbitrary exte
 - stale active-batch entries are invalidated before Channel destruction, and a
   same-address re-registration cannot pass the old generation check
 - repeated remove cannot erase a same-fd replacement registration
+- AcceptEx/ConnectEx cancel plus immediate EventLoop quit consumes the real
+  completion before operation storage or temporary owner guards are released
 
 ---
 

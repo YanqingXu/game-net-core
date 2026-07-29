@@ -55,6 +55,12 @@ It must not blur these roles.
   to the next round keeps both leases intact. Its transferred-byte and terminal
   error result is captured at dequeue time so later socket closure cannot
   mutate the observation
+- an IOCP retained lease owns operation storage but is not by itself a shutdown
+  obligation. A successfully submitted operation canceled during teardown is
+  marked exactly once as outstanding; packet dequeue clears the mark and
+  releases any retained lease even when the Channel observer is null
+- synchronous non-pending submission failure creates neither retained nor
+  outstanding ownership
 
 ## 4. Channel
 - Channel does not own fd by default
@@ -104,6 +110,14 @@ It must not blur these roles.
   converged and join completes
 - Acceptor owns its retry timer; stop/destruction cancels it before Acceptor
   storage is released
+- on Windows, Acceptor owns the listen/accepted sockets and Channel observer,
+  while Poller retains only the submitted AcceptEx operation state through its
+  terminal packet; Acceptor may clear the observer and release its own storage
+  after registering the shutdown obligation
+- Connector owns its Channel and connecting socket. Its cancellation self guard
+  temporarily owns Connector for mandatory completion cleanup, while Poller
+  independently owns the final-drain obligation and retained ConnectEx state;
+  neither lease substitutes for the other
 
 ## 7. Accepted Socket Failure
 - Acceptor owns an accepted fd until it transfers that fd through the new-

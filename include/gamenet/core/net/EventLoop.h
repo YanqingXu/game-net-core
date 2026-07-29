@@ -165,6 +165,7 @@ public:
     void assertInLoopThread() const;
 
 private:
+    friend class Acceptor;
     friend class Connector;
     friend class IocpTcpTransport;
     friend class TcpClient;

@@ -130,6 +130,34 @@ public:
         return false;
 #endif
     }
+
+    static std::size_t outstandingCompletionCount(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller == nullptr
+            ? 0
+            : poller->outstandingOperationCount_;
+#else
+        (void)loop;
+        return 0;
+#endif
+    }
+
+    static std::size_t retainedCompletionCount(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller == nullptr
+            ? 0
+            : poller->retainedOperations_.size();
+#else
+        (void)loop;
+        return 0;
+#endif
+    }
 };
 
 }  // namespace gamenet::net::detail

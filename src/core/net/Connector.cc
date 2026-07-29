@@ -580,6 +580,10 @@ bool Connector::cancelPendingConnectInLoop(SocketFd sockfd) noexcept {
     }
 
     iocpConnect_->canceling = true;
+    // A pending state exists only after ConnectEx was successfully submitted
+    // and retained. Track final-drain independently from the temporary owner
+    // guard so quit cannot strand a queued cancellation completion.
+    loop_->trackCompletionOperation(&iocpConnect_->operation);
     if (!connectStopGuard_) {
         connectStopGuard_ = shared_from_this();
     }

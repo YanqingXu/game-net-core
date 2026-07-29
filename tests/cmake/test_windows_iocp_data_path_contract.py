@@ -39,6 +39,13 @@ def main() -> None:
         / "poller"
         / "test_poller_contract.cpp"
     )
+    accept_connect_drain_test = (
+        repo_root
+        / "tests"
+        / "integration"
+        / "tcp"
+        / "test_iocp_accept_connect_quit_completion_drain.cpp"
+    )
     poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
     poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
@@ -55,6 +62,7 @@ def main() -> None:
     require(operation_text, "OVERLAPPED overlapped", operation)
     require(operation_text, "bytesTransferred", operation)
     require(operation_text, "Channel* channel", operation)
+    require(operation_text, "shutdownObligation", operation)
 
     socket_ops_text = socket_ops.read_text(encoding="utf-8")
     require(socket_ops_text, "loadAcceptEx", socket_ops)
@@ -84,6 +92,8 @@ def main() -> None:
     assert "platform::updateAcceptContextOrDie" not in acceptor_source_text
     require(acceptor_source_text, "IocpOperationKind::Accept", acceptor_source)
     require(acceptor_source_text, "retainCompletionOperation", acceptor_source)
+    require(acceptor_source_text, "trackCompletionOperation", acceptor_source)
+    require(acceptor_source_text, "CancelIoEx", acceptor_source)
 
     connector_header_text = connector_header.read_text(encoding="utf-8")
     require(connector_header_text, "IocpConnectState", connector_header)
@@ -98,8 +108,21 @@ def main() -> None:
     require(connector_source_text, "IocpOperationKind::Connect", connector_source)
     assert "preserveSocketAssociation" not in connector_source_text
     require(connector_source_text, "retainCompletionOperation", connector_source)
+    require(connector_source_text, "trackCompletionOperation", connector_source)
     require(connector_source_text, "retryAfterCancel", connector_source)
     require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
+
+    accept_connect_drain_text = accept_connect_drain_test.read_text(encoding="utf-8")
+    require(
+        accept_connect_drain_text,
+        "outstandingCompletionCount(loop) == 1",
+        accept_connect_drain_test,
+    )
+    require(
+        accept_connect_drain_text,
+        "retainedCompletionCount(loop) == 0",
+        accept_connect_drain_test,
+    )
 
     tcp_connection_header_text = tcp_connection_header.read_text(encoding="utf-8")
     require(tcp_connection_header_text, "IocpTcpTransport", tcp_connection_header)

@@ -50,7 +50,7 @@ private:
     std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> deferredEntries_{};
     ULONG deferredEntryCount_{0};
     std::unordered_set<SocketFd> associatedFds_;
-    std::unordered_set<void*> outstandingOperations_;
+    std::size_t outstandingOperationCount_{0};
     std::unordered_map<void*, std::shared_ptr<void>> retainedOperations_;
 };
 

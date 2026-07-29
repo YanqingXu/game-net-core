@@ -137,6 +137,10 @@ EventLoop is the heart of reactor execution in game-net-core.
 - Quiescing continues I/O completion consumption and lifecycle draining;
   FinalDraining begins only after no backend completion obligation and no
   lifecycle dirty/detaching node remains
+- retained IOCP operation storage alone does not prolong shutdown. An adapter
+  canceling a successfully submitted operation must separately mark its
+  shutdown completion obligation; dequeue releases that obligation exactly
+  once even after the Channel observer has been revoked
 - FinalDraining executes already-accepted normal functors and permitted
   self-rearmed control/lifecycle work to a fixed point; Shutdown is published
   only after all three admission planes are closed and silent
@@ -364,12 +368,17 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - Windows cancel plus quit continues polling until the real
   `ERROR_OPERATION_ABORTED` completion is consumed and the lifecycle node
   becomes silent
+- Windows AcceptEx/ConnectEx stop or destruction in the same owner callback as
+  quit drains the real completion packet and releases all backend/owner leases
+  before Shutdown
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies
   committed-notify, intrusive dirty coalescing, detach-generation ABA
   protection, saturation isolation, budgeted self-reschedule, callback
   re-entry, and quit linearization
 - `tests/integration/tcp/test_iocp_quit_completion_drain.cpp` verifies the
   Windows cancel/quit completion-drain fixed point
+- `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
+  verifies that fixed point for Acceptor and Connector
 - `tests/contract/event_loop/test_event_loop_control_saturation.cpp` verifies
   bounded registration, saturation isolation, coalescing, non-recursive
   re-arming, callback-exception containment, and quit linearization

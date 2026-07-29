@@ -180,7 +180,13 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             continue;
         }
 
-        outstandingOperations_.erase(operation);
+        if (operation->shutdownObligation) {
+            operation->shutdownObligation = false;
+            if (outstandingOperationCount_ == 0) {
+                iocpDie("IOCP completion obligation underflow");
+            }
+            --outstandingOperationCount_;
+        }
         std::shared_ptr<void> completionLifetime;
         const auto retained = retainedOperations_.find(operation);
         if (retained != retainedOperations_.end()) {
@@ -207,7 +213,11 @@ void IocpPoller::retainCompletionOperation(void* operation, std::shared_ptr<void
 
 void IocpPoller::trackCompletionOperation(void* operation) {
     if (operation != nullptr) {
-        outstandingOperations_.insert(operation);
+        auto* completion = static_cast<IocpOperation*>(operation);
+        if (!completion->shutdownObligation) {
+            completion->shutdownObligation = true;
+            ++outstandingOperationCount_;
+        }
     }
 }
 
@@ -216,7 +226,7 @@ bool IocpPoller::hasPendingCompletionOperations() const noexcept {
     // whose subsystem intentionally outlives loop(). Only operations
     // explicitly committed to quiescing (for example, CancelIoEx during
     // TcpConnection close) are shutdown completion obligations.
-    return !outstandingOperations_.empty();
+    return outstandingOperationCount_ != 0;
 }
 
 void IocpPoller::updateChannel(Channel* channel) {

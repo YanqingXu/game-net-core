@@ -39,7 +39,11 @@ hands them upward through a narrow callback boundary.
 - accepted fds are either handed upward or closed explicitly
 - destruction must not mutate Poller state from the wrong thread
 - on IOCP, pending AcceptEx operation storage outlives the cancellation
-  completion; stop clears its Channel observer before Acceptor destruction
+  completion; stop first marks the successfully submitted operation as a
+  shutdown completion obligation, requests cancellation, and clears its
+  Channel observer before Acceptor destruction
+- a synchronous non-pending AcceptEx submission failure creates neither a
+  storage lease nor a shutdown completion obligation
 
 ---
 
@@ -73,9 +77,14 @@ hands them upward through a narrow callback boundary.
 - stop() disables listening and removes Channel; idempotent when not listening
 - destroying a stopped Acceptor while its EventLoop continues polling cannot
   expose freed operation or Channel storage to a late IOCP completion
+- stopping and destroying an Acceptor in the same owner-loop callback as
+  `EventLoop::quit()` keeps zero-timeout polling until the real AcceptEx
+  cancellation packet releases both the storage lease and shutdown obligation
 - `tests/contract/acceptor/test_acceptor_contract.cpp` verifies unavailable
   listener bind is reported by exception without process termination and the
   normal accept path does not spuriously invoke the runtime error policy
+- `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
+  verifies the pending AcceptEx immediate-quit final-drain contract
 
 ---
 

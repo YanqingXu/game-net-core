@@ -133,6 +133,13 @@ and delivers the connected fd upward through a narrow callback boundary.
 - Windows cancellation completion remains responsible for releasing its own
   Channel / operation storage even when its generation is stale; generation
   rejection applies to publication and retry, not mandatory cleanup
+- canceling a successfully submitted pending ConnectEx marks exactly one
+  shutdown completion obligation before `CancelIoEx`; `ERROR_NOT_FOUND` means
+  the packet may already be queued and does not release that obligation
+- a synchronous non-pending ConnectEx failure creates neither retained storage
+  nor a shutdown completion obligation
+- the temporary Connector self guard keeps owner state available for completion
+  cleanup but is not a substitute for EventLoop final-drain tracking
 
 ---
 
@@ -196,6 +203,9 @@ Request-generation rules:
 - Windows ConnectEx operation storage is retained by the IOCP Poller until its
   completion packet is dequeued. Timeout/stop cancellation keeps the Channel
   alive even when `CancelIoEx` reports that completion already won the race.
+- stop/destroy plus `EventLoop::quit()` in one owner-loop callback consumes the
+  real ConnectEx completion, releases the shutdown obligation, retained
+  operation lease, Channel, and temporary owner guard before Shutdown
 - stop() during pending retry cancels timer
 - stop racing a due retry cannot publish a stale attempt
 - restart after backoff growth restores the caller-configured initial delay
@@ -221,6 +231,8 @@ Request-generation rules:
   pending-connect and mixed-timing TcpClient contracts; the deterministic
   retry-timer portions of the thread contract are platform-neutral and do not
   claim kernel-level ConnectEx race injection
+- `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
+  verifies the pending ConnectEx immediate-quit final-drain contract
 
 ---
 

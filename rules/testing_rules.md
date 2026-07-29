@@ -54,6 +54,9 @@ Contract tests verify:
 - a dirty population larger than the lifecycle budget self-reschedules while
   ready I/O/timers retain service
 - Windows cancel-versus-quit consumes the real IOCP completion before Shutdown
+- Windows AcceptEx/ConnectEx cancellation in the same owner-loop callback as
+  destruction and quit releases outstanding, retained-storage, Channel, and
+  owner-guard counts before Shutdown
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents
@@ -98,6 +101,9 @@ For lifecycle-sensitive modules, tests should include:
 - Connector owner-affinity rejection, callback re-entry, configured-backoff
   restart, and accepted/rejected facade-generation races, including two
   Accepted operations where the latest request supersedes an in-flight attempt
+- AcceptEx and ConnectEx immediate-quit tests must first prove a real successful
+  pending submission, then prove cancellation creates exactly one obligation;
+  synchronous non-pending failures must create none
 - TcpConnection explicit socket close and completion-drain terminal state,
   including first-close-reason-wins and native error preservation
 - Linux TcpConnection close-callback re-entry with deterministic numeric-fd
@@ -132,6 +138,7 @@ For core modules, the change description must name the specific test file that v
 For lifecycle-hub changes, the named minimum evidence is:
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp`
 - `tests/integration/tcp/test_iocp_quit_completion_drain.cpp`
+- `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
 - `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
 - `tests/contract/tcp_server/test_tcp_server_saturation_shutdown.cpp`
 
