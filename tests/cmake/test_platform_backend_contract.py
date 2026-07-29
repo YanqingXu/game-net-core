@@ -68,7 +68,12 @@ def main() -> None:
     assert "updateConnectContextOrDie" not in connector_source_text
 
     docs_text = ci_docs.read_text(encoding="utf-8")
-    require(docs_text, "The active CI gate runs on `ubuntu-24.04` and `windows-latest`.", ci_docs)
+    require(
+        docs_text,
+        "The active CI gate defaults to `ubuntu-24.04` and `windows-latest`.",
+        ci_docs,
+    )
+    require(docs_text, "dedicated Linux and Windows self-hosted runners", ci_docs)
     require(docs_text, "The Windows job validates the IOCP completion path", ci_docs)
     require(docs_text, "Windows MSVC Debug build", ci_docs)
     require(docs_text, "select-based", ci_docs)
