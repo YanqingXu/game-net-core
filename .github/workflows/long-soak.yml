@@ -500,7 +500,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
           if [[ "${GAMENET_ARTIFACT_OUTCOME}" != "success" ]]; then
             if [[ "${GAMENET_ARTIFACT_POLICY}" == "best-effort" ]]; then
-              echo "::warning::Self-hosted CI tests completed, but evidence upload was unavailable. The job result follows the build and test gates; no retained artifact may be claimed."
+              echo "::warning::Self-hosted CI evidence upload was unavailable. The job result follows all preceding gates; no retained artifact may be claimed."
             else
               echo "::error::Required self-hosted CI evidence upload failed."
             fi

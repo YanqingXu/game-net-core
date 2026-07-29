@@ -452,7 +452,7 @@ def main() -> None:
     )
     require(
         self_hosted_upload_report,
-        "The job result follows the build and test gates; no retained artifact may be claimed.",
+        "The job result follows all preceding gates; no retained artifact may be claimed.",
         workflow,
     )
     assert self_hosted_ci.index(self_hosted_upload) < self_hosted_ci.index(
