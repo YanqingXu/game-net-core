@@ -11,6 +11,8 @@ Mutable reactor state belongs to a specific EventLoop thread.
 - pending functors are executed on the owner thread
 - Windows completion batches are dequeued, translated, merged, and dispatched
   only on that EventLoop owner thread
+- the IOCP dequeue width is validated in `[1, 64]` before Poller construction;
+  changing the width never moves completion or Channel state off the owner loop
 - Windows AcceptEx/ConnectEx submission, cancellation, Channel-observer
   revocation, and completion-obligation tracking are owner-thread-only; final
   drain performs only zero-timeout owner-thread polls

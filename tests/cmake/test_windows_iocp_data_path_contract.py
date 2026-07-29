@@ -336,6 +336,7 @@ def main() -> None:
 
     poller_header_text = poller_header.read_text(encoding="utf-8")
     require(poller_header_text, "kCompletionBatchSize = 64", poller_header)
+    require(poller_header_text, "completionBatchSize_", poller_header)
     require(poller_header_text, "deferredEntries_", poller_header)
 
     poller_contract_text = poller_contract_test.read_text(encoding="utf-8")
@@ -348,6 +349,16 @@ def main() -> None:
     require(
         poller_contract_text,
         "testDeferredCompletionPreservesDequeuedError",
+        poller_contract_test,
+    )
+    require(
+        poller_contract_text,
+        "configuredCompletionBatchSize(loop)",
+        poller_contract_test,
+    )
+    require(
+        poller_contract_text,
+        "testIocpCompletionBudgetMetrics",
         poller_contract_test,
     )
 

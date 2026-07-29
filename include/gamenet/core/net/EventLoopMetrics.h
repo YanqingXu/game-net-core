@@ -19,6 +19,7 @@ enum class EventLoopMetricEvent {
     ActiveChannelsDrained,
     TimersDrained,
     LifecycleNodesDrained,
+    IocpCompletionPacketsDrained,
 };
 
 struct EventLoopMetricSample {

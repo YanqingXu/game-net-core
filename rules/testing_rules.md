@@ -58,12 +58,18 @@ Contract tests verify:
   indexed slot is invalidated
 - expired-timer and control populations larger than their budgets yield to
   accepted functors and publish exact drained/remaining plus exhausted metrics
+- one deterministic sustained-source contract keeps active I/O, timer,
+  control, lifecycle, and functor work pending together for multiple rounds;
+  every source advances once per round in documented order with callback depth
+  one
 - Windows cancel-versus-quit consumes the real IOCP completion before Shutdown
 - Windows AcceptEx/ConnectEx cancellation in the same owner-loop callback as
   destruction and quit releases outstanding, retained-storage, Channel, and
   owner-guard counts before Shutdown
 - Windows multi-producer wakeup bursts distinguish logical notifications from
   physical completion packets and prove one packet while pending
+- a configured IOCP dequeue width below 64 must bound each kernel poll while
+  preserving exact Accept/read/write identities and obligations across rounds
 - deterministic hooks place a producer immediately before and after the owner
   clears IOCP wakeup-pending; accepted work must execute in both cases
 - Windows wakeup self-rearm plus quit must drain accepted work and leave no

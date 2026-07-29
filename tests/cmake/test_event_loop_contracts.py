@@ -208,6 +208,11 @@ def main() -> None:
         event_loop_fair_budget_test,
     )
     require(
+        event_loop_fair_budget_test_text,
+        "testSustainedSourcesReceiveOneServicePerRound",
+        event_loop_fair_budget_test,
+    )
+    require(
         wakeup_coalescing_test_text,
         "testMultiProducerBurstPostsOnePacket",
         wakeup_coalescing_test,
@@ -278,6 +283,7 @@ def main() -> None:
     require(event_loop_header_text, "maxActiveChannelsPerIteration", event_loop_header)
     require(event_loop_header_text, "maxTimersPerIteration", event_loop_header)
     require(event_loop_header_text, "maxControlCallbacksPerIteration", event_loop_header)
+    require(event_loop_header_text, "maxIocpCompletionsPerPoll", event_loop_header)
     require(post_result_header_text, "enum class PostResult", post_result_header)
     require(event_loop_header_text, "class EventLoopControlSource", event_loop_header)
     require(event_loop_header_text, "registerControlSource", event_loop_header)

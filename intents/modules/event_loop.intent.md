@@ -172,9 +172,14 @@ EventLoop is the heart of reactor execution in game-net-core.
   cross-thread wakeup call inside EventLoop/Poller lifetime; after admission
   publishes Shutdown no scheduling handle may access a destroyed completion
   port
-- Windows IOCP polling returns at most one fixed 64-packet completion batch per
-  normal loop iteration; an I/O backlog therefore yields to expired timers,
+- Windows IOCP polling uses a startup-validated dequeue width in `[1, 64]`
+  within fixed 64-entry Poller storage. One configured packet batch is consumed
+  per normal loop iteration; an I/O backlog therefore yields to expired timers,
   control sources, lifecycle nodes, and pending functors before the next batch
+- IOCP scheduler metrics report dequeued packet count, exact user-space
+  same-Channel deferred count, and full-width exhaustion. Windows exposes no
+  non-destructive completion-port queue-depth/oldest-packet query, so those
+  fields never claim an unknown kernel remainder or lag
 - one asynchronous callback exception never skips later ready timers or
   already-accepted pending functors, and Channel dispatch always clears its
   in-callback lifetime guard while unwinding
@@ -239,7 +244,8 @@ Typical API direction:
 - EventLoopOptions fairness budgets:
   `maxActiveChannelsPerIteration`, `maxTimersPerIteration`,
   `maxControlCallbacksPerIteration`, `maxLifecycleCallbacksPerIteration`, and
-  `maxFunctorsPerIteration`
+  `maxFunctorsPerIteration`, plus Windows
+  `maxIocpCompletionsPerPoll`
 - callbackExceptionCount()
 - runAt(Timestamp, Functor)
 - runAfter(Duration, Functor)
@@ -363,6 +369,9 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - expired-timer and control populations larger than their configured budgets
   yield to later phases each round, preserve deterministic ready order, and
   publish drained/remaining/oldest-lag/exhausted observations
+- sustained active I/O, zero-delay timers, self-rearmed control/lifecycle
+  sources, and self-queued functors each receive exactly one budgeted service
+  opportunity per round in the documented phase order without recursive entry
 - quit still drains already-queued nested functors before loop exit
 - executor identity is stable, cross-thread queueing executes on the owner
   thread, and copied handles become unavailable after loop teardown
@@ -382,8 +391,9 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - two synthetically captured active Channels exercise pending-peer removal and
   destruction identically on Linux and Windows without depending on IOCP batch
   dequeue width
-- the Windows Poller contract interleaves a wakeup with more than 64 synthetic
-  completions, verifies bounded two-round progress, exact completion-obligation
+- the Windows Poller contract uses a configured width below the fixed 64-entry
+  ceiling, interleaves a wakeup with more than one configured batch, verifies
+  bounded multi-round progress, exact completion-obligation
   release, distinct-Channel batching, and same-Channel deferral across
   registration-safe rounds
 - the Windows wakeup-coalescing contract verifies a multi-producer burst emits

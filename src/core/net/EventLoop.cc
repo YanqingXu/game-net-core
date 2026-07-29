@@ -31,6 +31,7 @@ namespace {
 thread_local EventLoop* t_loopInThisThread = nullptr;
 std::atomic<std::uint64_t> nextExecutorId{1};
 constexpr std::size_t kMaxControlSources = 65536;
+constexpr std::size_t kMaxIocpCompletionBatchSize = 64;
 
 EventLoopOptions validatedEventLoopOptions(EventLoopOptions options) {
     options.validate();
@@ -308,6 +309,11 @@ void EventLoopOptions::validate() const {
         throw std::invalid_argument(
             "EventLoop control callback budget must be within the supported bound");
     }
+    if (maxIocpCompletionsPerPoll == 0 ||
+        maxIocpCompletionsPerPoll > kMaxIocpCompletionBatchSize) {
+        throw std::invalid_argument(
+            "EventLoop IOCP completion budget must be within [1, 64]");
+    }
 }
 
 EventLoop::EventLoop(EventLoopOptions options)
@@ -387,6 +393,7 @@ void EventLoop::loop() {
                 ? 0
                 : timerQueue_->pollTimeoutMs(10000);
             pollReturnTime_ = poller_->poll(pollTimeout, &activeChannels_);
+            emitIocpCompletionMetric();
         }
         dispatchActiveChannels();
         doExpiredTimers(gamenet::base::now());
@@ -410,6 +417,7 @@ void EventLoop::loop() {
             activeChannels_.clear();
             activeChannelCursor_ = 0;
             pollReturnTime_ = poller_->poll(0, &activeChannels_);
+            emitIocpCompletionMetric();
         }
         dispatchActiveChannels();
 
@@ -452,6 +460,7 @@ void EventLoop::loop() {
                 activeChannels_.clear();
                 activeChannelCursor_ = 0;
                 pollReturnTime_ = poller_->poll(0, &activeChannels_);
+                emitIocpCompletionMetric();
             }
             dispatchActiveChannels();
         }
@@ -1009,6 +1018,30 @@ void EventLoop::doExpiredTimers(gamenet::base::Timestamp now) {
     sample.oldestReadyLatency = result.oldestReadyLatency;
     sample.budgetExhausted = result.remaining != 0;
     emitEventLoopMetric(sample);
+}
+
+void EventLoop::emitIocpCompletionMetric() {
+#ifdef _WIN32
+    auto* iocp = dynamic_cast<IocpPoller*>(poller_.get());
+    if (iocp == nullptr ||
+        (iocp->lastCompletionPacketsDrained_ == 0 &&
+         iocp->lastDeferredCompletionCount_ == 0)) {
+        return;
+    }
+
+    EventLoopMetricSample sample;
+    sample.event =
+        EventLoopMetricEvent::IocpCompletionPacketsDrained;
+    sample.loop = this;
+    sample.drainedWork = iocp->lastCompletionPacketsDrained_;
+    // This is the exact user-space deferred remainder. Windows exposes no
+    // non-destructive kernel completion-port queue depth; a full dequeue is
+    // reported independently through budgetExhausted.
+    sample.remainingWork = iocp->lastDeferredCompletionCount_;
+    sample.budgetExhausted =
+        iocp->lastCompletionBudgetExhausted_;
+    emitEventLoopMetric(sample);
+#endif
 }
 
 void EventLoop::retireCurrentChannel(

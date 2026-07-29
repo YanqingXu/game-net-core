@@ -43,7 +43,9 @@ void testFixedPoolBurstAndStopReentry() {
     constexpr std::size_t kClientCount = 48;
 
     gamenet::net::detail::resetIocpAcceptPoolObservationsForTesting();
-    gamenet::net::EventLoop loop;
+    gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
+        .maxIocpCompletionsPerPoll = 2,
+    });
     auto acceptor = std::make_unique<gamenet::net::Acceptor>(
         &loop,
         gamenet::net::InetAddress(0, true),

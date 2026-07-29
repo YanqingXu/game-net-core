@@ -188,6 +188,17 @@ the source of truth.
   rounds; unselected timers/control bits remain in their source-owned ordered
   container/mailbox. Append-only metrics expose drained, exact remaining,
   oldest-ready lag, and budget exhaustion for every owner-loop callback phase.
+- M3-H1-B makes the IOCP dequeue width startup-configurable in `[1, 64]`
+  without changing the fixed 64-entry Poller storage ceiling. Configured-width
+  tests preserve wakeup and exact Accept/read/write completion identity across
+  later zero-timeout rounds, while append-only metrics distinguish drained
+  packets, exact user-space deferred work, and full-width exhaustion without
+  inventing an unavailable kernel queue depth or oldest-packet lag.
+- M3-H1-C keeps active I/O, zero-delay timer, self-rearmed control/lifecycle,
+  and self-queued functor work continuously ready for 12 deterministic owner
+  rounds. Every source advances exactly once per round in the documented
+  I/O -> timer -> control -> lifecycle -> functor order with callback-depth
+  peak one.
 - `connection_backpressure_controller` and `graceful_shutdown` are active
   `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
@@ -304,6 +315,10 @@ The M3-G5 worktree subsequently passed 115/115 Debug CTests, all 31 Python
 repository/API/CI guards, and 50/50 focused `AcceptEx` pool repetitions.
 The M3-H1-A worktree passed 116/116 Debug CTests, all 31 Python guards, and
 50/50 focused fair-budget repetitions.
+The completed M3-H1 worktree retained 116/116 Debug CTests and 31/31 guards;
+configured-width Poller, Accept pool, and sustained-source fairness contracts
+each passed 50/50 focused repetitions. Count budgets were sufficient to prove
+bounded multi-source progress, so no time budget was introduced in this slice.
 The current inventory is unit=8, contract=95, integration=13, threading=89,
 lifecycle=95, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic

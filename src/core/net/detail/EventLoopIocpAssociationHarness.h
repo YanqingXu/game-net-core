@@ -75,6 +75,45 @@ public:
 #endif
     }
 
+    static std::size_t configuredCompletionBatchSize(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller == nullptr ? 0 : poller->completionBatchSize_;
+#else
+        (void)loop;
+        return 0;
+#endif
+    }
+
+    static std::size_t lastCompletionPacketsDrained(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller == nullptr
+            ? 0
+            : poller->lastCompletionPacketsDrained_;
+#else
+        (void)loop;
+        return 0;
+#endif
+    }
+
+    static bool lastCompletionBudgetExhausted(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller != nullptr &&
+               poller->lastCompletionBudgetExhausted_;
+#else
+        (void)loop;
+        return false;
+#endif
+    }
+
     static void trackCompletion(
         EventLoop& loop,
         IocpOperation* operation) {

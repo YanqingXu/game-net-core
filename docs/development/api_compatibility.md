@@ -120,7 +120,9 @@ callback re-entry, and final-drain convergence.
 
 M3-H1-A appends three startup-validated count budgets to `EventLoopOptions`:
 `maxActiveChannelsPerIteration`, `maxTimersPerIteration`, and
-`maxControlCallbacksPerIteration`. Existing aggregate initialization remains
+`maxControlCallbacksPerIteration`. M3-H1-B appends
+`maxIocpCompletionsPerPoll`, validated in `[1, 64]`; non-Windows backends
+retain but do not use it. Existing aggregate initialization remains
 source compatible because the fields are appended after the earlier options
 and retain conservative defaults. `EventLoopMetricEvent` and
 `EventLoopMetricSample` likewise append active/timer/lifecycle phase events
@@ -132,4 +134,7 @@ budgeted drain shape. Direct contracts are
 `tests/contract/event_loop/test_event_loop_fair_budget.cpp`,
 `tests/contract/event_loop/test_event_loop_control_saturation.cpp`,
 `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp`, and
-`tests/contract/timer_queue/test_timer_queue.cpp`.
+`tests/contract/timer_queue/test_timer_queue.cpp`. H1-B adds
+`tests/contract/poller/test_poller_contract.cpp` and
+`tests/contract/acceptor/test_acceptor_iocp_pool.cpp` for configured-width
+packet, wakeup, Accept, read/write deferral, metric, and obligation evidence.

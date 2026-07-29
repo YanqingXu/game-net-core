@@ -63,6 +63,19 @@ public:
         return pending;
     }
 
+    static void runFairRound(
+        EventLoop& loop,
+        std::vector<Channel*> channels,
+        gamenet::base::Timestamp receiveTime) {
+        install(loop, std::move(channels), receiveTime);
+        loop.dispatchActiveChannels();
+        loop.doExpiredTimers(gamenet::base::now());
+        loop.doControlSources();
+        loop.doLifecycleNodes();
+        loop.doPendingFunctors(
+            loop.options_.maxFunctorsPerIteration);
+    }
+
     static void retireCurrentChannel(
         EventLoop& loop,
         std::unique_ptr<Channel> channel) noexcept {

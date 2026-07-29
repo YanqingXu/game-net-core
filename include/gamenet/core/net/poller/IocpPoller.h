@@ -37,6 +37,7 @@ public:
     bool wakeup() override;
 
 private:
+    friend class EventLoop;
     friend class detail::EventLoopIocpAssociationHarness;
 
     static constexpr int kNew = -1;
@@ -48,12 +49,16 @@ private:
     void associateChannel(Channel* channel);
 
     HANDLE iocp_;
+    ULONG completionBatchSize_;
     std::atomic<bool> wakeupPending_{false};
     std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> deferredEntries_{};
     ULONG deferredEntryCount_{0};
     std::unordered_set<SocketFd> associatedFds_;
     std::size_t outstandingOperationCount_{0};
     std::unordered_map<void*, std::shared_ptr<void>> retainedOperations_;
+    ULONG lastCompletionPacketsDrained_{0};
+    ULONG lastDeferredCompletionCount_{0};
+    bool lastCompletionBudgetExhausted_{false};
 };
 
 }  // namespace gamenet::net

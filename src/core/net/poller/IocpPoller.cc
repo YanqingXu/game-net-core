@@ -5,6 +5,7 @@
 #include "gamenet/core/base/Logger.h"
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/net/Channel.h"
+#include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/platform/IocpOperation.h"
 
@@ -99,7 +100,10 @@ std::atomic<std::uint64_t> wakeupPacketsConsumed{0};
 
 IocpPoller::IocpPoller(EventLoop* loop)
     : Poller(loop),
-      iocp_(createCompletionPortOrDie()) {}
+      iocp_(createCompletionPortOrDie()),
+      completionBatchSize_(
+          static_cast<ULONG>(
+              loop->options_.maxIocpCompletionsPerPoll)) {}
 
 IocpPoller::~IocpPoller() {
     if (iocp_ != nullptr) {
@@ -109,6 +113,9 @@ IocpPoller::~IocpPoller() {
 
 gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChannels) {
     std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> entries{};
+    lastCompletionPacketsDrained_ = 0;
+    lastDeferredCompletionCount_ = 0;
+    lastCompletionBudgetExhausted_ = false;
     ULONG removed = 0;
     BOOL ok = TRUE;
     const bool processingDeferredEntries = deferredEntryCount_ != 0;
@@ -123,7 +130,7 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         ok = ::GetQueuedCompletionStatusEx(
             iocp_,
             entries.data(),
-            static_cast<ULONG>(entries.size()),
+            completionBatchSize_,
             &removed,
             toTimeout(timeoutMs),
             FALSE);
@@ -137,6 +144,9 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         }
         return now;
     }
+    lastCompletionPacketsDrained_ = removed;
+    lastCompletionBudgetExhausted_ =
+        removed == completionBatchSize_;
 
     std::array<Channel*, kCompletionBatchSize> publishedChannels{};
     std::size_t activeCount = 0;
@@ -238,6 +248,7 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         publishedChannels[activeCount++] = channel;
         activeChannels->push_back(channel);
     }
+    lastDeferredCompletionCount_ = deferredEntryCount_;
     return now;
 }
 

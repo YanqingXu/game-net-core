@@ -178,7 +178,9 @@ for this completion.
 3. `IocpPoller::poll()` receives completions, stores metadata on each
    operation, appends every Accept identity for the listen Channel through the
    operation-embedded link, marks the Channel readable once, and returns it
-   active. This coalescing is capped by the fixed 64-entry Poller batch.
+   active. Poller storage remains fixed at 64 entries, while the validated
+   EventLoop option selects a `[1, 64]` dequeue width; coalescing is capped by
+   that configured per-poll budget.
 4. `Acceptor::handleRead()` drains the identified slot queue, moves each
    accepted socket out, advances and replenishes that exact slot, then delivers
    the socket through the existing callback while the listener remains in the

@@ -68,6 +68,8 @@ It must not blur these roles.
   to the next round keeps both leases intact. Its transferred-byte and terminal
   error result is captured at dequeue time so later socket closure cannot
   mutate the observation
+- the configured IOCP dequeue width borrows a prefix of the Poller's fixed
+  64-entry storage; it allocates no packet array and owns no completion
 - the same-Channel deferral rule has one bounded AcceptEx exception: independent
   Accept operations for one listen Channel are released and appended through
   their operation-embedded links to one callback queue in the current batch.

@@ -27,6 +27,7 @@ namespace gamenet::net {
 
 class Channel;
 class Connector;
+class IocpPoller;
 class IocpTcpTransport;
 class Poller;
 class TcpClient;
@@ -115,6 +116,9 @@ struct EventLoopOptions {
     std::size_t maxActiveChannelsPerIteration{64};
     std::size_t maxTimersPerIteration{1024};
     std::size_t maxControlCallbacksPerIteration{64};
+    // Windows only: actual dequeue width within IocpPoller's fixed 64-entry
+    // storage. Other backends validate and retain the value without using it.
+    std::size_t maxIocpCompletionsPerPoll{64};
 
     void validate() const;
 };
@@ -172,6 +176,7 @@ public:
 private:
     friend class Acceptor;
     friend class Connector;
+    friend class IocpPoller;
     friend class IocpTcpTransport;
     friend class TcpClient;
     friend class detail::EventLoopActiveBatchHarness;
@@ -196,6 +201,7 @@ private:
     void dispatchActiveChannels();
     bool hasPendingActiveChannels() const noexcept;
     void doExpiredTimers(gamenet::base::Timestamp now);
+    void emitIocpCompletionMetric();
     void retireCurrentChannel(std::unique_ptr<Channel> channel) noexcept;
     void doControlSources();
     void doLifecycleNodes();

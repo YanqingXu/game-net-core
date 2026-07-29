@@ -8,10 +8,14 @@
 
 #include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
 #include "../../../src/core/net/detail/EventLoopControlRegistry.h"
+#include "../../../src/core/net/detail/EventLoopLifecycleRegistry.h"
 
+#include <algorithm>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,6 +25,7 @@ namespace {
 
 using ActiveHarness = gamenet::net::detail::EventLoopActiveBatchHarness;
 using ControlRegistry = gamenet::net::detail::EventLoopControlRegistry;
+using LifecycleRegistry = gamenet::net::detail::EventLoopLifecycleRegistry;
 
 bool rejectsOptions(gamenet::net::EventLoopOptions options) {
     try {
@@ -72,6 +77,14 @@ void testActiveBatchContinuationAndBetweenRoundInvalidation() {
     GAMENET_TEST_ASSERT(rejectsOptions(
         gamenet::net::EventLoopOptions{
             .maxControlCallbacksPerIteration = 0,
+        }));
+    GAMENET_TEST_ASSERT(rejectsOptions(
+        gamenet::net::EventLoopOptions{
+            .maxIocpCompletionsPerPoll = 0,
+        }));
+    GAMENET_TEST_ASSERT(rejectsOptions(
+        gamenet::net::EventLoopOptions{
+            .maxIocpCompletionsPerPoll = 65,
         }));
 
     gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
@@ -211,11 +224,134 @@ void testControlBudgetYieldsToTimerAndFunctor() {
     ControlRegistry::unregisterSource(loop, third);
 }
 
+void testSustainedSourcesReceiveOneServicePerRound() {
+    constexpr int kRounds = 12;
+    gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
+        .maxPendingFunctors = 1,
+        .reservedPendingFunctors = 0,
+        .maxFunctorsPerIteration = 1,
+        .maxControlSources = 1,
+        .maxLifecycleNodes = 1,
+        .maxLifecycleCallbacksPerIteration = 1,
+        .maxActiveChannelsPerIteration = 1,
+        .maxTimersPerIteration = 1,
+        .maxControlCallbacksPerIteration = 1,
+        .maxIocpCompletionsPerPoll = 1,
+    });
+    gamenet::net::Channel channel(
+        &loop,
+        gamenet::net::kInvalidSocket);
+    std::vector<std::string_view> order;
+    int ioCalls = 0;
+    int timerCalls = 0;
+    int controlCalls = 0;
+    int lifecycleCalls = 0;
+    int functorCalls = 0;
+    int callbackDepth = 0;
+    int callbackDepthPeak = 0;
+
+    auto enter = [&] {
+        ++callbackDepth;
+        callbackDepthPeak =
+            (std::max)(callbackDepthPeak, callbackDepth);
+    };
+    auto leave = [&] { --callbackDepth; };
+
+    channel.setReadCallback([&](gamenet::base::Timestamp) {
+        enter();
+        order.push_back("io");
+        ++ioCalls;
+        leave();
+    });
+
+    std::function<void()> timerCallback;
+    timerCallback = [&] {
+        enter();
+        order.push_back("timer");
+        ++timerCalls;
+        if (timerCalls < kRounds) {
+            loop.runAfter(0ms, timerCallback);
+        }
+        leave();
+    };
+
+    gamenet::net::EventLoopControlSource control;
+    control = ControlRegistry::registerSource(loop, [&] {
+        enter();
+        order.push_back("control");
+        ++controlCalls;
+        if (controlCalls < kRounds) {
+            GAMENET_TEST_ASSERT(
+                control.notify() == gamenet::net::PostResult::Accepted);
+        }
+        leave();
+    });
+
+    gamenet::net::EventLoopLifecycleSource lifecycle;
+    lifecycle = LifecycleRegistry::attach(loop, [&] {
+        enter();
+        order.push_back("lifecycle");
+        ++lifecycleCalls;
+        if (lifecycleCalls < kRounds) {
+            GAMENET_TEST_ASSERT(
+                lifecycle.signal() ==
+                gamenet::net::PostResult::Accepted);
+        }
+        leave();
+    });
+
+    std::function<void()> functor;
+    functor = [&] {
+        enter();
+        order.push_back("functor");
+        ++functorCalls;
+        if (functorCalls < kRounds) {
+            GAMENET_TEST_ASSERT(loop.tryQueueInLoop(functor));
+        }
+        leave();
+    };
+
+    loop.runAfter(0ms, timerCallback);
+    GAMENET_TEST_ASSERT(
+        control.notify() == gamenet::net::PostResult::Accepted);
+    GAMENET_TEST_ASSERT(
+        lifecycle.signal() == gamenet::net::PostResult::Accepted);
+    GAMENET_TEST_ASSERT(loop.tryQueueInLoop(functor));
+
+    for (int round = 0; round < kRounds; ++round) {
+        channel.setRevents(gamenet::net::Channel::kReadEvent);
+        ActiveHarness::runFairRound(
+            loop,
+            {&channel},
+            gamenet::base::now());
+        GAMENET_TEST_ASSERT(ioCalls == round + 1);
+        GAMENET_TEST_ASSERT(timerCalls == round + 1);
+        GAMENET_TEST_ASSERT(controlCalls == round + 1);
+        GAMENET_TEST_ASSERT(lifecycleCalls == round + 1);
+        GAMENET_TEST_ASSERT(functorCalls == round + 1);
+        const auto offset = static_cast<std::size_t>(round) * 5;
+        GAMENET_TEST_ASSERT(order[offset] == "io");
+        GAMENET_TEST_ASSERT(order[offset + 1] == "timer");
+        GAMENET_TEST_ASSERT(order[offset + 2] == "control");
+        GAMENET_TEST_ASSERT(order[offset + 3] == "lifecycle");
+        GAMENET_TEST_ASSERT(order[offset + 4] == "functor");
+    }
+
+    GAMENET_TEST_ASSERT(callbackDepth == 0);
+    GAMENET_TEST_ASSERT(callbackDepthPeak == 1);
+    GAMENET_TEST_ASSERT(loop.pendingControlSourceCount() == 0);
+    GAMENET_TEST_ASSERT(loop.pendingLifecycleNodeCount() == 0);
+    GAMENET_TEST_ASSERT(loop.pendingFunctorCount() == 0);
+    ControlRegistry::unregisterSource(loop, control);
+    LifecycleRegistry::detach(loop, lifecycle);
+}
+
 }  // namespace
 
 int main() {
     testActiveBatchContinuationAndBetweenRoundInvalidation();
     testExpiredTimerBudgetYieldsToAcceptedFunctor();
     testControlBudgetYieldsToTimerAndFunctor();
+    testSustainedSourcesReceiveOneServicePerRound();
     return 0;
 }

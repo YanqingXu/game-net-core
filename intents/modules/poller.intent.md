@@ -49,7 +49,8 @@ Poller is not channel owner.
   backend event bits are merged before EventLoop dispatch, while additional
   IOCP operations for the same Channel are retained for a later poll round so
   Channel registration-generation re-entry cannot strand a dequeued operation
-- Windows IOCP dequeues at most 64 completion packets per `poll()` call through
+- Windows IOCP owns fixed 64-entry packet/deferred storage and passes the
+  EventLoop startup-validated `[1, 64]` width to
   `GetQueuedCompletionStatusEx`; backlog remains queued for a later EventLoop
   iteration so timer, control, lifecycle, and functor phases retain service
 - a wakeup packet is consumed as a scheduling signal but does not end the
@@ -62,7 +63,7 @@ Poller is not channel owner.
   the corresponding packet. A producer ordered before that clear relies on
   the current awake turn, while a producer ordered after it changes false to
   true and posts a new packet; neither side of the race can lose a wakeup
-- wakeup packets coalesce independently of the fixed completion batch:
+- wakeup packets coalesce independently of the configured completion batch:
   consuming the signal never truncates real I/O translation in that batch
 - backend removal validates both fd and Channel identity before erasing
   bookkeeping, so a stale same-fd remove cannot erase a replacement Channel
@@ -173,9 +174,10 @@ High-risk mistakes:
   from the internal Channel map
 - a deterministic multi-entry dispatch harness verifies stale active entries
   are skipped on both platforms
-- `tests/contract/poller/test_poller_contract.cpp` posts more than one bounded
-  IOCP batch with an interleaved wakeup, verifies the first poll consumes only
-  its fixed budget, verifies the remainder is preserved for the next poll, and
+- `tests/contract/poller/test_poller_contract.cpp` configures a width below the
+  fixed storage ceiling, posts more than one bounded IOCP batch with an
+  interleaved wakeup, verifies the first poll consumes only its configured
+  budget, verifies the remainder is preserved for later polls, and
   proves read/write completions for one Channel are dispatched in separate
   registration-safe rounds while distinct Channels share one batch; a deferred
   cancellation keeps its dequeued `ERROR_OPERATION_ABORTED` result even when
