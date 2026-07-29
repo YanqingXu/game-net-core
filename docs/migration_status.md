@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 126 |
+| 61 | 30 | 20 | 11 | 128 |
 
 ## Production-Hardening Worktree State
 
@@ -143,6 +143,19 @@ the source of truth.
   passed 50/50, the complete Windows MSVC Debug inventory passed 111/111, and
   all 34 repository guards passed. These are local development-gate results,
   not frozen Release, sanitizer, endurance, or performance evidence.
+- M3-G3 replaces the Windows full-output `Buffer` plus `writeStorage_` mirror
+  with an owner-loop deque of stable string segments. `WSASend` borrows only
+  the current front suffix, every submission is explicitly capped to `ULONG`,
+  and partial completion advances an offset without moving the remaining
+  bytes. The two new segmented/partial-write contracts passed 20/20 focused
+  repeats each, the complete Windows MSVC Debug inventory passed 113/113, and
+  all 31 repository/API guards passed. A same-runner, same-compiler Release
+  comparison used seven alternating slow-client runs with four connections and
+  8 MiB per connection: external peak-working-set median fell from
+  113,942,528 bytes at baseline `61076a0` to 46,792,704 bytes in the current
+  worktree, a 67,149,824-byte (58.93%) reduction. The benchmark's post-drain
+  working-set-delta median fell from 67,481,600 to 352,256 bytes. This is local
+  slice evidence, not a frozen M3 Release performance run.
 - `connection_backpressure_controller` and `graceful_shutdown` are active
   `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
@@ -238,7 +251,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 111 configured CTest tests: 8 unit tests, 90 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 113 configured CTest tests: 8 unit tests, 92 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -250,10 +263,13 @@ control-lane saturation, optional TcpConnection notification saturation,
 Connector/TcpClient typed admission and generation races, and IOCP synchronous
 submission errors.
 
-On 2026-07-27, the current Windows MSVC worktree passed full Debug, Release,
-and AddressSanitizer builds and 109/109 CTests in all three configurations.
-The current inventory is unit=8, contract=90, integration=13, threading=84,
-lifecycle=90, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+On 2026-07-29, the current Windows MSVC worktree passed a full Debug build and
+113/113 CTests; the two new IOCP segmented/partial-write contracts also passed
+20/20 focused repeats each. The 2026-07-27 snapshot separately passed full
+Debug, Release, and AddressSanitizer builds and 109/109 CTests in all three
+configurations.
+The current inventory is unit=8, contract=92, integration=13, threading=86,
+lifecycle=92, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and
@@ -510,7 +526,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. The workflow locks the 111-test inventory, `threading=84`,
+  timeout. The workflow locks the 113-test inventory, `threading=86`,
   `game_pipeline=7`, and `broadcast=5`, then verifies the raw result lines for
   every selected test and exact repeat count. Its two
   `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,

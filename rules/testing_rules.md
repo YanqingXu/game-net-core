@@ -107,6 +107,14 @@ For lifecycle-sensitive modules, tests should include:
 - deterministic Windows `WSAENOBUFS` / `WSAECONNRESET` submit failures and a
   real `ERROR_OPERATION_ABORTED` cancellation completion, proving immediate
   error handling, no phantom pending operation, and single-shot close
+- deterministic Windows write-chunk injection proves each physical `WSASend`
+  is bounded to `ULONG`, a multi-segment queue preserves payload order, and one
+  large segment advances its front offset across partial completions without a
+  complete-suffix copy
+- Windows segmented-write tests compare peak queued segment bytes with
+  `pendingOutputBytes`, require exact zero after drain/close, and keep existing
+  slow-peer, synchronous-failure, cancellation, and write-complete ordering
+  contracts green
 - Connector owner-affinity rejection, callback re-entry, configured-backoff
   restart, and accepted/rejected facade-generation races, including two
   Accepted operations where the latest request supersedes an in-flight attempt

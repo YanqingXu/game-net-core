@@ -111,7 +111,11 @@ private:
     void handleClose();
     void handleError(int savedErrno = 0);
 
+#ifdef _WIN32
+    void sendReservedInLoop(std::string payload);
+#else
     void sendReservedInLoop(const char* data, std::size_t len);
+#endif
     void shutdownInLoop();
     void forceCloseInLoop();
     void driveLifecycleInLoop();
@@ -127,6 +131,7 @@ private:
     void recordDroppedNotification() noexcept;
     bool tryReserveOutputBytes(std::size_t bytes) noexcept;
     void releaseOutputBytes(std::size_t bytes) noexcept;
+    std::size_t bufferedOutputBytesInLoop() const noexcept;
     void clearBufferedOutputInLoop();
     void applyBackpressureInLoop();
     std::size_t remainingInputCapacity() const noexcept;

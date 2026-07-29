@@ -7,7 +7,9 @@
 
 #include <array>
 #include <cstddef>
-#include <vector>
+#include <cstdint>
+#include <deque>
+#include <string>
 
 namespace gamenet::net {
 
@@ -22,20 +24,30 @@ public:
     [[nodiscard]] int startRead(std::size_t maxBytes);
     ssize_t completeRead(Buffer* input, int* savedErrno);
     bool readPending() const noexcept;
-    [[nodiscard]] int startWrite(const char* data, std::size_t len);
+    void enqueueWrite(std::string payload);
+    [[nodiscard]] int startWrite();
     ssize_t completeWrite(int* savedErrno);
     bool writePending() const noexcept;
+    std::size_t bufferedWriteBytes() const noexcept;
+    std::size_t discardBufferedWrites() noexcept;
     bool hasPendingOperations() const noexcept;
     void cancelPendingOperations(SocketFd sockfd) noexcept;
 
 private:
+    struct WriteSegment {
+        std::string bytes;
+        std::size_t offset{0};
+    };
+
     Channel* channel_;
     IocpOperation readOperation_;
     IocpOperation writeOperation_;
     std::array<char, 65536> readStorage_{};
-    std::vector<char> writeStorage_;
+    std::deque<WriteSegment> writeSegments_;
+    std::size_t bufferedWriteBytes_{0};
     WSABUF readBuffer_{};
     WSABUF writeBuffer_{};
+    ULONG submittedWriteBytes_{0};
     bool readPending_{false};
     bool writePending_{false};
 };
@@ -52,6 +64,14 @@ void injectNextIocpReadSubmissionErrorForTesting(int error) noexcept;
 void injectNextIocpWriteSubmissionErrorForTesting(int error) noexcept;
 void setIocpCompletionObserverForTesting(
     IocpCompletionObserverForTesting observer) noexcept;
+void setIocpWriteChunkLimitForTesting(std::size_t bytes) noexcept;
+std::uint64_t iocpWriteSubmissionCountForTesting() noexcept;
+std::size_t iocpMaxWriteSubmissionBytesForTesting() noexcept;
+std::uint64_t iocpPartialWriteCompletionCountForTesting() noexcept;
+std::size_t iocpPeakBufferedWriteBytesForTesting() noexcept;
+std::size_t iocpPeakWriteSegmentCountForTesting() noexcept;
+std::size_t iocpCurrentBufferedWriteBytesForTesting() noexcept;
+std::size_t iocpCurrentWriteSegmentCountForTesting() noexcept;
 void resetIocpTcpTransportFaultsForTesting() noexcept;
 
 }  // namespace detail

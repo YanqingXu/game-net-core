@@ -150,7 +150,18 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
 
     if (loop_->isInLoopThread()) {
         if (state_.load(std::memory_order_relaxed) == kConnected) {
+#ifdef _WIN32
+            std::string payload;
+            try {
+                payload.assign(static_cast<const char*>(data), len);
+            } catch (...) {
+                releaseOutputBytes(len);
+                throw;
+            }
+            sendReservedInLoop(std::move(payload));
+#else
             sendReservedInLoop(static_cast<const char*>(data), len);
+#endif
             return TcpSendResult::Accepted;
         }
         releaseOutputBytes(len);
@@ -174,14 +185,22 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
 
     bool queued = false;
     try {
-        queued = loop_->executor().tryQueue([self, payload = std::move(payload)] {
-            const auto state = self->state_.load(std::memory_order_relaxed);
-            if (state == kConnected || state == kDisconnecting) {
-                self->sendReservedInLoop(payload.data(), payload.size());
-            } else {
-                self->releaseOutputBytes(payload.size());
-            }
-        });
+        queued = loop_->executor().tryQueue(
+            [self, payload = std::move(payload)]() mutable {
+                const auto state =
+                    self->state_.load(std::memory_order_relaxed);
+                if (state == kConnected || state == kDisconnecting) {
+#ifdef _WIN32
+                    self->sendReservedInLoop(std::move(payload));
+#else
+                    self->sendReservedInLoop(
+                        payload.data(),
+                        payload.size());
+#endif
+                } else {
+                    self->releaseOutputBytes(payload.size());
+                }
+            });
     } catch (...) {
         releaseOutputBytes(len);
         throw;
@@ -375,9 +394,11 @@ void TcpConnection::connectEstablished() {
     backpressure_->configure(
         backpressureOptions_.highWaterMarkBytes,
         backpressureOptions_.lowWaterMarkBytes,
-        outputBuffer_.readableBytes(),
+        bufferedOutputBytesInLoop(),
         *channel_);
-    backpressure_->onConnectionEstablished(outputBuffer_.readableBytes(), *channel_);
+    backpressure_->onConnectionEstablished(
+        bufferedOutputBytesInLoop(),
+        *channel_);
 #ifdef _WIN32
     if (backpressure_->readingEnabled()) {
         const int submitError =
@@ -517,7 +538,9 @@ void TcpConnection::handleWrite() {
 #endif
     if (n > 0) {
         const auto written = static_cast<std::size_t>(n);
+#ifndef _WIN32
         outputBuffer_.retrieve(written);
+#endif
         releaseOutputBytes(written);
         applyBackpressureInLoop();
 #ifdef _WIN32
@@ -529,7 +552,7 @@ void TcpConnection::handleWrite() {
             return;
         }
 #endif
-        if (outputBuffer_.readableBytes() == 0) {
+        if (bufferedOutputBytesInLoop() == 0) {
             channel_->disableWriting();
             if (state_.load(std::memory_order_relaxed) == kDisconnecting) {
                 shutdownInLoop();
@@ -539,9 +562,7 @@ void TcpConnection::handleWrite() {
 #ifdef _WIN32
         else {
             if (!iocpTransport_->writePending()) {
-                const int submitError = iocpTransport_->startWrite(
-                    outputBuffer_.peek(),
-                    outputBuffer_.readableBytes());
+                const int submitError = iocpTransport_->startWrite();
                 if (submitError != 0) {
                     handleError(submitError);
                 }
@@ -703,27 +724,26 @@ void TcpConnection::handleError(int savedErrno) {
     handleClose();
 }
 
-void TcpConnection::sendReservedInLoop(const char* data, std::size_t len) {
+#ifdef _WIN32
+void TcpConnection::sendReservedInLoop(std::string payload) {
     loop_->assertInLoopThread();
+    const std::size_t len = payload.size();
     if (state_.load(std::memory_order_relaxed) == kDisconnected) {
         releaseOutputBytes(len);
         return;
     }
 
-#ifdef _WIN32
-    const std::size_t oldLen = outputBuffer_.readableBytes();
+    const std::size_t oldLen = iocpTransport_->bufferedWriteBytes();
     try {
-        outputBuffer_.append(data, len);
+        iocpTransport_->enqueueWrite(std::move(payload));
     } catch (...) {
         releaseOutputBytes(len);
         throw;
     }
-    const std::size_t newLen = outputBuffer_.readableBytes();
+    const std::size_t newLen = iocpTransport_->bufferedWriteBytes();
     applyBackpressureInLoop();
     if (!iocpTransport_->writePending()) {
-        const int submitError = iocpTransport_->startWrite(
-            outputBuffer_.peek(),
-            outputBuffer_.readableBytes());
+        const int submitError = iocpTransport_->startWrite();
         if (submitError != 0) {
             handleError(submitError);
             return;
@@ -733,8 +753,16 @@ void TcpConnection::sendReservedInLoop(const char* data, std::size_t len) {
         }
     }
     maybeQueueHighWaterMark(oldLen, newLen);
-    return;
-#endif
+}
+#else
+void TcpConnection::sendReservedInLoop(
+    const char* data,
+    std::size_t len) {
+    loop_->assertInLoopThread();
+    if (state_.load(std::memory_order_relaxed) == kDisconnected) {
+        releaseOutputBytes(len);
+        return;
+    }
 
     std::size_t remaining = len;
     std::size_t written = 0;
@@ -775,6 +803,7 @@ void TcpConnection::sendReservedInLoop(const char* data, std::size_t len) {
         maybeQueueHighWaterMark(oldLen, newLen);
     }
 }
+#endif
 
 void TcpConnection::shutdownInLoop() {
     loop_->assertInLoopThread();
@@ -893,20 +922,39 @@ void TcpConnection::releaseOutputBytes(std::size_t bytes) noexcept {
     }
 }
 
+std::size_t TcpConnection::bufferedOutputBytesInLoop() const noexcept {
+#ifdef _WIN32
+    return iocpTransport_->bufferedWriteBytes();
+#else
+    return outputBuffer_.readableBytes();
+#endif
+}
+
 void TcpConnection::clearBufferedOutputInLoop() {
     loop_->assertInLoopThread();
-    const std::size_t buffered = outputBuffer_.readableBytes();
+    const std::size_t buffered = bufferedOutputBytesInLoop();
     if (buffered == 0) {
         return;
     }
+#ifdef _WIN32
+    const std::size_t discarded =
+        iocpTransport_->discardBufferedWrites();
+    if (discarded != buffered) {
+        LOG_FATAL << "TcpConnection IOCP write accounting mismatch on "
+                  << name_;
+    }
+#else
     outputBuffer_.retrieveAll();
+#endif
     releaseOutputBytes(buffered);
 }
 
 void TcpConnection::applyBackpressureInLoop() {
     loop_->assertInLoopThread();
     const bool wasReading = backpressure_->readingEnabled();
-    backpressure_->onBufferedBytesChanged(outputBuffer_.readableBytes(), *channel_);
+    backpressure_->onBufferedBytesChanged(
+        bufferedOutputBytesInLoop(),
+        *channel_);
 #ifdef _WIN32
     if (!wasReading && backpressure_->readingEnabled()) {
         resumeWindowsReadAfterBackpressure();

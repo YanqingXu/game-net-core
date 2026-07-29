@@ -140,6 +140,10 @@ No other direct mutation path is allowed for core loop state.
   on the connection owner loop. A synchronous non-pending submit error
   converges immediately through the owner-loop error/close path and must not be
   converted into a fabricated Channel event
+- Windows output-segment enqueue, front-offset advancement, segment removal,
+  chunk submission, and close-time discard are connection owner-loop-only.
+  Cross-thread send owns only its admitted immutable payload until the
+  executor moves it into that queue
 - TcpConnection socket close, completion-obligation consumption, lifecycle
   detach, Channel removal, and disconnected publication are owner-loop-only
 - on Linux, TcpConnection disables and removes its Channel registration before

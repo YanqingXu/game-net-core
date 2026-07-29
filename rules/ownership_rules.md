@@ -91,6 +91,15 @@ It must not blur these roles.
   referenced backing buffer until exactly one normal, error, or cancellation
   completion is consumed. A synchronous non-pending submission failure creates
   no completion ownership obligation
+- For Windows writes, the Core-private IOCP transport owns a deque of stable
+  string segments on behalf of TcpConnection. `WSABUF` borrows only the current
+  segment suffix; the segment outlives the pending completion and is released
+  only after its offset reaches the end or close has consumed every pending
+  completion
+- Cross-thread Accepted send owns one immutable string allocation in its
+  executor closure, then transfers that allocation into the segment deque.
+  Neither the legacy output Buffer nor a transport mirror owns a second full
+  copy
 - TcpConnection owns its socket until explicit owner-loop close. After close,
   the IOCP transport and/or Poller retain operation storage until every
   completion obligation is consumed; object destruction is not the close

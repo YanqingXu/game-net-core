@@ -29,6 +29,9 @@ inline inside TcpConnection.
 - bound admitted output bytes across buffered and not-yet-executed cross-thread
   sends, returning an explicit overload result before additional payload memory
   is admitted
+- on Windows, move admitted payloads into a loop-owned stable-segment queue
+  instead of mirroring the complete output Buffer into transport-private write
+  storage
 - bound unread input bytes and close through the normal lifecycle path when an
   application callback leaves the input buffer at its configured hard limit
 - expose force-close style teardown entry that still converges on the same close path
@@ -69,6 +72,17 @@ inline inside TcpConnection.
 - every accepted output byte is reserved exactly once and released exactly once
   after write completion or close-time discard; the configured hard limit is
   never exceeded even by concurrent cross-thread send admission
+- the Windows pending-write queue contains stable owned string segments. One
+  segment is appended once, remains at a stable address while `WSASend`
+  observes it, advances only its front offset on partial completion, and is
+  removed only after every byte in that segment completes
+- each Windows `WSASend` submission references at most
+  `std::numeric_limits<ULONG>::max()` bytes from the current front segment;
+  completing that chunk never copies or compacts the uncompleted suffix
+- Windows buffered-output accounting is the exact sum of remaining segment
+  bytes. It drives high/low-water transitions while the atomic
+  `pendingOutputBytes` additionally includes accepted cross-thread payloads
+  that have not yet reached the owner loop
 - output-buffer mutation, backpressure enforcement, and write-interest /
   platform write initiation complete before an optional high-water
   notification is submitted
@@ -109,6 +123,9 @@ inline inside TcpConnection.
 ## 5. Collaboration
 - TcpConnection owns Socket, Channel, input/output Buffer, and callback slots
 - TcpConnection may delegate read/write/shutdown details to ConnectionTransport
+- the existing Core-private Windows IOCP transport owns the stable segment
+  container on behalf of TcpConnection; TcpConnection remains responsible for
+  reservation, callback, backpressure, and lifecycle semantics
 - TcpConnection may delegate coroutine waiter state to ConnectionAwaiterRegistry
 - TcpConnection may delegate threshold-based read pause/resume to
   ConnectionBackpressureController
@@ -123,6 +140,9 @@ inline inside TcpConnection.
 ## 6. Threading Rules
 - handleRead/handleWrite/handleClose/handleError run on owner loop thread
 - cross-thread send/shutdown must marshal back into the loop
+- cross-thread send copies the admitted bytes into one immutable payload before
+  returning Accepted; the executor moves that same allocation into the owner-
+  loop Windows segment queue without another complete-payload copy
 - `connected()` and `disconnected()` may be called from any thread and return
   a point-in-time state snapshot
 - `droppedNotificationCount()` may be called from any thread and returns a
@@ -172,6 +192,10 @@ inline inside TcpConnection.
 - normal, error, and `ERROR_OPERATION_ABORTED` completion consumption clears
   the corresponding pending obligation once; repeated close/error entry remains
   single-shot
+- Windows synchronous write-submit failure retains the queued segment only
+  until normal close cleanup; a pending/canceled write retains its referenced
+  front segment until the real completion is consumed, after which close may
+  discard the exact remaining segment bytes and release their reservations
 - timeout-driven close should reuse the normal close path rather than inventing a side channel
 - backpressure throttling should resume automatically after the output buffer drains below the low-water threshold
 - disconnected state should block unsafe user-visible actions
@@ -305,6 +329,14 @@ inline inside TcpConnection.
   failures, proves they close immediately without phantom readiness, and
   verifies cancellation of the other real pending operation reports
   `ERROR_OPERATION_ABORTED` before one final teardown
+- `tests/contract/tcp_connection/test_tcp_connection_iocp_segmented_write.cpp`
+  verifies multiple cross-thread payload allocations move into distinct stable
+  owner-loop segments, preserve byte order, obey the configured test chunk,
+  and release exact pending-byte reservations
+- `tests/contract/tcp_connection/test_tcp_connection_iocp_partial_write.cpp`
+  forces one large segment through many bounded IOCP submissions while a slow
+  peer drains, proving partial completions advance the front offset without a
+  suffix copy and converge to one write-complete callback
 - `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
   verifies explicit socket close precedes disconnected publication, pending
   operations retain storage, and one final lifecycle detach follows drain

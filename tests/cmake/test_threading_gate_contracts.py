@@ -72,6 +72,8 @@ def main() -> None:
         "contract/tcp_server/test_tcp_server_repeated_stop.cpp",
         "contract/tcp_server/test_tcp_server_stop_soak.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp",
+        "contract/tcp_connection/test_tcp_connection_iocp_segmented_write.cpp",
+        "contract/tcp_connection/test_tcp_connection_iocp_partial_write.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_state.cpp",
         "contract/tcp_connection/test_tcp_connection_send_after_close.cpp",
         "contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp",
@@ -96,7 +98,7 @@ def main() -> None:
     require(workflow_text, "linux-tsan:", workflow)
     require(workflow_text, "GAMENET_ENABLE_TSAN=ON", workflow)
     require(workflow_text, "ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60", workflow)
-    require(workflow_text, "--expect-label threading=84", workflow)
+    require(workflow_text, "--expect-label threading=86", workflow)
     require(workflow_text, "python3 tests/cmake/test_threading_gate_contracts.py", workflow)
 
     player_session_text = player_session.read_text(encoding="utf-8")

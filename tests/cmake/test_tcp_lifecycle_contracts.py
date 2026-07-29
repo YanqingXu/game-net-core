@@ -176,6 +176,20 @@ def main() -> None:
     connection_iocp_sync_error_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_iocp_sync_error.cpp"
     )
+    connection_iocp_segmented_write_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_segmented_write.cpp"
+    )
+    connection_iocp_partial_write_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_partial_write.cpp"
+    )
     connection_repeated_force_close_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_repeated_force_close.cpp"
     )
@@ -355,6 +369,14 @@ def main() -> None:
     )
     assert connection_iocp_sync_error_test.exists(), (
         f"missing TCP connection IOCP sync-error contract: {connection_iocp_sync_error_test}"
+    )
+    assert connection_iocp_segmented_write_test.exists(), (
+        "missing TCP connection IOCP segmented-write contract: "
+        f"{connection_iocp_segmented_write_test}"
+    )
+    assert connection_iocp_partial_write_test.exists(), (
+        "missing TCP connection IOCP partial-write contract: "
+        f"{connection_iocp_partial_write_test}"
     )
     assert connection_repeated_force_close_test.exists(), (
         f"missing TCP connection repeated force-close contract: {connection_repeated_force_close_test}"
@@ -1281,6 +1303,8 @@ def main() -> None:
         connection_peer_reset_test,
         connection_write_complete_test,
         connection_cross_thread_send_test,
+        connection_iocp_segmented_write_test,
+        connection_iocp_partial_write_test,
         connection_shutdown_pending_test,
         connection_cross_thread_shutdown_test,
         connection_repeated_shutdown_test,
@@ -1615,6 +1639,8 @@ def main() -> None:
     require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_write_soak.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_force_close_pending_write_mixed_timing_soak.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_iocp_segmented_write.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_iocp_partial_write.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "force-close only the offending connection", tcp_connection_intent)
     require(tcp_connection_intent_text, "disconnected and close callback exceptions are reported and contained", tcp_connection_intent)
 
@@ -1623,10 +1649,15 @@ def main() -> None:
     require(iocp_transport_header_text, "hasPendingOperations", iocp_transport_header)
     require(iocp_transport_header_text, "[[nodiscard]] int startRead", iocp_transport_header)
     require(iocp_transport_header_text, "[[nodiscard]] int startWrite", iocp_transport_header)
+    require(iocp_transport_header_text, "std::deque<WriteSegment>", iocp_transport_header)
+    require(iocp_transport_header_text, "discardBufferedWrites", iocp_transport_header)
+    assert "writeStorage_" not in iocp_transport_header_text
 
     iocp_transport_source_text = iocp_transport_source.read_text(encoding="utf-8")
     require(iocp_transport_source_text, "CancelIoEx", iocp_transport_source)
     require(iocp_transport_source_text, "ERROR_NOT_FOUND", iocp_transport_source)
+    require(iocp_transport_source_text, "front.offset += completed", iocp_transport_source)
+    require(iocp_transport_source_text, "writeSegments_.pop_front()", iocp_transport_source)
     assert "setRevents" not in iocp_transport_source_text
 
     tcp_connection_source_text = tcp_connection_source.read_text(encoding="utf-8")
@@ -1816,6 +1847,43 @@ def main() -> None:
     require(iocp_sync_error_text, "WSAECONNRESET", connection_iocp_sync_error_test)
     require(iocp_sync_error_text, "ERROR_OPERATION_ABORTED", connection_iocp_sync_error_test)
 
+    iocp_segmented_write_text = connection_iocp_segmented_write_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        iocp_segmented_write_text,
+        "gamenet::test::runFromNonOwnerThread",
+        connection_iocp_segmented_write_test,
+    )
+    require(
+        iocp_segmented_write_text,
+        "iocpPeakWriteSegmentCountForTesting() ==",
+        connection_iocp_segmented_write_test,
+    )
+    require(
+        iocp_segmented_write_text,
+        "connection->pendingOutputBytes() == 0",
+        connection_iocp_segmented_write_test,
+    )
+    iocp_partial_write_text = connection_iocp_partial_write_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        iocp_partial_write_text,
+        "iocpPartialWriteCompletionCountForTesting() > 1",
+        connection_iocp_partial_write_test,
+    )
+    require(
+        iocp_partial_write_text,
+        "iocpMaxWriteSubmissionBytesForTesting() <=",
+        connection_iocp_partial_write_test,
+    )
+    require(
+        iocp_partial_write_text,
+        "iocpPeakWriteSegmentCountForTesting() == 1",
+        connection_iocp_partial_write_test,
+    )
+
     iocp_poller_source_text = iocp_poller_source.read_text(encoding="utf-8")
     require(iocp_poller_source_text, "IocpOperationKind::Read", iocp_poller_source)
     require(iocp_poller_source_text, "IocpOperationKind::Write", iocp_poller_source)
@@ -1881,6 +1949,8 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_connection_queue_saturation.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_iocp_sync_error.cpp lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_completion_drain.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_iocp_segmented_write.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_iocp_partial_write.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_close_reason.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_force_close.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_connect_destroyed.cpp", tests_cmake)

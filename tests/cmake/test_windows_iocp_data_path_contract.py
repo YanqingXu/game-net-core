@@ -32,6 +32,20 @@ def main() -> None:
         / "tcp_connection"
         / "test_tcp_connection_iocp_sync_error.cpp"
     )
+    segmented_write_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_segmented_write.cpp"
+    )
+    partial_write_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_partial_write.cpp"
+    )
     poller_contract_test = (
         repo_root
         / "tests"
@@ -56,6 +70,7 @@ def main() -> None:
         / "test_event_loop_wakeup_coalescing.cpp"
     )
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
+    tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
@@ -152,13 +167,29 @@ def main() -> None:
     require(tcp_transport_text, "completeRead", tcp_transport)
     require(tcp_transport_text, "[[nodiscard]] int startWrite", tcp_transport)
     require(tcp_transport_text, "completeWrite", tcp_transport)
-    require(tcp_transport_text, "writeStorage_", tcp_transport)
+    require(tcp_transport_text, "std::deque<WriteSegment>", tcp_transport)
+    require(tcp_transport_text, "bufferedWriteBytes_", tcp_transport)
+    assert "writeStorage_" not in tcp_transport_text, (
+        "IOCP writes must not retain a full transport mirror"
+    )
 
     tcp_transport_source_text = tcp_transport_source.read_text(encoding="utf-8")
     require(tcp_transport_source_text, "WSARecv", tcp_transport_source)
     require(tcp_transport_source_text, "WSASend", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Read", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Write", tcp_transport_source)
+    require(tcp_transport_source_text, "front.offset += completed", tcp_transport_source)
+    require(tcp_transport_source_text, "writeSegments_.pop_front()", tcp_transport_source)
+    require(
+        tcp_transport_source_text,
+        "std::numeric_limits<ULONG>::max",
+        tcp_transport_source,
+    )
+    require(
+        tcp_transport_source_text,
+        "setIocpWriteChunkLimitForTesting",
+        tcp_transport_source,
+    )
     require(tcp_transport_source_text, "return error;", tcp_transport_source)
     assert "setRevents" not in tcp_transport_source_text, (
         "a synchronous IOCP submission error must not fabricate Channel readiness"
@@ -168,6 +199,31 @@ def main() -> None:
     require(sync_error_test_text, "WSAENOBUFS", sync_error_test)
     require(sync_error_test_text, "WSAECONNRESET", sync_error_test)
     require(sync_error_test_text, "ERROR_OPERATION_ABORTED", sync_error_test)
+
+    segmented_write_test_text = segmented_write_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        segmented_write_test_text,
+        "iocpPeakWriteSegmentCountForTesting() ==",
+        segmented_write_test,
+    )
+    require(
+        segmented_write_test_text,
+        "iocpCurrentBufferedWriteBytesForTesting() == 0",
+        segmented_write_test,
+    )
+    partial_write_test_text = partial_write_test.read_text(encoding="utf-8")
+    require(
+        partial_write_test_text,
+        "iocpPartialWriteCompletionCountForTesting() > 1",
+        partial_write_test,
+    )
+    require(
+        partial_write_test_text,
+        "iocpMaxWriteSubmissionBytesForTesting() <=",
+        partial_write_test,
+    )
 
     poller_header_text = poller_header.read_text(encoding="utf-8")
     require(poller_header_text, "Windows IOCP backend for EventLoop", poller_header)
@@ -236,6 +292,17 @@ def main() -> None:
         core_cmake_text,
         "GAMENET_INTERNAL_IOCP_TEST_HOOKS=1",
         core_cmake,
+    )
+    tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
+    require(
+        tests_cmake_text,
+        "test_tcp_connection_iocp_segmented_write.cpp threading lifecycle",
+        tests_cmake,
+    )
+    require(
+        tests_cmake_text,
+        "test_tcp_connection_iocp_partial_write.cpp threading lifecycle",
+        tests_cmake,
     )
 
     guard_command = "python3 tests/cmake/test_windows_iocp_data_path_contract.py"
