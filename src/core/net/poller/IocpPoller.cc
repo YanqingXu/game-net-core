@@ -186,14 +186,17 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
                 completionError(*operation, channelRegistered);
         }
 
-        if (channelRegistered &&
+        const bool channelAlreadyPublished =
+            channelRegistered &&
             std::find(
                 publishedChannels.begin(),
                 publishedChannels.begin() +
                     static_cast<std::ptrdiff_t>(activeCount),
                 channel) !=
                 publishedChannels.begin() +
-                    static_cast<std::ptrdiff_t>(activeCount)) {
+                    static_cast<std::ptrdiff_t>(activeCount);
+        if (channelAlreadyPublished &&
+            operation->kind != IocpOperationKind::Accept) {
             if (deferredEntryCount_ >= deferredEntries_.size()) {
                 iocpDie("IOCP deferred completion batch overflow");
             }
@@ -201,6 +204,7 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             continue;
         }
 
+        operation->completionObserved = true;
         if (operation->shutdownObligation) {
             operation->shutdownObligation = false;
             if (outstandingOperationCount_ == 0) {
@@ -219,6 +223,17 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             continue;
         }
 
+        if (operation->kind == IocpOperationKind::Accept) {
+            // A listen Channel can have multiple independent AcceptEx slots.
+            // Coalesce their exact identities into one allocation-free
+            // owner-loop callback instead of forcing one loop turn per slot.
+            channel->appendIocpAcceptCompletionOperation(operation);
+        } else {
+            channel->setIocpCompletionOperation(operation);
+        }
+        if (channelAlreadyPublished) {
+            continue;
+        }
         channel->setRevents(completionEvents(*operation));
         publishedChannels[activeCount++] = channel;
         activeChannels->push_back(channel);

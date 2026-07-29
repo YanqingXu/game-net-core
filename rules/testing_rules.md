@@ -126,6 +126,16 @@ For lifecycle-sensitive modules, tests should include:
 - AcceptEx and ConnectEx immediate-quit tests must first prove a real successful
   pending submission, then prove cancellation creates exactly one obligation;
   synchronous non-pending failures must create none
+- Windows AcceptEx pool tests must prove default/configured finite depth,
+  independent slot generations and socket ownership, allocation-free
+  same-Channel Accept completion coalescing with exact identities,
+  replenishment before burst callbacks serialize the pool, callback `stop()`
+  re-entry, generation-wide Retry after a deterministic synchronous submission
+  failure, and delayed cancellation consumption
+- after multi-slot stop/destroy plus immediate quit, fixed-pool slot, slot-owned
+  socket, retained completion, and shutdown-obligation counts must all be zero;
+  the test seam must also prove pool capacity never exceeds its configured
+  bound
 - TcpConnection explicit socket close and completion-drain terminal state,
   including first-close-reason-wins and native error preservation
 - Linux TcpConnection close-callback re-entry with deterministic numeric-fd

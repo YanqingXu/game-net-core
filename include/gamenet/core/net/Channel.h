@@ -15,6 +15,11 @@
 namespace gamenet::net {
 
 class EventLoop;
+#ifdef _WIN32
+class Acceptor;
+class IocpPoller;
+struct IocpOperation;
+#endif
 
 class Channel : private gamenet::base::noncopyable {
 public:
@@ -59,10 +64,21 @@ public:
 
 private:
     friend class EventLoop;
+#ifdef _WIN32
+    friend class Acceptor;
+    friend class IocpPoller;
+#endif
 
     void update();
     void advanceRegistrationGeneration() noexcept;
     void handleEventWithGuard(gamenet::base::Timestamp receiveTime);
+#ifdef _WIN32
+    void setIocpCompletionOperation(IocpOperation* operation) noexcept;
+    IocpOperation* takeIocpCompletionOperation() noexcept;
+    void appendIocpAcceptCompletionOperation(IocpOperation* operation) noexcept;
+    IocpOperation* takeIocpAcceptCompletionOperation() noexcept;
+    void clearIocpAcceptCompletionOperations() noexcept;
+#endif
 
     EventLoop* loop_;
     const SocketFd fd_;
@@ -74,6 +90,11 @@ private:
     std::uint64_t registrationGeneration_;
     std::uint64_t activeBatchEpoch_;
     std::size_t activeBatchIndex_;
+#ifdef _WIN32
+    IocpOperation* iocpCompletionOperation_;
+    IocpOperation* iocpAcceptCompletionHead_;
+    IocpOperation* iocpAcceptCompletionTail_;
+#endif
     bool tied_;
     std::weak_ptr<void> tie_;
     ReadEventCallback readCallback_;

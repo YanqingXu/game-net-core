@@ -14,6 +14,12 @@ Mutable reactor state belongs to a specific EventLoop thread.
 - Windows AcceptEx/ConnectEx submission, cancellation, Channel-observer
   revocation, and completion-obligation tracking are owner-thread-only; final
   drain performs only zero-timeout owner-thread polls
+- every Windows AcceptEx slot is created, submitted, completed, generation-
+  advanced, canceled, and reused only by the Acceptor base loop; Poller may
+  publish the completed operation identity but never mutates slot policy
+- Poller may append multiple completed Accept identities to the listen
+  Channel's owner-loop queue in one batch; only the subsequent Acceptor
+  callback may drain slots or replenish the pool
 
 ## 3. Allowed Cross-Thread Interaction
 Cross-thread interaction must go through:
@@ -186,6 +192,11 @@ No other direct mutation path is allowed for core loop state.
   to that same owner loop
 - A policy callback may choose Retry or Stop; neither action permits direct
   worker-loop mutation
+- Windows Retry cancels the whole submitted AcceptEx generation and may
+  replenish the fixed pool only after every cancellation completion has been
+  consumed and the retry delay has elapsed
+- accepted-socket callbacks may re-enter `stop()`; code after callback entry
+  must not assume that the listener or any newly replenished slot remains live
 
 ## 11. Callback Exceptions
 - EventLoop exception handlers execute on the affected EventLoop owner thread

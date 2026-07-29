@@ -24,6 +24,7 @@ void assertNoCompletionLeases(gamenet::net::EventLoop& loop) {
 }
 
 void testAcceptCancelDestroyAndImmediateQuit() {
+    constexpr std::size_t kAcceptDepth = 7;
     gamenet::net::EventLoop loop;
     std::unique_ptr<gamenet::net::Acceptor> acceptor;
 
@@ -32,20 +33,25 @@ void testAcceptCancelDestroyAndImmediateQuit() {
             &loop,
             gamenet::net::InetAddress(0, true),
             true);
+        acceptor->setIocpAcceptDepth(kAcceptDepth);
         acceptor->listen();
 
-        // A retained lease proves AcceptEx was submitted successfully; it is
-        // not a shutdown obligation until owner-loop cancellation begins.
+        // One retained lease per slot proves the complete fixed pool was
+        // submitted successfully. None is a shutdown obligation until
+        // owner-loop cancellation begins.
         GAMENET_TEST_ASSERT(
-            EventLoopIocpAssociationHarness::retainedCompletionCount(loop) == 1);
+            EventLoopIocpAssociationHarness::retainedCompletionCount(loop) ==
+            kAcceptDepth);
         GAMENET_TEST_ASSERT(
             EventLoopIocpAssociationHarness::outstandingCompletionCount(loop) == 0);
 
         acceptor->stop();
         GAMENET_TEST_ASSERT(
-            EventLoopIocpAssociationHarness::retainedCompletionCount(loop) == 1);
+            EventLoopIocpAssociationHarness::retainedCompletionCount(loop) ==
+            kAcceptDepth);
         GAMENET_TEST_ASSERT(
-            EventLoopIocpAssociationHarness::outstandingCompletionCount(loop) == 1);
+            EventLoopIocpAssociationHarness::outstandingCompletionCount(loop) ==
+            kAcceptDepth);
 
         acceptor.reset();
         loop.quit();

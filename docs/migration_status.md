@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 129 |
+| 61 | 30 | 20 | 11 | 130 |
 
 ## Production-Hardening Worktree State
 
@@ -165,6 +165,22 @@ the source of truth.
   (71,367.475 bytes/connection) at baseline `649880d` to 100,343,808 bytes
   (10,034.381 bytes/connection), an 85.94% reduction. Seven one-connection
   samples reduced the median delta from 126,976 to 61,440 bytes.
+- M3-G5 replaces the single pending Windows `AcceptEx` with a configurable
+  fixed pool that defaults to four and validates a hard maximum of 64. Every
+  base-loop-owned slot has independent socket, `OVERLAPPED`, address storage,
+  and generation; Poller publication coalesces exact Accept operation
+  identities through an allocation-free, operation-embedded Channel queue,
+  while read/write same-Channel deferral remains unchanged. Retry cancels and
+  consumes the complete submitted generation before
+  replenishment, while Stop revokes every observer and final-drains one real
+  obligation per submitted slot. The dedicated pool contract covers a 48-
+  connection burst, callback `stop()` re-entry, deterministic synchronous
+  failure after two real submissions, delayed Retry cancellation, fixed-depth
+  accounting, and final zero slots/sockets/leases/obligations. On the same
+  Windows runner and compiler, nine alternating Release samples of the
+  128-connection preloaded accept-drain profile reduced median elapsed time
+  from 1.680 ms at depth one to 1.524 ms at depth four, a 9.29% reduction
+  (accept throughput +10.24%).
 - `connection_backpressure_controller` and `graceful_shutdown` are active
   `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
@@ -260,7 +276,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 114 configured CTest tests: 8 unit tests, 93 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 115 configured CTest tests: 8 unit tests, 94 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -277,8 +293,10 @@ On 2026-07-29, the current Windows MSVC worktree passed a full Debug build and
 repeats each and the bounded read-storage contract passed 50/50. The 2026-07-27 snapshot separately passed full
 Debug, Release, and AddressSanitizer builds and 109/109 CTests in all three
 configurations.
-The current inventory is unit=8, contract=93, integration=13, threading=87,
-lifecycle=93, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+The M3-G5 worktree subsequently passed 115/115 Debug CTests, all 31 Python
+repository/API/CI guards, and 50/50 focused `AcceptEx` pool repetitions.
+The current inventory is unit=8, contract=94, integration=13, threading=88,
+lifecycle=94, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and
@@ -535,7 +553,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. The workflow locks the 114-test inventory, `threading=87`,
+  timeout. The workflow locks the 115-test inventory, `threading=88`,
   `game_pipeline=7`, and `broadcast=5`, then verifies the raw result lines for
   every selected test and exact repeat count. Its two
   `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,

@@ -61,6 +61,7 @@ add_gamenet_test(unit acceptor ${CMAKE_CURRENT_SOURCE_DIR}/unit/acceptor/test_ac
 add_gamenet_test(unit connector ${CMAKE_CURRENT_SOURCE_DIR}/unit/connector/test_connector.cpp)
 add_gamenet_test(unit metrics ${CMAKE_CURRENT_SOURCE_DIR}/unit/metrics/test_metrics_exporter.cpp)
 add_gamenet_test(contract acceptor ${CMAKE_CURRENT_SOURCE_DIR}/contract/acceptor/test_acceptor_contract.cpp threading lifecycle)
+add_gamenet_test(contract acceptor ${CMAKE_CURRENT_SOURCE_DIR}/contract/acceptor/test_acceptor_iocp_pool.cpp threading lifecycle)
 add_gamenet_test(contract base ${CMAKE_CURRENT_SOURCE_DIR}/contract/base/test_logger_contract.cpp)
 add_gamenet_test(contract base ${CMAKE_CURRENT_SOURCE_DIR}/contract/base/test_logger_thread_safety.cpp threading)
 add_gamenet_test(contract buffer ${CMAKE_CURRENT_SOURCE_DIR}/contract/buffer/test_buffer_contract.cpp)

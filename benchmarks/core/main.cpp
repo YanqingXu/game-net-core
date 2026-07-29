@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -51,6 +52,9 @@ constexpr std::size_t kMebibyte = 1024U * 1024U;
 struct Config {
     std::string scenario{"echo"};
     std::size_t connections{0};
+    std::size_t connectConcurrency{1};
+    std::size_t iocpAcceptDepth{4};
+    bool preloadBeforeLoop{false};
     std::size_t eventLoopThreads{1};
     std::size_t messagesPerConnection{1000};
     std::size_t payloadBytes{256};
@@ -105,6 +109,36 @@ public:
     void markDisconnected() {
         disconnected_.fetch_add(1, std::memory_order_release);
         cv_.notify_all();
+    }
+
+    void markClientsCreated() {
+        {
+            std::lock_guard lock(mutex_);
+            clientsCreated_ = true;
+        }
+        cv_.notify_all();
+    }
+
+    bool waitForClientsCreated(std::chrono::milliseconds timeout) {
+        std::unique_lock lock(mutex_);
+        return cv_.wait_for(lock, timeout, [&] {
+            return clientsCreated_ || !failure_.empty();
+        }) && clientsCreated_;
+    }
+
+    void beginAcceptDrain() {
+        std::lock_guard lock(mutex_);
+        acceptDrainStarted_ = Clock::now();
+    }
+
+    double acceptDrainElapsedSeconds() const {
+        std::lock_guard lock(mutex_);
+        if (!acceptDrainStarted_) {
+            throw std::logic_error("accept drain start was not published");
+        }
+        return std::chrono::duration<double>(
+                   Clock::now() - *acceptDrainStarted_)
+            .count();
     }
 
     void markHighWater() {
@@ -281,6 +315,8 @@ private:
     std::atomic<bool> driverDone_{false};
     mutable std::mutex mutex_;
     std::condition_variable cv_;
+    bool clientsCreated_{false};
+    std::optional<Clock::time_point> acceptDrainStarted_;
     std::string failure_;
 };
 
@@ -316,6 +352,9 @@ void printUsage(std::ostream& output) {
         << "usage: gamenet_core_benchmark [options]\n"
         << "  --scenario echo|connections|slow-client\n"
         << "  --connections N       scenario default: echo=4, connections=256, slow-client=4\n"
+        << "  --connect-concurrency N simultaneous client connect workers (default 1)\n"
+        << "  --iocp-accept-depth N Windows AcceptEx pre-post depth (default 4)\n"
+        << "  --preload-before-loop 0|1 preload connections before base loop (default 0)\n"
         << "  --threads N           TcpServer worker EventLoops, including 0 for the base loop\n"
         << "  --messages N          echo messages per connection (default 1000)\n"
         << "  --payload N           echo payload bytes (default 256)\n"
@@ -342,6 +381,13 @@ Config parseArgs(int argc, char* argv[]) {
         } else if (option == "--connections") {
             config.connections = parseSize(value, option, 1, 100000);
             config.connectionsProvided = true;
+        } else if (option == "--connect-concurrency") {
+            config.connectConcurrency = parseSize(value, option, 1, 1024);
+        } else if (option == "--iocp-accept-depth") {
+            config.iocpAcceptDepth = parseSize(value, option, 1, 64);
+        } else if (option == "--preload-before-loop") {
+            config.preloadBeforeLoop =
+                parseSize(value, option, 0, 1) != 0;
         } else if (option == "--threads") {
             config.eventLoopThreads = parseSize(value, option, 0, 64);
         } else if (option == "--messages") {
@@ -371,6 +417,12 @@ Config parseArgs(int argc, char* argv[]) {
     }
     if (!config.connectionsProvided) {
         config.connections = config.scenario == "connections" ? 256U : 4U;
+    }
+    if (config.connectConcurrency > config.connections) {
+        usageError("--connect-concurrency must not exceed --connections");
+    }
+    if (config.preloadBeforeLoop && config.scenario != "connections") {
+        usageError("--preload-before-loop is supported only for connections");
     }
     if (config.highWaterBytes > config.slowBytes && config.scenario == "slow-client") {
         usageError("--high-water must not exceed --slow-bytes for slow-client");
@@ -482,6 +534,22 @@ public:
         }
     }
 
+    void closeAbortively() noexcept {
+        if (!gamenet::net::sockets::isValid(fd_)) {
+            return;
+        }
+        linger resetOnClose{};
+        resetOnClose.l_onoff = 1;
+        resetOnClose.l_linger = 0;
+        (void)::setsockopt(
+            fd_,
+            SOL_SOCKET,
+            SO_LINGER,
+            reinterpret_cast<const char*>(&resetOnClose),
+            static_cast<socklen_t>(sizeof(resetOnClose)));
+        close();
+    }
+
 private:
     void configure(std::chrono::milliseconds timeout, bool slowReader) {
         const int noDelay = 1;
@@ -548,11 +616,58 @@ std::vector<ClientSocket> connectClients(
     const gamenet::net::InetAddress& address,
     SharedState& state,
     bool slowReaders) {
-    std::vector<ClientSocket> clients;
-    clients.reserve(config.connections);
-    for (std::size_t index = 0; index < config.connections; ++index) {
-        clients.push_back(ClientSocket::connectTo(address, config.timeout, slowReaders));
+    std::vector<ClientSocket> clients(config.connections);
+    if (config.connectConcurrency == 1) {
+        for (std::size_t index = 0; index < config.connections; ++index) {
+            clients[index] =
+                ClientSocket::connectTo(address, config.timeout, slowReaders);
+        }
+    } else {
+        const std::size_t workerCount =
+            (std::min)(config.connectConcurrency, config.connections);
+        std::atomic<std::size_t> nextIndex{0};
+        std::atomic<bool> failed{false};
+        std::mutex failureMutex;
+        std::exception_ptr failure;
+        std::barrier startGate(
+            static_cast<std::ptrdiff_t>(workerCount + 1));
+        std::vector<std::thread> workers;
+        workers.reserve(workerCount);
+        for (std::size_t worker = 0; worker < workerCount; ++worker) {
+            workers.emplace_back([&] {
+                startGate.arrive_and_wait();
+                try {
+                    while (!failed.load(std::memory_order_acquire)) {
+                        const std::size_t index =
+                            nextIndex.fetch_add(1, std::memory_order_relaxed);
+                        if (index >= config.connections) {
+                            break;
+                        }
+                        clients[index] = ClientSocket::connectTo(
+                            address,
+                            config.timeout,
+                            slowReaders);
+                    }
+                } catch (...) {
+                    {
+                        std::lock_guard lock(failureMutex);
+                        if (!failure) {
+                            failure = std::current_exception();
+                        }
+                    }
+                    failed.store(true, std::memory_order_release);
+                }
+            });
+        }
+        startGate.arrive_and_wait();
+        for (auto& worker : workers) {
+            worker.join();
+        }
+        if (failure) {
+            std::rethrow_exception(failure);
+        }
     }
+    state.markClientsCreated();
     if (!state.waitForConnections(config.connections, config.timeout)) {
         throw std::runtime_error("timed out waiting for TcpServer connection callbacks");
     }
@@ -652,7 +767,13 @@ void runConnections(
     auto clients = connectClients(config, address, state, false);
     std::this_thread::sleep_for(config.settle);
     recordWorkingSet(result, config);
-    result.elapsedSeconds = std::chrono::duration<double>(Clock::now() - started).count();
+    result.elapsedSeconds =
+        config.preloadBeforeLoop
+        ? state.acceptDrainElapsedSeconds()
+        : std::chrono::duration<double>(Clock::now() - started).count();
+    for (auto& client : clients) {
+        client.closeAbortively();
+    }
     clients.clear();
 }
 
@@ -768,7 +889,7 @@ std::string_view completionMode() noexcept {
 
 void printResult(const Config& config, const Result& result, const SharedState& state) {
     const std::string failure = state.failure();
-    std::cout << std::fixed << std::setprecision(3)
+    std::cout << std::fixed << std::setprecision(6)
               << "{\n"
               << "  \"schema\": \"gamenet.core_benchmark.v2\",\n"
               << "  \"status\": \"" << (failure.empty() ? "ok" : "error") << "\",\n"
@@ -787,6 +908,10 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "  \"build_type\": \"" << GAMENET_BENCHMARK_BUILD_TYPE << "\",\n"
               << "  \"parameters\": {\n"
               << "    \"connections\": " << config.connections << ",\n"
+              << "    \"connect_concurrency\": " << config.connectConcurrency << ",\n"
+              << "    \"iocp_accept_depth\": " << config.iocpAcceptDepth << ",\n"
+              << "    \"preload_before_loop\": "
+              << (config.preloadBeforeLoop ? "true" : "false") << ",\n"
               << "    \"event_loop_threads\": " << config.eventLoopThreads << ",\n"
               << "    \"messages_per_connection\": " << config.messagesPerConnection << ",\n"
               << "    \"payload_bytes\": " << config.payloadBytes << ",\n"
@@ -842,6 +967,7 @@ int run(const Config& config) {
         &loop,
         gamenet::net::InetAddress(0, true),
         "core-benchmark");
+    server.setIocpAcceptDepth(config.iocpAcceptDepth);
     server.setThreadNum(static_cast<int>(config.eventLoopThreads));
     gamenet::net::TcpConnectionBackpressureOptions backpressureOptions;
     backpressureOptions.highWaterMarkBytes = config.highWaterBytes;
@@ -916,6 +1042,14 @@ int run(const Config& config) {
         }
         state.markDriverDone();
     });
+
+    if (config.preloadBeforeLoop) {
+        if (!state.waitForClientsCreated(config.timeout)) {
+            state.fail("timed out preloading clients before EventLoop start");
+        } else {
+            state.beginAcceptDrain();
+        }
+    }
 
     bool finishing = false;
     loop.runEvery(10ms, [&] {

@@ -10,6 +10,7 @@
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/TimerId.h"
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 
@@ -44,6 +45,10 @@ public:
 
     void setNewConnectionCallback(NewConnectionCallback cb);
     void setErrorCallback(AcceptorErrorCallback cb);
+    // Controls the fixed Windows AcceptEx pre-post pool. Configure before
+    // listen(); other backends retain the value but use readiness draining.
+    void setIocpAcceptDepth(std::size_t depth);
+    std::size_t iocpAcceptDepth() const noexcept;
     bool listening() const noexcept;
     const InetAddress& listenAddress() const noexcept;
     void listen();
@@ -55,7 +60,14 @@ private:
     void scheduleAcceptRetry();
     void resumeAccept();
 #ifdef _WIN32
-    void postAccept();
+    struct IocpAcceptSlot;
+    struct IocpAcceptState;
+
+    void fillAcceptPool();
+    bool postAccept(IocpAcceptSlot& slot);
+    void beginAcceptRetry();
+    void maybeResumeAccept();
+    void cancelPendingAccepts(bool shutdown) noexcept;
     void closePendingAccept() noexcept;
 #endif
 
@@ -66,8 +78,8 @@ private:
     NewConnectionCallback newConnectionCallback_;
     AcceptorErrorCallback errorCallback_;
     TimerId retryTimer_;
+    std::size_t iocpAcceptDepth_{4};
 #ifdef _WIN32
-    struct IocpAcceptState;
     std::shared_ptr<IocpAcceptState> iocpAccept_;
 #endif
     bool listening_;

@@ -62,6 +62,14 @@ It must not blur these roles.
   to the next round keeps both leases intact. Its transferred-byte and terminal
   error result is captured at dequeue time so later socket closure cannot
   mutate the observation
+- the same-Channel deferral rule has one bounded AcceptEx exception: independent
+  Accept operations for one listen Channel are released and appended through
+  their operation-embedded links to one callback queue in the current batch.
+  Read/write/connect operations retain the existing one-entry-per-round rule
+- for a registered Channel, IOCP publication also lends that callback the exact
+  operation identity for the current active entry. Accept publication lends a
+  bounded intrusive queue of exact identities; no queue node allocation or
+  operation-storage transfer is introduced
 - an IOCP retained lease owns operation storage but is not by itself a shutdown
   obligation. A successfully submitted operation canceled during teardown is
   marked exactly once as outstanding; packet dequeue clears the mark and
@@ -130,10 +138,19 @@ It must not blur these roles.
   converged and join completes
 - Acceptor owns its retry timer; stop/destruction cancels it before Acceptor
   storage is released
-- on Windows, Acceptor owns the listen/accepted sockets and Channel observer,
-  while Poller retains only the submitted AcceptEx operation state through its
-  terminal packet; Acceptor may clear the observer and release its own storage
-  after registering the shutdown obligation
+- on Windows, Acceptor owns one bounded fixed pool and every slot in it; each
+  slot exclusively owns its accepted socket, `OVERLAPPED`, address buffer, and
+  generation until accepted-fd transfer or terminal cleanup. Poller retains
+  shared fixed-pool storage independently for each submitted operation through
+  its terminal packet
+- successful accepted-fd handoff removes the socket from its completed slot
+  before user/server callback entry. A replacement operation may reuse that
+  slot only after the old completion was published; it then owns a new socket
+  and a new generation
+- stop may revoke all slot Channel observers and release Acceptor ownership
+  only after marking every submitted slot as a shutdown obligation. Retry
+  retains Acceptor ownership and consumes every canceled slot callback before
+  replenishing the same fixed-capacity pool
 - Connector owns its Channel and connecting socket. Its cancellation self guard
   temporarily owns Connector for mandatory completion cleanup, while Poller
   independently owns the final-drain obligation and retained ConnectEx state;

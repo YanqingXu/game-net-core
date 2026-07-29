@@ -100,11 +100,34 @@ def main() -> None:
         "config.connections = parseSize(value, option, 1, 100000)",
         benchmark_source,
     )
+    require(
+        source_text,
+        "config.connectConcurrency = parseSize(value, option, 1, 1024)",
+        benchmark_source,
+    )
+    require(
+        source_text,
+        "--connect-concurrency must not exceed --connections",
+        benchmark_source,
+    )
+    require(
+        source_text,
+        "config.iocpAcceptDepth = parseSize(value, option, 1, 64)",
+        benchmark_source,
+    )
+    require(source_text, "server.setIocpAcceptDepth", benchmark_source)
+    require(
+        source_text,
+        "--preload-before-loop is supported only for connections",
+        benchmark_source,
+    )
+    require(source_text, "state.waitForClientsCreated", benchmark_source)
     assert "connection->send(" not in source_text, "Core benchmark must not ignore send admission"
     require(source_text, "result.requestedBytes != result.acceptedBytes + result.rejectedBytes", benchmark_source)
     require(source_text, "GetProcessMemoryInfo", benchmark_source)
     require(source_text, 'std::ifstream statm("/proc/self/statm")', benchmark_source)
     require(source_text, "server.connectionCount() == 0", benchmark_source)
+    require(source_text, "client.closeAbortively()", benchmark_source)
     require(validator_text, 'SCHEMA = "gamenet.core_benchmark.v2"', benchmark_validator)
     require(
         validator_text,
@@ -125,6 +148,9 @@ def main() -> None:
     require(docs_text, "-DGAMENET_BUILD_BENCHMARKS=ON", docs)
     require(docs_text, "--scenario echo", docs)
     require(docs_text, "--scenario connections", docs)
+    require(docs_text, "--connect-concurrency 64", docs)
+    require(docs_text, "--iocp-accept-depth 4", docs)
+    require(docs_text, "--preload-before-loop 1", docs)
     require(
         docs_text,
         "--scenario connections --connections 10000",

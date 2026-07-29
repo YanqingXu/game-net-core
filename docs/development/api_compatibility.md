@@ -89,3 +89,29 @@ The primary Linux CI producer writes
 `ci-evidence/public-api-diff.json` before its evidence manifest is built. The
 existing per-job evidence artifact therefore retains the diff for 90 days and
 the aggregate evidence gate covers the producer artifact.
+
+## Current M3-G5 Additive Review
+
+M3-G5 adds `Acceptor::setIocpAcceptDepth()` /
+`Acceptor::iocpAcceptDepth()` and `TcpServer::setIocpAcceptDepth()` to the
+stable Core source surface. Existing constructors and defaults remain source
+compatible; applications that do not configure the option receive the bounded
+Windows default depth of four, while non-Windows readiness behavior is
+unchanged. Reconfiguration is rejected after listen/start, and `[1, 64]`
+validation prevents an unbounded pool.
+
+The `Channel.h` fingerprint also changes because its private Windows backend
+state now carries the exact IOCP operation identity published for the current
+active entry plus an allocation-free head/tail pair for bounded Accept
+completion coalescing. This is not an application scheduling API and adds no
+public method. No binary ABI promise exists before 1.0, so consumers rebuild
+as already required.
+
+Direct contracts are
+`tests/contract/acceptor/test_acceptor_contract.cpp`,
+`tests/contract/acceptor/test_acceptor_iocp_pool.cpp`,
+`tests/contract/tcp_server/test_tcp_server_contract.cpp`, and
+`tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`.
+They cover the public option, finite default/configured depth, exact completion
+identity, burst replenishment, Retry/Stop cancellation, synchronous failure,
+callback re-entry, and final-drain convergence.

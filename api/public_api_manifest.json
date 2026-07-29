@@ -92,11 +92,11 @@
     "include/gamenet/core/base/Logger.h": "7ba3bd6d20360aaa4c77fb0767d4ed10f2f89d3aff0c6462d06d32933063b0b3",
     "include/gamenet/core/base/Timestamp.h": "c668d00e88f50d591a58a7d6eb845f5c0fe7db8296159c098113108827cf1ec1",
     "include/gamenet/core/base/noncopyable.h": "06e896f354470b405c28a955f106e79716b373662e32ef5af9afe35c36c164d2",
-    "include/gamenet/core/net/Acceptor.h": "22e8621a01547dd9e6de0e0a36833d0c2de0e59c159460c1a91a74d35002692e",
+    "include/gamenet/core/net/Acceptor.h": "37c8c5d5c0b929a461419bed8e9c52b817a363669c847463fb6b256bf1700943",
     "include/gamenet/core/net/Buffer.h": "49beb04a234447ada7d422cd8090c4e71c6d821ee5e71603fac3d58663f849e6",
     "include/gamenet/core/net/CallbackException.h": "7d2d1f7de7bd9cff7fdd68ec7b56835238f341dd63ae40ed11d1cbdf39b41b84",
     "include/gamenet/core/net/Callbacks.h": "7cbd8d58eee4e2723319498016ce4768d350069a7277b104029abad42c5f68eb",
-    "include/gamenet/core/net/Channel.h": "13f82f21ec4395621d936af07a9698443f46112422f166490e33423327191e5b",
+    "include/gamenet/core/net/Channel.h": "f3f3255b325aa578fcd8ebe64c534f9ed166c05831177f7054e020d7ac2200be",
     "include/gamenet/core/net/Connector.h": "0bba1a93b24da30c04800addbb668a1febd2294bf86ff28ce9d3791ea2da1c5d",
     "include/gamenet/core/net/ConnectorOptions.h": "5b03f5e7912ad83fa2d6576469c815e8a972599de76e56de301e013f21e4630b",
     "include/gamenet/core/net/EventLoop.h": "6503bf7aa4b9a85a0856ba4df89426778ff6ba3816b5b30af9e079c8766bd559",
@@ -115,7 +115,7 @@
     "include/gamenet/core/net/TcpConnection.h": "d65b893d6faa6634badb5e3e81d5ce00d9b7f812adf1ffab6940920a85011503",
     "include/gamenet/core/net/TcpConnectionClose.h": "d8441b5901bb3639412c2b527581164890d959ed63bda870dcd18f45ca32e1c6",
     "include/gamenet/core/net/TcpConnectionOptions.h": "a5d168ff3ebececd3c89473bb03e3cacfa7ec7058709831615013f961be99212",
-    "include/gamenet/core/net/TcpServer.h": "0622df5ff092cd61b3b75ec078c89eed8a1bab149db7b6bb11e59a3e0493ec25",
+    "include/gamenet/core/net/TcpServer.h": "071f628b8d408a8d4cbcd599ed40fa5d004f2001aea43ea363aec77094ec6598",
     "include/gamenet/core/net/TimerId.h": "3f4ffe32ab0985427de257aae3fa80ff894ff65f6b4e636571ee84e20293032a",
     "include/gamenet/core/net/TimerQueue.h": "b668fee6c1889bbcf59b194c608bc273555761fc3808ac3171f463e7c2211be4"
   }

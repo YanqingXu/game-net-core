@@ -214,6 +214,14 @@ void TcpServer::setAcceptErrorCallback(AcceptorErrorCallback cb) {
     acceptor_->setErrorCallback(acceptErrorCallback_);
 }
 
+void TcpServer::setIocpAcceptDepth(std::size_t depth) {
+    if (started_.load(std::memory_order_relaxed)) {
+        throw std::logic_error(
+            "TcpServer IOCP accept depth must be configured before start");
+    }
+    acceptor_->setIocpAcceptDepth(depth);
+}
+
 void TcpServer::setCallbackExceptionHandler(
     TcpConnectionCallbackExceptionHandler cb) {
     callbackExceptionHandler_ = std::move(cb);

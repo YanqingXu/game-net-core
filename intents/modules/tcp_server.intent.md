@@ -15,6 +15,8 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 
 ## 2. Responsibilities
 - own Acceptor and EventLoopThreadPool collaboration
+- expose the bounded Windows AcceptEx pre-post depth before start while leaving
+  global/per-peer admission at the existing accepted-fd policy point
 - create TcpConnection on chosen loop
 - maintain connection map on base loop thread
 - optionally install per-connection backpressure thresholds for accepted connections
@@ -63,6 +65,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   teardown and worker-loop join; timeout escalation remains single-shot
 - admission options are immutable after start and default to disabled so
   existing servers preserve unlimited/admitted behavior
+- AcceptEx pre-post depth is immutable after start; increasing transport-level
+  accept concurrency does not bypass base-loop admission or transfer accepted-
+  fd ownership before the existing admission decision
 - every admission rejection happens while TcpServer still uniquely owns the
   accepted fd, which is then closed exactly once without creating TcpConnection
 - active-per-peer counts, fixed-window rate buckets, and authentication timers

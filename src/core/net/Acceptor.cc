@@ -8,12 +8,22 @@
 #ifdef _WIN32
 #include "gamenet/core/net/platform/IocpOperation.h"
 #include "gamenet/core/net/platform/IocpSocketOps.h"
-
-#include <array>
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+#include "detail/AcceptorIocpHarness.h"
 #endif
 
+#include <array>
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+#include <atomic>
+#endif
+#include <vector>
+#endif
+
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstdint>
+#include <stdexcept>
 #include <system_error>
 #include <utility>
 
@@ -35,6 +45,8 @@ SocketFd createAcceptSocket(sa_family_t family) {
     return fd;
 }
 
+constexpr std::size_t kMaxIocpAcceptDepth = 64;
+
 }  // namespace
 
 #ifdef _WIN32
@@ -43,19 +55,150 @@ namespace {
 
 constexpr DWORD kAcceptAddressBytes = sizeof(sockaddr_storage) + 16;
 
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+std::atomic<std::size_t> currentIocpAcceptSlots{0};
+std::atomic<std::size_t> peakIocpAcceptSlots{0};
+std::atomic<std::size_t> currentIocpAcceptSockets{0};
+std::atomic<std::size_t> peakIocpAcceptSockets{0};
+std::atomic<std::size_t> currentIocpAcceptSubmissions{0};
+std::atomic<std::size_t> peakIocpAcceptSubmissions{0};
+std::atomic<std::uint64_t> iocpAcceptSubmissionCount{0};
+std::atomic<std::uint64_t> iocpAcceptCompletionCount{0};
+std::atomic<std::uint64_t> iocpAcceptCancellationCount{0};
+std::atomic<std::uint64_t> maxIocpAcceptGeneration{0};
+std::atomic<std::int64_t> iocpAcceptPostsBeforeInjectedFailure{-1};
+std::atomic<int> iocpInjectedAcceptError{WSAENOBUFS};
+
+void updatePeak(
+    std::atomic<std::size_t>& peak,
+    std::size_t value) noexcept {
+    std::size_t observed = peak.load(std::memory_order_relaxed);
+    while (observed < value &&
+           !peak.compare_exchange_weak(
+               observed,
+               value,
+               std::memory_order_relaxed,
+               std::memory_order_relaxed)) {
+    }
+}
+
+void observeSlotPoolCreated(std::size_t depth) noexcept {
+    const std::size_t current =
+        currentIocpAcceptSlots.fetch_add(depth, std::memory_order_relaxed) +
+        depth;
+    updatePeak(peakIocpAcceptSlots, current);
+}
+
+void observeSlotPoolDestroyed(std::size_t depth) noexcept {
+    currentIocpAcceptSlots.fetch_sub(depth, std::memory_order_relaxed);
+}
+
+void observeAcceptedSocketCreated() noexcept {
+    const std::size_t current =
+        currentIocpAcceptSockets.fetch_add(1, std::memory_order_relaxed) + 1;
+    updatePeak(peakIocpAcceptSockets, current);
+}
+
+void observeAcceptedSocketReleased() noexcept {
+    currentIocpAcceptSockets.fetch_sub(1, std::memory_order_relaxed);
+}
+
+void observeAcceptSubmitted() noexcept {
+    const std::size_t current =
+        currentIocpAcceptSubmissions.fetch_add(1, std::memory_order_relaxed) +
+        1;
+    updatePeak(peakIocpAcceptSubmissions, current);
+    iocpAcceptSubmissionCount.fetch_add(1, std::memory_order_relaxed);
+}
+
+void observeAcceptCompleted() noexcept {
+    currentIocpAcceptSubmissions.fetch_sub(1, std::memory_order_relaxed);
+    iocpAcceptCompletionCount.fetch_add(1, std::memory_order_relaxed);
+}
+
+bool takeInjectedAcceptError(int* error) noexcept {
+    std::int64_t remaining =
+        iocpAcceptPostsBeforeInjectedFailure.load(std::memory_order_acquire);
+    while (remaining >= 0) {
+        if (remaining == 0) {
+            if (iocpAcceptPostsBeforeInjectedFailure.compare_exchange_weak(
+                    remaining,
+                    -1,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                *error =
+                    iocpInjectedAcceptError.load(std::memory_order_acquire);
+                return true;
+            }
+            continue;
+        }
+        if (iocpAcceptPostsBeforeInjectedFailure.compare_exchange_weak(
+                remaining,
+                remaining - 1,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            return false;
+        }
+    }
+    return false;
+}
+#endif
+
 }  // namespace
 
-struct Acceptor::IocpAcceptState {
+struct Acceptor::IocpAcceptSlot {
     IocpOperation operation{};
     SocketFd accepted{kInvalidSocket};
     std::array<char, kAcceptAddressBytes * 2> addresses{};
-    LPFN_ACCEPTEX acceptEx{nullptr};
-    LPFN_GETACCEPTEXSOCKADDRS getAcceptExSockaddrs{nullptr};
+    std::uint64_t generation{0};
     bool pending{false};
+    bool cancelling{false};
 
-    IocpAcceptState() {
+    IocpAcceptSlot() {
         operation.kind = IocpOperationKind::Accept;
     }
+};
+
+struct Acceptor::IocpAcceptState {
+    enum class Phase {
+        Accepting,
+        Retrying,
+        Stopped,
+    };
+
+    explicit IocpAcceptState(std::size_t depth)
+        : slots(depth) {
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        observeSlotPoolCreated(depth);
+#endif
+    }
+
+    ~IocpAcceptState() {
+        for (auto& slot : slots) {
+            if (slot.pending) {
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptCompleted();
+#endif
+                slot.pending = false;
+            }
+            if (sockets::isValid(slot.accepted)) {
+                sockets::close(slot.accepted);
+                slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptedSocketReleased();
+#endif
+            }
+        }
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        observeSlotPoolDestroyed(slots.size());
+#endif
+    }
+
+    std::vector<IocpAcceptSlot> slots;
+    LPFN_ACCEPTEX acceptEx{nullptr};
+    LPFN_GETACCEPTEXSOCKADDRS getAcceptExSockaddrs{nullptr};
+    Phase phase{Phase::Accepting};
+    bool retryDelayElapsed{false};
 };
 
 #endif
@@ -106,6 +249,23 @@ void Acceptor::setErrorCallback(AcceptorErrorCallback cb) {
     errorCallback_ = std::move(cb);
 }
 
+void Acceptor::setIocpAcceptDepth(std::size_t depth) {
+    loop_->assertInLoopThread();
+    if (depth == 0 || depth > kMaxIocpAcceptDepth) {
+        throw std::invalid_argument(
+            "Acceptor IOCP accept depth must be in [1, 64]");
+    }
+    if (listening_) {
+        throw std::logic_error(
+            "Acceptor IOCP accept depth must be configured before listen");
+    }
+    iocpAcceptDepth_ = depth;
+}
+
+std::size_t Acceptor::iocpAcceptDepth() const noexcept {
+    return iocpAcceptDepth_;
+}
+
 bool Acceptor::listening() const noexcept {
     return listening_;
 }
@@ -119,7 +279,7 @@ void Acceptor::listen() {
     acceptSocket_.listen();
 #ifdef _WIN32
     if (!iocpAccept_) {
-        iocpAccept_ = std::make_shared<IocpAcceptState>();
+        iocpAccept_ = std::make_shared<IocpAcceptState>(iocpAcceptDepth_);
         iocpAccept_->acceptEx = platform::loadAcceptEx(acceptSocket_.fd());
         if (iocpAccept_->acceptEx == nullptr) {
             throwSocketError("load AcceptEx", sockets::lastError());
@@ -128,13 +288,16 @@ void Acceptor::listen() {
         if (iocpAccept_->getAcceptExSockaddrs == nullptr) {
             throwSocketError("load GetAcceptExSockaddrs", sockets::lastError());
         }
+        for (auto& slot : iocpAccept_->slots) {
+            slot.operation.channel = &acceptChannel_;
+        }
     }
-    iocpAccept_->operation.channel = &acceptChannel_;
+    iocpAccept_->phase = IocpAcceptState::Phase::Accepting;
 #endif
     listening_ = true;
     acceptChannel_.enableReading();
 #ifdef _WIN32
-    postAccept();
+    fillAcceptPool();
 #endif
 }
 
@@ -166,46 +329,116 @@ void Acceptor::handleRead(gamenet::base::Timestamp receiveTime) {
     loop_->assertInLoopThread();
 
 #ifdef _WIN32
-    if (!iocpAccept_ || !iocpAccept_->pending) {
-        return;
-    }
-    iocpAccept_->pending = false;
-    if (iocpAccept_->operation.error != 0) {
-        const int error = static_cast<int>(iocpAccept_->operation.error);
-        sockets::close(iocpAccept_->accepted);
-        iocpAccept_->accepted = kInvalidSocket;
-        handleAcceptError(AcceptorErrorStage::Accept, error);
+    const auto state = iocpAccept_;
+    if (!state) {
         return;
     }
 
-    if (!platform::updateAcceptContext(iocpAccept_->accepted, acceptSocket_.fd())) {
-        const int error = sockets::lastError();
-        sockets::close(iocpAccept_->accepted);
-        iocpAccept_->accepted = kInvalidSocket;
-        handleAcceptError(AcceptorErrorStage::AcceptedSocketSetup, error);
-        return;
-    }
-    sockaddr_storage peerStorage{};
-    if (!sockets::tryGetPeerAddr(iocpAccept_->accepted, &peerStorage)) {
-        const int error = sockets::lastError();
-        sockets::close(iocpAccept_->accepted);
-        iocpAccept_->accepted = kInvalidSocket;
-        handleAcceptError(AcceptorErrorStage::AcceptedSocketSetup, error);
-        return;
-    }
-    InetAddress peerAddr(peerStorage);
-    const SocketFd connfd = iocpAccept_->accepted;
-    iocpAccept_->accepted = kInvalidSocket;
+    while (IocpOperation* completedOperation =
+               acceptChannel_.takeIocpAcceptCompletionOperation()) {
+        const auto completedSlot = std::find_if(
+            state->slots.begin(),
+            state->slots.end(),
+            [completedOperation](const IocpAcceptSlot& slot) {
+                return &slot.operation == completedOperation;
+            });
+        if (completedSlot == state->slots.end()) {
+            LOG_ERROR << "Acceptor received an unknown AcceptEx completion";
+            continue;
+        }
+        if (!completedSlot->pending) {
+            continue;
+        }
 
-    if (newConnectionCallback_) {
-        newConnectionCallback_(connfd, peerAddr);
-    } else {
-        sockets::close(connfd);
+        IocpAcceptSlot& slot = *completedSlot;
+        slot.pending = false;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        observeAcceptCompleted();
+#endif
+
+        const bool wasCancelling = slot.cancelling;
+        slot.cancelling = false;
+        if (wasCancelling ||
+            state->phase == IocpAcceptState::Phase::Retrying) {
+            if (sockets::isValid(slot.accepted)) {
+                sockets::close(slot.accepted);
+                slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptedSocketReleased();
+#endif
+            }
+            maybeResumeAccept();
+            continue;
+        }
+
+        if (state->phase != IocpAcceptState::Phase::Accepting ||
+            !listening_) {
+            if (sockets::isValid(slot.accepted)) {
+                sockets::close(slot.accepted);
+                slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptedSocketReleased();
+#endif
+            }
+            continue;
+        }
+
+        if (slot.operation.error != 0) {
+            const int error = static_cast<int>(slot.operation.error);
+            if (sockets::isValid(slot.accepted)) {
+                sockets::close(slot.accepted);
+                slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptedSocketReleased();
+#endif
+            }
+            handleAcceptError(AcceptorErrorStage::Accept, error);
+            continue;
+        }
+
+        if (!platform::updateAcceptContext(slot.accepted, acceptSocket_.fd())) {
+            const int error = sockets::lastError();
+            sockets::close(slot.accepted);
+            slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            observeAcceptedSocketReleased();
+#endif
+            handleAcceptError(AcceptorErrorStage::AcceptedSocketSetup, error);
+            continue;
+        }
+        sockaddr_storage peerStorage{};
+        if (!sockets::tryGetPeerAddr(slot.accepted, &peerStorage)) {
+            const int error = sockets::lastError();
+            sockets::close(slot.accepted);
+            slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            observeAcceptedSocketReleased();
+#endif
+            handleAcceptError(AcceptorErrorStage::AcceptedSocketSetup, error);
+            continue;
+        }
+        InetAddress peerAddr(peerStorage);
+        const SocketFd connfd = slot.accepted;
+        slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        observeAcceptedSocketReleased();
+#endif
+
+        // Replenish the completed slot before entering the upper callback. The
+        // old completion has already been published and its socket moved out,
+        // so callback stop() re-entry can only cancel the new generation.
+        if (listening_ &&
+            state->phase == IocpAcceptState::Phase::Accepting) {
+            (void)postAccept(slot);
+        }
+
+        if (newConnectionCallback_) {
+            newConnectionCallback_(connfd, peerAddr);
+        } else {
+            sockets::close(connfd);
+        }
     }
 
-    if (listening_) {
-        postAccept();
-    }
     return;
 #else
     while (true) {
@@ -255,7 +488,11 @@ void Acceptor::handleAcceptError(AcceptorErrorStage stage, int error) {
         stop();
         return;
     }
+#ifdef _WIN32
+    beginAcceptRetry();
+#else
     scheduleAcceptRetry();
+#endif
 }
 
 void Acceptor::scheduleAcceptRetry() {
@@ -279,73 +516,293 @@ void Acceptor::resumeAccept() {
         acceptChannel_.enableReading();
     }
 #ifdef _WIN32
-    postAccept();
+    if (!iocpAccept_) {
+        return;
+    }
+    iocpAccept_->retryDelayElapsed = true;
+    maybeResumeAccept();
 #endif
 }
 
 #ifdef _WIN32
 
-void Acceptor::postAccept() {
+void Acceptor::fillAcceptPool() {
     loop_->assertInLoopThread();
-    if (!listening_ || !iocpAccept_ || iocpAccept_->pending) {
+    const auto state = iocpAccept_;
+    if (!listening_ || !state ||
+        state->phase != IocpAcceptState::Phase::Accepting) {
         return;
     }
 
-    iocpAccept_->accepted = platform::createOverlappedTcp(listenAddr_.family());
-    if (!sockets::isValid(iocpAccept_->accepted)) {
-        handleAcceptError(AcceptorErrorStage::AcceptedSocketCreate, sockets::lastError());
-        return;
+    for (auto& slot : state->slots) {
+        if (slot.pending) {
+            continue;
+        }
+        if (!postAccept(slot) ||
+            iocpAccept_ != state ||
+            state->phase != IocpAcceptState::Phase::Accepting) {
+            break;
+        }
     }
-    iocpAccept_->operation.overlapped = OVERLAPPED{};
-    iocpAccept_->operation.kind = IocpOperationKind::Accept;
-    iocpAccept_->operation.channel = &acceptChannel_;
-    iocpAccept_->operation.bytesTransferred = 0;
-    iocpAccept_->operation.error = 0;
+}
+
+bool Acceptor::postAccept(IocpAcceptSlot& slot) {
+    loop_->assertInLoopThread();
+    const auto state = iocpAccept_;
+    if (!listening_ || !state ||
+        state->phase != IocpAcceptState::Phase::Accepting ||
+        slot.pending) {
+        return false;
+    }
+
+    if (sockets::isValid(slot.accepted)) {
+        sockets::close(slot.accepted);
+        slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        observeAcceptedSocketReleased();
+#endif
+    }
+    slot.accepted = platform::createOverlappedTcp(listenAddr_.family());
+    if (!sockets::isValid(slot.accepted)) {
+        handleAcceptError(
+            AcceptorErrorStage::AcceptedSocketCreate,
+            sockets::lastError());
+        return false;
+    }
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    observeAcceptedSocketCreated();
+#endif
+
+    ++slot.generation;
+    if (slot.generation == 0) {
+        ++slot.generation;
+    }
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    {
+        std::uint64_t observed =
+            maxIocpAcceptGeneration.load(std::memory_order_relaxed);
+        while (observed < slot.generation &&
+               !maxIocpAcceptGeneration.compare_exchange_weak(
+                   observed,
+                   slot.generation,
+                   std::memory_order_relaxed,
+                   std::memory_order_relaxed)) {
+        }
+    }
+#endif
+    slot.operation.overlapped = OVERLAPPED{};
+    slot.operation.kind = IocpOperationKind::Accept;
+    slot.operation.channel = &acceptChannel_;
+    slot.operation.bytesTransferred = 0;
+    slot.operation.error = 0;
+    slot.operation.completionObserved = false;
+    slot.operation.nextPublishedCompletion = nullptr;
+    slot.cancelling = false;
 
     DWORD bytes = 0;
-    iocpAccept_->pending = true;
-    const BOOL ok = iocpAccept_->acceptEx(
-        acceptSocket_.fd(),
-        iocpAccept_->accepted,
-        iocpAccept_->addresses.data(),
-        0,
-        kAcceptAddressBytes,
-        kAcceptAddressBytes,
-        &bytes,
-        &iocpAccept_->operation.overlapped);
-    const int acceptError = ok ? 0 : sockets::lastError();
+    BOOL ok = FALSE;
+    int acceptError = 0;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    const bool injectedFailure = takeInjectedAcceptError(&acceptError);
+#else
+    constexpr bool injectedFailure = false;
+#endif
+    if (!injectedFailure) {
+        ok = state->acceptEx(
+            acceptSocket_.fd(),
+            slot.accepted,
+            slot.addresses.data(),
+            0,
+            kAcceptAddressBytes,
+            kAcceptAddressBytes,
+            &bytes,
+            &slot.operation.overlapped);
+        acceptError = ok ? 0 : sockets::lastError();
+    }
     if (!ok && acceptError != ERROR_IO_PENDING) {
-        iocpAccept_->pending = false;
-        sockets::close(iocpAccept_->accepted);
-        iocpAccept_->accepted = kInvalidSocket;
+        sockets::close(slot.accepted);
+        slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        observeAcceptedSocketReleased();
+#endif
         handleAcceptError(AcceptorErrorStage::Accept, acceptError);
+        return false;
+    }
+
+    slot.pending = true;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    observeAcceptSubmitted();
+#endif
+    loop_->retainCompletionOperation(&slot.operation, state);
+    return true;
+}
+
+void Acceptor::beginAcceptRetry() {
+    loop_->assertInLoopThread();
+    if (!listening_ || !iocpAccept_ ||
+        iocpAccept_->phase == IocpAcceptState::Phase::Retrying) {
         return;
     }
-    loop_->retainCompletionOperation(&iocpAccept_->operation, iocpAccept_);
+
+    iocpAccept_->phase = IocpAcceptState::Phase::Retrying;
+    iocpAccept_->retryDelayElapsed = false;
+    cancelPendingAccepts(false);
+    acceptChannel_.clearIocpAcceptCompletionOperations();
+    if (!retryTimer_.valid()) {
+        retryTimer_ = loop_->runAfter(
+            std::chrono::milliseconds(100),
+            [this] { resumeAccept(); });
+    }
+}
+
+void Acceptor::maybeResumeAccept() {
+    loop_->assertInLoopThread();
+    const auto state = iocpAccept_;
+    if (!listening_ || !state ||
+        state->phase != IocpAcceptState::Phase::Retrying ||
+        !state->retryDelayElapsed) {
+        return;
+    }
+    if (std::any_of(
+            state->slots.begin(),
+            state->slots.end(),
+            [](const IocpAcceptSlot& slot) { return slot.pending; })) {
+        return;
+    }
+
+    state->phase = IocpAcceptState::Phase::Accepting;
+    state->retryDelayElapsed = false;
+    fillAcceptPool();
+}
+
+void Acceptor::cancelPendingAccepts(bool shutdown) noexcept {
+    const auto state = iocpAccept_;
+    if (!state) {
+        return;
+    }
+
+    for (auto& slot : state->slots) {
+        if (shutdown) {
+            slot.operation.channel = nullptr;
+        }
+        if (!slot.pending) {
+            if (shutdown && sockets::isValid(slot.accepted)) {
+                sockets::close(slot.accepted);
+                slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptedSocketReleased();
+#endif
+            }
+            continue;
+        }
+
+        // The completion can already have been published into the current
+        // EventLoop active batch before another callback stops the listener.
+        // That packet and its leases are already consumed, so tracking it now
+        // would create a phantom final-drain obligation.
+        if (slot.operation.completionObserved) {
+            slot.pending = false;
+            slot.cancelling = false;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            observeAcceptCompleted();
+#endif
+            if (sockets::isValid(slot.accepted)) {
+                sockets::close(slot.accepted);
+                slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                observeAcceptedSocketReleased();
+#endif
+            }
+        } else if (!slot.cancelling) {
+            slot.cancelling = true;
+            loop_->trackCompletionOperation(&slot.operation);
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            iocpAcceptCancellationCount.fetch_add(
+                1,
+                std::memory_order_relaxed);
+#endif
+            if (sockets::isValid(acceptSocket_.fd())) {
+                (void)::CancelIoEx(
+                    reinterpret_cast<HANDLE>(acceptSocket_.fd()),
+                    &slot.operation.overlapped);
+            }
+        }
+
+        if (shutdown && sockets::isValid(slot.accepted)) {
+            sockets::close(slot.accepted);
+            slot.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            observeAcceptedSocketReleased();
+#endif
+        }
+    }
 }
 
 void Acceptor::closePendingAccept() noexcept {
     if (!iocpAccept_) {
         return;
     }
-    if (iocpAccept_->pending) {
-        // postAccept() retained storage only after a real kernel submission.
-        // Mark the separate shutdown obligation before cancellation/handle
-        // close so immediate EventLoop quit cannot pass the backend quiet point.
-        loop_->trackCompletionOperation(&iocpAccept_->operation);
-        if (sockets::isValid(acceptSocket_.fd())) {
-            (void)::CancelIoEx(
-                reinterpret_cast<HANDLE>(acceptSocket_.fd()),
-                &iocpAccept_->operation.overlapped);
-        }
-    }
-    iocpAccept_->pending = false;
-    iocpAccept_->operation.channel = nullptr;
-    if (sockets::isValid(iocpAccept_->accepted)) {
-        sockets::close(iocpAccept_->accepted);
-        iocpAccept_->accepted = kInvalidSocket;
-    }
+    (void)acceptChannel_.takeIocpCompletionOperation();
+    acceptChannel_.clearIocpAcceptCompletionOperations();
+    iocpAccept_->phase = IocpAcceptState::Phase::Stopped;
+    cancelPendingAccepts(true);
+    iocpAccept_.reset();
 }
+
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+namespace detail {
+
+void resetIocpAcceptPoolObservationsForTesting() noexcept {
+    currentIocpAcceptSlots.store(0, std::memory_order_release);
+    peakIocpAcceptSlots.store(0, std::memory_order_release);
+    currentIocpAcceptSockets.store(0, std::memory_order_release);
+    peakIocpAcceptSockets.store(0, std::memory_order_release);
+    currentIocpAcceptSubmissions.store(0, std::memory_order_release);
+    peakIocpAcceptSubmissions.store(0, std::memory_order_release);
+    iocpAcceptSubmissionCount.store(0, std::memory_order_release);
+    iocpAcceptCompletionCount.store(0, std::memory_order_release);
+    iocpAcceptCancellationCount.store(0, std::memory_order_release);
+    maxIocpAcceptGeneration.store(0, std::memory_order_release);
+    iocpAcceptPostsBeforeInjectedFailure.store(-1, std::memory_order_release);
+    iocpInjectedAcceptError.store(WSAENOBUFS, std::memory_order_release);
+}
+
+IocpAcceptPoolObservations iocpAcceptPoolObservationsForTesting() noexcept {
+    return IocpAcceptPoolObservations{
+        .currentSlots =
+            currentIocpAcceptSlots.load(std::memory_order_acquire),
+        .peakSlots =
+            peakIocpAcceptSlots.load(std::memory_order_acquire),
+        .currentSlotSockets =
+            currentIocpAcceptSockets.load(std::memory_order_acquire),
+        .peakSlotSockets =
+            peakIocpAcceptSockets.load(std::memory_order_acquire),
+        .currentSubmitted =
+            currentIocpAcceptSubmissions.load(std::memory_order_acquire),
+        .peakSubmitted =
+            peakIocpAcceptSubmissions.load(std::memory_order_acquire),
+        .submissions =
+            iocpAcceptSubmissionCount.load(std::memory_order_acquire),
+        .completions =
+            iocpAcceptCompletionCount.load(std::memory_order_acquire),
+        .cancellationRequests =
+            iocpAcceptCancellationCount.load(std::memory_order_acquire),
+        .maxGeneration =
+            maxIocpAcceptGeneration.load(std::memory_order_acquire),
+    };
+}
+
+void injectIocpAcceptSubmissionErrorForTesting(
+    std::size_t successfulSubmissionsBeforeFailure,
+    int error) noexcept {
+    iocpInjectedAcceptError.store(error, std::memory_order_release);
+    iocpAcceptPostsBeforeInjectedFailure.store(
+        static_cast<std::int64_t>(successfulSubmissionsBeforeFailure),
+        std::memory_order_release);
+}
+
+}  // namespace detail
+#endif
 
 #endif
 

@@ -9,12 +9,41 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <system_error>
 #include <thread>
 
 using namespace std::chrono_literals;
 
 int main() {
+    {
+        gamenet::net::EventLoop loop;
+        gamenet::net::Acceptor acceptor(
+            &loop,
+            gamenet::net::InetAddress(0, true),
+            true);
+        GAMENET_TEST_ASSERT(acceptor.iocpAcceptDepth() == 4);
+
+        acceptor.setIocpAcceptDepth(8);
+        GAMENET_TEST_ASSERT(acceptor.iocpAcceptDepth() == 8);
+
+        bool rejectedZero = false;
+        try {
+            acceptor.setIocpAcceptDepth(0);
+        } catch (const std::invalid_argument&) {
+            rejectedZero = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedZero);
+
+        bool rejectedUnbounded = false;
+        try {
+            acceptor.setIocpAcceptDepth(65);
+        } catch (const std::invalid_argument&) {
+            rejectedUnbounded = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedUnbounded);
+    }
+
     {
         gamenet::net::EventLoop loop;
         bool rejectedUnavailableBindAddress = false;
@@ -60,6 +89,13 @@ int main() {
         GAMENET_TEST_ASSERT(!acceptor.listening());
         acceptor.listen();
         GAMENET_TEST_ASSERT(acceptor.listening());
+        bool rejectedLiveReconfiguration = false;
+        try {
+            acceptor.setIocpAcceptDepth(2);
+        } catch (const std::logic_error&) {
+            rejectedLiveReconfiguration = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedLiveReconfiguration);
 
         const gamenet::net::InetAddress listenAddr = acceptor.listenAddress();
         std::thread clients([listenAddr] {

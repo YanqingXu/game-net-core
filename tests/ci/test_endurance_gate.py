@@ -205,8 +205,8 @@ def main() -> None:
     for fragment in (
         "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
         "timeout-minutes: 4620",
-        "--expected-total 114",
-        "--expect-label threading=87",
+        "--expected-total 115",
+        "--expect-label threading=88",
         "--expect-label fault_injection=1",
         "--expect-label endurance=1",
         "tools/run_endurance_gate.py",

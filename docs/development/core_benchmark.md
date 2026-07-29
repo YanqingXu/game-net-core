@@ -52,6 +52,15 @@ $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benc
 & $exe --scenario connections --connections 256 --threads 1 `
   --settle-ms 1000 --timeout-ms 30000
 
+& $exe --scenario connections --connections 4096 `
+  --connect-concurrency 64 --iocp-accept-depth 4 --threads 1 `
+  --settle-ms 0 --timeout-ms 30000
+
+& $exe --scenario connections --connections 128 `
+  --connect-concurrency 64 --iocp-accept-depth 4 `
+  --preload-before-loop 1 --threads 1 `
+  --settle-ms 0 --timeout-ms 30000
+
 & $exe --scenario connections --connections 10000 --threads 1 `
   --settle-ms 2000 --timeout-ms 120000
 
@@ -70,6 +79,20 @@ They do not alter the poller. Current Windows candidates report
 `single_get_queued_completion_status`; the distinct value prevents batched
 candidate results from being confused with that baseline.
 
+The 4,096-connection command is the M3-G5 accept-burst profile. It starts 64
+client connect workers together, explicitly records the fixed AcceptEx depth,
+and uses zero settle delay, so
+`elapsed_seconds` measures connection creation through convergence of all
+server connection callbacks plus the immediate working-set sample. Compare
+alternating same-runner Release medians only; the sequential default remains
+one connect worker so existing canonical scenarios do not silently change.
+After the sample, connection-scenario clients use abortive close to keep
+client-side `TIME_WAIT` accumulation from contaminating repeated burst runs.
+The 128-connection preload variant is the lower-noise accept-drain profile: all
+client handshakes finish before the base EventLoop starts, and
+`elapsed_seconds` begins immediately before loop dispatch. This isolates
+queued AcceptEx completion/backlog drain from concurrent SYN creation jitter.
+
 ## Scenarios and Measurements
 
 - `echo` creates all clients before timing. Each client performs sequential
@@ -79,7 +102,12 @@ candidate results from being confused with that baseline.
 - `connections` samples process working set before client creation and after
   all accepted idle connections have settled. `approx_bytes_per_connection`
   is the process working-set delta divided by configured connections, not an
-  allocator-level object-size claim.
+  allocator-level object-size claim. `--connect-concurrency` optionally creates
+  clients from a bounded simultaneous worker set for an explicit accept-burst
+  profile; it defaults to one. `--iocp-accept-depth` applies the public bounded
+  TcpServer option and defaults to four. Connections-only
+  `--preload-before-loop 1` waits for all client sockets before starting the
+  base loop and measures only the subsequent callback drain.
 - `slow-client` gives clients a small receive buffer, holds reads through the
   working-set sample, and calls `trySend()` from each connection owner loop.
   It then drains accepted output to observe write completion and read-throttle

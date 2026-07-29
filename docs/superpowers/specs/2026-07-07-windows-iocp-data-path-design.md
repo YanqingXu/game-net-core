@@ -111,17 +111,34 @@ struct IocpOperation {
 
 The actual implementation may wrap this record in small Acceptor, Connector,
 and TcpConnection helper classes, but each operation must have stable storage
-until the kernel completes it or cancellation/close ordering makes completion
-safe to ignore.
+until its real terminal completion is consumed. For a registered Channel the
+Poller also publishes the exact operation identity with the active entry.
+Independent Accept operations for one listen Channel are the bounded exception
+to ordinary same-Channel deferral: operation-embedded links form an
+allocation-free queue consumed by one Acceptor callback. Read/write/connect
+entries retain later-round deferral.
 
 ### Acceptor
 
-On Windows, Acceptor posts one or more `AcceptEx` operations after the listen
-socket is associated with IOCP. Completion is translated into a read event for
-the listen Channel. `Acceptor::handleRead()` consumes completed accepts from the
-Windows helper and invokes the existing new-connection callback on the owner
-loop. After a completed accepted socket is delivered or closed, the helper
-posts the next accept while the Acceptor is still listening.
+On Windows, Acceptor owns a fixed pool of independent `AcceptEx` slots after the
+listen socket is associated with IOCP. The public pre-post depth is configured
+before listen/start, defaults to four, and is bounded to `[1, 64]`. Each slot
+owns its accepted socket, `OVERLAPPED`, address buffer, and submission
+generation. Completion is translated into a read event plus a bounded queue of
+exact operation identities for the listen Channel, so
+`Acceptor::handleRead()` drains only slots actually published in that batch.
+After a completed accepted socket leaves its slot, that slot is
+replenished before the existing new-connection callback runs; callback
+`stop()` re-entry therefore cancels the new generation instead of reusing
+storage that is still completing.
+
+One slot error applies policy to the complete accept generation. Stop cancels
+all submitted slots, registers one shutdown obligation per real submission,
+revokes their Channel observers, and lets EventLoop final drain release the
+retained pool. Retry cancels all other submitted slots, consumes their
+completion callbacks, waits for the retry delay, and only then replenishes the
+same fixed-capacity pool. A synchronous non-pending submission failure retains
+no operation and creates no phantom completion.
 
 ### Connector
 
@@ -156,11 +173,16 @@ for this completion.
 
 1. `Acceptor::listen()` starts listening and enables reading on the listen
    Channel.
-2. The Windows helper posts `AcceptEx` with stable operation storage.
-3. `IocpPoller::poll()` receives the completion, stores metadata on the
-   operation, marks the listen Channel readable, and returns it active.
-4. `Acceptor::handleRead()` completes accept bookkeeping, delivers the accepted
-   socket through the existing callback, and posts the next accept if listening.
+2. The Windows helper creates the configured fixed number of slots and posts
+   one `AcceptEx` per slot with stable independent storage.
+3. `IocpPoller::poll()` receives completions, stores metadata on each
+   operation, appends every Accept identity for the listen Channel through the
+   operation-embedded link, marks the Channel readable once, and returns it
+   active. This coalescing is capped by the fixed 64-entry Poller batch.
+4. `Acceptor::handleRead()` drains the identified slot queue, moves each
+   accepted socket out, advances and replenishes that exact slot, then delivers
+   the socket through the existing callback while the listener remains in the
+   normal accept generation.
 
 ### Connect
 

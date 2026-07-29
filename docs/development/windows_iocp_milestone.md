@@ -65,6 +65,7 @@ not performance thresholds.
   logging remains synchronous, thread-safe, and independent of EventLoop
   ownership while preserving the configured Windows CTest gate.
 - `contract.acceptor.test_acceptor_contract`,
+  `contract.acceptor.test_acceptor_iocp_pool`,
   `contract.tcp_server.test_tcp_server_contract`, and
   `contract.tcp_server.test_tcp_server_stop_active_connections`,
   `contract.tcp_server.test_tcp_server_stop_active_write`,
@@ -73,7 +74,10 @@ not performance thresholds.
   `contract.tcp_server.test_tcp_server_stop_from_worker_callback_soak`,
   `contract.tcp_server.test_tcp_server_repeated_stop`,
   `contract.tcp_server.test_tcp_server_stop_soak`: the Acceptor and server
-  stop paths are backed by `AcceptEx` and owner-loop connection teardown;
+  stop paths are backed by a configurable, fixed-depth `AcceptEx` pre-post
+  pool and owner-loop connection teardown; exact per-slot completion identity,
+  generation-wide Retry cancellation, callback stop re-entry, and final zero
+  slot/socket/completion accounting are direct contracts;
   worker-loop teardown, including active writes, worker-callback stop()
   reentry, and repeated stop() requests while worker-owned connections are
   active, is allowed to finish before the worker pool is joined.

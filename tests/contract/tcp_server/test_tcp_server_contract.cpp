@@ -95,6 +95,7 @@ int main() {
     {
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "server-contract");
+    server.setIocpAcceptDepth(6);
     server.setConnectionBackpressureOptions(gamenet::net::TcpConnectionBackpressureOptions{
         .lowWaterMarkBytes = 128,
         .highWaterMarkBytes = 256,
@@ -126,6 +127,13 @@ int main() {
     });
 
     server.start();
+    bool rejectedStartedAcceptDepthChange = false;
+    try {
+        server.setIocpAcceptDepth(4);
+    } catch (const std::logic_error&) {
+        rejectedStartedAcceptDepthChange = true;
+    }
+    GAMENET_TEST_ASSERT(rejectedStartedAcceptDepthChange);
     gamenet::net::SocketFd clientFd = gamenet::test::connectTestClient(server.listenAddress());
 
     gamenet::test::runLoopWithTimeout(

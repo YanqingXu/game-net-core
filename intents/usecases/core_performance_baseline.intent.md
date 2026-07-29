@@ -22,10 +22,14 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - exercise the public TcpServer/TcpConnection path over loopback TCP
 - measure echo round-trip latency and application-byte throughput
 - measure process working-set growth while holding idle connections
+- optionally create connections through a bounded simultaneous client-worker
+  set so accept-burst elapsed time is measured without changing sequential
+  canonical defaults
 - observe working-set growth, bounded output admission, high/low-water read
   throttling, and recovery for slow-reading clients
 - report connection count, EventLoop worker count, backend, completion mode,
-  build type, parameters, and measurements as one versioned JSON document
+  build type, IOCP accept depth, parameters, and measurements as one versioned
+  JSON document
 - provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
   and 4/16-slow-client Release matrix three times for both baseline and candidate
 - return a non-zero exit code when setup, I/O, timeout, or schema production fails
@@ -53,8 +57,19 @@ applies reviewed same-runner relative regression budgets outside the executable.
 
 ### `connections`
 - sample process working set after server startup and before client creation
+- default to one client connect worker; an explicit bounded
+  `--connect-concurrency` value starts that many workers together and must not
+  exceed the requested connection count
+- report and apply a bounded `--iocp-accept-depth` through the public
+  TcpServer configuration point; it defaults to four
+- an explicit connections-only preload mode creates every client before the
+  base EventLoop starts, then measures from loop start through all connection
+  callbacks so queued accept-drain work is isolated from SYN creation jitter
 - hold the requested accepted connections through a configurable settle interval
-- report before/after/delta working set and approximate delta per connection
+- report connection-callback convergence elapsed time plus before/after/delta
+  working set and approximate delta per connection
+- close connection-scenario client sockets abortively after measurement so
+  repeated local burst samples do not accumulate client-side `TIME_WAIT`
 
 ### `slow-client`
 - clients connect with a deliberately small receive buffer and do not read
@@ -76,7 +91,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - stdout contains exactly one JSON document with schema
   `gamenet.core_benchmark.v2`; diagnostics use stderr
 - every scenario reports `platform`, `backend`, `completion_mode`, and `build_type`
-- every scenario reports configured `connections` and `event_loop_threads`
+- every scenario reports configured `connections`, `connect_concurrency`,
+  `iocp_accept_depth`, `preload_before_loop`, and `event_loop_threads`
 - measurement keys remain present across scenarios; values that do not apply are `null`
 - the regression runner may ingest the frozen `v1` baseline schema and current
   `v2` candidate schema, but candidate artifacts and semantic validation require
@@ -92,7 +108,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 ## 6. Threading Rules
 - the process main thread owns and destroys EventLoop and TcpServer
 - TcpServer callbacks execute only on their assigned connection owner loops
-- each blocking benchmark client socket is owned by exactly one driver thread
+- each blocking benchmark client socket is owned by exactly one driver thread;
+  parallel connection creation uses one distinct pre-sized socket slot per
+  worker index
 - benchmark coordination uses atomics, a condition variable, and isolated result storage
 - no benchmark worker directly mutates loop-owned server or connection state
 - server stop and final connection-map inspection execute on the base EventLoop thread

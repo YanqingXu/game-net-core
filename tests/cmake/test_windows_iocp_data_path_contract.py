@@ -53,6 +53,13 @@ def main() -> None:
         / "tcp_connection"
         / "test_tcp_connection_iocp_read_storage.cpp"
     )
+    acceptor_pool_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "acceptor"
+        / "test_acceptor_iocp_pool.cpp"
+    )
     poller_contract_test = (
         repo_root
         / "tests"
@@ -92,6 +99,8 @@ def main() -> None:
     require(operation_text, "bytesTransferred", operation)
     require(operation_text, "Channel* channel", operation)
     require(operation_text, "shutdownObligation", operation)
+    require(operation_text, "completionObserved", operation)
+    require(operation_text, "nextPublishedCompletion", operation)
 
     socket_ops_text = socket_ops.read_text(encoding="utf-8")
     require(socket_ops_text, "loadAcceptEx", socket_ops)
@@ -112,6 +121,9 @@ def main() -> None:
     acceptor_header_text = acceptor_header.read_text(encoding="utf-8")
     require(acceptor_header_text, "IocpAcceptState", acceptor_header)
     require(acceptor_header_text, "postAccept", acceptor_header)
+    require(acceptor_header_text, "setIocpAcceptDepth", acceptor_header)
+    require(acceptor_header_text, "IocpAcceptSlot", acceptor_header)
+    require(acceptor_header_text, "fillAcceptPool", acceptor_header)
 
     acceptor_source_text = acceptor_source.read_text(encoding="utf-8")
     require(acceptor_source_text, "platform::loadAcceptEx", acceptor_source)
@@ -123,6 +135,10 @@ def main() -> None:
     require(acceptor_source_text, "retainCompletionOperation", acceptor_source)
     require(acceptor_source_text, "trackCompletionOperation", acceptor_source)
     require(acceptor_source_text, "CancelIoEx", acceptor_source)
+    require(acceptor_source_text, "std::vector<IocpAcceptSlot>", acceptor_source)
+    require(acceptor_source_text, "slot.generation", acceptor_source)
+    require(acceptor_source_text, "beginAcceptRetry", acceptor_source)
+    require(acceptor_source_text, "cancelPendingAccepts(false)", acceptor_source)
 
     connector_header_text = connector_header.read_text(encoding="utf-8")
     require(connector_header_text, "IocpConnectState", connector_header)
@@ -142,6 +158,11 @@ def main() -> None:
     require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
 
     accept_connect_drain_text = accept_connect_drain_test.read_text(encoding="utf-8")
+    require(
+        accept_connect_drain_text,
+        "constexpr std::size_t kAcceptDepth = 7",
+        accept_connect_drain_test,
+    )
     require(
         accept_connect_drain_text,
         "outstandingCompletionCount(loop) == 1",
@@ -302,6 +323,13 @@ def main() -> None:
     require(poller_text, "deferredEntries_", poller_source)
     require(poller_text, "reinterpret_cast<IocpOperation*>", poller_source)
     require(poller_text, "operation->bytesTransferred", poller_source)
+    require(poller_text, "operation->completionObserved = true", poller_source)
+    require(poller_text, "setIocpCompletionOperation(operation)", poller_source)
+    require(
+        poller_text,
+        "appendIocpAcceptCompletionOperation(operation)",
+        poller_source,
+    )
     require(poller_text, "IocpOperationKind::Read", poller_source)
     require(poller_text, "IocpOperationKind::Write", poller_source)
     require(poller_text, "associatedFds_", poller_source)
@@ -347,6 +375,33 @@ def main() -> None:
         tests_cmake_text,
         "test_tcp_connection_iocp_read_storage.cpp threading lifecycle",
         tests_cmake,
+    )
+    require(
+        tests_cmake_text,
+        "test_acceptor_iocp_pool.cpp threading lifecycle",
+        tests_cmake,
+    )
+
+    acceptor_pool_test_text = acceptor_pool_test.read_text(encoding="utf-8")
+    require(
+        acceptor_pool_test_text,
+        "testFixedPoolBurstAndStopReentry",
+        acceptor_pool_test,
+    )
+    require(
+        acceptor_pool_test_text,
+        "testSynchronousFailureCancelsGenerationBeforeRetry",
+        acceptor_pool_test,
+    )
+    require(
+        acceptor_pool_test_text,
+        "currentSubmitted == kDepth",
+        acceptor_pool_test,
+    )
+    require(
+        acceptor_pool_test_text,
+        "submissions == observations.completions",
+        acceptor_pool_test,
     )
 
     guard_command = "python3 tests/cmake/test_windows_iocp_data_path_contract.py"

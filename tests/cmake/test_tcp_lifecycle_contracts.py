@@ -137,6 +137,13 @@ def main() -> None:
     acceptor_contract_test = (
         repo_root / "tests" / "contract" / "acceptor" / "test_acceptor_contract.cpp"
     )
+    acceptor_iocp_pool_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "acceptor"
+        / "test_acceptor_iocp_pool.cpp"
+    )
     socket_contract_test = (
         repo_root / "tests" / "contract" / "socket" / "test_socket_contract.cpp"
     )
@@ -1800,13 +1807,26 @@ def main() -> None:
     acceptor_source_text = acceptor_source.read_text(encoding="utf-8")
     require(acceptor_header_text, "enum class AcceptorErrorAction", acceptor_header)
     require(acceptor_header_text, "void setErrorCallback", acceptor_header)
+    require(acceptor_header_text, "void setIocpAcceptDepth", acceptor_header)
     require(acceptor_source_text, "scheduleAcceptRetry", acceptor_source)
+    require(acceptor_source_text, "beginAcceptRetry", acceptor_source)
     assert "createNonblockingOrDie" not in acceptor_source_text
 
     acceptor_contract_text = acceptor_contract_test.read_text(encoding="utf-8")
     socket_contract_text = socket_contract_test.read_text(encoding="utf-8")
     require(acceptor_contract_text, "rejectedUnavailableBindAddress", acceptor_contract_test)
     require(acceptor_contract_text, "AcceptorErrorAction::Stop", acceptor_contract_test)
+    acceptor_iocp_pool_text = acceptor_iocp_pool_test.read_text(encoding="utf-8")
+    require(
+        acceptor_iocp_pool_text,
+        "testFixedPoolBurstAndStopReentry",
+        acceptor_iocp_pool_test,
+    )
+    require(
+        acceptor_iocp_pool_text,
+        "testSynchronousFailureCancelsGenerationBeforeRetry",
+        acceptor_iocp_pool_test,
+    )
     require(socket_contract_text, "sockets::createNonblocking(unsupportedFamily)", socket_contract_test)
     require(socket_contract_text, "invalid.tryBindAddress", socket_contract_test)
     require(socket_contract_text, "invalid.tryListen", socket_contract_test)
@@ -2010,6 +2030,11 @@ def main() -> None:
     require(
         tests_cmake_text,
         "test_iocp_accept_connect_quit_completion_drain.cpp threading lifecycle",
+        tests_cmake,
+    )
+    require(
+        tests_cmake_text,
+        "test_acceptor_iocp_pool.cpp threading lifecycle",
         tests_cmake,
     )
     require(tests_cmake_text, "contract tcp_server", tests_cmake)

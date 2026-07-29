@@ -115,6 +115,7 @@ public:
     void setCloseInfoCallback(CloseInfoCallback cb);
     void setConnectionBackpressureOptions(TcpConnectionBackpressureOptions options);
     void setAcceptErrorCallback(AcceptorErrorCallback cb);
+    void setIocpAcceptDepth(std::size_t depth);
     void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
     void setAdmissionOptions(TcpServerAdmissionOptions options);
     void setAdmissionMetricCallback(TcpServerAdmissionMetricCallback cb);

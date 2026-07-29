@@ -18,6 +18,8 @@ hands them upward through a narrow callback boundary.
 - own listen socket wrapper
 - own listen Channel registration
 - accept as many ready connections as possible per readable event
+- on Windows, keep a fixed, configurable number of `AcceptEx` operations
+  pre-posted so a connection burst does not serialize on one accept slot
 - deliver accepted fds to upper layer on the loop thread
 - report runtime accept/accepted-socket failures through an owner-loop policy
   callback with explicit Retry or Stop action
@@ -38,10 +40,20 @@ hands them upward through a narrow callback boundary.
 - listen Channel mutation happens only on owner loop thread
 - accepted fds are either handed upward or closed explicitly
 - destruction must not mutate Poller state from the wrong thread
-- on IOCP, pending AcceptEx operation storage outlives the cancellation
-  completion; stop first marks the successfully submitted operation as a
-  shutdown completion obligation, requests cancellation, and clears its
-  Channel observer before Acceptor destruction
+- on IOCP, Acceptor owns one fixed pool on its base loop; each slot owns one
+  accepted socket, `OVERLAPPED`, address buffer, and monotonically increasing
+  submission generation, and a slot is never reused before its prior terminal
+  completion is published to that owner loop
+- the IOCP pre-post depth is configured before `listen()`, defaults to four,
+  and is validated in the finite range `[1, 64]`; Linux retains drain-until-
+  would-block behavior and does not allocate accept slots
+- pending AcceptEx slot storage outlives every normal, error, or cancellation
+  completion; stop marks each successfully submitted operation as one shutdown
+  completion obligation, requests cancellation, revokes its Channel observer,
+  and lets final drain release the retained fixed-pool state
+- Retry is generation-wide: after one slot fails, every other submitted slot
+  in that accept generation is canceled and consumed before the fixed pool is
+  replenished
 - a synchronous non-pending AcceptEx submission failure creates neither a
   storage lease nor a shutdown completion obligation
 
@@ -51,6 +63,8 @@ hands them upward through a narrow callback boundary.
 - listen() is owner-thread only
 - stop() is owner-thread only
 - handleRead() runs on owner loop thread
+- IOCP slot creation, submission, completion consumption, generation advance,
+  cancellation, and reuse are owner-thread only
 - error policy callbacks and retry timer callbacks run on the owner loop thread
 - destructor must respect owner-thread teardown discipline
 
@@ -65,6 +79,9 @@ hands them upward through a narrow callback boundary.
 - the default runtime action is a delayed retry; an installed policy may stop
   the Acceptor, and Retry disables readable interest until the retry timer to
   avoid an error spin loop
+- on IOCP, Retry keeps the listen Channel available only to consume the
+  canceled generation, waits for both the retry delay and zero submitted
+  slots, and then replenishes the fixed pool
 - teardown should not rely on accidental destructor side effects
 
 ---
@@ -79,12 +96,23 @@ hands them upward through a narrow callback boundary.
   expose freed operation or Channel storage to a late IOCP completion
 - stopping and destroying an Acceptor in the same owner-loop callback as
   `EventLoop::quit()` keeps zero-timeout polling until the real AcceptEx
-  cancellation packet releases both the storage lease and shutdown obligation
+  cancellation packets for every submitted slot release all storage leases and
+  shutdown obligations
+- completion dispatch appends every exact AcceptEx operation identity from one
+  IOCP batch to an allocation-free intrusive listen-Channel queue; one
+  `handleRead()` drains that bounded queue, and a slot cannot be consumed or
+  reused through another operation's completion
+- callback re-entry through `stop()` is safe after the completed socket has
+  left its slot, including when the replacement slot was already pre-posted
 - `tests/contract/acceptor/test_acceptor_contract.cpp` verifies unavailable
   listener bind is reported by exception without process termination and the
   normal accept path does not spuriously invoke the runtime error policy
+- `tests/contract/acceptor/test_acceptor_iocp_pool.cpp` verifies default and
+  configured finite depth, burst replenishment, callback re-entry, generation-
+  wide Retry after deterministic synchronous failure, delayed cancellation
+  consumption, and final zero slot/socket/completion accounting
 - `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
-  verifies the pending AcceptEx immediate-quit final-drain contract
+  verifies the multi-slot pending AcceptEx immediate-quit final-drain contract
 
 ---
 
