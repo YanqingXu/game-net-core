@@ -12,6 +12,7 @@
 #ifdef _WIN32
 
 #include <array>
+#include <atomic>
 #include <unordered_set>
 
 namespace gamenet::net {
@@ -47,6 +48,7 @@ private:
     void associateChannel(Channel* channel);
 
     HANDLE iocp_;
+    std::atomic<bool> wakeupPending_{false};
     std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> deferredEntries_{};
     ULONG deferredEntryCount_{0};
     std::unordered_set<SocketFd> associatedFds_;

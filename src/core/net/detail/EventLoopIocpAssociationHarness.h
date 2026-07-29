@@ -1,8 +1,8 @@
 #pragma once
 
-// Source-private deterministic inspection seam for the Windows association
-// handoff contract. It is compiled only by repository tests and is not part
-// of the installed scheduling API.
+// Source-private deterministic inspection seam for Windows IOCP association,
+// completion-drain, and wakeup contracts. It is compiled only by repository
+// tests and is not part of the installed scheduling API.
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketTypes.h"
@@ -20,6 +20,12 @@ namespace gamenet::net::detail {
 void injectNextIocpAssociationPreserveFailureForTesting() noexcept;
 void injectNextIocpReplacementRegistrationFailureForTesting() noexcept;
 SocketFd lastIocpAssociationFaultSocketForTesting() noexcept;
+void resetIocpWakeupObservationsForTesting() noexcept;
+void setIocpWakeupResetHooksForTesting(
+    void (*beforeReset)() noexcept,
+    void (*afterReset)() noexcept) noexcept;
+std::uint64_t iocpWakeupPacketsPostedForTesting() noexcept;
+std::uint64_t iocpWakeupPacketsConsumedForTesting() noexcept;
 #endif
 
 class EventLoopIocpAssociationHarness final {
@@ -156,6 +162,57 @@ public:
 #else
         (void)loop;
         return 0;
+#endif
+    }
+
+    static void resetWakeupObservations() noexcept {
+#ifdef _WIN32
+        resetIocpWakeupObservationsForTesting();
+#endif
+    }
+
+    static void setWakeupResetHooks(
+        void (*beforeReset)() noexcept,
+        void (*afterReset)() noexcept) noexcept {
+#ifdef _WIN32
+        setIocpWakeupResetHooksForTesting(beforeReset, afterReset);
+#else
+        (void)beforeReset;
+        (void)afterReset;
+#endif
+    }
+
+    static std::uint64_t logicalWakeupCount(
+        EventLoop& loop) noexcept {
+        return loop.wakeupCount_.load(std::memory_order_acquire);
+    }
+
+    static std::uint64_t physicalWakeupPacketsPosted() noexcept {
+#ifdef _WIN32
+        return iocpWakeupPacketsPostedForTesting();
+#else
+        return 0;
+#endif
+    }
+
+    static std::uint64_t physicalWakeupPacketsConsumed() noexcept {
+#ifdef _WIN32
+        return iocpWakeupPacketsConsumedForTesting();
+#else
+        return 0;
+#endif
+    }
+
+    static bool wakeupPending(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller != nullptr &&
+               poller->wakeupPending_.load(std::memory_order_acquire);
+#else
+        (void)loop;
+        return false;
 #endif
     }
 };

@@ -88,6 +88,11 @@ DWORD completionError(
 std::atomic<bool> failNextAssociationPreserve{false};
 std::atomic<bool> failNextReplacementRegistration{false};
 std::atomic<SocketFd> lastAssociationFaultSocket{kInvalidSocket};
+using WakeupResetHook = void (*)() noexcept;
+std::atomic<WakeupResetHook> beforeWakeupResetHook{nullptr};
+std::atomic<WakeupResetHook> afterWakeupResetHook{nullptr};
+std::atomic<std::uint64_t> wakeupPacketsPosted{0};
+std::atomic<std::uint64_t> wakeupPacketsConsumed{0};
 #endif
 
 }  // namespace
@@ -139,6 +144,22 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
     for (ULONG index = 0; index < removed; ++index) {
         const auto& entry = entries[index];
         if (entry.lpCompletionKey == kWakeupCompletionKey) {
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            if (const auto hook =
+                    beforeWakeupResetHook.load(std::memory_order_acquire);
+                hook != nullptr) {
+                hook();
+            }
+#endif
+            wakeupPending_.store(false, std::memory_order_release);
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            wakeupPacketsConsumed.fetch_add(1, std::memory_order_relaxed);
+            if (const auto hook =
+                    afterWakeupResetHook.load(std::memory_order_acquire);
+                hook != nullptr) {
+                hook();
+            }
+#endif
             continue;
         }
 
@@ -320,9 +341,21 @@ void IocpPoller::forgetSocketAssociation(SocketFd sockfd) noexcept {
 }
 
 bool IocpPoller::wakeup() {
+    bool expected = false;
+    if (!wakeupPending_.compare_exchange_strong(
+            expected,
+            true,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire)) {
+        return true;
+    }
+
     if (::PostQueuedCompletionStatus(iocp_, 0, kWakeupCompletionKey, nullptr) == FALSE) {
         iocpDie("PostQueuedCompletionStatus(wakeup)");
     }
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    wakeupPacketsPosted.fetch_add(1, std::memory_order_relaxed);
+#endif
     return true;
 }
 
@@ -350,6 +383,28 @@ void injectNextIocpReplacementRegistrationFailureForTesting() noexcept {
 
 SocketFd lastIocpAssociationFaultSocketForTesting() noexcept {
     return lastAssociationFaultSocket.load(std::memory_order_acquire);
+}
+
+void resetIocpWakeupObservationsForTesting() noexcept {
+    beforeWakeupResetHook.store(nullptr, std::memory_order_release);
+    afterWakeupResetHook.store(nullptr, std::memory_order_release);
+    wakeupPacketsPosted.store(0, std::memory_order_release);
+    wakeupPacketsConsumed.store(0, std::memory_order_release);
+}
+
+void setIocpWakeupResetHooksForTesting(
+    void (*beforeReset)() noexcept,
+    void (*afterReset)() noexcept) noexcept {
+    beforeWakeupResetHook.store(beforeReset, std::memory_order_release);
+    afterWakeupResetHook.store(afterReset, std::memory_order_release);
+}
+
+std::uint64_t iocpWakeupPacketsPostedForTesting() noexcept {
+    return wakeupPacketsPosted.load(std::memory_order_acquire);
+}
+
+std::uint64_t iocpWakeupPacketsConsumedForTesting() noexcept {
+    return wakeupPacketsConsumed.load(std::memory_order_acquire);
 }
 
 }  // namespace detail

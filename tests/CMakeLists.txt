@@ -72,6 +72,7 @@ add_gamenet_test(contract connector ${CMAKE_CURRENT_SOURCE_DIR}/contract/connect
 add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop.cpp threading lifecycle)
 add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop_control_saturation.cpp threading lifecycle)
 add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop_lifecycle_hub.cpp threading lifecycle)
+add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop_wakeup_coalescing.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp threading lifecycle)

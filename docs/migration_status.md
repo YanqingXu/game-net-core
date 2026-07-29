@@ -126,13 +126,23 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 124 |
+| 61 | 30 | 20 | 11 | 126 |
 
 ## Production-Hardening Worktree State
 
 - M3 PR-G has completed its first local IOCP batching slice: fixed-size
   GQCSEx collection, bounded per-round publication, same-Channel deferral,
   wakeup coexistence, and exact outstanding-operation retention.
+- M3-G2 adds a Poller-owned atomic wakeup-pending bit: one false-to-true
+  producer posts the physical IOCP packet, later producers merge without
+  allocation, and the owner clears the bit at packet dequeue without
+  truncating the surrounding real-I/O batch. Deterministic before/after-reset
+  races, multi-producer burst, self-rearm, quit, and closed-admission cases are
+  covered by
+  `contract.event_loop.test_event_loop_wakeup_coalescing`; its focused repeat
+  passed 50/50, the complete Windows MSVC Debug inventory passed 111/111, and
+  all 34 repository guards passed. These are local development-gate results,
+  not frozen Release, sanitizer, endurance, or performance evidence.
 - `connection_backpressure_controller` and `graceful_shutdown` are active
   `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
@@ -228,7 +238,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 110 configured CTest tests: 8 unit tests, 89 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 111 configured CTest tests: 8 unit tests, 90 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -242,8 +252,8 @@ submission errors.
 
 On 2026-07-27, the current Windows MSVC worktree passed full Debug, Release,
 and AddressSanitizer builds and 109/109 CTests in all three configurations.
-The current inventory is unit=8, contract=89, integration=13, threading=83,
-lifecycle=89, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+The current inventory is unit=8, contract=90, integration=13, threading=84,
+lifecycle=90, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and
@@ -500,7 +510,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. The workflow locks the 110-test inventory, `threading=83`,
+  timeout. The workflow locks the 111-test inventory, `threading=84`,
   `game_pipeline=7`, and `broadcast=5`, then verifies the raw result lines for
   every selected test and exact repeat count. Its two
   `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,

@@ -48,6 +48,13 @@ def main() -> None:
     )
     poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
     poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
+    wakeup_coalescing_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "event_loop"
+        / "test_event_loop_wakeup_coalescing.cpp"
+    )
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
@@ -171,6 +178,32 @@ def main() -> None:
 
     poller_text = poller_source.read_text(encoding="utf-8")
     require(poller_text, "GetQueuedCompletionStatusEx", poller_source)
+    require(
+        poller_header_text,
+        "std::atomic<bool> wakeupPending_{false}",
+        poller_header,
+    )
+    require(
+        poller_text,
+        "wakeupPending_.compare_exchange_strong",
+        poller_source,
+    )
+    require(
+        poller_text,
+        "wakeupPending_.store(false, std::memory_order_release)",
+        poller_source,
+    )
+    wakeup_coalescing_test_text = wakeup_coalescing_test.read_text(encoding="utf-8")
+    require(
+        wakeup_coalescing_test_text,
+        "logicalWakeupCount(loop) ==",
+        wakeup_coalescing_test,
+    )
+    require(
+        wakeup_coalescing_test_text,
+        "physicalWakeupPacketsPosted() ==",
+        wakeup_coalescing_test,
+    )
     require(poller_text, "deferredEntries_", poller_source)
     require(poller_text, "reinterpret_cast<IocpOperation*>", poller_source)
     require(poller_text, "operation->bytesTransferred", poller_source)

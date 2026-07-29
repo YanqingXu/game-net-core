@@ -194,6 +194,15 @@ No other direct mutation path is allowed for core loop state.
 - Wakeup is a scheduling signal, not business event delivery
 - An IOCP wakeup packet may share a dequeue batch with real I/O; consuming the
   signal must not stop translation of the remaining completion entries
+- IOCP producers may only change the Poller-owned atomic pending bit and post
+  the packet won by a false-to-true transition; only the EventLoop owner may
+  clear that bit after dequeue
+- A producer ordered before the owner clear merges into the current awake
+  iteration; a producer ordered after the clear must post the next packet.
+  Tests must cover both orderings so reset cannot strand accepted work
+- Scheduling handles hold their admission-state synchronization through the
+  wakeup call. EventLoop destruction closes those states before destroying the
+  Poller, so an admitted producer cannot race a destroyed completion port
 
 ## 13. TcpServer Admission
 - Global/per-peer active counts, per-peer rate buckets, peer-table expiry, and

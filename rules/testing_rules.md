@@ -57,6 +57,12 @@ Contract tests verify:
 - Windows AcceptEx/ConnectEx cancellation in the same owner-loop callback as
   destruction and quit releases outstanding, retained-storage, Channel, and
   owner-guard counts before Shutdown
+- Windows multi-producer wakeup bursts distinguish logical notifications from
+  physical completion packets and prove one packet while pending
+- deterministic hooks place a producer immediately before and after the owner
+  clears IOCP wakeup-pending; accepted work must execute in both cases
+- Windows wakeup self-rearm plus quit must drain accepted work and leave no
+  pending physical packet before Shutdown
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents
@@ -78,6 +84,9 @@ Contract tests verify:
   interleaved wakeup, exact outstanding-operation release, distinct-Channel
   batching, same-Channel read/write deferral across poll rounds, and deferred
   error preservation after the first callback removes the Channel
+- Windows wakeup coalescing remains allocation-free, does not truncate the
+  real-I/O entries beside its packet, and exposes exact physical post/consume
+  counts only through a source-private repository-test seam
 - Windows association-preserve and replacement-registration fault injection
   both prove transactional TcpClient rollback and successful fresh reconnect
 

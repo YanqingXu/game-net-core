@@ -54,6 +54,16 @@ Poller is not channel owner.
   iteration so timer, control, lifecycle, and functor phases retain service
 - a wakeup packet is consumed as a scheduling signal but does not end the
   current IOCP batch or suppress real I/O packets returned beside it
+- the IOCP Poller owns one atomic wakeup-pending bit. A producer that changes
+  it from false to true owns the one physical `PostQueuedCompletionStatus`;
+  producers that observe true merge into the pending scheduling turn and
+  allocate no storage
+- only the EventLoop owner clears wakeup-pending, immediately after dequeuing
+  the corresponding packet. A producer ordered before that clear relies on
+  the current awake turn, while a producer ordered after it changes false to
+  true and posts a new packet; neither side of the race can lose a wakeup
+- wakeup packets coalesce independently of the fixed completion batch:
+  consuming the signal never truncates real I/O translation in that batch
 - backend removal validates both fd and Channel identity before erasing
   bookkeeping, so a stale same-fd remove cannot erase a replacement Channel
 - IOCP completion metadata remains allocated until the completion is dequeued
@@ -170,6 +180,9 @@ High-risk mistakes:
   registration-safe rounds while distinct Channels share one batch; a deferred
   cancellation keeps its dequeued `ERROR_OPERATION_ABORTED` result even when
   the first callback removes the Channel before the next poll
+- `tests/contract/event_loop/test_event_loop_wakeup_coalescing.cpp` verifies
+  one physical IOCP packet for a multi-producer pending burst, both sides of
+  the owner reset race, and zero pending packets after quit/final drain
 - `tests/contract/acceptor/test_acceptor_contract.cpp` destroys a stopped
   Acceptor while the EventLoop continues polling and guards late IOCP completion
 - `tests/contract/connector/test_connector_retry_stop.cpp` covers ConnectEx

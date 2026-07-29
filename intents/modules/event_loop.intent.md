@@ -147,6 +147,21 @@ EventLoop is the heart of reactor execution in game-net-core.
 - normal iterations execute at most `maxFunctorsPerIteration`; accepted
   remainder is preserved and the loop is woken for another I/O/timer-aware
   iteration
+- Windows wakeup producers share one Poller-owned atomic pending bit. Exactly
+  one producer that changes it from clear to pending posts an IOCP wakeup
+  packet; later producers merge into that pending turn without allocation
+- the owner clears the Windows wakeup pending bit immediately after dequeuing
+  its packet and continues translating the rest of the same completion batch.
+  Work published by a producer before that clear is visible to the already
+  awake iteration; a producer after the clear posts the next packet, so the
+  clear/producer race cannot strand accepted work
+- logical `wakeup()` observations remain distinct from physical IOCP packets:
+  metrics count every scheduling request even when the backend coalesces its
+  packet
+- executor/control/lifecycle admission synchronization keeps every permitted
+  cross-thread wakeup call inside EventLoop/Poller lifetime; after admission
+  publishes Shutdown no scheduling handle may access a destroyed completion
+  port
 - Windows IOCP polling returns at most one fixed 64-packet completion batch per
   normal loop iteration; an I/O backlog therefore yields to expired timers,
   control sources, lifecycle nodes, and pending functors before the next batch
@@ -351,6 +366,10 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   completions, verifies bounded two-round progress, exact completion-obligation
   release, distinct-Channel batching, and same-Channel deferral across
   registration-safe rounds
+- the Windows wakeup-coalescing contract verifies a multi-producer burst emits
+  one physical packet, producers on both sides of the owner reset cannot lose
+  accepted work, self-rearm remains non-recursive, and quit/final-drain
+  consumes the last physical packet before Shutdown
 - current-Channel internal retirement remains available when normal and
   reserved pending-functor capacity are both full
 - lifecycle attach/detach generation invalidates stale handles and prevents
@@ -382,6 +401,9 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - `tests/contract/event_loop/test_event_loop_control_saturation.cpp` verifies
   bounded registration, saturation isolation, coalescing, non-recursive
   re-arming, callback-exception containment, and quit linearization
+- `tests/contract/event_loop/test_event_loop_wakeup_coalescing.cpp` verifies
+  logical-versus-physical wakeup accounting, reset races, self-rearm, and
+  final-drain convergence on Windows
 - `tests/contract/event_loop/test_event_loop.cpp` verifies
   Channel, Timer, pending-functor, and metric callback exceptions are observed,
   later callbacks still run under Continue, Quit still drains accepted work,

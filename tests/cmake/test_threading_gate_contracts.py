@@ -44,6 +44,7 @@ def main() -> None:
 
     required_threading_contracts = [
         "contract/event_loop/test_event_loop.cpp",
+        "contract/event_loop/test_event_loop_wakeup_coalescing.cpp",
         "contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp",
         "contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp",
         "contract/timer_queue/test_timer_queue.cpp",
@@ -95,7 +96,7 @@ def main() -> None:
     require(workflow_text, "linux-tsan:", workflow)
     require(workflow_text, "GAMENET_ENABLE_TSAN=ON", workflow)
     require(workflow_text, "ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60", workflow)
-    require(workflow_text, "--expect-label threading=83", workflow)
+    require(workflow_text, "--expect-label threading=84", workflow)
     require(workflow_text, "python3 tests/cmake/test_threading_gate_contracts.py", workflow)
 
     player_session_text = player_session.read_text(encoding="utf-8")

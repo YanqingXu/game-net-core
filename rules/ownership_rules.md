@@ -11,6 +11,10 @@ It must not blur these roles.
 ## 2. EventLoop
 - EventLoop owns its Poller
 - EventLoop owns wakeup-related resources it creates
+- On Windows, the owned Poller exclusively owns the wakeup-pending state and
+  completion-port handle. Producers own neither; a successful false-to-true
+  transition grants only the obligation to post one signal packet before
+  returning
 - EventLoop owns the fixed control-source slot table, pending bitset, and
   registered callback storage
 - EventLoop owns its dynamic lifecycle hub, attached-node registry, intrusive
@@ -47,6 +51,9 @@ It must not blur these roles.
 - Poller does not own Channel
 - Poller only maintains registration/mapping relationship
 - Poller backend state must not outlive EventLoop
+- The IOCP Poller owns its atomic wakeup-pending bit until owner-thread
+  destruction. A queued wakeup packet owns no EventLoop, Channel, callback, or
+  business payload; it only represents one-or-more logical scheduling requests
 - Poller erases a registration only after exact fd-plus-pointer validation; it
   cannot erase a same-fd replacement on behalf of a stale Channel
 - IOCP batch entries are value snapshots and do not acquire Channel ownership.

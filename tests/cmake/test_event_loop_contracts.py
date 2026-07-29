@@ -17,6 +17,13 @@ def main() -> None:
         / "event_loop"
         / "test_event_loop_control_saturation.cpp"
     )
+    wakeup_coalescing_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "event_loop"
+        / "test_event_loop_wakeup_coalescing.cpp"
+    )
     active_batch_test = (
         repo_root
         / "tests"
@@ -60,6 +67,9 @@ def main() -> None:
     assert event_loop_control_test.exists(), (
         f"missing EventLoop control saturation contract: {event_loop_control_test}"
     )
+    assert wakeup_coalescing_test.exists(), (
+        f"missing EventLoop wakeup coalescing contract: {wakeup_coalescing_test}"
+    )
     assert active_batch_test.exists(), (
         f"missing active Channel batch lifetime contract: {active_batch_test}"
     )
@@ -74,6 +84,7 @@ def main() -> None:
 
     event_loop_test_text = event_loop_test.read_text(encoding="utf-8")
     event_loop_control_test_text = event_loop_control_test.read_text(encoding="utf-8")
+    wakeup_coalescing_test_text = wakeup_coalescing_test.read_text(encoding="utf-8")
     active_batch_test_text = active_batch_test.read_text(encoding="utf-8")
     event_loop_thread_test_text = event_loop_thread_test.read_text(encoding="utf-8")
     future_test_helper_text = future_test_helper.read_text(encoding="utf-8")
@@ -164,6 +175,31 @@ def main() -> None:
         event_loop_control_test_text,
         "mergedControlNotificationCount() == 9'999",
         event_loop_control_test,
+    )
+    require(
+        wakeup_coalescing_test_text,
+        "testMultiProducerBurstPostsOnePacket",
+        wakeup_coalescing_test,
+    )
+    require(
+        wakeup_coalescing_test_text,
+        "testProducerAroundOwnerReset(false)",
+        wakeup_coalescing_test,
+    )
+    require(
+        wakeup_coalescing_test_text,
+        "testProducerAroundOwnerReset(true)",
+        wakeup_coalescing_test,
+    )
+    require(
+        wakeup_coalescing_test_text,
+        "testSelfRearmAndQuitDrainTheLastPacket",
+        wakeup_coalescing_test,
+    )
+    require(
+        wakeup_coalescing_test_text,
+        "physicalWakeupPacketsPosted() <",
+        wakeup_coalescing_test,
     )
     require(
         active_batch_test_text,
@@ -272,6 +308,11 @@ def main() -> None:
     require(
         tests_cmake_text,
         "test_event_loop_control_saturation.cpp threading lifecycle",
+        tests_cmake,
+    )
+    require(
+        tests_cmake_text,
+        "test_event_loop_wakeup_coalescing.cpp threading lifecycle",
         tests_cmake,
     )
     require(tests_cmake_text, "test_event_loop_thread.cpp threading lifecycle", tests_cmake)

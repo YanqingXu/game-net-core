@@ -127,6 +127,7 @@ void testBoundedIocpBatch() {
     using gamenet::net::detail::EventLoopIocpAssociationHarness;
 
     gamenet::net::EventLoop loop;
+    EventLoopIocpAssociationHarness::resetWakeupObservations();
 
     const std::size_t batchSize =
         EventLoopIocpAssociationHarness::completionBatchSize();
@@ -144,7 +145,9 @@ void testBoundedIocpBatch() {
             loop,
             &operation);
         if (index == batchSize / 2) {
-            loop.wakeup();
+            for (std::size_t wakeup = 0; wakeup < 256; ++wakeup) {
+                loop.wakeup();
+            }
         }
         GAMENET_TEST_ASSERT(
             EventLoopIocpAssociationHarness::postCompletion(
@@ -152,12 +155,18 @@ void testBoundedIocpBatch() {
                 &operation,
                 static_cast<DWORD>(index + 1)));
     }
+    GAMENET_TEST_ASSERT(
+        EventLoopIocpAssociationHarness::logicalWakeupCount(loop) == 256);
+    GAMENET_TEST_ASSERT(
+        EventLoopIocpAssociationHarness::physicalWakeupPacketsPosted() == 1);
 
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::
             hasPendingCompletionOperations(loop));
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
+    GAMENET_TEST_ASSERT(
+        EventLoopIocpAssociationHarness::physicalWakeupPacketsConsumed() == 1);
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::
             hasPendingCompletionOperations(loop));
