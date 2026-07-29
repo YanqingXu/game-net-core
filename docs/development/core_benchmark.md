@@ -93,6 +93,19 @@ client handshakes finish before the base EventLoop starts, and
 `elapsed_seconds` begins immediately before loop dispatch. This isolates
 queued AcceptEx completion/backlog drain from concurrent SYN creation jitter.
 
+For the M3-H2-D decision, the Windows MSVC Release worktree ran seven preloaded
+128-connection samples at 64-way client concurrency, AcceptEx depth four, zero
+settle delay, and 1/2/4 worker loops. Median ready-backlog drain was
+1.597/1.586/1.567 ms. Five successful live 1,024-connection samples per worker
+count reported 1.519/2.014/2.016 s medians (the one-worker profile needed one
+retry). Adding workers did not improve the live burst, while the isolated
+ready backlog already drained roughly three orders of magnitude faster. This
+does not identify the base loop as the bottleneck; it identifies live
+client/kernel handshake timing as the dominant uncontrolled interval on this
+runner. The project therefore does not add a per-worker accept topology from
+this evidence. Linux/epoll `SO_REUSEPORT` remains conditional on a future M3-P1
+churn profile that measures a sustained ready backlog and base-loop saturation.
+
 ## Scenarios and Measurements
 
 - `echo` creates all clients before timing. Each client performs sequential

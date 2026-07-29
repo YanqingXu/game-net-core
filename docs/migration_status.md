@@ -349,6 +349,15 @@ medians were 2.949/58.419/780.003 ms before and
 3.9042/64.9958/740.6443 ms after; the bucket index intentionally optimizes
 future-population isolation while keeping cleanup bounded, not every small-
 population expire-all case.
+M3-H2-D does not introduce per-worker listeners. Seven Windows MSVC Release
+preloaded 128-connection samples produced 1.597/1.586/1.567 ms median
+ready-backlog drain for 1/2/4 workers. Five successful live 1,024-connection
+samples per worker count produced 1.519/2.014/2.016 s medians, with one retry
+needed for the one-worker set. The isolated base-loop backlog was already
+roughly three orders of magnitude faster than the live handshake interval, so
+this runner does not prove a base-loop accept bottleneck. Linux/epoll
+`SO_REUSEPORT` per-worker accept remains deferred until M3-P1 has a sustained
+churn profile that isolates and saturates ready accept work.
 The current inventory is unit=8, contract=96, integration=13, threading=90,
 lifecycle=96, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic

@@ -65,6 +65,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - an explicit connections-only preload mode creates every client before the
   base EventLoop starts, then measures from loop start through all connection
   callbacks so queued accept-drain work is isolated from SYN creation jitter
+- compare the preloaded ready-backlog profile with the live concurrent-connect
+  profile before attributing connection churn to the base loop; live
+  client/kernel handshake time is not an accept-loop bottleneck measurement
 - hold the requested accepted connections through a configurable settle interval
 - report connection-callback convergence elapsed time plus before/after/delta
   working set and approximate delta per connection

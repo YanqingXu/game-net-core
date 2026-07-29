@@ -50,6 +50,8 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - does not process application protocol payloads
 - does not authenticate credentials or define account, ban-list, or protocol
   semantics; it only provides the transport admission/deadline mechanism
+- does not create one listener/Acceptor per worker loop; the active topology
+  keeps one base-loop Acceptor and hands established sockets to selected loops
 
 ---
 
@@ -93,6 +95,10 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   call the base TcpServer
 - thread-pool quit/join starts only after every participating worker has acked;
   the graceful future becomes ready only after join
+- enabling the listen socket's reuse-port option does not imply per-worker
+  accept ownership. A topology change requires Linux/epoll churn evidence that
+  isolates base-loop ready-backlog drain as the bottleneck, plus new listener,
+  admission, stop, and exact-once fd-ownership contracts
 - normal and reserved pending-functor saturation cannot turn a committed
   graceful/immediate stop into SchedulingFailed; only pre-commit
   OwnerUnavailable/Shutdown can reject the request, with a defined terminal
@@ -184,6 +190,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - `tests/contract/tcp_server/test_tcp_server_release_handshake.cpp` verifies
   generation-tagged worker cleanup, base release before Channel destruction,
   stale ack rejection, callback re-entry, and exact-once join
+- `gamenet_core_benchmark --scenario connections` provides live-burst and
+  preloaded ready-backlog profiles. Worker-count scaling that is dominated by
+  client/kernel handshake time is not evidence for per-worker accept
 
 ---
 
