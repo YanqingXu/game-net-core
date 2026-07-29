@@ -115,3 +115,21 @@ Direct contracts are
 They cover the public option, finite default/configured depth, exact completion
 identity, burst replenishment, Retry/Stop cancellation, synchronous failure,
 callback re-entry, and final-drain convergence.
+
+## Current M3-H1-A Additive Review
+
+M3-H1-A appends three startup-validated count budgets to `EventLoopOptions`:
+`maxActiveChannelsPerIteration`, `maxTimersPerIteration`, and
+`maxControlCallbacksPerIteration`. Existing aggregate initialization remains
+source compatible because the fields are appended after the earlier options
+and retain conservative defaults. `EventLoopMetricEvent` and
+`EventLoopMetricSample` likewise append active/timer/lifecycle phase events
+and generic drained/remaining/oldest-ready/exhausted observations; existing
+enumerator values and positional field meanings are unchanged.
+
+The `TimerQueue.h` stable fingerprint changes only in its EventLoop-private
+budgeted drain shape. Direct contracts are
+`tests/contract/event_loop/test_event_loop_fair_budget.cpp`,
+`tests/contract/event_loop/test_event_loop_control_saturation.cpp`,
+`tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp`, and
+`tests/contract/timer_queue/test_timer_queue.cpp`.

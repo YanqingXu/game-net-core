@@ -53,6 +53,11 @@ Contract tests verify:
   callback-frame-safe reclamation
 - a dirty population larger than the lifecycle budget self-reschedules while
   ready I/O/timers retain service
+- an active batch larger than its budget survives across owner-loop rounds,
+  and an intervening phase destroys an undispatched Channel only after its
+  indexed slot is invalidated
+- expired-timer and control populations larger than their budgets yield to
+  accepted functors and publish exact drained/remaining plus exhausted metrics
 - Windows cancel-versus-quit consumes the real IOCP completion before Shutdown
 - Windows AcceptEx/ConnectEx cancellation in the same owner-loop callback as
   destruction and quit releases outstanding, retained-storage, Channel, and

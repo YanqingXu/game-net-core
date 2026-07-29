@@ -22,15 +22,45 @@ public:
         EventLoop& loop,
         std::vector<Channel*> channels,
         gamenet::base::Timestamp receiveTime) {
+        install(loop, std::move(channels), receiveTime);
+        while (loop.hasPendingActiveChannels()) {
+            loop.dispatchActiveChannels();
+        }
+    }
+
+    static void install(
+        EventLoop& loop,
+        std::vector<Channel*> channels,
+        gamenet::base::Timestamp receiveTime) {
         loop.assertInLoopThread();
         if (loop.looping_ || loop.eventHandling_) {
             throw std::logic_error(
                 "active-batch harness requires an idle owner EventLoop");
         }
+        if (loop.hasPendingActiveChannels()) {
+            throw std::logic_error(
+                "active-batch harness cannot replace pending ready work");
+        }
         loop.activeChannels_ = std::move(channels);
+        loop.activeChannelCursor_ = 0;
         loop.pollReturnTime_ = receiveTime;
+    }
+
+    static void dispatchRound(EventLoop& loop) {
+        loop.assertInLoopThread();
         loop.dispatchActiveChannels();
-        loop.activeChannels_.clear();
+    }
+
+    static std::size_t pendingCount(const EventLoop& loop) noexcept {
+        std::size_t pending = 0;
+        for (std::size_t index = loop.activeChannelCursor_;
+             index < loop.activeChannels_.size();
+             ++index) {
+            if (loop.activeChannels_[index] != nullptr) {
+                ++pending;
+            }
+        }
+        return pending;
     }
 
     static void retireCurrentChannel(

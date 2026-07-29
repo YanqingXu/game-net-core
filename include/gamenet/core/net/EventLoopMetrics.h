@@ -16,6 +16,9 @@ enum class EventLoopMetricEvent {
     WakeupHandled,
     // Appended to preserve existing event values within the 0.3 source line.
     ControlSourcesDrained,
+    ActiveChannelsDrained,
+    TimersDrained,
+    LifecycleNodesDrained,
 };
 
 struct EventLoopMetricSample {
@@ -36,6 +39,11 @@ struct EventLoopMetricSample {
     std::uint64_t controlNotifications{0};
     std::uint64_t mergedControlNotifications{0};
     std::uint64_t rejectedControlNotifications{0};
+    // Append-only scheduler observations shared by every budgeted phase.
+    std::size_t drainedWork{0};
+    std::size_t remainingWork{0};
+    Duration oldestReadyLatency{Duration::zero()};
+    bool budgetExhausted{false};
 };
 
 using EventLoopMetricCallback = std::function<void(const EventLoopMetricSample&)>;

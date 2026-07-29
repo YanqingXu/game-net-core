@@ -82,6 +82,12 @@ No other direct mutation path is allowed for core loop state.
 - FinalDraining runs already-accepted functors and committed internal work to a
   fixed point; only then may EventLoop publish Shutdown
 - User/data callbacks may not use lifecycle nodes as a priority queue
+- Partial active-Channel batches, ready timers beyond the current budget, and
+  undrained control mailbox bits remain owner-loop/source-owned; continuation
+  never transfers their callback targets through the pending-functor queue
+- Every fairness budget is validated before `loop()` starts. Budget exhaustion
+  causes an immediate/non-blocking next turn while timer, control, lifecycle,
+  and accepted-functor phases continue between portions
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread
@@ -89,6 +95,8 @@ No other direct mutation path is allowed for core loop state.
 - active-batch epoch/index assignment and invalidation are owner-thread-only
 - successful remove invalidates the Channel's current batch slot before the
   caller may release ownership; dispatch never dereferences an invalidated slot
+- slot invalidation remains mandatory between budgeted dispatch portions, when
+  removal originates from a timer, control, lifecycle, or functor phase
 - remove/re-register changes the registration generation and stops remaining
   callbacks from the old readiness snapshot
 - source-private retirement of the currently executing removed Channel is an

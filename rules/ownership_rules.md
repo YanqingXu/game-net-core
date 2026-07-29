@@ -23,6 +23,12 @@ It must not blur these roles.
 - EventLoop may temporarily own one already-removed current Channel until its
   active callback frame returns; this narrow retirement lease owns neither the
   fd nor its upper business object
+- EventLoop retains a partial active batch and cursor across budgeted turns.
+  Intervening owner-loop removal nulls the indexed observation before Channel
+  ownership is released; no continuation queue owns Channel
+- TimerQueue retains ready metadata not selected by the current timer budget,
+  and the fixed control mailbox retains bits not selected by the current
+  control budget
 
 ## 2.1 EventLoopControlSource
 - A source handle is a copyable, non-owning scheduling capability

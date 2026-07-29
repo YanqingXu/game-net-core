@@ -181,6 +181,13 @@ the source of truth.
   128-connection preloaded accept-drain profile reduced median elapsed time
   from 1.680 ms at depth one to 1.524 ms at depth four, a 9.29% reduction
   (accept throughput +10.24%).
+- M3-H1-A adds validated per-iteration budgets for active Channel dispatch,
+  expired timers, and registered control callbacks, complementing the existing
+  lifecycle and pending-functor budgets. Partial active batches remain
+  EventLoop-owned and preserve O(1) remove-before-destroy invalidation between
+  rounds; unselected timers/control bits remain in their source-owned ordered
+  container/mailbox. Append-only metrics expose drained, exact remaining,
+  oldest-ready lag, and budget exhaustion for every owner-loop callback phase.
 - `connection_backpressure_controller` and `graceful_shutdown` are active
   `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
@@ -276,7 +283,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 115 configured CTest tests: 8 unit tests, 94 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 116 configured CTest tests: 8 unit tests, 95 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -295,8 +302,10 @@ Debug, Release, and AddressSanitizer builds and 109/109 CTests in all three
 configurations.
 The M3-G5 worktree subsequently passed 115/115 Debug CTests, all 31 Python
 repository/API/CI guards, and 50/50 focused `AcceptEx` pool repetitions.
-The current inventory is unit=8, contract=94, integration=13, threading=88,
-lifecycle=94, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+The M3-H1-A worktree passed 116/116 Debug CTests, all 31 Python guards, and
+50/50 focused fair-budget repetitions.
+The current inventory is unit=8, contract=95, integration=13, threading=89,
+lifecycle=95, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and

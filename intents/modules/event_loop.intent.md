@@ -147,6 +147,16 @@ EventLoop is the heart of reactor execution in game-net-core.
 - normal iterations execute at most `maxFunctorsPerIteration`; accepted
   remainder is preserved and the loop is woken for another I/O/timer-aware
   iteration
+- active Channel, expired-timer, registered-control, lifecycle, and pending-
+  functor phases each execute at most their validated per-iteration count
+  budget. A partially dispatched active batch remains owner-loop storage, and
+  removal from any intervening phase invalidates its O(1) slot before release
+- expired timers beyond the current budget remain in TimerQueue's ordered
+  owner-loop container, forcing a zero poll timeout; control bits beyond the
+  current budget remain in the fixed mailbox, and both paths continue without
+  pending-functor admission
+- append-only scheduler metrics report the phase's drained count, exact ready
+  remainder, oldest-ready lag, and whether the count budget was exhausted
 - Windows wakeup producers share one Poller-owned atomic pending bit. Exactly
   one producer that changes it from clear to pending posts an IOCP wakeup
   packet; later producers merge into that pending turn without allocation
@@ -183,10 +193,10 @@ EventLoop is the heart of reactor execution in game-net-core.
 ## 6. Main Execution Model
 Default v1 loop direction:
 1. wait for active I/O via Poller
-2. stamp and dispatch the unique active-Channel batch, skipping registrations
-   invalidated by earlier callbacks
-3. dispatch expired timers
-4. execute one round of pending control sources
+2. stamp and dispatch one budgeted portion of the unique active-Channel batch,
+   skipping registrations invalidated by earlier or intervening callbacks
+3. dispatch one budgeted portion of expired timers
+4. execute one budgeted round of pending control sources
 5. execute one budgeted round of dirty lifecycle nodes
 6. execute pending functors
 7. repeat until quit requested
@@ -226,6 +236,10 @@ Typical API direction:
 - phase() -> EventLoopPhase
 - executor() -> EventLoopExecutor
 - setCallbackExceptionHandler(EventLoopCallbackExceptionHandler)
+- EventLoopOptions fairness budgets:
+  `maxActiveChannelsPerIteration`, `maxTimersPerIteration`,
+  `maxControlCallbacksPerIteration`, `maxLifecycleCallbacksPerIteration`, and
+  `maxFunctorsPerIteration`
 - callbackExceptionCount()
 - runAt(Timestamp, Functor)
 - runAfter(Duration, Functor)
@@ -343,6 +357,12 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   already accepted functor
 - a per-iteration batch limit yields back to ready timers/I/O before executing
   the remaining accepted batch
+- an active batch larger than its configured budget remains loop-owned across
+  rounds; a timer/control callback may remove and destroy an undispatched
+  Channel, and the continuation skips its invalidated slot
+- expired-timer and control populations larger than their configured budgets
+  yield to later phases each round, preserve deterministic ready order, and
+  publish drained/remaining/oldest-lag/exhausted observations
 - quit still drains already-queued nested functors before loop exit
 - executor identity is stable, cross-thread queueing executes on the owner
   thread, and copied handles become unavailable after loop teardown

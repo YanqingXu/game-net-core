@@ -17,6 +17,13 @@ def main() -> None:
         / "event_loop"
         / "test_event_loop_control_saturation.cpp"
     )
+    event_loop_fair_budget_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "event_loop"
+        / "test_event_loop_fair_budget.cpp"
+    )
     wakeup_coalescing_test = (
         repo_root
         / "tests"
@@ -67,6 +74,9 @@ def main() -> None:
     assert event_loop_control_test.exists(), (
         f"missing EventLoop control saturation contract: {event_loop_control_test}"
     )
+    assert event_loop_fair_budget_test.exists(), (
+        f"missing EventLoop fair-budget contract: {event_loop_fair_budget_test}"
+    )
     assert wakeup_coalescing_test.exists(), (
         f"missing EventLoop wakeup coalescing contract: {wakeup_coalescing_test}"
     )
@@ -84,6 +94,9 @@ def main() -> None:
 
     event_loop_test_text = event_loop_test.read_text(encoding="utf-8")
     event_loop_control_test_text = event_loop_control_test.read_text(encoding="utf-8")
+    event_loop_fair_budget_test_text = event_loop_fair_budget_test.read_text(
+        encoding="utf-8"
+    )
     wakeup_coalescing_test_text = wakeup_coalescing_test.read_text(encoding="utf-8")
     active_batch_test_text = active_batch_test.read_text(encoding="utf-8")
     event_loop_thread_test_text = event_loop_thread_test.read_text(encoding="utf-8")
@@ -117,6 +130,9 @@ def main() -> None:
     require(event_loop_intent_text, "PostResult::Shutdown", event_loop_intent)
     require(event_loop_intent_text, "pending mailbox bit", event_loop_intent)
     require(event_loop_intent_text, "active Channel batch", event_loop_intent)
+    require(event_loop_intent_text, "maxActiveChannelsPerIteration", event_loop_intent)
+    require(event_loop_intent_text, "maxTimersPerIteration", event_loop_intent)
+    require(event_loop_intent_text, "maxControlCallbacksPerIteration", event_loop_intent)
     require(event_loop_thread_intent_text, "explicit stop drains accepted work", event_loop_thread_intent)
     require(event_loop_intent_text, "asynchronous callback exceptions are counted", event_loop_intent)
     require(event_loop_thread_intent_text, "must not call `std::terminate`", event_loop_thread_intent)
@@ -175,6 +191,21 @@ def main() -> None:
         event_loop_control_test_text,
         "mergedControlNotificationCount() == 9'999",
         event_loop_control_test,
+    )
+    require(
+        event_loop_fair_budget_test_text,
+        "testActiveBatchContinuationAndBetweenRoundInvalidation",
+        event_loop_fair_budget_test,
+    )
+    require(
+        event_loop_fair_budget_test_text,
+        "testExpiredTimerBudgetYieldsToAcceptedFunctor",
+        event_loop_fair_budget_test,
+    )
+    require(
+        event_loop_fair_budget_test_text,
+        "testControlBudgetYieldsToTimerAndFunctor",
+        event_loop_fair_budget_test,
     )
     require(
         wakeup_coalescing_test_text,
@@ -244,6 +275,9 @@ def main() -> None:
     require(event_loop_header_text, "void setCallbackExceptionHandler", event_loop_header)
     require(event_loop_header_text, "callbackExceptionCount()", event_loop_header)
     require(event_loop_header_text, "maxControlSources", event_loop_header)
+    require(event_loop_header_text, "maxActiveChannelsPerIteration", event_loop_header)
+    require(event_loop_header_text, "maxTimersPerIteration", event_loop_header)
+    require(event_loop_header_text, "maxControlCallbacksPerIteration", event_loop_header)
     require(post_result_header_text, "enum class PostResult", post_result_header)
     require(event_loop_header_text, "class EventLoopControlSource", event_loop_header)
     require(event_loop_header_text, "registerControlSource", event_loop_header)
@@ -295,7 +329,8 @@ def main() -> None:
         f"{connector_source} must not defer Channel destruction through pending functors"
     )
     require(channel_source_text, "eventHandling_ = false;\n        throw;", channel_source)
-    require(timer_queue_source_text, "std::vector<std::exception_ptr>", timer_queue_source)
+    require(timer_queue_source_text, "TimerQueue::ExpiredResult", timer_queue_source)
+    require(timer_queue_source_text, "expired.size() < maxCount", timer_queue_source)
     require(timer_queue_source_text, "timer->canceled = true", timer_queue_source)
     require(event_loop_thread_source_text, "startupException_ = std::current_exception()", event_loop_thread_source)
     require(event_loop_thread_source_text, "std::rethrow_exception(startupException)", event_loop_thread_source)
@@ -308,6 +343,11 @@ def main() -> None:
     require(
         tests_cmake_text,
         "test_event_loop_control_saturation.cpp threading lifecycle",
+        tests_cmake,
+    )
+    require(
+        tests_cmake_text,
+        "test_event_loop_fair_budget.cpp threading lifecycle",
         tests_cmake,
     )
     require(

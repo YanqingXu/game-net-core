@@ -104,27 +104,38 @@ int TimerQueue::pollTimeoutMs(int defaultTimeoutMs) const {
     return std::min(defaultTimeoutMs, nextTimerMs);
 }
 
-std::vector<std::exception_ptr> TimerQueue::handleExpired(gamenet::base::Timestamp now) {
+TimerQueue::ExpiredResult TimerQueue::handleExpired(
+    gamenet::base::Timestamp now,
+    std::size_t maxCount) {
     loop_->assertInLoopThread();
     if (timers_.empty() || timers_.begin()->second->expiration > now) {
         return {};
     }
 
-    auto expired = getExpired(now);
-    std::vector<std::exception_ptr> exceptions;
-    exceptions.reserve(expired.size());
+    ExpiredResult result;
+    result.oldestReadyLatency =
+        now - timers_.begin()->second->expiration;
+    auto expired = getExpired(now, maxCount);
+    result.drained = expired.size();
+    result.exceptions.reserve(expired.size());
     for (const auto& timer : expired) {
         if (!timer->canceled) {
             try {
                 timer->callback();
             } catch (...) {
                 timer->canceled = true;
-                exceptions.push_back(std::current_exception());
+                result.exceptions.push_back(std::current_exception());
             }
         }
     }
     reset(expired, gamenet::base::now());
-    return exceptions;
+
+    const TimerKey sentry{
+        gamenet::base::now(),
+        std::numeric_limits<std::int64_t>::max()};
+    result.remaining = static_cast<std::size_t>(
+        std::distance(timers_.begin(), timers_.upper_bound(sentry)));
+    return result;
 }
 
 bool TimerQueue::insert(TimerPtr timer) {
@@ -139,17 +150,20 @@ bool TimerQueue::insert(TimerPtr timer) {
     return earliestChanged;
 }
 
-std::vector<TimerQueue::TimerPtr> TimerQueue::getExpired(gamenet::base::Timestamp now) {
+std::vector<TimerQueue::TimerPtr> TimerQueue::getExpired(
+    gamenet::base::Timestamp now,
+    std::size_t maxCount) {
     std::vector<TimerPtr> expired;
     const TimerKey sentry{now, std::numeric_limits<std::int64_t>::max()};
     const auto end = timers_.upper_bound(sentry);
 
-    for (auto it = timers_.begin(); it != end; ++it) {
+    auto it = timers_.begin();
+    for (; it != end && expired.size() < maxCount; ++it) {
         it->second->inQueue = false;
         expired.push_back(it->second);
     }
 
-    timers_.erase(timers_.begin(), end);
+    timers_.erase(timers_.begin(), it);
     return expired;
 }
 

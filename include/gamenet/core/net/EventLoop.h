@@ -110,6 +110,11 @@ struct EventLoopOptions {
     std::size_t maxLifecycleNodes{262144};
     // Owner-thread callback budget for one lifecycle drain round.
     std::size_t maxLifecycleCallbacksPerIteration{1024};
+    // Owner-thread fairness budgets. Ready work beyond these limits remains
+    // owned by its source and forces another non-blocking loop turn.
+    std::size_t maxActiveChannelsPerIteration{64};
+    std::size_t maxTimersPerIteration{1024};
+    std::size_t maxControlCallbacksPerIteration{64};
 
     void validate() const;
 };
@@ -189,6 +194,8 @@ private:
     void trackCompletionOperation(void* operation);
     void handleRead(gamenet::base::Timestamp receiveTime);
     void dispatchActiveChannels();
+    bool hasPendingActiveChannels() const noexcept;
+    void doExpiredTimers(gamenet::base::Timestamp now);
     void retireCurrentChannel(std::unique_ptr<Channel> channel) noexcept;
     void doControlSources();
     void doLifecycleNodes();
@@ -222,6 +229,7 @@ private:
     platform::WakeupFdPair wakeupFds_;
     std::unique_ptr<Channel> wakeupChannel_;
     ChannelList activeChannels_;
+    std::size_t activeChannelCursor_;
     Channel* currentActiveChannel_;
     std::unique_ptr<Channel> retiredCurrentChannel_;
     EventLoopMetricCallback eventLoopMetricCallback_;

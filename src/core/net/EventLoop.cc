@@ -62,6 +62,7 @@ struct EventLoopControlSource::State {
 
     struct Slot {
         std::shared_ptr<EventLoop::Functor> callback;
+        gamenet::base::Timestamp pendingSince{};
         std::uint64_t generation{0};
         bool active{false};
     };
@@ -86,6 +87,7 @@ struct EventLoopControlSource::State {
 
 struct EventLoopLifecycleSource::Node {
     std::shared_ptr<EventLoop::Functor> callback;
+    gamenet::base::Timestamp pendingSince{};
     Node* dirtyNext{nullptr};
     std::uint64_t id{0};
     std::uint64_t generation{1};
@@ -158,6 +160,7 @@ PostResult EventLoopControlSource::notify() const noexcept {
         state->mergedNotifications.fetch_add(1, std::memory_order_relaxed);
     } else {
         state->pendingWords[wordIndex] |= mask;
+        state->slots[slot_].pendingSince = gamenet::base::now();
         ++state->pendingCount;
         state->pendingPeak =
             (std::max)(state->pendingPeak, state->pendingCount);
@@ -213,6 +216,7 @@ PostResult EventLoopLifecycleSource::signal() const noexcept {
     }
 
     node->dirty = true;
+    node->pendingSince = gamenet::base::now();
     node->pendingGeneration = generation_;
     node->dirtyNext = nullptr;
     if (state->dirtyTail == nullptr) {
@@ -291,6 +295,19 @@ void EventLoopOptions::validate() const {
         throw std::invalid_argument(
             "EventLoop lifecycle callback budget must be positive");
     }
+    if (maxActiveChannelsPerIteration == 0) {
+        throw std::invalid_argument(
+            "EventLoop active Channel budget must be positive");
+    }
+    if (maxTimersPerIteration == 0) {
+        throw std::invalid_argument(
+            "EventLoop expired timer budget must be positive");
+    }
+    if (maxControlCallbacksPerIteration == 0 ||
+        maxControlCallbacksPerIteration > kMaxControlSources) {
+        throw std::invalid_argument(
+            "EventLoop control callback budget must be within the supported bound");
+    }
 }
 
 EventLoop::EventLoop(EventLoopOptions options)
@@ -316,6 +333,7 @@ EventLoop::EventLoop(EventLoopOptions options)
       timerQueue_(std::make_unique<TimerQueue>(this)),
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
+      activeChannelCursor_(0),
       currentActiveChannel_(nullptr),
       pendingFunctorPeak_(0),
       wakeupCount_(0),
@@ -361,16 +379,17 @@ void EventLoop::loop() {
     looping_ = true;
 
     while (!quit_) {
-        activeChannels_.clear();
-        const int pollTimeout =
-            (hasPendingControlSources() || hasPendingLifecycleNodes())
-            ? 0
-            : timerQueue_->pollTimeoutMs(10000);
-        pollReturnTime_ = poller_->poll(pollTimeout, &activeChannels_);
-        dispatchActiveChannels();
-        for (auto& exception : timerQueue_->handleExpired(gamenet::base::now())) {
-            handleCallbackException(EventLoopCallbackSource::Timer, exception);
+        if (!hasPendingActiveChannels()) {
+            activeChannels_.clear();
+            activeChannelCursor_ = 0;
+            const int pollTimeout =
+                (hasPendingControlSources() || hasPendingLifecycleNodes())
+                ? 0
+                : timerQueue_->pollTimeoutMs(10000);
+            pollReturnTime_ = poller_->poll(pollTimeout, &activeChannels_);
         }
+        dispatchActiveChannels();
+        doExpiredTimers(gamenet::base::now());
         doControlSources();
         doLifecycleNodes();
         doPendingFunctors(options_.maxFunctorsPerIteration);
@@ -387,8 +406,11 @@ void EventLoop::loop() {
     // IOCP: CancelIoEx publishes completion packets rather than synchronously
     // completing connection-owned operation storage.
     while (true) {
-        activeChannels_.clear();
-        pollReturnTime_ = poller_->poll(0, &activeChannels_);
+        if (!hasPendingActiveChannels()) {
+            activeChannels_.clear();
+            activeChannelCursor_ = 0;
+            pollReturnTime_ = poller_->poll(0, &activeChannels_);
+        }
         dispatchActiveChannels();
 
         const bool hasPending = hasPendingFunctors();
@@ -406,6 +428,7 @@ void EventLoop::loop() {
         if (!hasPendingFunctors() &&
             !hasPendingControlSources() &&
             !hasPendingLifecycleNodes() &&
+            !hasPendingActiveChannels() &&
             !poller_->hasPendingCompletionOperations()) {
             break;
         }
@@ -423,9 +446,13 @@ void EventLoop::loop() {
     // fixed point. A self-rearmed internal callback remains legal, but no
     // external producer can enter after Quiescing linearized.
     while (true) {
-        if (poller_->hasPendingCompletionOperations()) {
-            activeChannels_.clear();
-            pollReturnTime_ = poller_->poll(0, &activeChannels_);
+        if (hasPendingActiveChannels() ||
+            poller_->hasPendingCompletionOperations()) {
+            if (!hasPendingActiveChannels()) {
+                activeChannels_.clear();
+                activeChannelCursor_ = 0;
+                pollReturnTime_ = poller_->poll(0, &activeChannels_);
+            }
             dispatchActiveChannels();
         }
         if (hasPendingControlSources()) {
@@ -440,6 +467,7 @@ void EventLoop::loop() {
         if (!hasPendingFunctors() &&
             !hasPendingControlSources() &&
             !hasPendingLifecycleNodes() &&
+            !hasPendingActiveChannels() &&
             !poller_->hasPendingCompletionOperations()) {
             break;
         }
@@ -827,13 +855,14 @@ void EventLoop::removeChannel(Channel* channel) {
 
     poller_->removeChannel(channel);
 
-    if (eventHandling_ && channel->activeBatchEpoch_ == activeBatchEpoch_) {
+    if (channel->activeBatchEpoch_ == activeBatchEpoch_) {
         const std::size_t index = channel->activeBatchIndex_;
-        if (index >= activeChannels_.size() ||
-            activeChannels_[index] != channel) {
+        if (index < activeChannels_.size() &&
+            activeChannels_[index] == channel) {
+            activeChannels_[index] = nullptr;
+        } else if (eventHandling_) {
             LOG_FATAL << "EventLoop active Channel batch membership is corrupt";
         }
-        activeChannels_[index] = nullptr;
     }
     channel->addedToLoop_ = false;
     channel->advanceRegistrationGeneration();
@@ -877,29 +906,40 @@ void EventLoop::dispatchActiveChannels() {
     if (eventHandling_) {
         throw std::logic_error("EventLoop active Channel dispatch cannot re-enter");
     }
+    if (!hasPendingActiveChannels()) {
+        activeChannels_.clear();
+        activeChannelCursor_ = 0;
+        return;
+    }
 
-    ++activeBatchEpoch_;
-    if (activeBatchEpoch_ == 0) {
+    if (activeChannelCursor_ == 0) {
         ++activeBatchEpoch_;
+        if (activeBatchEpoch_ == 0) {
+            ++activeBatchEpoch_;
+        }
+
+        for (std::size_t index = 0; index < activeChannels_.size(); ++index) {
+            Channel* channel = activeChannels_[index];
+            if (channel == nullptr) {
+                continue;
+            }
+            if (channel->activeBatchEpoch_ == activeBatchEpoch_) {
+                LOG_FATAL << "Poller returned one Channel more than once in an active batch";
+            }
+            channel->activeBatchEpoch_ = activeBatchEpoch_;
+            channel->activeBatchIndex_ = index;
+        }
     }
 
-    for (std::size_t index = 0; index < activeChannels_.size(); ++index) {
-        Channel* channel = activeChannels_[index];
-        if (channel == nullptr) {
-            continue;
-        }
-        if (channel->activeBatchEpoch_ == activeBatchEpoch_) {
-            LOG_FATAL << "Poller returned one Channel more than once in an active batch";
-        }
-        channel->activeBatchEpoch_ = activeBatchEpoch_;
-        channel->activeBatchIndex_ = index;
-    }
-
+    std::size_t drained = 0;
     eventHandling_ = true;
-    for (Channel* channel : activeChannels_) {
+    while (activeChannelCursor_ < activeChannels_.size() &&
+           drained < options_.maxActiveChannelsPerIteration) {
+        Channel* channel = activeChannels_[activeChannelCursor_++];
         if (channel == nullptr) {
             continue;
         }
+        ++drained;
         currentActiveChannel_ = channel;
         try {
             channel->handleEvent(pollReturnTime_);
@@ -912,6 +952,63 @@ void EventLoop::dispatchActiveChannels() {
         retiredCurrentChannel_.reset();
     }
     eventHandling_ = false;
+
+    std::size_t remaining = 0;
+    for (std::size_t index = activeChannelCursor_;
+         index < activeChannels_.size();
+         ++index) {
+        if (activeChannels_[index] != nullptr) {
+            ++remaining;
+        }
+    }
+
+    EventLoopMetricSample sample;
+    sample.event = EventLoopMetricEvent::ActiveChannelsDrained;
+    sample.loop = this;
+    sample.drainedWork = drained;
+    sample.remainingWork = remaining;
+    const auto now = gamenet::base::now();
+    if (pollReturnTime_ <= now) {
+        sample.oldestReadyLatency = now - pollReturnTime_;
+    }
+    sample.budgetExhausted = remaining != 0;
+    emitEventLoopMetric(sample);
+
+    if (remaining == 0) {
+        activeChannels_.clear();
+        activeChannelCursor_ = 0;
+    }
+}
+
+bool EventLoop::hasPendingActiveChannels() const noexcept {
+    for (std::size_t index = activeChannelCursor_;
+         index < activeChannels_.size();
+         ++index) {
+        if (activeChannels_[index] != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void EventLoop::doExpiredTimers(gamenet::base::Timestamp now) {
+    auto result =
+        timerQueue_->handleExpired(now, options_.maxTimersPerIteration);
+    for (auto& exception : result.exceptions) {
+        handleCallbackException(EventLoopCallbackSource::Timer, exception);
+    }
+    if (result.drained == 0) {
+        return;
+    }
+
+    EventLoopMetricSample sample;
+    sample.event = EventLoopMetricEvent::TimersDrained;
+    sample.loop = this;
+    sample.drainedWork = result.drained;
+    sample.remainingWork = result.remaining;
+    sample.oldestReadyLatency = result.oldestReadyLatency;
+    sample.budgetExhausted = result.remaining != 0;
+    emitEventLoopMetric(sample);
 }
 
 void EventLoop::retireCurrentChannel(
@@ -971,28 +1068,50 @@ bool EventLoop::hasPendingFunctors() const {
 void EventLoop::doControlSources() {
     assertInLoopThread();
 
-    std::size_t pendingCount = 0;
+    std::fill(
+        controlDrainWords_.begin(),
+        controlDrainWords_.end(),
+        std::uint64_t{0});
+    std::size_t selectedCount = 0;
     std::size_t pendingPeak = 0;
+    gamenet::base::Timestamp oldestPending{};
     {
         std::lock_guard lock(controlState_->mutex);
-        std::copy(
-            controlState_->pendingWords.begin(),
-            controlState_->pendingWords.end(),
-            controlDrainWords_.begin());
-        std::fill(
-            controlState_->pendingWords.begin(),
-            controlState_->pendingWords.end(),
-            std::uint64_t{0});
-        pendingCount = controlState_->pendingCount;
-        controlState_->pendingCount = 0;
         pendingPeak = controlState_->pendingPeak;
         controlState_->pendingPeak = 0;
+        for (std::size_t wordIndex = 0;
+             wordIndex < controlState_->pendingWords.size() &&
+             selectedCount < options_.maxControlCallbacksPerIteration;
+             ++wordIndex) {
+            auto available = controlState_->pendingWords[wordIndex];
+            while (available != 0 &&
+                   selectedCount < options_.maxControlCallbacksPerIteration) {
+                const auto bitIndex =
+                    static_cast<std::size_t>(std::countr_zero(available));
+                const std::uint64_t mask = std::uint64_t{1} << bitIndex;
+                const std::size_t slotIndex = wordIndex * 64 + bitIndex;
+                available &= available - 1;
+                controlState_->pendingWords[wordIndex] &= ~mask;
+                controlDrainWords_[wordIndex] |= mask;
+                --controlState_->pendingCount;
+                ++selectedCount;
+
+                const auto pendingSince =
+                    controlState_->slots[slotIndex].pendingSince;
+                if (oldestPending == gamenet::base::Timestamp{} ||
+                    pendingSince < oldestPending) {
+                    oldestPending = pendingSince;
+                }
+                controlState_->slots[slotIndex].pendingSince = {};
+            }
+        }
     }
 
-    if (pendingCount == 0) {
+    if (selectedCount == 0) {
         return;
     }
 
+    std::size_t drainedCount = 0;
     for (std::size_t wordIndex = 0;
          wordIndex < controlDrainWords_.size();
          ++wordIndex) {
@@ -1017,6 +1136,7 @@ void EventLoop::doControlSources() {
                 callback = slot.callback;
             }
 
+            ++drainedCount;
             std::exception_ptr exception;
             try {
                 (*callback)();
@@ -1043,24 +1163,42 @@ void EventLoop::doControlSources() {
 
     EventLoopMetricSample sample;
     sample.event = EventLoopMetricEvent::ControlSourcesDrained;
-    sample.pendingControlSources = pendingCount;
+    sample.loop = this;
+    sample.pendingControlSources = drainedCount;
     sample.pendingControlSourcePeak =
-        (std::max)(pendingPeak, pendingCount);
+        (std::max)(pendingPeak, selectedCount);
     sample.wakeupCount = wakeupCount_.load(std::memory_order_relaxed);
+    sample.drainedWork = drainedCount;
+    sample.remainingWork = pendingControlSourceCount();
+    const auto now = gamenet::base::now();
+    if (oldestPending != gamenet::base::Timestamp{} &&
+        oldestPending <= now) {
+        sample.oldestReadyLatency = now - oldestPending;
+    }
+    sample.budgetExhausted = sample.remainingWork != 0;
     emitEventLoopMetric(sample);
+
+    if (sample.remainingWork != 0) {
+        wakeup();
+    }
 }
 
 void EventLoop::doLifecycleNodes() {
     assertInLoopThread();
 
     std::size_t roundCount = 0;
+    gamenet::base::Timestamp oldestPending{};
     {
         std::lock_guard lock(lifecycleState_->mutex);
         roundCount = std::min(
             options_.maxLifecycleCallbacksPerIteration,
             lifecycleState_->pendingCount);
+        if (lifecycleState_->dirtyHead != nullptr) {
+            oldestPending = lifecycleState_->dirtyHead->pendingSince;
+        }
     }
 
+    std::size_t drainedCount = 0;
     for (std::size_t index = 0; index < roundCount; ++index) {
         std::shared_ptr<EventLoopLifecycleSource::Node> node;
         std::shared_ptr<Functor> callback;
@@ -1091,6 +1229,7 @@ void EventLoop::doLifecycleNodes() {
             callback = node->callback;
             callbackGeneration = node->pendingGeneration;
             node->pendingGeneration = 0;
+            node->pendingSince = {};
             node->active = true;
             lifecycleState_->activeNode = node.get();
             lifecycleState_->activeGeneration = callbackGeneration;
@@ -1129,9 +1268,26 @@ void EventLoop::doLifecycleNodes() {
                 EventLoopCallbackSource::Lifecycle,
                 exception);
         }
+        ++drainedCount;
     }
 
-    if (hasPendingLifecycleNodes()) {
+    const auto remaining = pendingLifecycleNodeCount();
+    if (drainedCount != 0) {
+        EventLoopMetricSample sample;
+        sample.event = EventLoopMetricEvent::LifecycleNodesDrained;
+        sample.loop = this;
+        sample.drainedWork = drainedCount;
+        sample.remainingWork = remaining;
+        const auto now = gamenet::base::now();
+        if (oldestPending != gamenet::base::Timestamp{} &&
+            oldestPending <= now) {
+            sample.oldestReadyLatency = now - oldestPending;
+        }
+        sample.budgetExhausted = remaining != 0;
+        emitEventLoopMetric(sample);
+    }
+
+    if (remaining != 0) {
         // The remaining intrusive entries are already allocated and linked.
         // A wakeup requests another fair loop turn without queue admission.
         wakeup();
@@ -1165,6 +1321,10 @@ void EventLoop::doPendingFunctors(std::size_t maxCount) {
         sample.rejectedFunctors = rejectedFunctorCount_.load(std::memory_order_relaxed);
         sample.callbackExceptions = callbackExceptionCount_.load(std::memory_order_relaxed);
         sample.oldestPendingLatency = now - functors.front().enqueuedAt;
+        sample.drainedWork = functors.size();
+        sample.remainingWork = pendingFunctorCount();
+        sample.oldestReadyLatency = sample.oldestPendingLatency;
+        sample.budgetExhausted = sample.remainingWork != 0;
         emitEventLoopMetric(sample);
     }
 

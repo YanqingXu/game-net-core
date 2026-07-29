@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <exception>
@@ -35,6 +36,13 @@ public:
     void cancel(TimerId timerId);
 
 private:
+    struct ExpiredResult {
+        std::vector<std::exception_ptr> exceptions;
+        std::size_t drained{0};
+        std::size_t remaining{0};
+        Duration oldestReadyLatency{Duration::zero()};
+    };
+
     struct Timer {
         Timer(TimerCallback timerCallback, gamenet::base::Timestamp expirationTime, Duration repeatInterval, std::int64_t id)
             : callback(std::move(timerCallback)),
@@ -62,10 +70,14 @@ private:
     void addTimerInLoop(TimerPtr timer);
     void cancelInLoop(TimerId timerId);
     int pollTimeoutMs(int defaultTimeoutMs) const;
-    std::vector<std::exception_ptr> handleExpired(gamenet::base::Timestamp now);
+    ExpiredResult handleExpired(
+        gamenet::base::Timestamp now,
+        std::size_t maxCount);
 
     bool insert(TimerPtr timer);
-    std::vector<TimerPtr> getExpired(gamenet::base::Timestamp now);
+    std::vector<TimerPtr> getExpired(
+        gamenet::base::Timestamp now,
+        std::size_t maxCount);
     void reset(const std::vector<TimerPtr>& expired, gamenet::base::Timestamp now);
 
     EventLoop* loop_;

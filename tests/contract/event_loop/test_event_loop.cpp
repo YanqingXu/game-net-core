@@ -92,6 +92,12 @@ int main() {
         GAMENET_TEST_ASSERT(legacyShape.oldestPendingLatency == 6ms);
         GAMENET_TEST_ASSERT(legacyShape.pendingControlSources == 0);
         GAMENET_TEST_ASSERT(legacyShape.controlNotifications == 0);
+        GAMENET_TEST_ASSERT(legacyShape.drainedWork == 0);
+        GAMENET_TEST_ASSERT(legacyShape.remainingWork == 0);
+        GAMENET_TEST_ASSERT(
+            legacyShape.oldestReadyLatency ==
+            gamenet::net::EventLoopMetricSample::Duration::zero());
+        GAMENET_TEST_ASSERT(!legacyShape.budgetExhausted);
     }
 
     gamenet::net::EventLoopExecutor expiredExecutor;

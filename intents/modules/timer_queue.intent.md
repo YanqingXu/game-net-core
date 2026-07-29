@@ -19,6 +19,9 @@ thread-affinity and lifecycle discipline.
 - store one-shot and repeating timer metadata
 - provide the nearest timeout to EventLoop before each backend poll
 - trigger ready timers on the owner EventLoop thread
+- extract at most EventLoop's validated expired-timer budget per loop turn;
+  later ready timers remain in the ordered container and keep the next poll
+  timeout at zero
 - reschedule repeating timers explicitly
 - support cross-thread add/cancel through EventLoop scheduling APIs
 
@@ -39,13 +42,15 @@ thread-affinity and lifecycle discipline.
 - ready timer callbacks run on the owner loop thread
 - repeating timers are only reinserted if they were not canceled
 - cancel must prevent future firing, even if requested cross-thread
+- a callback may cancel a later ready timer that was not extracted into the
+  current budget; removal from the ordered container prevents its later firing
 
 ---
 
 ## 5. Collaboration
 - owned by EventLoop
 - EventLoop calls pollTimeoutMs(defaultTimeoutMs) before Poller::poll()
-- EventLoop calls handleExpired(now) after active I/O dispatch
+- EventLoop calls handleExpired(now, maxCount) after active I/O dispatch
 - relies on EventLoop runInLoop / queueInLoop for cross-thread add/cancel
 - may later provide scheduling substrate for connection idle timeout or delayed shutdown features
 
@@ -92,6 +97,8 @@ Exposed through EventLoop:
 - cancel before expiration prevents callback execution
 - canceling a ready timer from an earlier ready callback prevents the canceled
   callback from firing
+- a ready population larger than the configured per-iteration budget retains
+  order, yields to later EventLoop phases, and reports exact remaining work
 - timer queue teardown owns only timer metadata and does not leave backend registration behind
 
 ---
