@@ -95,6 +95,11 @@ def main() -> None:
 
     require(source_text, "connection->trySend(payload)", benchmark_source)
     require(source_text, "connection->trySend(buffer->peek(), readable)", benchmark_source)
+    require(
+        source_text,
+        "config.connections = parseSize(value, option, 1, 100000)",
+        benchmark_source,
+    )
     assert "connection->send(" not in source_text, "Core benchmark must not ignore send admission"
     require(source_text, "result.requestedBytes != result.acceptedBytes + result.rejectedBytes", benchmark_source)
     require(source_text, "GetProcessMemoryInfo", benchmark_source)
@@ -120,6 +125,12 @@ def main() -> None:
     require(docs_text, "-DGAMENET_BUILD_BENCHMARKS=ON", docs)
     require(docs_text, "--scenario echo", docs)
     require(docs_text, "--scenario connections", docs)
+    require(
+        docs_text,
+        "--scenario connections --connections 10000",
+        docs,
+    )
+    require(docs_text, "structured idle-memory profile", docs)
     require(docs_text, "--scenario slow-client", docs)
     require(docs_text, "Raw JSON evidence", docs)
 

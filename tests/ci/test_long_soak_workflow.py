@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 86
+EXPECTED_THREADING_TESTS = 87
 EXPECTED_PHASE4_SOAK_TESTS = 12
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -214,7 +214,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 113", workflow)
+    require(inventory, "--expected-total 114", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=7", workflow)
     require(inventory, "--expect-label broadcast=5", workflow)
@@ -267,7 +267,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 113",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 114",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -384,8 +384,8 @@ def main() -> None:
     assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
         "      - name: Check repository guards"
     ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
-    require(self_hosted_ci, "--expected-total 113", workflow)
-    require(self_hosted_ci, "inventory+=(--expect-label threading=86)", workflow)
+    require(self_hosted_ci, "--expected-total 114", workflow)
+    require(self_hosted_ci, "inventory+=(--expect-label threading=87)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
     require(self_hosted_ci, "--expected-total 1", workflow)

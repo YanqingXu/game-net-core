@@ -340,7 +340,7 @@ Config parseArgs(int argc, char* argv[]) {
         if (option == "--scenario") {
             config.scenario = value;
         } else if (option == "--connections") {
-            config.connections = parseSize(value, option, 1, 4096);
+            config.connections = parseSize(value, option, 1, 100000);
             config.connectionsProvided = true;
         } else if (option == "--threads") {
             config.eventLoopThreads = parseSize(value, option, 0, 64);

@@ -659,6 +659,9 @@ void TcpConnection::finishClose() {
     setState(kDisconnected);
     forceClosePending_ = false;
     backpressure_->onClosed();
+#ifdef _WIN32
+    iocpTransport_->releaseReadStorage();
+#endif
     clearBufferedOutputInLoop();
     if (!socketClosed()) {
         socket_->close();

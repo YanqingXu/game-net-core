@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 128 |
+| 61 | 30 | 20 | 11 | 129 |
 
 ## Production-Hardening Worktree State
 
@@ -156,6 +156,15 @@ the source of truth.
   worktree, a 67,149,824-byte (58.93%) reduction. The benchmark's post-drain
   working-set-delta median fell from 67,481,600 to 352,256 bytes. This is local
   slice evidence, not a frozen M3 Release performance run.
+- M3-G4 replaces the embedded 64 KiB Windows read array with one
+  connection-local allocation created on the first `WSARecv`, reused behind a
+  fixed 4 KiB submission/retention ceiling, and released only after final
+  completion drain. It deliberately introduces no shared pool or cross-loop
+  return path. On the same Windows runner and compiler, the structured Release
+  10k-idle profile reduced working-set delta from 713,674,752 bytes
+  (71,367.475 bytes/connection) at baseline `649880d` to 100,343,808 bytes
+  (10,034.381 bytes/connection), an 85.94% reduction. Seven one-connection
+  samples reduced the median delta from 126,976 to 61,440 bytes.
 - `connection_backpressure_controller` and `graceful_shutdown` are active
   `GameNet::core` implementation authority rather than deferred design assets.
 - MetricsExporter is active but provisional, with thread-safe
@@ -251,7 +260,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 113 configured CTest tests: 8 unit tests, 92 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 114 configured CTest tests: 8 unit tests, 93 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -264,12 +273,12 @@ Connector/TcpClient typed admission and generation races, and IOCP synchronous
 submission errors.
 
 On 2026-07-29, the current Windows MSVC worktree passed a full Debug build and
-113/113 CTests; the two new IOCP segmented/partial-write contracts also passed
-20/20 focused repeats each. The 2026-07-27 snapshot separately passed full
+114/114 CTests; the IOCP segmented/partial-write contracts passed 20/20 focused
+repeats each and the bounded read-storage contract passed 50/50. The 2026-07-27 snapshot separately passed full
 Debug, Release, and AddressSanitizer builds and 109/109 CTests in all three
 configurations.
-The current inventory is unit=8, contract=92, integration=13, threading=86,
-lifecycle=92, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+The current inventory is unit=8, contract=93, integration=13, threading=87,
+lifecycle=93, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed, including the public API manifest and deterministic
 compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
 50 for 600 executions. A clean Release install exposed `DispatchResult` and
@@ -526,7 +535,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   CI. The long-soak repository guard parity includes the EventLoop contract guard,
   keeping manual soak guards aligned with the ordinary CI guard surface. The
   current workflow input defaults to repeat 50 with a 60-second per-test
-  timeout. The workflow locks the 113-test inventory, `threading=86`,
+  timeout. The workflow locks the 114-test inventory, `threading=87`,
   `game_pipeline=7`, and `broadcast=5`, then verifies the raw result lines for
   every selected test and exact repeat count. Its two
   `gamenet.ctest_repeat_evidence.v1` summaries include per-test executions,

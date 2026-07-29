@@ -190,6 +190,13 @@ def main() -> None:
         / "tcp_connection"
         / "test_tcp_connection_iocp_partial_write.cpp"
     )
+    connection_iocp_read_storage_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_read_storage.cpp"
+    )
     connection_repeated_force_close_test = (
         repo_root / "tests" / "contract" / "tcp_connection" / "test_tcp_connection_repeated_force_close.cpp"
     )
@@ -377,6 +384,10 @@ def main() -> None:
     assert connection_iocp_partial_write_test.exists(), (
         "missing TCP connection IOCP partial-write contract: "
         f"{connection_iocp_partial_write_test}"
+    )
+    assert connection_iocp_read_storage_test.exists(), (
+        "missing TCP connection IOCP read-storage contract: "
+        f"{connection_iocp_read_storage_test}"
     )
     assert connection_repeated_force_close_test.exists(), (
         f"missing TCP connection repeated force-close contract: {connection_repeated_force_close_test}"
@@ -1305,6 +1316,7 @@ def main() -> None:
         connection_cross_thread_send_test,
         connection_iocp_segmented_write_test,
         connection_iocp_partial_write_test,
+        connection_iocp_read_storage_test,
         connection_shutdown_pending_test,
         connection_cross_thread_shutdown_test,
         connection_repeated_shutdown_test,
@@ -1641,6 +1653,7 @@ def main() -> None:
     require(tcp_connection_intent_text, "test_tcp_connection_cross_thread_force_close_pending_write.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_iocp_segmented_write.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "test_tcp_connection_iocp_partial_write.cpp", tcp_connection_intent)
+    require(tcp_connection_intent_text, "test_tcp_connection_iocp_read_storage.cpp", tcp_connection_intent)
     require(tcp_connection_intent_text, "force-close only the offending connection", tcp_connection_intent)
     require(tcp_connection_intent_text, "disconnected and close callback exceptions are reported and contained", tcp_connection_intent)
 
@@ -1651,6 +1664,10 @@ def main() -> None:
     require(iocp_transport_header_text, "[[nodiscard]] int startWrite", iocp_transport_header)
     require(iocp_transport_header_text, "std::deque<WriteSegment>", iocp_transport_header)
     require(iocp_transport_header_text, "discardBufferedWrites", iocp_transport_header)
+    require(iocp_transport_header_text, "kReadChunkBytes = 4 * 1024", iocp_transport_header)
+    require(iocp_transport_header_text, "std::unique_ptr<char[]> readStorage_", iocp_transport_header)
+    require(iocp_transport_header_text, "releaseReadStorage", iocp_transport_header)
+    assert "std::array<char, 65536> readStorage_" not in iocp_transport_header_text
     assert "writeStorage_" not in iocp_transport_header_text
 
     iocp_transport_source_text = iocp_transport_source.read_text(encoding="utf-8")
@@ -1658,6 +1675,7 @@ def main() -> None:
     require(iocp_transport_source_text, "ERROR_NOT_FOUND", iocp_transport_source)
     require(iocp_transport_source_text, "front.offset += completed", iocp_transport_source)
     require(iocp_transport_source_text, "writeSegments_.pop_front()", iocp_transport_source)
+    require(iocp_transport_source_text, "std::make_unique_for_overwrite<char[]>", iocp_transport_source)
     assert "setRevents" not in iocp_transport_source_text
 
     tcp_connection_source_text = tcp_connection_source.read_text(encoding="utf-8")
@@ -1883,6 +1901,24 @@ def main() -> None:
         "iocpPeakWriteSegmentCountForTesting() == 1",
         connection_iocp_partial_write_test,
     )
+    iocp_read_storage_text = connection_iocp_read_storage_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        iocp_read_storage_text,
+        "iocpCurrentReadStorageBytesForTesting() == 0",
+        connection_iocp_read_storage_test,
+    )
+    require(
+        iocp_read_storage_text,
+        "iocpReadStorageAllocationCountForTesting() == 1",
+        connection_iocp_read_storage_test,
+    )
+    require(
+        iocp_read_storage_text,
+        "observedReadCancellation.load(",
+        connection_iocp_read_storage_test,
+    )
 
     iocp_poller_source_text = iocp_poller_source.read_text(encoding="utf-8")
     require(iocp_poller_source_text, "IocpOperationKind::Read", iocp_poller_source)
@@ -1951,6 +1987,7 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_connection_completion_drain.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_iocp_segmented_write.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_iocp_partial_write.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_connection_iocp_read_storage.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_close_reason.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_force_close.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_connection_repeated_connect_destroyed.cpp", tests_cmake)

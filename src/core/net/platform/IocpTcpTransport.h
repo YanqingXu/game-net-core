@@ -5,10 +5,10 @@
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/platform/IocpOperation.h"
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <string>
 
 namespace gamenet::net {
@@ -17,6 +17,8 @@ class Channel;
 
 class IocpTcpTransport {
 public:
+    static constexpr std::size_t kReadChunkBytes = 4 * 1024;
+
     explicit IocpTcpTransport(Channel* channel);
 
     // Returns zero once an overlapped operation owns a future completion, or
@@ -24,6 +26,7 @@ public:
     [[nodiscard]] int startRead(std::size_t maxBytes);
     ssize_t completeRead(Buffer* input, int* savedErrno);
     bool readPending() const noexcept;
+    void releaseReadStorage() noexcept;
     void enqueueWrite(std::string payload);
     [[nodiscard]] int startWrite();
     ssize_t completeWrite(int* savedErrno);
@@ -42,7 +45,8 @@ private:
     Channel* channel_;
     IocpOperation readOperation_;
     IocpOperation writeOperation_;
-    std::array<char, 65536> readStorage_{};
+    std::unique_ptr<char[]> readStorage_;
+    std::size_t readStorageBytes_{0};
     std::deque<WriteSegment> writeSegments_;
     std::size_t bufferedWriteBytes_{0};
     WSABUF readBuffer_{};
@@ -64,6 +68,13 @@ void injectNextIocpReadSubmissionErrorForTesting(int error) noexcept;
 void injectNextIocpWriteSubmissionErrorForTesting(int error) noexcept;
 void setIocpCompletionObserverForTesting(
     IocpCompletionObserverForTesting observer) noexcept;
+std::size_t iocpReadChunkBytesForTesting() noexcept;
+std::size_t iocpCurrentReadStorageBytesForTesting() noexcept;
+std::size_t iocpPeakReadStorageBytesForTesting() noexcept;
+std::size_t iocpMaxReadSubmissionBytesForTesting() noexcept;
+std::uint64_t iocpReadStorageAllocationCountForTesting() noexcept;
+std::uint64_t iocpReadStorageReleaseCountForTesting() noexcept;
+std::uint64_t iocpPositiveReadCompletionCountForTesting() noexcept;
 void setIocpWriteChunkLimitForTesting(std::size_t bytes) noexcept;
 std::uint64_t iocpWriteSubmissionCountForTesting() noexcept;
 std::size_t iocpMaxWriteSubmissionBytesForTesting() noexcept;

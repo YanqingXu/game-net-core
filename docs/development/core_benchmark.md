@@ -52,12 +52,18 @@ $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benc
 & $exe --scenario connections --connections 256 --threads 1 `
   --settle-ms 1000 --timeout-ms 30000
 
+& $exe --scenario connections --connections 10000 --threads 1 `
+  --settle-ms 2000 --timeout-ms 120000
+
 & $exe --scenario slow-client --connections 4 --threads 1 `
   --slow-bytes 8388608 --high-water 65536 `
   --settle-ms 1000 --timeout-ms 30000
 ```
 
-The two echo commands provide the first one-worker/two-worker scaling point.
+The 10k connection command is the structured idle-memory profile used by
+M3-G4; compare `working_set_delta_bytes` and
+`approx_bytes_per_connection` against the same-runner baseline. The two echo
+commands provide the first one-worker/two-worker scaling point.
 They do not alter the poller. Current Windows candidates report
 `get_queued_completion_status_ex_batch_64`, while Linux reports
 `epoll_wait_batch`. Historical Windows Core Preview artifacts report

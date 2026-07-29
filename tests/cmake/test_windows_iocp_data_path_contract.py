@@ -46,6 +46,13 @@ def main() -> None:
         / "tcp_connection"
         / "test_tcp_connection_iocp_partial_write.cpp"
     )
+    read_storage_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_iocp_read_storage.cpp"
+    )
     poller_contract_test = (
         repo_root
         / "tests"
@@ -165,6 +172,12 @@ def main() -> None:
     require(tcp_transport_text, "class IocpTcpTransport", tcp_transport)
     require(tcp_transport_text, "[[nodiscard]] int startRead", tcp_transport)
     require(tcp_transport_text, "completeRead", tcp_transport)
+    require(tcp_transport_text, "kReadChunkBytes = 4 * 1024", tcp_transport)
+    require(tcp_transport_text, "std::unique_ptr<char[]> readStorage_", tcp_transport)
+    require(tcp_transport_text, "releaseReadStorage", tcp_transport)
+    assert "std::array<char, 65536> readStorage_" not in tcp_transport_text, (
+        "idle IOCP connections must not embed the historical 64 KiB read array"
+    )
     require(tcp_transport_text, "[[nodiscard]] int startWrite", tcp_transport)
     require(tcp_transport_text, "completeWrite", tcp_transport)
     require(tcp_transport_text, "std::deque<WriteSegment>", tcp_transport)
@@ -175,6 +188,16 @@ def main() -> None:
 
     tcp_transport_source_text = tcp_transport_source.read_text(encoding="utf-8")
     require(tcp_transport_source_text, "WSARecv", tcp_transport_source)
+    require(
+        tcp_transport_source_text,
+        "std::make_unique_for_overwrite<char[]>",
+        tcp_transport_source,
+    )
+    require(
+        tcp_transport_source_text,
+        "IOCP read storage released before completion",
+        tcp_transport_source,
+    )
     require(tcp_transport_source_text, "WSASend", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Read", tcp_transport_source)
     require(tcp_transport_source_text, "IocpOperationKind::Write", tcp_transport_source)
@@ -218,6 +241,22 @@ def main() -> None:
         partial_write_test_text,
         "iocpPartialWriteCompletionCountForTesting() > 1",
         partial_write_test,
+    )
+    read_storage_test_text = read_storage_test.read_text(encoding="utf-8")
+    require(
+        read_storage_test_text,
+        "iocpCurrentReadStorageBytesForTesting() == 0",
+        read_storage_test,
+    )
+    require(
+        read_storage_test_text,
+        "iocpReadStorageAllocationCountForTesting() == 1",
+        read_storage_test,
+    )
+    require(
+        read_storage_test_text,
+        "observedReadCancellation.load(",
+        read_storage_test,
     )
     require(
         partial_write_test_text,
@@ -302,6 +341,11 @@ def main() -> None:
     require(
         tests_cmake_text,
         "test_tcp_connection_iocp_partial_write.cpp threading lifecycle",
+        tests_cmake,
+    )
+    require(
+        tests_cmake_text,
+        "test_tcp_connection_iocp_read_storage.cpp threading lifecycle",
         tests_cmake,
     )
 

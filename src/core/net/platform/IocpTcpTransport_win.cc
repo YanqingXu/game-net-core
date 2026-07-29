@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <new>
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
 #include <atomic>
 #endif
@@ -23,6 +24,12 @@ std::atomic<int> nextReadSubmissionError{0};
 std::atomic<int> nextWriteSubmissionError{0};
 std::atomic<detail::IocpCompletionObserverForTesting> completionObserver{
     nullptr};
+std::atomic<std::size_t> currentReadStorageBytes{0};
+std::atomic<std::size_t> peakReadStorageBytes{0};
+std::atomic<std::size_t> maxReadSubmissionBytes{0};
+std::atomic<std::uint64_t> readStorageAllocationCount{0};
+std::atomic<std::uint64_t> readStorageReleaseCount{0};
+std::atomic<std::uint64_t> positiveReadCompletionCount{0};
 std::atomic<std::size_t> writeChunkLimit{
     static_cast<std::size_t>((std::numeric_limits<ULONG>::max)())};
 std::atomic<std::uint64_t> writeSubmissionCount{0};
@@ -84,6 +91,25 @@ void observeWriteSubmission(std::size_t bytes) noexcept {
     updatePeak(maxWriteSubmissionBytes, bytes);
 }
 
+void observeReadStorageChange(
+    std::size_t oldBytes,
+    std::size_t newBytes) noexcept {
+    if (newBytes > oldBytes) {
+        const std::size_t total =
+            currentReadStorageBytes.fetch_add(
+                newBytes - oldBytes,
+                std::memory_order_relaxed) +
+            (newBytes - oldBytes);
+        updatePeak(peakReadStorageBytes, total);
+        return;
+    }
+    if (oldBytes > newBytes) {
+        currentReadStorageBytes.fetch_sub(
+            oldBytes - newBytes,
+            std::memory_order_relaxed);
+    }
+}
+
 }  // namespace
 #endif
 
@@ -109,8 +135,29 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
     readOperation_.bytesTransferred = 0;
     readOperation_.error = 0;
 
-    readBuffer_.buf = readStorage_.data();
-    readBuffer_.len = static_cast<ULONG>(std::min(readStorage_.size(), maxBytes));
+    const std::size_t submissionBytes =
+        (std::min)(kReadChunkBytes, maxBytes);
+    if (readStorageBytes_ < submissionBytes) {
+        try {
+            auto replacement =
+                std::make_unique_for_overwrite<char[]>(submissionBytes);
+            readStorage_ = std::move(replacement);
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            observeReadStorageChange(
+                readStorageBytes_,
+                submissionBytes);
+            readStorageAllocationCount.fetch_add(
+                1,
+                std::memory_order_relaxed);
+#endif
+            readStorageBytes_ = submissionBytes;
+        } catch (const std::bad_alloc&) {
+            return WSAENOBUFS;
+        }
+    }
+
+    readBuffer_.buf = readStorage_.get();
+    readBuffer_.len = static_cast<ULONG>(submissionBytes);
 
     DWORD flags = 0;
     DWORD bytes = 0;
@@ -147,17 +194,25 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
             sockets::lastError();
 #endif
         if (error == WSA_IO_PENDING) {
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+            updatePeak(maxReadSubmissionBytes, submissionBytes);
+#endif
             return 0;
         }
         readPending_ = false;
+        readBuffer_ = WSABUF{};
         readOperation_.error = static_cast<DWORD>(error);
         return error;
     }
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    updatePeak(maxReadSubmissionBytes, submissionBytes);
+#endif
     return 0;
 }
 
 ssize_t IocpTcpTransport::completeRead(Buffer* input, int* savedErrno) {
     readPending_ = false;
+    readBuffer_ = WSABUF{};
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
     observeCompletion(
         IocpOperationKind::Read,
@@ -170,13 +225,35 @@ ssize_t IocpTcpTransport::completeRead(Buffer* input, int* savedErrno) {
 
     const auto n = static_cast<std::size_t>(readOperation_.bytesTransferred);
     if (n > 0) {
-        input->append(readStorage_.data(), n);
+        input->append(readStorage_.get(), n);
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+        positiveReadCompletionCount.fetch_add(
+            1,
+            std::memory_order_relaxed);
+#endif
     }
     return static_cast<ssize_t>(n);
 }
 
 bool IocpTcpTransport::readPending() const noexcept {
     return readPending_;
+}
+
+void IocpTcpTransport::releaseReadStorage() noexcept {
+    if (readPending_) {
+        LOG_FATAL << "IOCP read storage released before completion";
+    }
+    if (readStorageBytes_ == 0) {
+        return;
+    }
+    const std::size_t released = readStorageBytes_;
+    readStorage_.reset();
+    readStorageBytes_ = 0;
+    readBuffer_ = WSABUF{};
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    observeReadStorageChange(released, 0);
+    readStorageReleaseCount.fetch_add(1, std::memory_order_relaxed);
+#endif
 }
 
 void IocpTcpTransport::enqueueWrite(std::string payload) {
@@ -392,6 +469,34 @@ void setIocpCompletionObserverForTesting(
     completionObserver.store(observer, std::memory_order_release);
 }
 
+std::size_t iocpReadChunkBytesForTesting() noexcept {
+    return IocpTcpTransport::kReadChunkBytes;
+}
+
+std::size_t iocpCurrentReadStorageBytesForTesting() noexcept {
+    return currentReadStorageBytes.load(std::memory_order_acquire);
+}
+
+std::size_t iocpPeakReadStorageBytesForTesting() noexcept {
+    return peakReadStorageBytes.load(std::memory_order_acquire);
+}
+
+std::size_t iocpMaxReadSubmissionBytesForTesting() noexcept {
+    return maxReadSubmissionBytes.load(std::memory_order_acquire);
+}
+
+std::uint64_t iocpReadStorageAllocationCountForTesting() noexcept {
+    return readStorageAllocationCount.load(std::memory_order_acquire);
+}
+
+std::uint64_t iocpReadStorageReleaseCountForTesting() noexcept {
+    return readStorageReleaseCount.load(std::memory_order_acquire);
+}
+
+std::uint64_t iocpPositiveReadCompletionCountForTesting() noexcept {
+    return positiveReadCompletionCount.load(std::memory_order_acquire);
+}
+
 void setIocpWriteChunkLimitForTesting(std::size_t bytes) noexcept {
     const std::size_t nativeLimit =
         static_cast<std::size_t>((std::numeric_limits<ULONG>::max)());
@@ -432,6 +537,12 @@ void resetIocpTcpTransportFaultsForTesting() noexcept {
     nextReadSubmissionError.store(0, std::memory_order_release);
     nextWriteSubmissionError.store(0, std::memory_order_release);
     completionObserver.store(nullptr, std::memory_order_release);
+    currentReadStorageBytes.store(0, std::memory_order_release);
+    peakReadStorageBytes.store(0, std::memory_order_release);
+    maxReadSubmissionBytes.store(0, std::memory_order_release);
+    readStorageAllocationCount.store(0, std::memory_order_release);
+    readStorageReleaseCount.store(0, std::memory_order_release);
+    positiveReadCompletionCount.store(0, std::memory_order_release);
     writeChunkLimit.store(
         static_cast<std::size_t>((std::numeric_limits<ULONG>::max)()),
         std::memory_order_release);

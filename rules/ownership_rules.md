@@ -100,6 +100,10 @@ It must not blur these roles.
   executor closure, then transfers that allocation into the segment deque.
   Neither the legacy output Buffer nor a transport mirror owns a second full
   copy
+- Each Windows TcpConnection IOCP transport uniquely owns at most one optional
+  4 KiB read allocation. `WSABUF` borrows that allocation only while the read
+  obligation is pending; no pool or cross-EventLoop return path exists, and
+  final close releases it only after the completion is consumed
 - TcpConnection owns its socket until explicit owner-loop close. After close,
   the IOCP transport and/or Poller retain operation storage until every
   completion obligation is consumed; object destruction is not the close

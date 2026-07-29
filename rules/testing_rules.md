@@ -115,6 +115,11 @@ For lifecycle-sensitive modules, tests should include:
   `pendingOutputBytes`, require exact zero after drain/close, and keep existing
   slow-peer, synchronous-failure, cancellation, and write-complete ordering
   contracts green
+- deterministic Windows read-storage hooks prove zero allocation before first
+  post, a 4 KiB submission/retention ceiling, reuse across multi-chunk input,
+  and zero retained bytes only after pending-read cancellation is consumed.
+  The Release connection benchmark must also accept a structured 10k idle
+  profile so bytes-per-connection can be compared with the frozen baseline
 - Connector owner-affinity rejection, callback re-entry, configured-backoff
   restart, and accepted/rejected facade-generation races, including two
   Accepted operations where the latest request supersedes an in-flight attempt

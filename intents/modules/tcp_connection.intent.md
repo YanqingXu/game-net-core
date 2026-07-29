@@ -32,6 +32,9 @@ inline inside TcpConnection.
 - on Windows, move admitted payloads into a loop-owned stable-segment queue
   instead of mirroring the complete output Buffer into transport-private write
   storage
+- on Windows, allocate read backing storage only when the first `WSARecv` is
+  posted, retain at most one fixed 4 KiB connection-local chunk, and release it
+  after final completion drain
 - bound unread input bytes and close through the normal lifecycle path when an
   application callback leaves the input buffer at its configured hard limit
 - expose force-close style teardown entry that still converges on the same close path
@@ -92,6 +95,13 @@ inline inside TcpConnection.
   atomic dropped-notification counter and never rolls back mandatory state
 - each socket read is capped by the input buffer's remaining allowance; the
   input Buffer never grows past the configured connection limit
+- each Windows `WSARecv` references at most 4 KiB of connection-local backing
+  storage. That allocation is absent before the first post, remains stable
+  while a completion is pending, is reused without growth across normal read
+  completions, and is released only after no read completion obligation remains
+- Windows read backing is never returned across EventLoops: this slice uses
+  one bounded allocation owned by the connection's IOCP transport rather than
+  a shared pool
 - coroutine resume returns through EventLoop scheduling
 - transport-specific behavior (plain TCP or TLS) must not change callback ordering
   or close-path convergence
@@ -126,6 +136,9 @@ inline inside TcpConnection.
 - the existing Core-private Windows IOCP transport owns the stable segment
   container on behalf of TcpConnection; TcpConnection remains responsible for
   reservation, callback, backpressure, and lifecycle semantics
+- the same IOCP transport uniquely owns its optional read chunk; TcpConnection
+  supplies remaining input capacity and requests final release only after
+  completion drain
 - TcpConnection may delegate coroutine waiter state to ConnectionAwaiterRegistry
 - TcpConnection may delegate threshold-based read pause/resume to
   ConnectionBackpressureController
@@ -160,6 +173,8 @@ inline inside TcpConnection.
 - Windows read resume is mandatory owner-loop work and runs inline from the
   low-water transition instead of depending on ordinary queue admission; a
   buffered message callback on that path may therefore re-enter connection APIs
+- Windows read-chunk allocation, submission, reuse, and final release are
+  owner-loop-only and never transfer storage to another loop
 - after such Windows callback re-entry, the outer write handler rechecks
   disconnected/force-close state and pending-overlapped-write state before it
   performs any further transition
@@ -189,6 +204,9 @@ inline inside TcpConnection.
 - a synchronous Windows read/write submission failure invokes the same
   `handleError()` -> `handleClose()` convergence immediately on the owner loop;
   it does not set Channel `revents` and wait for a nonexistent completion
+- failure to allocate the bounded Windows read chunk is reported as
+  `WSAENOBUFS` before submission and therefore creates no kernel completion
+  obligation
 - normal, error, and `ERROR_OPERATION_ABORTED` completion consumption clears
   the corresponding pending obligation once; repeated close/error entry remains
   single-shot
@@ -337,6 +355,10 @@ inline inside TcpConnection.
   forces one large segment through many bounded IOCP submissions while a slow
   peer drains, proving partial completions advance the front offset without a
   suffix copy and converge to one write-complete callback
+- `tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`
+  proves read storage is absent before first post, capped and reused at 4 KiB,
+  bounds each completion, preserves input-limit behavior, survives pending-read
+  cancellation, and is released before final close publication
 - `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
   verifies explicit socket close precedes disconnected publication, pending
   operations retain storage, and one final lifecycle detach follows drain

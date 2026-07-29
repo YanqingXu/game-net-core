@@ -144,6 +144,9 @@ No other direct mutation path is allowed for core loop state.
   chunk submission, and close-time discard are connection owner-loop-only.
   Cross-thread send owns only its admitted immutable payload until the
   executor moves it into that queue
+- Windows read-storage allocation, bounded reuse, submission, and final
+  release are connection owner-loop-only. A pending `WSARecv` keeps the same
+  allocation until its real normal/error/cancellation completion is consumed
 - TcpConnection socket close, completion-obligation consumption, lifecycle
   detach, Channel removal, and disconnected publication are owner-loop-only
 - on Linux, TcpConnection disables and removes its Channel registration before
