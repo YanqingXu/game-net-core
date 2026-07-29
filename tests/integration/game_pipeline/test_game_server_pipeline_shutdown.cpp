@@ -357,6 +357,7 @@ int main() {
     bool stopCompleted = false;
     gamenet::net::TcpServerStopFuture pipelineStopFuture;
     std::optional<gamenet::net::TcpServerStopResult> pipelineStopResult;
+    std::function<void()> pollCompletion;
     gamenet::examples::GameServerPipeline pipeline(
         &loop,
         gamenet::net::InetAddress(0, true),
@@ -382,16 +383,15 @@ int main() {
                     gamenet::examples::GameServerPipelineShutdownTestPeer::pendingAuthenticationTimers(
                         *pipelineObserver) == 0);
                 GAMENET_TEST_ASSERT(pendingAttempt.expired());
-                auto pollCompletion = std::make_shared<std::function<void()>>();
-                *pollCompletion = [&, pollCompletion] {
+                pollCompletion = [&] {
                     if (pipelineStopFuture.wait_for(0ms) == std::future_status::ready) {
                         pipelineStopResult = pipelineStopFuture.get();
                         loop.quit();
                         return;
                     }
-                    loop.runAfter(5ms, *pollCompletion);
+                    loop.runAfter(5ms, pollCompletion);
                 };
-                loop.runAfter(5ms, *pollCompletion);
+                loop.runAfter(5ms, pollCompletion);
             });
          }});
     pipelineObserver = &pipeline;

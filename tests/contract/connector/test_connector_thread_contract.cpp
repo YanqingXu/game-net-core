@@ -356,11 +356,11 @@ void testRestartRestoresConfiguredInitialDelayAndRejectsStaleRetry() {
     int retryScheduled = 0;
     bool restartQueued = false;
     bool stopQueued = false;
-    auto waitForStopped = std::make_shared<std::function<void()>>();
+    std::function<void()> waitForStopped;
 
-    *waitForStopped = [&, waitForStopped] {
+    waitForStopped = [&] {
         if (connector->state() != gamenet::net::Connector::kDisconnected) {
-            loop.runAfter(10ms, *waitForStopped);
+            loop.runAfter(10ms, waitForStopped);
             return;
         }
 
@@ -377,9 +377,9 @@ void testRestartRestoresConfiguredInitialDelayAndRejectsStaleRetry() {
                 attempts.push_back(std::chrono::steady_clock::now());
                 if (attempts.size() == 4 && !stopQueued) {
                     stopQueued = true;
-                    loop.queueInLoop([&, waitForStopped] {
+                    loop.queueInLoop([&] {
                         connector->stop();
-                        loop.runAfter(10ms, *waitForStopped);
+                        loop.runAfter(10ms, waitForStopped);
                     });
                 }
                 return;
@@ -520,10 +520,10 @@ void testRejectedConnectDoesNotSupersedeAcceptedDisconnect() {
 
     GAMENET_TEST_ASSERT(
         client.tryConnect() == gamenet::net::PostResult::Accepted);
-    auto issueRequests = std::make_shared<std::function<void()>>();
-    *issueRequests = [&, issueRequests] {
+    std::function<void()> issueRequests;
+    issueRequests = [&] {
         if (loop.pendingFunctorCount() != 0) {
-            loop.runAfter(10ms, *issueRequests);
+            loop.runAfter(10ms, issueRequests);
             return;
         }
         gamenet::test::runFromNonOwnerThread([&] {
@@ -542,7 +542,7 @@ void testRejectedConnectDoesNotSupersedeAcceptedDisconnect() {
             gamenet::net::PostResult::QueueFull);
         loop.runAfter(50ms, [&] { server.start(); });
     };
-    loop.runAfter(150ms, *issueRequests);
+    loop.runAfter(150ms, issueRequests);
     loop.runAfter(750ms, [&] {
         GAMENET_TEST_ASSERT(serverConnected == 0);
         server.stop();
