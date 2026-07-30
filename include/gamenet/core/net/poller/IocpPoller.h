@@ -51,7 +51,9 @@ private:
     HANDLE iocp_;
     ULONG completionBatchSize_;
     std::atomic<bool> wakeupPending_{false};
+    std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> completionEntries_{};
     std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> deferredEntries_{};
+    std::array<Channel*, kCompletionBatchSize> publishedChannels_{};
     ULONG deferredEntryCount_{0};
     std::unordered_set<SocketFd> associatedFds_;
     std::size_t outstandingOperationCount_{0};

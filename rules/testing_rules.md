@@ -194,6 +194,12 @@ For lifecycle-sensitive modules, tests should include:
   target, remain untrimmed above the lower recovery threshold, preserve every
   unread/wrapped byte through trim, converge at or below the target, and reuse
   that capacity without per-small-read/frame retrimming
+- fixed-storage retention contracts use the public process snapshot to prove
+  shared read-pool/slab bytes remain zero, one IOCP Poller contributes one
+  finite fixed batch workspace, one AcceptEx pool contributes slot bytes until
+  its final shared lease is released, one connection contributes no bytes
+  before the first read and at most 4 KiB afterward, category/total peaks are
+  monotonic, and every current category returns to zero after teardown
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

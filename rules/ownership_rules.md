@@ -84,6 +84,9 @@ It must not blur these roles.
   releases any retained lease even when the Channel observer is null
 - synchronous non-pending submission failure creates neither retained nor
   outstanding ownership
+- fixed-storage accounting owns only atomic byte observations. It owns no
+  Poller, completion entry, Channel, operation, or EventLoop and cannot extend
+  any of their lifetimes
 
 ## 4. Channel
 - Channel does not own fd by default
@@ -161,6 +164,9 @@ It must not blur these roles.
   generation until accepted-fd transfer or terminal cleanup. Poller retains
   shared fixed-pool storage independently for each submitted operation through
   its terminal packet
+- AcceptEx fixed-pool byte accounting follows that shared pool-state lifetime,
+  not the shorter Acceptor pointer lifetime, and therefore remains nonzero
+  while any Poller lease still retains the slot vector
 - successful accepted-fd handoff removes the socket from its completed slot
   before user/server callback entry. A replacement operation may reuse that
   slot only after the old completion was published; it then owns a new socket

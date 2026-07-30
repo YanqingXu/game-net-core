@@ -1,5 +1,6 @@
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/NetworkMemoryRetention.h"
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TcpConnection.h"
@@ -65,6 +66,16 @@ int main() {
     GAMENET_TEST_ASSERT(
         gamenet::net::detail::
             iocpCurrentReadStorageBytesForTesting() == 0);
+    {
+        const auto retention =
+            gamenet::net::networkFixedStorageRetentionSnapshot();
+        GAMENET_TEST_ASSERT(retention.sharedReadPoolBytes == 0);
+        GAMENET_TEST_ASSERT(retention.sharedReadSlabBytes == 0);
+        GAMENET_TEST_ASSERT(retention.connectionLocalReadBytes == 0);
+        GAMENET_TEST_ASSERT(
+            retention.connectionLocalReadChunkLimitBytes ==
+            kReadChunkBytes);
+    }
 
     gamenet::test::TcpConnectionCallbackCounts callbacks;
     gamenet::test::setCountingConnectionCallback(
@@ -102,6 +113,9 @@ int main() {
             GAMENET_TEST_ASSERT(
                 gamenet::net::detail::
                     iocpCurrentReadStorageBytesForTesting() == 0);
+            GAMENET_TEST_ASSERT(
+                gamenet::net::networkFixedStorageRetentionSnapshot().
+                    connectionLocalReadBytes == 0);
             ++callbacks.closed;
             conn->connectDestroyed();
             loop.quit();
@@ -116,6 +130,21 @@ int main() {
             gamenet::net::detail::
                 iocpCurrentReadStorageBytesForTesting() ==
             kReadChunkBytes);
+        {
+            const auto retention =
+                gamenet::net::networkFixedStorageRetentionSnapshot();
+            GAMENET_TEST_ASSERT(
+                retention.connectionLocalReadBytes ==
+                kReadChunkBytes);
+            GAMENET_TEST_ASSERT(
+                retention.peakConnectionLocalReadBytes >=
+                kReadChunkBytes);
+            GAMENET_TEST_ASSERT(
+                retention.totalRetainedBytes ==
+                retention.acceptExFixedPoolBytes +
+                    retention.iocpCompletionBatchBytes +
+                    retention.connectionLocalReadBytes);
+        }
 
         sendTimer = loop.runEvery(1ms, [&] {
             while (sentBytes < payload.size()) {
@@ -167,6 +196,14 @@ int main() {
     GAMENET_TEST_ASSERT(
         gamenet::net::detail::
             iocpCurrentReadStorageBytesForTesting() == 0);
+    {
+        const auto retention =
+            gamenet::net::networkFixedStorageRetentionSnapshot();
+        GAMENET_TEST_ASSERT(retention.connectionLocalReadBytes == 0);
+        GAMENET_TEST_ASSERT(
+            retention.peakConnectionLocalReadBytes ==
+            kReadChunkBytes);
+    }
 
     gamenet::net::detail::resetIocpTcpTransportFaultsForTesting();
     return 0;

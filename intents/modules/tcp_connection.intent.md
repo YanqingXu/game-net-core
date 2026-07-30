@@ -38,6 +38,10 @@ inline inside TcpConnection.
 - on Windows, allocate read backing storage only when the first `WSARecv` is
   posted, retain at most one fixed 4 KiB connection-local chunk, and release it
   after final completion drain
+- expose a cross-thread-safe process-level retention snapshot for transport
+  fixed storage without exposing connection-owned Buffer or transport state;
+  shared read-pool and shared-slab bytes are explicitly zero because the active
+  design has neither facility
 - bound unread input bytes and close through the normal lifecycle path when an
   application callback leaves the input buffer at its configured hard limit
 - expose force-close style teardown entry that still converges on the same close path
@@ -385,7 +389,9 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`
   proves read storage is absent before first post, capped and reused at 4 KiB,
   bounds each completion, preserves input-limit behavior, survives pending-read
-  cancellation, and is released before final close publication
+  cancellation, exposes current/peak bytes through the public process snapshot,
+  records shared read pool/slab as zero, and is released before final close
+  publication
 - `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
   verifies explicit socket close precedes disconnected publication, pending
   operations retain storage, and one final lifecycle detach follows drain

@@ -216,3 +216,22 @@ ordinary maximum-size frames. Both components expose owner-thread-only
 current/peak/trim snapshots; no cross-thread guarantee is added. Direct
 contracts live in `tests/contract/buffer/test_buffer_contract.cpp` and
 `tests/contract/protocol/test_packet_framer_budget.cpp`.
+
+## Current M3-Q1-D Additive Review
+
+M3-Q1-D adds the stable Core `NetworkMemoryRetention.h` surface. Its
+cross-thread-safe process snapshot accounts only transport-internal pool, slab,
+and fixed working storage that is not already represented by logical
+pending-byte budgets: AcceptEx slot vectors, IOCP Poller completion workspaces,
+and connection-local IOCP read chunks. Shared read-pool and shared-slab fields
+are explicitly zero in the active design. AcceptEx bytes follow the final
+shared pool-state lifetime, so an Acceptor stop cannot hide storage still
+retained by completion leases.
+
+The new header is additive within the 0.3 line and does not change an existing
+stable declaration. IOCP platform-private storage moves two per-poll arrays
+into the existing Poller-lifetime fixed workspace; no public Poller contract is
+changed. Direct contracts live in
+`tests/contract/acceptor/test_acceptor_iocp_pool.cpp`,
+`tests/contract/poller/test_poller_contract.cpp`, and
+`tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`.

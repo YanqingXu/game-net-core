@@ -6,6 +6,7 @@
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
+#include "../detail/NetworkMemoryRetentionTracker.h"
 
 #include <algorithm>
 #include <limits>
@@ -121,6 +122,10 @@ IocpTcpTransport::IocpTcpTransport(Channel* channel)
     writeOperation_.channel = channel_;
 }
 
+IocpTcpTransport::~IocpTcpTransport() {
+    releaseReadStorage();
+}
+
 int IocpTcpTransport::startRead(std::size_t maxBytes) {
     if (readPending_) {
         return 0;
@@ -142,6 +147,9 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
             auto replacement =
                 std::make_unique_for_overwrite<char[]>(submissionBytes);
             readStorage_ = std::move(replacement);
+            detail::retainNetworkFixedStorage(
+                detail::NetworkFixedStorageCategory::ConnectionLocalRead,
+                submissionBytes - readStorageBytes_);
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             observeReadStorageChange(
                 readStorageBytes_,
@@ -247,6 +255,9 @@ void IocpTcpTransport::releaseReadStorage() noexcept {
         return;
     }
     const std::size_t released = readStorageBytes_;
+    detail::releaseNetworkFixedStorage(
+        detail::NetworkFixedStorageCategory::ConnectionLocalRead,
+        released);
     readStorage_.reset();
     readStorageBytes_ = 0;
     readBuffer_ = WSABUF{};

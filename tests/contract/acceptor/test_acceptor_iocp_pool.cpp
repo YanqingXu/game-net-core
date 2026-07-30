@@ -5,6 +5,7 @@
 #include "gamenet/core/net/Acceptor.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
+#include "gamenet/core/net/NetworkMemoryRetention.h"
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "../../../src/core/net/detail/AcceptorIocpHarness.h"
@@ -53,6 +54,7 @@ void testFixedPoolBurstAndStopReentry() {
     acceptor->setIocpAcceptDepth(kDepth);
 
     std::size_t accepted = 0;
+    bool observedRetainedBytesAfterStop = false;
     acceptor->setNewConnectionCallback(
         [&](gamenet::net::SocketFd socket,
             const gamenet::net::InetAddress&) {
@@ -72,6 +74,16 @@ void testFixedPoolBurstAndStopReentry() {
                 // Re-enter listener lifecycle from the accepted-socket
                 // callback after the replacement generation was submitted.
                 acceptor->stop();
+                const auto retention =
+                    gamenet::net::networkFixedStorageRetentionSnapshot();
+                GAMENET_TEST_ASSERT(
+                    retention.acceptExFixedPoolBytes > 0);
+                GAMENET_TEST_ASSERT(
+                    retention.peakAcceptExFixedPoolBytes >=
+                    retention.acceptExFixedPoolBytes);
+                GAMENET_TEST_ASSERT(
+                    retention.acceptExSlotLimitPerAcceptor == 64);
+                observedRetainedBytesAfterStop = true;
                 loop.quit();
             }
         });
@@ -89,6 +101,14 @@ void testFixedPoolBurstAndStopReentry() {
         GAMENET_TEST_ASSERT(
             EventLoopIocpAssociationHarness::retainedCompletionCount(loop) ==
             kDepth);
+        const auto retention =
+            gamenet::net::networkFixedStorageRetentionSnapshot();
+        GAMENET_TEST_ASSERT(retention.acceptExFixedPoolBytes > 0);
+        GAMENET_TEST_ASSERT(
+            retention.totalRetainedBytes ==
+            retention.acceptExFixedPoolBytes +
+                retention.iocpCompletionBatchBytes +
+                retention.connectionLocalReadBytes);
     }
 
     const auto listenAddress = acceptor->listenAddress();
@@ -112,8 +132,12 @@ void testFixedPoolBurstAndStopReentry() {
     GAMENET_TEST_ASSERT(acceptor);
     acceptor.reset();
     GAMENET_TEST_ASSERT(accepted == kClientCount);
+    GAMENET_TEST_ASSERT(observedRetainedBytesAfterStop);
     assertBackendQuiet(loop);
     assertPoolStorageReleased();
+    GAMENET_TEST_ASSERT(
+        gamenet::net::networkFixedStorageRetentionSnapshot().
+            acceptExFixedPoolBytes == 0);
 
     const auto final =
         gamenet::net::detail::iocpAcceptPoolObservationsForTesting();

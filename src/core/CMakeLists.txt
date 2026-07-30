@@ -12,6 +12,7 @@ set(GAMENET_CORE_SOURCES
     net/EventLoopThread.cc
     net/EventLoopThreadPool.cc
     net/InetAddress.cc
+    net/NetworkMemoryRetention.cc
     net/Poller.cc
     net/Socket.cc
     net/TcpClient.cc

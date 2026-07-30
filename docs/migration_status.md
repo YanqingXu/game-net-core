@@ -393,6 +393,17 @@ fails. Buffer and PacketFramer direct contracts each passed 50/50 repetitions;
 the Buffer unit plus all three PacketFramer contracts passed together, and the
 MSVC Debug tree passed all 119 tests. All 33 repository guards plus the public
 API manifest and deterministic compatibility diff also passed.
+M3-Q1-D inventories transport-internal pool, slab, and fixed working storage
+outside logical pending-byte budgets. The stable process snapshot records
+AcceptEx fixed-pool bytes through final shared completion-lease release, the
+Poller-lifetime IOCP completion workspace, and optional connection-local 4 KiB
+read chunks; the active architecture explicitly reports shared read-pool and
+shared-slab bytes as zero. Category and aggregate current/peak counters update
+only on construction/allocation and release/destruction boundaries. The three
+direct contracts each passed 50/50 repetitions, including Acceptor stop before
+final lease release and a cross-thread snapshot observation. The resulting
+MSVC Debug tree passed all 119 tests; all 31 Python repository/API contracts,
+the public API verifier, and deterministic compatibility diff also passed.
 The current inventory is unit=8, contract=98, integration=13, threading=92,
 lifecycle=97, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed before M3-Q1-A. After Q1-A, all 119 MSVC Debug tests and all

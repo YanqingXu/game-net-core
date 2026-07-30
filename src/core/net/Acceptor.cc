@@ -8,6 +8,7 @@
 #ifdef _WIN32
 #include "gamenet/core/net/platform/IocpOperation.h"
 #include "gamenet/core/net/platform/IocpSocketOps.h"
+#include "detail/NetworkMemoryRetentionTracker.h"
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
 #include "detail/AcceptorIocpHarness.h"
 #endif
@@ -168,6 +169,9 @@ struct Acceptor::IocpAcceptState {
 
     explicit IocpAcceptState(std::size_t depth)
         : slots(depth) {
+        detail::retainNetworkFixedStorage(
+            detail::NetworkFixedStorageCategory::AcceptExFixedPool,
+            slots.capacity() * sizeof(IocpAcceptSlot));
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
         observeSlotPoolCreated(depth);
 #endif
@@ -192,6 +196,9 @@ struct Acceptor::IocpAcceptState {
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
         observeSlotPoolDestroyed(slots.size());
 #endif
+        detail::releaseNetworkFixedStorage(
+            detail::NetworkFixedStorageCategory::AcceptExFixedPool,
+            slots.capacity() * sizeof(IocpAcceptSlot));
     }
 
     std::vector<IocpAcceptSlot> slots;

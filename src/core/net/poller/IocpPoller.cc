@@ -8,6 +8,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/platform/IocpOperation.h"
+#include "../detail/NetworkMemoryRetentionTracker.h"
 
 #include <algorithm>
 #include <array>
@@ -103,16 +104,26 @@ IocpPoller::IocpPoller(EventLoop* loop)
       iocp_(createCompletionPortOrDie()),
       completionBatchSize_(
           static_cast<ULONG>(
-              loop->options_.maxIocpCompletionsPerPoll)) {}
+              loop->options_.maxIocpCompletionsPerPoll)) {
+    detail::retainNetworkFixedStorage(
+        detail::NetworkFixedStorageCategory::IocpCompletionBatch,
+        sizeof(completionEntries_) +
+            sizeof(deferredEntries_) +
+            sizeof(publishedChannels_));
+}
 
 IocpPoller::~IocpPoller() {
+    detail::releaseNetworkFixedStorage(
+        detail::NetworkFixedStorageCategory::IocpCompletionBatch,
+        sizeof(completionEntries_) +
+            sizeof(deferredEntries_) +
+            sizeof(publishedChannels_));
     if (iocp_ != nullptr) {
         ::CloseHandle(iocp_);
     }
 }
 
 gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChannels) {
-    std::array<OVERLAPPED_ENTRY, kCompletionBatchSize> entries{};
     lastCompletionPacketsDrained_ = 0;
     lastDeferredCompletionCount_ = 0;
     lastCompletionBudgetExhausted_ = false;
@@ -124,12 +135,12 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         std::copy_n(
             deferredEntries_.begin(),
             removed,
-            entries.begin());
+            completionEntries_.begin());
         deferredEntryCount_ = 0;
     } else {
         ok = ::GetQueuedCompletionStatusEx(
             iocp_,
-            entries.data(),
+            completionEntries_.data(),
             completionBatchSize_,
             &removed,
             toTimeout(timeoutMs),
@@ -148,11 +159,10 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
     lastCompletionBudgetExhausted_ =
         removed == completionBatchSize_;
 
-    std::array<Channel*, kCompletionBatchSize> publishedChannels{};
     std::size_t activeCount = 0;
 
     for (ULONG index = 0; index < removed; ++index) {
-        const auto& entry = entries[index];
+        const auto& entry = completionEntries_[index];
         if (entry.lpCompletionKey == kWakeupCompletionKey) {
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             if (const auto hook =
@@ -199,11 +209,11 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
         const bool channelAlreadyPublished =
             channelRegistered &&
             std::find(
-                publishedChannels.begin(),
-                publishedChannels.begin() +
+                publishedChannels_.begin(),
+                publishedChannels_.begin() +
                     static_cast<std::ptrdiff_t>(activeCount),
                 channel) !=
-                publishedChannels.begin() +
+                publishedChannels_.begin() +
                     static_cast<std::ptrdiff_t>(activeCount);
         if (channelAlreadyPublished &&
             operation->kind != IocpOperationKind::Accept) {
@@ -245,7 +255,7 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             continue;
         }
         channel->setRevents(completionEvents(*operation));
-        publishedChannels[activeCount++] = channel;
+        publishedChannels_[activeCount++] = channel;
         activeChannels->push_back(channel);
     }
     lastDeferredCompletionCount_ = deferredEntryCount_;

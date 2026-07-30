@@ -1,5 +1,6 @@
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/NetworkMemoryRetention.h"
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "support/TestAssert.h"
@@ -13,6 +14,7 @@
 #endif
 #include <chrono>
 #include <string_view>
+#include <thread>
 
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -22,6 +24,66 @@
 using namespace std::chrono_literals;
 
 namespace {
+
+void assertCurrentFixedStorageTotal(
+    const gamenet::net::NetworkFixedStorageRetentionSnapshot& snapshot) {
+    GAMENET_TEST_ASSERT(
+        snapshot.totalRetainedBytes ==
+        snapshot.acceptExFixedPoolBytes +
+            snapshot.iocpCompletionBatchBytes +
+            snapshot.connectionLocalReadBytes);
+    GAMENET_TEST_ASSERT(snapshot.sharedReadPoolBytes == 0);
+    GAMENET_TEST_ASSERT(snapshot.sharedReadSlabBytes == 0);
+    GAMENET_TEST_ASSERT(
+        snapshot.peakTotalRetainedBytes >=
+        snapshot.totalRetainedBytes);
+}
+
+void testFixedCompletionStorageAccounting() {
+    const auto before =
+        gamenet::net::networkFixedStorageRetentionSnapshot();
+    assertCurrentFixedStorageTotal(before);
+    GAMENET_TEST_ASSERT(before.iocpCompletionBatchBytes == 0);
+
+    {
+        gamenet::net::EventLoop loop;
+        const auto active =
+            gamenet::net::networkFixedStorageRetentionSnapshot();
+        assertCurrentFixedStorageTotal(active);
+        gamenet::net::NetworkFixedStorageRetentionSnapshot crossThread;
+        std::thread observer([&] {
+            crossThread =
+                gamenet::net::networkFixedStorageRetentionSnapshot();
+        });
+        observer.join();
+        GAMENET_TEST_ASSERT(
+            crossThread.iocpCompletionBatchBytes ==
+            active.iocpCompletionBatchBytes);
+        assertCurrentFixedStorageTotal(crossThread);
+#ifdef _WIN32
+        GAMENET_TEST_ASSERT(
+            active.iocpCompletionBatchEntriesPerLoop == 64);
+        GAMENET_TEST_ASSERT(active.iocpCompletionBatchBytes > 0);
+        GAMENET_TEST_ASSERT(
+            active.peakIocpCompletionBatchBytes >=
+            active.iocpCompletionBatchBytes);
+#else
+        GAMENET_TEST_ASSERT(
+            active.iocpCompletionBatchEntriesPerLoop == 0);
+        GAMENET_TEST_ASSERT(active.iocpCompletionBatchBytes == 0);
+#endif
+    }
+
+    const auto after =
+        gamenet::net::networkFixedStorageRetentionSnapshot();
+    assertCurrentFixedStorageTotal(after);
+    GAMENET_TEST_ASSERT(after.iocpCompletionBatchBytes == 0);
+#ifdef _WIN32
+    GAMENET_TEST_ASSERT(after.peakIocpCompletionBatchBytes > 0);
+#else
+    GAMENET_TEST_ASSERT(after.peakIocpCompletionBatchBytes == 0);
+#endif
+}
 
 struct ReadablePair {
     gamenet::net::SocketFd readFd{gamenet::net::kInvalidSocket};
@@ -413,6 +475,7 @@ void testDeferredCompletionPreservesDequeuedError() {
 }  // namespace
 
 int main() {
+    testFixedCompletionStorageAccounting();
     testReadableCompletion();
 #ifdef _WIN32
     testBoundedIocpBatch();

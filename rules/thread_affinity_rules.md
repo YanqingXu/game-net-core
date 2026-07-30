@@ -174,6 +174,10 @@ No other direct mutation path is allowed for core loop state.
 - Windows read-storage allocation, bounded reuse, submission, and final
   release are connection owner-loop-only. A pending `WSARecv` keeps the same
   allocation until its real normal/error/cancellation completion is consumed
+- transport fixed-storage accounting updates occur only at owner-controlled
+  allocation/construction/release/destruction boundaries. The public
+  process-level snapshot is cross-thread-safe, approximate across concurrently
+  changing categories, and grants no access to owner-loop objects
 - Buffer retention growth, arm state, trim, and snapshots are owner-loop-only;
   no retention observation becomes cross-thread-safe merely because Buffer is
   embedded in TcpConnection

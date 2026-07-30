@@ -53,6 +53,11 @@ Poller is not channel owner.
   EventLoop startup-validated `[1, 64]` width to
   `GetQueuedCompletionStatusEx`; backlog remains queued for a later EventLoop
   iteration so timer, control, lifecycle, and functor phases retain service
+- the packet, same-Channel deferred, and published-Channel identity arrays are
+  Poller-lifetime fixed working storage. Process-level retention accounting
+  adds their exact bytes at Poller construction and releases them at Poller
+  destruction; configured dequeue width changes work per round, not retained
+  capacity
 - a wakeup packet is consumed as a scheduling signal but does not end the
   current IOCP batch or suppress real I/O packets returned beside it
 - the IOCP Poller owns one atomic wakeup-pending bit. A producer that changes
@@ -181,7 +186,9 @@ High-risk mistakes:
   proves read/write completions for one Channel are dispatched in separate
   registration-safe rounds while distinct Channels share one batch; a deferred
   cancellation keeps its dequeued `ERROR_OPERATION_ABORTED` result even when
-  the first callback removes the Channel before the next poll
+  the first callback removes the Channel before the next poll. The same
+  contract verifies one Poller contributes a finite nonzero fixed-batch byte
+  count and destruction returns the current process count to zero
 - `tests/contract/event_loop/test_event_loop_wakeup_coalescing.cpp` verifies
   one physical IOCP packet for a multi-producer pending burst, both sides of
   the owner reset race, and zero pending packets after quit/final drain

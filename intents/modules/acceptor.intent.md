@@ -56,6 +56,10 @@ hands them upward through a narrow callback boundary.
   replenished
 - a synchronous non-pending AcceptEx submission failure creates neither a
   storage lease nor a shutdown completion obligation
+- process-level fixed-storage retention accounting begins when the Windows
+  slot vector is allocated and ends only when the shared pool state is
+  destroyed after every Poller lease is released; `stop()` cannot publish zero
+  merely because Acceptor dropped its own shared pointer
 
 ---
 
@@ -110,7 +114,8 @@ hands them upward through a narrow callback boundary.
 - `tests/contract/acceptor/test_acceptor_iocp_pool.cpp` verifies default and
   configured finite depth, burst replenishment, callback re-entry, generation-
   wide Retry after deterministic synchronous failure, delayed cancellation
-  consumption, and final zero slot/socket/completion accounting
+  consumption, fixed-pool retained-byte visibility through the public process
+  snapshot, and final zero slot/socket/completion/byte accounting
 - `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
   verifies the multi-slot pending AcceptEx immediate-quit final-drain contract
 

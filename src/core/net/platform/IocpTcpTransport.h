@@ -20,6 +20,7 @@ public:
     static constexpr std::size_t kReadChunkBytes = 4 * 1024;
 
     explicit IocpTcpTransport(Channel* channel);
+    ~IocpTcpTransport();
 
     // Returns zero once an overlapped operation owns a future completion, or
     // the synchronous WinSock error when no completion packet will be posted.
