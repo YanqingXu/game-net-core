@@ -20,6 +20,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - create TcpConnection on chosen loop
 - maintain connection map on base loop thread
 - optionally install per-connection backpressure thresholds for accepted connections
+- own one server output-memory budget and one budget per selected connection
+  loop, and optionally join a caller-owned process/global budget shared by
+  multiple servers
 - expose the Acceptor runtime-error policy and apply its Retry/Stop decision to
   accepted-socket setup failures before connection ownership is established
 - install one diagnostic callback-exception observer on every accepted
@@ -60,6 +63,10 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - close/remove path must not dereference a destroyed TcpServer
 - connection creation and removal remain explicit and loop-safe
 - backpressure configuration must not mutate worker-loop Channel state directly from base loop code
+- output-memory options are immutable after start. Budget identities are
+  installed before `connectEstablished()` and the send hot path uses only
+  atomics; low-frequency aggregate snapshots may synchronize budget-container
+  observation but never connection I/O
 - shutdown should detach callbacks before asynchronous teardown continues
 - stop() during active write must let connection-owner close/cancel ordering
   drain pending operations before connection destruction
@@ -110,6 +117,10 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - newConnection/removeConnectionInLoop run on base loop thread
 - accept-error policy callbacks run on the base loop thread
 - connectEstablished/connectDestroyed run on owning connection loop
+- output reservation may originate on any sender thread; it mutates only
+  atomic accounting in the connection's immutable budget chain. Budget
+  construction, loop association, and connection injection are setup-time
+  base/owner-loop work
 - cross-loop handoff happens only through EventLoop scheduling APIs
 - graceful-stop requests may originate on any thread but orchestration and
   connection-map decisions run on the base loop
@@ -135,6 +146,10 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   connection-map removal and later admission remain available
 - global, per-peer, rate, peer-tracking-capacity, and authentication-timeout
   rejections have distinct counters/events; disabled limits reject nothing
+- output sends rejected by connection/loop/server/global memory have distinct
+  `TcpSendResult` values. A later-scope rejection rolls back earlier
+  reservations, and close, write completion, queue rejection, allocation
+  failure, or stop releases every accepted scope exactly once
 - if authentication completion and its deadline race, whichever base-loop task
   executes first wins, and the later task is a no-op
 - stopping or removing a connection cancels its generation-tagged
@@ -190,6 +205,10 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - `tests/contract/tcp_server/test_tcp_server_release_handshake.cpp` verifies
   generation-tagged worker cleanup, base release before Channel destruction,
   stale ack rejection, callback re-entry, and exact-once join
+- `tests/contract/tcp_server/test_tcp_server_output_memory.cpp` verifies
+  setup-time validation, per-loop/server/shared-global injection, typed
+  rejection, hysteretic recovery snapshots, and zero pending bytes after
+  worker/base stop convergence
 - `gamenet_core_benchmark --scenario connections` provides live-burst and
   preloaded ready-backlog profiles. Worker-count scaling that is dominated by
   client/kernel handshake time is not evidence for per-worker accept

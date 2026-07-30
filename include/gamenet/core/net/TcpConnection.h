@@ -13,6 +13,7 @@
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/TcpConnectionClose.h"
 #include "gamenet/core/net/TcpConnectionOptions.h"
+#include "gamenet/core/net/TcpOutputMemoryBudget.h"
 
 #include <any>
 #include <atomic>
@@ -29,6 +30,7 @@ namespace gamenet::net {
 class Channel;
 class EventLoop;
 class EventLoopLifecycleSource;
+class TcpServer;
 namespace detail {
 class ConnectionBackpressureController;
 }
@@ -79,6 +81,9 @@ public:
 
     // Cross-thread-safe snapshot of admitted bytes not yet written or dropped.
     std::size_t pendingOutputBytes() const noexcept;
+    // Connection-local capacity/rejection snapshot. Upper loop/server/global
+    // scopes are exposed by TcpServer::outputMemoryStats().
+    TcpOutputMemoryBudgetSnapshot outputMemorySnapshot() const noexcept;
     // Cross-thread-safe diagnostic count of optional high-water/write-complete
     // notifications dropped because owner-loop queue admission failed.
     std::uint64_t droppedNotificationCount() const noexcept;
@@ -129,8 +134,13 @@ private:
     void queueWriteComplete() noexcept;
     void maybeQueueHighWaterMark(std::size_t oldLen, std::size_t newLen) noexcept;
     void recordDroppedNotification() noexcept;
-    bool tryReserveOutputBytes(std::size_t bytes) noexcept;
+    TcpSendResult tryReserveOutputBytes(std::size_t bytes) noexcept;
     void releaseOutputBytes(std::size_t bytes) noexcept;
+    void releaseConnectionOutputBytes(std::size_t bytes) noexcept;
+    void setOutputMemoryBudgets(
+        std::shared_ptr<TcpOutputMemoryBudget> loopBudget,
+        std::shared_ptr<TcpOutputMemoryBudget> serverBudget,
+        std::shared_ptr<TcpOutputMemoryBudget> globalBudget);
     std::size_t bufferedOutputBytesInLoop() const noexcept;
     void clearBufferedOutputInLoop();
     void applyBackpressureInLoop();
@@ -167,6 +177,12 @@ private:
     std::size_t highWaterMark_{0};
     TcpConnectionBackpressureOptions backpressureOptions_;
     std::atomic<std::size_t> pendingOutputBytes_{0};
+    std::atomic<std::size_t> peakPendingOutputBytes_{0};
+    std::atomic<std::uint64_t> rejectedOutputReservations_{0};
+    std::atomic<bool> outputAdmissionOverloaded_{false};
+    std::shared_ptr<TcpOutputMemoryBudget> loopOutputBudget_;
+    std::shared_ptr<TcpOutputMemoryBudget> serverOutputBudget_;
+    std::shared_ptr<TcpOutputMemoryBudget> globalOutputBudget_;
     std::atomic<std::uint64_t> droppedNotificationCount_{0};
     std::atomic<std::uint64_t> closeInfoBits_{0};
     std::atomic<TcpConnectionClosePhase> closePhase_{
@@ -180,6 +196,8 @@ private:
     TcpConnectionPtr forceCloseGuard_;
     mutable std::mutex lifecycleSourceMutex_;
     std::shared_ptr<EventLoopLifecycleSource> lifecycleSource_;
+
+    friend class TcpServer;
 };
 
 }  // namespace gamenet::net

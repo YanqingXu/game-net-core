@@ -213,6 +213,20 @@ It must not blur these roles.
 - Rejected accepted sockets remain owned by TcpServer's local Socket guard and
   are closed exactly once before the callback returns
 
+## 9.1 TCP Output-Memory Budgets
+- TcpConnection owns its per-connection pending-byte count and releases it
+  together with every successfully reserved upper scope
+- TcpServer owns one shared server budget and one shared budget identity per
+  selected EventLoop; connections borrow those identities through shared
+  ownership so accepted reservations can outlive base-map removal until the
+  owner-loop write/close path releases them
+- an optional process/global budget is caller-owned and may be shared by
+  multiple TcpServer instances; no budget owns a server, EventLoop,
+  TcpConnection, payload, callback, Buffer, or segment
+- a reservation owns only an exact byte-accounting obligation. Later-scope
+  rejection rolls back earlier scopes synchronously; accepted bytes release
+  once after write completion or terminal discard
+
 ## 10. Cross-Layer Rule
 - Lower reactor layers do not own higher business objects
 - Higher layers may own reactor-layer wrappers, but their destruction path must respect thread/lifecycle rules

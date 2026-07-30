@@ -4,6 +4,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/Socket.h"
 #include "gamenet/core/net/SocketsOps.h"
+#include "gamenet/core/net/TcpOutputMemoryBudget.h"
 #include "detail/ConnectionBackpressureController.h"
 #include "detail/EventLoopLifecycleRegistry.h"
 
@@ -144,8 +145,9 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
     if (!connected()) {
         return TcpSendResult::Closed;
     }
-    if (!tryReserveOutputBytes(len)) {
-        return TcpSendResult::Overloaded;
+    const TcpSendResult reservation = tryReserveOutputBytes(len);
+    if (reservation != TcpSendResult::Accepted) {
+        return reservation;
     }
 
     if (loop_->isInLoopThread()) {
@@ -285,6 +287,22 @@ void TcpConnection::setBackpressureOptions(TcpConnectionBackpressureOptions opti
 
 std::size_t TcpConnection::pendingOutputBytes() const noexcept {
     return pendingOutputBytes_.load(std::memory_order_relaxed);
+}
+
+TcpOutputMemoryBudgetSnapshot
+TcpConnection::outputMemorySnapshot() const noexcept {
+    return TcpOutputMemoryBudgetSnapshot{
+        .pendingBytes =
+            pendingOutputBytes_.load(std::memory_order_acquire),
+        .peakPendingBytes =
+            peakPendingOutputBytes_.load(std::memory_order_relaxed),
+        .rejectedReservations =
+            rejectedOutputReservations_.load(
+                std::memory_order_relaxed),
+        .overloaded =
+            outputAdmissionOverloaded_.load(
+                std::memory_order_acquire),
+    };
 }
 
 std::uint64_t TcpConnection::droppedNotificationCount() const noexcept {
@@ -899,30 +917,132 @@ void TcpConnection::recordDroppedNotification() noexcept {
     droppedNotificationCount_.fetch_add(1, std::memory_order_relaxed);
 }
 
-bool TcpConnection::tryReserveOutputBytes(std::size_t bytes) noexcept {
+TcpSendResult TcpConnection::tryReserveOutputBytes(
+    std::size_t bytes) noexcept {
     const std::size_t limit = backpressureOptions_.hardLimitBytes;
     std::size_t current = pendingOutputBytes_.load(std::memory_order_relaxed);
-    while (current <= limit && bytes <= limit - current) {
+    for (;;) {
+        if (outputAdmissionOverloaded_.load(
+                std::memory_order_acquire)) {
+            if (current > backpressureOptions_.lowWaterMarkBytes) {
+                rejectedOutputReservations_.fetch_add(
+                    1, std::memory_order_relaxed);
+                return TcpSendResult::Overloaded;
+            }
+            bool expected = true;
+            (void)outputAdmissionOverloaded_.compare_exchange_strong(
+                expected,
+                false,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire);
+            current =
+                pendingOutputBytes_.load(std::memory_order_acquire);
+            continue;
+        }
+
+        if (current > limit || bytes > limit - current) {
+            if (current > backpressureOptions_.lowWaterMarkBytes) {
+                outputAdmissionOverloaded_.store(
+                    true, std::memory_order_release);
+            }
+            rejectedOutputReservations_.fetch_add(
+                1, std::memory_order_relaxed);
+            return TcpSendResult::Overloaded;
+        }
+
         if (pendingOutputBytes_.compare_exchange_weak(
                 current,
                 current + bytes,
                 std::memory_order_acq_rel,
-                std::memory_order_relaxed)) {
-            return true;
+                std::memory_order_acquire)) {
+            break;
         }
     }
-    return false;
+
+    if (loopOutputBudget_ &&
+        !loopOutputBudget_->tryReserve(bytes)) {
+        releaseConnectionOutputBytes(bytes);
+        return TcpSendResult::LoopOverloaded;
+    }
+    if (serverOutputBudget_ &&
+        !serverOutputBudget_->tryReserve(bytes)) {
+        if (loopOutputBudget_) {
+            loopOutputBudget_->release(bytes);
+        }
+        releaseConnectionOutputBytes(bytes);
+        return TcpSendResult::ServerOverloaded;
+    }
+    if (globalOutputBudget_ &&
+        !globalOutputBudget_->tryReserve(bytes)) {
+        if (serverOutputBudget_) {
+            serverOutputBudget_->release(bytes);
+        }
+        if (loopOutputBudget_) {
+            loopOutputBudget_->release(bytes);
+        }
+        releaseConnectionOutputBytes(bytes);
+        return TcpSendResult::GlobalOverloaded;
+    }
+
+    const std::size_t candidate =
+        pendingOutputBytes_.load(std::memory_order_relaxed);
+    std::size_t peak =
+        peakPendingOutputBytes_.load(std::memory_order_relaxed);
+    while (peak < candidate &&
+           !peakPendingOutputBytes_.compare_exchange_weak(
+               peak,
+               candidate,
+               std::memory_order_relaxed,
+               std::memory_order_relaxed)) {
+    }
+    return TcpSendResult::Accepted;
 }
 
 void TcpConnection::releaseOutputBytes(std::size_t bytes) noexcept {
     if (bytes == 0) {
         return;
     }
+    if (globalOutputBudget_) {
+        globalOutputBudget_->release(bytes);
+    }
+    if (serverOutputBudget_) {
+        serverOutputBudget_->release(bytes);
+    }
+    if (loopOutputBudget_) {
+        loopOutputBudget_->release(bytes);
+    }
+    releaseConnectionOutputBytes(bytes);
+}
+
+void TcpConnection::releaseConnectionOutputBytes(
+    std::size_t bytes) noexcept {
     const std::size_t previous =
         pendingOutputBytes_.fetch_sub(bytes, std::memory_order_acq_rel);
     if (previous < bytes) {
         LOG_FATAL << "TcpConnection output reservation underflow on " << name_;
     }
+    if (previous - bytes <= backpressureOptions_.lowWaterMarkBytes) {
+        outputAdmissionOverloaded_.store(
+            false, std::memory_order_release);
+    }
+}
+
+void TcpConnection::setOutputMemoryBudgets(
+    std::shared_ptr<TcpOutputMemoryBudget> loopBudget,
+    std::shared_ptr<TcpOutputMemoryBudget> serverBudget,
+    std::shared_ptr<TcpOutputMemoryBudget> globalBudget) {
+    loop_->assertInLoopThread();
+    if (state_.load(std::memory_order_relaxed) != kConnecting) {
+        throw std::logic_error(
+            "TcpConnection output-memory budgets must be configured before establishment");
+    }
+    if (!loopBudget || !serverBudget) {
+        throw std::invalid_argument(
+            "TcpConnection requires loop and server output-memory budgets");
+    }
+    loopOutputBudget_ = std::move(loopBudget);
+    serverOutputBudget_ = std::move(serverBudget);
+    globalOutputBudget_ = std::move(globalBudget);
 }
 
 std::size_t TcpConnection::bufferedOutputBytesInLoop() const noexcept {

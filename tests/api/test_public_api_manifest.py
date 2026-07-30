@@ -111,6 +111,10 @@ def main() -> None:
     }
     assert added_headers["include/gamenet/core/net/CallbackException.h"] == "stable_core"
     assert added_headers["include/gamenet/core/net/TcpConnectionOptions.h"] == "stable_core"
+    assert (
+        added_headers["include/gamenet/core/net/TcpOutputMemoryBudget.h"]
+        == "stable_core"
+    )
     assert added_headers["include/gamenet/core/metrics/MetricsExporter.h"] == "provisional"
     assert difference["changes"]["stable_header_fingerprint_changes"]
     assert comparer.render_diff(difference) == comparer.render_diff(

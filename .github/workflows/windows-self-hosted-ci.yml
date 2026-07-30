@@ -159,7 +159,7 @@ jobs:
           py -3 tools/verify_ctest_inventory.py `
             --test-dir "$env:GAMENET_BUILD_DIR" `
             --config "$env:GAMENET_CONFIGURATION" `
-            --expected-total 117 `
+            --expected-total 119 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -221,7 +221,7 @@ jobs:
             --output ci-evidence/manifest.json `
             --artifact-name "windows-self-hosted-${{ matrix.configuration }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" `
             --command "cmake configure $env:GAMENET_CONFIGURATION" `
-            --command "verify CTest inventory 116" `
+            --command "verify CTest inventory 119" `
             --command "cmake build $env:GAMENET_CONFIGURATION" `
             --command "ctest $env:GAMENET_CONFIGURATION" `
             --command "install and verify package consumer"

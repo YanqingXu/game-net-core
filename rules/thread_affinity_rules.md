@@ -146,6 +146,10 @@ No other direct mutation path is allowed for core loop state.
   snapshot and does not expose other loop-owned state
 - Actual socket write/read handling occurs on owning EventLoop thread
 - Cross-thread send request must be marshaled back into loop thread
+- output-memory admission before marshaling may update only the connection's
+  fixed atomic connection/loop/server/global reservation chain. It invokes no
+  callbacks and grants no cross-thread access to Buffer, Channel, segment, or
+  server-map state
 - Socket-option mutation, context access, callback replacement, connection
   establishment, and connection destruction are owning-EventLoop-thread only
 - Mandatory output-buffer, backpressure, write-interest, and disconnecting
@@ -207,6 +211,10 @@ No other direct mutation path is allowed for core loop state.
   timer, connection, or completion state
 - selector decisions never migrate an established connection; the selected
   loop owns it for its full TcpConnection lifetime
+- TcpServer constructs and associates per-loop/server output budgets before
+  accepting connections. Low-frequency snapshot aggregation may lock only the
+  budget-container metadata; no send acquires that lock or a process-global
+  mutex
 
 ## 10. Listener Error Policy
 - Acceptor and TcpServer accept-error policy callbacks execute on the base /

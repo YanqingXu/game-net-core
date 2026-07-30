@@ -55,6 +55,11 @@ void TcpServerAdmissionOptions::validate() const {
     }
 }
 
+void TcpServerOutputMemoryOptions::validate() const {
+    loop.validate();
+    server.validate();
+}
+
 struct TcpServer::GracefulStopState {
     GracefulStopState()
         : future(promise.get_future().share()) {}
@@ -129,7 +134,10 @@ TcpServer::TcpServer(EventLoop* loop, const InetAddress& listenAddr, std::string
     : loop_(loop),
       name_(std::move(name)),
       acceptor_(std::make_unique<Acceptor>(loop, listenAddr, reusePort)),
-      threadPool_(std::make_unique<EventLoopThreadPool>(loop, name_)) {
+      threadPool_(std::make_unique<EventLoopThreadPool>(loop, name_)),
+      serverOutputBudget_(
+          std::make_shared<TcpOutputMemoryBudget>(
+              outputMemoryOptions_.server)) {
     acceptor_->setNewConnectionCallback(
         [this](SocketFd sockfd, const InetAddress& peerAddr) { newConnection(sockfd, peerAddr); });
 
@@ -223,6 +231,19 @@ void TcpServer::setConnectionBackpressureOptions(
     backpressureOptions_ = options;
 }
 
+void TcpServer::setOutputMemoryOptions(
+    TcpServerOutputMemoryOptions options) {
+    options.validate();
+    if (started_.load(std::memory_order_relaxed)) {
+        throw std::logic_error(
+            "TcpServer output-memory options must be configured before start");
+    }
+    auto serverBudget =
+        std::make_shared<TcpOutputMemoryBudget>(options.server);
+    outputMemoryOptions_ = std::move(options);
+    serverOutputBudget_ = std::move(serverBudget);
+}
+
 void TcpServer::setAcceptErrorCallback(AcceptorErrorCallback cb) {
     acceptErrorCallback_ = std::move(cb);
     acceptor_->setErrorCallback(acceptErrorCallback_);
@@ -298,6 +319,22 @@ TcpServerAdmissionStats TcpServer::admissionStats() const noexcept {
     };
 }
 
+TcpServerOutputMemoryStats
+TcpServer::outputMemoryStats() const {
+    TcpServerOutputMemoryStats stats;
+    std::lock_guard lock(outputMemoryBudgetsMutex_);
+    stats.loops.reserve(loopOutputBudgets_.size());
+    for (const auto& [loop, budget] : loopOutputBudgets_) {
+        (void)loop;
+        stats.loops.push_back(budget->snapshot());
+    }
+    stats.server = serverOutputBudget_->snapshot();
+    if (outputMemoryOptions_.global) {
+        stats.global = outputMemoryOptions_.global->snapshot();
+    }
+    return stats;
+}
+
 const InetAddress& TcpServer::listenAddress() const noexcept {
     return acceptor_->listenAddress();
 }
@@ -322,6 +359,10 @@ void TcpServer::start() {
     stopped_ = false;
     try {
         workerStopParticipants_.clear();
+        {
+            std::lock_guard lock(outputMemoryBudgetsMutex_);
+            loopOutputBudgets_.clear();
+        }
         std::weak_ptr<void> lifetime = lifetimeToken_;
         const auto userThreadInit = threadInitCallback_;
         threadPool_->start(
@@ -329,12 +370,25 @@ void TcpServer::start() {
                 if (!lifetime.lock()) {
                     return;
                 }
+                auto loopBudget =
+                    std::make_shared<TcpOutputMemoryBudget>(
+                        outputMemoryOptions_.loop);
+                {
+                    std::lock_guard lock(outputMemoryBudgetsMutex_);
+                    loopOutputBudgets_.emplace(
+                        workerLoop,
+                        std::move(loopBudget));
+                }
                 registerWorkerStopParticipant(workerLoop);
                 if (userThreadInit) {
                     userThreadInit(workerLoop);
                 }
             });
     } catch (...) {
+        {
+            std::lock_guard lock(outputMemoryBudgetsMutex_);
+            loopOutputBudgets_.clear();
+        }
         workerStopParticipants_.clear();
         started_.store(false, std::memory_order_relaxed);
         stopped_ = true;
@@ -1273,6 +1327,12 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
     }
 
     EventLoop* ioLoop = threadPool_->selectLoop(peerAddress);
+    const auto budget = loopOutputBudgets_.find(ioLoop);
+    if (budget == loopOutputBudgets_.end()) {
+        LOG_FATAL
+            << "TcpServer selected an EventLoop without an output-memory budget";
+    }
+    auto loopOutputBudget = budget->second;
     if (nextConnId_ == std::numeric_limits<std::uint64_t>::max()) {
         LOG_ERROR << "TcpServer connection identity space exhausted";
         return;
@@ -1349,8 +1409,15 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
          callbackExceptionHandler = callbackExceptionHandler_,
          closeCallback = std::move(closeCallback),
          backpressureOptions = backpressureOptions_,
+         loopOutputBudget = std::move(loopOutputBudget),
+         serverOutputBudget = serverOutputBudget_,
+         globalOutputBudget = outputMemoryOptions_.global,
          highWaterMark = highWaterMark_]() mutable {
             connection->setBackpressureOptions(backpressureOptions);
+            connection->setOutputMemoryBudgets(
+                std::move(loopOutputBudget),
+                std::move(serverOutputBudget),
+                std::move(globalOutputBudget));
             connection->setConnectionCallback(std::move(connectionCallback));
             connection->setMessageCallback(std::move(messageCallback));
             if (highWaterMarkCallback && highWaterMark > 0) {

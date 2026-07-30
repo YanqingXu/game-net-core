@@ -171,3 +171,18 @@ generation-tagged values for cancellation. SessionManager/PlayerSession remain
 provisional while adopting the same substrate. Direct Core contracts live in
 `tests/contract/timer_queue/test_deadline_queue.cpp`; TcpServer and
 SessionManager contracts verify bounded backlog continuation and cleanup.
+
+M3-Q1-A adds the stable Core `TcpOutputMemoryBudget.h` surface, appends
+loop/server/global overload results to `TcpSendResult`, and adds setup-time
+`TcpServerOutputMemoryOptions` plus low-frequency snapshots. Existing
+connection-local `Overloaded` semantics and the default round-robin server
+surface remain available; new TcpServer instances additionally receive finite
+64 MiB per-loop and 256 MiB per-server output budgets, while a process/global
+budget is opt-in and explicitly shared by the caller. Every shared scope uses
+atomic reservation rather than a per-send mutex, and later-scope rejection
+rolls earlier scopes back before returning. This is an additive source change
+within the 0.3 line, but the enum/header fingerprints remain part of the
+required independent stable-surface review. Direct contracts live in
+`tests/contract/tcp_connection/test_tcp_output_memory_budget.cpp`,
+`tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp`,
+and `tests/contract/tcp_server/test_tcp_server_output_memory.cpp`.

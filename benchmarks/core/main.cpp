@@ -157,6 +157,9 @@ public:
             acceptedSends_.fetch_add(1, std::memory_order_relaxed);
             break;
         case gamenet::net::TcpSendResult::Overloaded:
+        case gamenet::net::TcpSendResult::LoopOverloaded:
+        case gamenet::net::TcpSendResult::ServerOverloaded:
+        case gamenet::net::TcpSendResult::GlobalOverloaded:
             rejectedBytes_.fetch_add(requestedBytes, std::memory_order_relaxed);
             rejectedSends_.fetch_add(1, std::memory_order_relaxed);
             overloadedSends_.fetch_add(1, std::memory_order_relaxed);

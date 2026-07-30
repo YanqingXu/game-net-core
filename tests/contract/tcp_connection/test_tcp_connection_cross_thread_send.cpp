@@ -125,6 +125,11 @@ int main() {
     GAMENET_TEST_ASSERT(closeCallbackCount == 1);
     GAMENET_TEST_ASSERT(connection->disconnected());
     GAMENET_TEST_ASSERT(connection->pendingOutputBytes() == 0);
+    const auto memory = connection->outputMemorySnapshot();
+    GAMENET_TEST_ASSERT(memory.pendingBytes == 0);
+    GAMENET_TEST_ASSERT(memory.peakPendingBytes == payload.size());
+    GAMENET_TEST_ASSERT(memory.rejectedReservations == 1);
+    GAMENET_TEST_ASSERT(!memory.overloaded);
 
     return 0;
 }

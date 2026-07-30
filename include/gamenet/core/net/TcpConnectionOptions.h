@@ -10,8 +10,12 @@ namespace gamenet::net {
 enum class TcpSendResult {
     Accepted,
     Closed,
+    // The connection-local hard limit rejected the send.
     Overloaded,
     OwnerUnavailable,
+    LoopOverloaded,
+    ServerOverloaded,
+    GlobalOverloaded,
 };
 
 struct TcpConnectionBackpressureOptions {

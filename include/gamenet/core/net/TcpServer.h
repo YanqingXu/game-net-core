@@ -13,6 +13,7 @@
 #include "gamenet/core/net/PostResult.h"
 #include "gamenet/core/net/SocketTypes.h"
 #include "gamenet/core/net/TcpConnectionOptions.h"
+#include "gamenet/core/net/TcpOutputMemoryBudget.h"
 #include "gamenet/core/net/TimerId.h"
 
 #include <atomic>
@@ -24,6 +25,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -104,6 +106,27 @@ struct TcpServerAdmissionStats {
     std::uint64_t activeConnections{0};
 };
 
+struct TcpServerOutputMemoryOptions {
+    TcpOutputMemoryBudgetOptions loop{
+        .hardLimitBytes = 64U * 1024U * 1024U,
+        .recoveryThresholdBytes = 48U * 1024U * 1024U,
+    };
+    TcpOutputMemoryBudgetOptions server{
+        .hardLimitBytes = 256U * 1024U * 1024U,
+        .recoveryThresholdBytes = 192U * 1024U * 1024U,
+    };
+    // Optional process/global scope shared by one or more TcpServer objects.
+    std::shared_ptr<TcpOutputMemoryBudget> global;
+
+    void validate() const;
+};
+
+struct TcpServerOutputMemoryStats {
+    std::vector<TcpOutputMemoryBudgetSnapshot> loops;
+    TcpOutputMemoryBudgetSnapshot server;
+    std::optional<TcpOutputMemoryBudgetSnapshot> global;
+};
+
 class TcpServer : private gamenet::base::noncopyable {
 public:
     TcpServer(EventLoop* loop, const InetAddress& listenAddr, std::string name, bool reusePort = true);
@@ -118,6 +141,7 @@ public:
     void setWriteCompleteCallback(WriteCompleteCallback cb);
     void setCloseInfoCallback(CloseInfoCallback cb);
     void setConnectionBackpressureOptions(TcpConnectionBackpressureOptions options);
+    void setOutputMemoryOptions(TcpServerOutputMemoryOptions options);
     void setAcceptErrorCallback(AcceptorErrorCallback cb);
     void setIocpAcceptDepth(std::size_t depth);
     void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
@@ -128,6 +152,7 @@ public:
     // accepted; authentication and deadline races resolve in base-loop order.
     bool tryMarkConnectionAuthenticated(const TcpConnectionPtr& connection);
     TcpServerAdmissionStats admissionStats() const noexcept;
+    TcpServerOutputMemoryStats outputMemoryStats() const;
 
     const InetAddress& listenAddress() const noexcept;
     std::size_t connectionCount() const;
@@ -216,6 +241,13 @@ private:
     std::uint64_t nextConnId_{1};
     std::size_t highWaterMark_{0};
     TcpConnectionBackpressureOptions backpressureOptions_;
+    TcpServerOutputMemoryOptions outputMemoryOptions_;
+    std::shared_ptr<TcpOutputMemoryBudget> serverOutputBudget_;
+    std::unordered_map<
+        EventLoop*,
+        std::shared_ptr<TcpOutputMemoryBudget>>
+        loopOutputBudgets_;
+    mutable std::mutex outputMemoryBudgetsMutex_;
     std::unordered_map<std::string, TcpConnectionPtr> connections_;
 
     struct PeerRateBucket {

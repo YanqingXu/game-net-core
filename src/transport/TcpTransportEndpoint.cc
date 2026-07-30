@@ -46,6 +46,9 @@ EndpointResult TcpTransportEndpoint::send(std::string_view bytes) {
     case gamenet::net::TcpSendResult::Closed:
         return EndpointResult::Closed;
     case gamenet::net::TcpSendResult::Overloaded:
+    case gamenet::net::TcpSendResult::LoopOverloaded:
+    case gamenet::net::TcpSendResult::ServerOverloaded:
+    case gamenet::net::TcpSendResult::GlobalOverloaded:
         return EndpointResult::Overloaded;
     case gamenet::net::TcpSendResult::OwnerUnavailable:
         return EndpointResult::OwnerUnavailable;

@@ -29,6 +29,9 @@ inline inside TcpConnection.
 - bound admitted output bytes across buffered and not-yet-executed cross-thread
   sends, returning an explicit overload result before additional payload memory
   is admitted
+- when installed by TcpServer, reserve each accepted output byte through the
+  fixed connection -> owner-loop -> server -> optional shared-global budget
+  chain without a hot-path mutex; report the first rejecting scope explicitly
 - on Windows, move admitted payloads into a loop-owned stable-segment queue
   instead of mirroring the complete output Buffer into transport-private write
   storage
@@ -75,6 +78,15 @@ inline inside TcpConnection.
 - every accepted output byte is reserved exactly once and released exactly once
   after write completion or close-time discard; the configured hard limit is
   never exceeded even by concurrent cross-thread send admission
+- a hierarchical reservation never exceeds any configured hard limit. Failure
+  at a later scope rolls back every earlier scope before `trySend()` returns,
+  and an accepted byte releases every scope exactly once
+- each shared output budget enters overload only after capacity rejection above
+  its recovery threshold and resumes admission only after pending bytes return
+  to or below that threshold; one request larger than an otherwise idle budget
+  is rejected without latching unrelated small sends
+- current/peak/rejection/overload snapshots are atomic observations only. They
+  grant no right to mutate owner-loop connection state
 - the Windows pending-write queue contains stable owned string segments. One
   segment is appended once, remains at a stable address while `WSASend`
   observes it, advances only its front offset on partial completion, and is
@@ -144,6 +156,10 @@ inline inside TcpConnection.
   ConnectionBackpressureController
 - TcpConnection remains the only component that changes the public connection state
   or invokes the final close callback used by TcpServer/TcpClient
+- TcpConnection owns its local reservation count and borrows shared ownership
+  of immutable loop/server/global budget identities. TcpServer owns the loop
+  and server budget configuration; an optional global budget may be shared by
+  multiple servers and outlive any one server until all accepted bytes release
 - EventLoop owns lifecycle-node scheduling/storage; TcpConnection owns the
   node registration generation and requests detach during final owner-loop
   cleanup
@@ -156,6 +172,9 @@ inline inside TcpConnection.
 - cross-thread send copies the admitted bytes into one immutable payload before
   returning Accepted; the executor moves that same allocation into the owner-
   loop Windows segment queue without another complete-payload copy
+- hierarchical output admission is cross-thread-safe atomic value accounting;
+  it does not mutate Channel, Buffer, segment, server-map, or EventLoop state
+  and does not invoke callbacks
 - `connected()` and `disconnected()` may be called from any thread and return
   a point-in-time state snapshot
 - `droppedNotificationCount()` may be called from any thread and returns a
@@ -230,9 +249,10 @@ inline inside TcpConnection.
 - a dropped high-water notification does not prevent read backpressure or
   EPOLLOUT/WSASend progress; a dropped write-complete notification does not
   prevent a disconnecting connection from half-closing
-- `trySend()` reports `Overloaded` before queue/buffer growth when the hard
-  output reservation limit would be exceeded; the legacy `send()` API uses the
-  same bounded admission path
+- `trySend()` reports `Overloaded` for the connection hard limit and distinct
+  loop/server/global overload results for the first rejecting shared scope,
+  before queue/buffer growth; the legacy `send()` API uses the same bounded
+  admission path
 - reaching the configured input hard limit after message dispatch is treated
   as connection overload and converges on the existing close path
 - helper-component failure must still converge on TcpConnection's existing error/close model
@@ -314,6 +334,13 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp`
   verifies concurrent-domain admission reserves bytes before owner-loop
   execution and rejects a second send that would exceed the same hard limit
+- `tests/contract/tcp_connection/test_tcp_output_memory_budget.cpp` verifies
+  mutex-free hard limits, hysteretic recovery, concurrent no-overshoot,
+  hierarchical rollback, and exact release to zero
+- `tests/contract/tcp_server/test_tcp_server_output_memory.cpp` verifies
+  TcpServer injects distinct loop/server/optional shared-global budgets,
+  reports the rejecting scope, exposes low-frequency snapshots, and releases
+  all scopes after close/stop
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_force_close.cpp`
   verifies repeated forceClose teardown remains single-shot
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_connect_destroyed.cpp`

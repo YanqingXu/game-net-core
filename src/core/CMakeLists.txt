@@ -16,6 +16,7 @@ set(GAMENET_CORE_SOURCES
     net/Socket.cc
     net/TcpClient.cc
     net/TcpConnection.cc
+    net/TcpOutputMemoryBudget.cc
     net/TcpServer.cc
     net/TimerQueue.cc
     net/poller/PollerFactory.cc

@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 130 |
+| 61 | 30 | 20 | 11 | 133 |
 
 ## Production-Hardening Worktree State
 
@@ -294,7 +294,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 117 configured CTest tests: 8 unit tests, 96 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 119 configured CTest tests: 8 unit tests, 98 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -358,12 +358,26 @@ roughly three orders of magnitude faster than the live handshake interval, so
 this runner does not prove a base-loop accept bottleneck. Linux/epoll
 `SO_REUSEPORT` per-worker accept remains deferred until M3-P1 has a sustained
 churn profile that isolates and saturates ready accept work.
-The current inventory is unit=8, contract=96, integration=13, threading=90,
-lifecycle=96, game_pipeline=7, and broadcast=5. All 31 Python repository/API
-contracts passed, including the public API manifest and deterministic
-compatibility diff. The focused 12-test Pipeline/Broadcast slice passed repeat
-50 for 600 executions. A clean Release install exposed `DispatchResult` and
-the updated upper-layer headers, and the isolated
+M3-Q1-A adds mutex-free hierarchical TCP output admission in the fixed order
+connection -> owner loop -> server -> optional caller-shared global budget.
+Every shared scope has a hard limit, lower recovery threshold, atomic
+current/peak/rejection/overload snapshot, and exact rollback/release. The
+connection keeps its existing hard limit and now exposes the same diagnostic
+snapshot; `TcpSendResult` identifies the first rejecting scope. TcpServer
+defaults to finite 64 MiB per-loop and 256 MiB per-server budgets and installs
+immutable budget identities before connection establishment. The two new
+budget/server contracts each passed 50/50 focused repetitions, including a
+32-thread no-overshoot race, two-worker scope injection, later-scope rollback,
+and zero pending bytes after stop. The Windows partial-write contract was also
+made independent of ambient system timer-resolution changes while preserving a
+reader slower than each physical write chunk.
+The current inventory is unit=8, contract=98, integration=13, threading=92,
+lifecycle=97, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+contracts passed before M3-Q1-A. After Q1-A, all 119 MSVC Debug tests and all
+33 repository guards passed; the public API manifest and deterministic
+compatibility diff also passed. The focused 12-test Pipeline/Broadcast slice
+passed repeat 50 for 600 executions. A clean Release install exposed
+`DispatchResult` and the updated upper-layer headers, and the isolated
 `find_package(GameNetCore)` consumer built and passed CTest 1/1.
 
 The pre-H2-C Release `session-expiry-scan` scale study measured

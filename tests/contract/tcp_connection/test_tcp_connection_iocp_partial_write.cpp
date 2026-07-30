@@ -25,7 +25,9 @@ int main() {
     return 0;
 #else
     constexpr std::size_t kWriteChunkBytes = 4096;
-    constexpr std::size_t kPeerReadBytes = 512;
+    // Stay below one physical write chunk while avoiding a dependency on
+    // another process raising Windows' common ~15.6 ms timer resolution.
+    constexpr std::size_t kPeerReadBytes = 2048;
     gamenet::net::detail::resetIocpTcpTransportFaultsForTesting();
     gamenet::net::detail::setIocpWriteChunkLimitForTesting(
         kWriteChunkBytes);
@@ -87,7 +89,7 @@ int main() {
             loop.quit();
         });
 
-    drainTimer = loop.runEvery(std::chrono::milliseconds(2), [&] {
+    drainTimer = loop.runEvery(std::chrono::milliseconds(16), [&] {
         if (received.size() < payload.size()) {
             std::array<char, kPeerReadBytes> bytes{};
             const ssize_t n = gamenet::net::sockets::read(
