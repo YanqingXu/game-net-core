@@ -188,6 +188,7 @@ def main() -> None:
         "EndpointOverloaded",
         "recoveryStable",
         "workingSetRecoveryDeltaBytes",
+        "sampledWorkingSetPeak",
     ):
         require(source_text, fragment, source)
     for fragment in (
@@ -206,6 +207,7 @@ def main() -> None:
         "2026-07-30 local M3-P1 seed",
         "accepted / `EndpointOverloaded`",
         "100/1k and 1k/10k+ scale",
+        "M3-P1-D scale seed",
     ):
         require(docs_text, fragment, docs)
     require(
@@ -236,6 +238,7 @@ def main() -> None:
             1,
         ),
         ("fixed-storage leak", ("process", "fixed_storage_after_teardown", "total_retained_bytes"), 1),
+        ("incoherent RSS peak", ("process", "working_set_peak_bytes"), 14999999),
         ("false producer check", ("checks", "passed"), False),
     )
     for label, path, value in mutations:

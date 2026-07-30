@@ -37,7 +37,10 @@ The producer and `tools/validate_capacity_profile.py` require:
 
 RSS before/pressure/recovery/peak/after is observational. Allocator and kernel
 retention vary by platform, so this schema deliberately defines no RSS
-correctness or performance threshold.
+performance threshold. The reported peak is nevertheless structurally
+coherent: it is the maximum of the independent 1 ms sampler and every explicit
+baseline, pressure, recovery, and post-teardown sample. A short phase sample
+therefore cannot exceed the reported peak merely because the sampler missed it.
 
 `TcpConnection::memoryRetentionSnapshot()` is owner-loop-only. The profile
 posts each low-frequency sample through the endpoint owner executor; it never
@@ -93,3 +96,39 @@ threshold.
 
 The planned M3-P1 `Slow reader` and `Broadcast TCP` rows reuse this schema at
 100/1k and 1k/10k+ scale rather than inventing a second result format.
+
+## 2026-07-30 M3-P1-D scale seed
+
+The scale profile reduces payload and per-connection watermarks together so
+the 100- and 1,000-client runs test the same eight-payload pending bound without
+manufacturing a multi-gigabyte process:
+
+```powershell
+foreach ($connections in 100, 1000) {
+  build-capacity\benchmarks\Release\gamenet_capacity_profile.exe `
+    --scenario slow-broadcast-recovery `
+    --connections $connections --threads 4 --messages 10 `
+    --payload-bytes 32768 `
+    --low-water-bytes 32768 `
+    --high-water-bytes 65536 `
+    --hard-limit-bytes 262144 `
+    --recovery-threshold-bytes 0 `
+    --pressure-settle-ms 500 `
+    --recovery-stable-ms 250 `
+    --timeout-ms 120000 `
+    --iocp-accept-depth 32
+}
+```
+
+Both Windows MSVC Release artifacts passed the strict v1 validator:
+
+| Slow clients / endpoint attempts | Accepted / overload | Pending peak | Recovery | RSS peak |
+| ---: | ---: | ---: | ---: | ---: |
+| 100 / 1,000 | 900 / 100 | 26,214,400 B | 267.014 ms | 30,298,112 B |
+| 1,000 / 10,000 | 8,252 / 1,748 | 262,144,000 B | 331.686 ms | 274,972,672 B |
+
+These are local capacity seeds, not portable thresholds. The 1,000-client run
+also proves the endpoint-attempt accounting and recovery contract at the
+planned 10k Broadcast TCP scale. The next P1-D slice adds bounded short-lived
+healthy probes during this pressure/recovery window rather than inferring
+mixed-workload behavior from this slow-client-only run.

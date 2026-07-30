@@ -110,7 +110,10 @@ state.
 - `gamenet_capacity_profile --scenario slow-broadcast-recovery` drives real
   TcpTransportEndpoint targets into bounded slow-reader output, samples
   dispatcher/TCP/retained-memory peaks, attributes every terminal rejection,
-  and requires a stable low-water recovery window before teardown.
+  and requires a stable low-water recovery window before teardown. Its
+  observational process working-set peak must be no smaller than the explicit
+  baseline, pressure, recovery, and post-teardown samples even when the
+  independent periodic sampler misses a short-lived phase maximum.
 
 ## Migration Provenance
 

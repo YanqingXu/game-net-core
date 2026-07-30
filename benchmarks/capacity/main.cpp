@@ -1624,8 +1624,15 @@ int run(const Config& config) {
     result.fixedAfterTeardown =
         gamenet::net::networkFixedStorageRetentionSnapshot();
     result.workingSetAfterBytes = sampleWorkingSetBytes();
-    result.workingSetPeakBytes =
+    const auto sampledWorkingSetPeak =
         workingSetSampler.stop(result.workingSetAfterBytes);
+    result.workingSetPeakBytes = (std::max)({
+        sampledWorkingSetPeak,
+        result.workingSetBeforeBytes,
+        result.workingSetPressureBytes,
+        result.workingSetRecoveryBytes,
+        result.workingSetAfterBytes,
+    });
     finalizeChecks(
         config,
         result,
