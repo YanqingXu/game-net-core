@@ -11,9 +11,11 @@ from typing import Any
 
 SCHEMA_V1 = "gamenet.capacity_profile.v1"
 SCHEMA_V2 = "gamenet.capacity_profile.v2"
+SCHEMA_V3 = "gamenet.capacity_profile.v3"
 SCENARIOS = {
     SCHEMA_V1: "slow-broadcast-recovery",
     SCHEMA_V2: "mixed-pressure-recovery",
+    SCHEMA_V3: "mixed-pressure-recovery",
 }
 REASONS = {
     "none",
@@ -52,6 +54,9 @@ MIXED_CHECKS = BASE_CHECKS | {
     "healthy_probe_zero_failures",
     "healthy_probe_closed",
     "healthy_probe_paced",
+}
+SCALE_READY_CHECKS = MIXED_CHECKS | {
+    "recovery_reader_pool_accounted",
 }
 
 
@@ -212,7 +217,8 @@ def validate_document(
         document.get("scenario") == SCENARIOS[schema],
         f"{label}: schema/scenario mismatch",
     )
-    mixed_profile = schema == SCHEMA_V2
+    mixed_profile = schema in {SCHEMA_V2, SCHEMA_V3}
+    scale_ready_profile = schema == SCHEMA_V3
     if expected_platform is not None:
         require(document.get("platform") == expected_platform, f"{label}: platform mismatch")
     if expected_backend is not None:
@@ -635,7 +641,43 @@ def validate_document(
             <= elapsed_ms * 1000.0 + 1.0,
             f"{label}: healthy probe P99 exceeds total elapsed time",
         )
-        expected_checks = MIXED_CHECKS
+        if scale_ready_profile:
+            reader_limit = positive_integer(
+                parameters.get("reader_concurrency_limit"),
+                f"{label}.reader_concurrency_limit",
+            )
+            readers = object_field(document, "recovery_readers", label)
+            require(
+                set(readers)
+                == {"workers", "assigned_sockets", "closed_sockets"},
+                f"{label}: recovery reader field set mismatch",
+            )
+            reader_workers = positive_integer(
+                readers.get("workers"),
+                f"{label}.recovery_readers.workers",
+            )
+            assigned_sockets = non_negative_integer(
+                readers.get("assigned_sockets"),
+                f"{label}.recovery_readers.assigned_sockets",
+            )
+            closed_sockets = non_negative_integer(
+                readers.get("closed_sockets"),
+                f"{label}.recovery_readers.closed_sockets",
+            )
+            require(
+                reader_workers == min(reader_limit, connections)
+                and assigned_sockets == connections
+                and closed_sockets == assigned_sockets,
+                f"{label}: recovery reader accounting is inconsistent",
+            )
+            expected_checks = SCALE_READY_CHECKS
+        else:
+            require(
+                "reader_concurrency_limit" not in parameters
+                and "recovery_readers" not in document,
+                f"{label}: v2 document reported v3 recovery readers",
+            )
+            expected_checks = MIXED_CHECKS
     else:
         require(
             not {
@@ -645,6 +687,7 @@ def validate_document(
                 "probe_concurrency",
                 "probe_payload_bytes",
                 "probe_connect_timeout_ms",
+                "reader_concurrency_limit",
             }
             & set(parameters),
             f"{label}: v1 document reported healthy probe parameters",
@@ -652,6 +695,10 @@ def validate_document(
         require(
             "healthy_churn" not in document,
             f"{label}: v1 document reported healthy churn",
+        )
+        require(
+            "recovery_readers" not in document,
+            f"{label}: v1 document reported recovery readers",
         )
         expected_checks = BASE_CHECKS
 

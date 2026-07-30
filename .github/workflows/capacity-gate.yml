@@ -1,0 +1,226 @@
+name: capacity-gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Reviewed mixed capacity profile
+        required: true
+        default: candidate-10k
+        type: choice
+        options:
+          - candidate-10k
+          - dedicated-100k
+      dedicated_capacity_ack:
+        description: Enter RUN_DEDICATED_100K for the dedicated profile
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  linux-capacity-gate:
+    name: Linux epoll mixed capacity gate
+    runs-on: ${{ inputs.profile == 'dedicated-100k' && fromJSON('["self-hosted","linux","x64","gamenet-endurance"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 180
+
+    steps:
+      - name: Authorize dedicated capacity
+        shell: bash
+        env:
+          CAPACITY_PROFILE: ${{ inputs.profile }}
+          DEDICATED_CAPACITY_ACK: ${{ inputs.dedicated_capacity_ack }}
+        run: |
+          set -euo pipefail
+          if [ "$CAPACITY_PROFILE" = "dedicated-100k" ] &&
+             [ "$DEDICATED_CAPACITY_ACK" != "RUN_DEDICATED_100K" ]; then
+            echo "dedicated-100k requires RUN_DEDICATED_100K" >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Record capacity toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            cmake --version
+            c++ --version
+            python3 --version
+          } 2>&1 | tee capacity-toolchain.txt
+
+      - name: Check capacity contract
+        run: python3 tests/cmake/test_capacity_profile_contract.py
+
+      - name: Configure Release capacity target
+        run: >
+          cmake -S . -B build-capacity-gate
+          -DCMAKE_BUILD_TYPE=Release
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_BENCHMARKS=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build Release capacity target
+        run: >
+          cmake --build build-capacity-gate
+          --target gamenet_capacity_profile --parallel
+
+      - name: Run fixed mixed capacity profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/run_capacity_gate.py \
+            --profile "${{ inputs.profile }}" \
+            --executable build-capacity-gate/benchmarks/gamenet_capacity_profile \
+            --output-root capacity-results \
+            --platform linux --backend epoll --build-type Release \
+            --candidate-sha "${GITHUB_SHA}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job "${GITHUB_JOB}" \
+            --artifact-name "capacity-gate-${{ inputs.profile }}-${GITHUB_JOB}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --toolchain capacity-toolchain.txt
+
+      - name: Upload Linux capacity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-gate-${{ inputs.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: capacity-results/
+          if-no-files-found: error
+          retention-days: 90
+
+  windows-capacity-gate:
+    name: Windows IOCP mixed capacity gate
+    runs-on: ${{ inputs.profile == 'dedicated-100k' && fromJSON('["self-hosted","windows","x64","gamenet-windows"]') || 'windows-latest' }}
+    timeout-minutes: 180
+
+    steps:
+      - name: Authorize dedicated capacity
+        shell: pwsh
+        env:
+          CAPACITY_PROFILE: ${{ inputs.profile }}
+          DEDICATED_CAPACITY_ACK: ${{ inputs.dedicated_capacity_ack }}
+        run: |
+          if ($env:CAPACITY_PROFILE -eq "dedicated-100k" -and
+              $env:DEDICATED_CAPACITY_ACK -ne "RUN_DEDICATED_100K") {
+            throw "dedicated-100k requires RUN_DEDICATED_100K"
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Record capacity toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $toolchain = @(
+            cmake --version
+            python --version
+            "Visual Studio installation: $installationPath"
+            "MSVC tools version:"
+            Get-Content (Join-Path $installationPath "VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt")
+          )
+          $toolchain | Set-Content -Encoding utf8 capacity-toolchain.txt
+
+      - name: Check capacity contract
+        run: python tests/cmake/test_capacity_profile_contract.py
+
+      - name: Configure Release capacity target
+        shell: pwsh
+        run: >
+          cmake -S . -B build-capacity-gate
+          -G "Visual Studio 18 2026" -A x64
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_BENCHMARKS=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build Release capacity target
+        shell: pwsh
+        run: >
+          cmake --build build-capacity-gate --config Release
+          --target gamenet_capacity_profile --parallel
+
+      - name: Run fixed mixed capacity profile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/run_capacity_gate.py `
+            --profile "${{ inputs.profile }}" `
+            --executable build-capacity-gate/benchmarks/Release/gamenet_capacity_profile.exe `
+            --output-root capacity-results `
+            --platform windows --backend iocp --build-type Release `
+            --candidate-sha "$env:GITHUB_SHA" `
+            --run-id "$env:GITHUB_RUN_ID" `
+            --run-attempt "$env:GITHUB_RUN_ATTEMPT" `
+            --job "$env:GITHUB_JOB" `
+            --artifact-name "capacity-gate-${{ inputs.profile }}-$($env:GITHUB_JOB)-$($env:GITHUB_SHA)-$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)" `
+            --toolchain capacity-toolchain.txt
+          if ($LASTEXITCODE -ne 0) { throw "capacity gate failed" }
+
+      - name: Upload Windows capacity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-gate-${{ inputs.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: capacity-results/
+          if-no-files-found: error
+          retention-days: 90
+
+  paired-capacity-evidence:
+    name: Verify paired mixed capacity evidence
+    needs:
+      - linux-capacity-gate
+      - windows-capacity-gate
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Require successful capacity producers
+        shell: bash
+        env:
+          LINUX_PRODUCER_RESULT: ${{ needs['linux-capacity-gate'].result }}
+          WINDOWS_PRODUCER_RESULT: ${{ needs['windows-capacity-gate'].result }}
+        run: |
+          set -euo pipefail
+          if [ "$LINUX_PRODUCER_RESULT" != "success" ] ||
+             [ "$WINDOWS_PRODUCER_RESULT" != "success" ]; then
+            echo "capacity producer did not finish successfully" >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download capacity evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: capacity-gate-${{ inputs.profile }}-*-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: capacity-evidence-set
+
+      - name: Verify paired capacity evidence
+        run: |
+          python3 tools/verify_capacity_gate_evidence_set.py \
+            --input-root capacity-evidence-set \
+            --output capacity-evidence-set/pair-manifest.json
+
+      - name: Upload paired capacity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-gate-pair-${{ inputs.profile }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: capacity-evidence-set/
+          if-no-files-found: error
+          retention-days: 90

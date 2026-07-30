@@ -27,6 +27,10 @@ matrix, and immutable evidence are explicit and machine checked.
   contract without freezing the current hot-path API
 - compare fixed benchmark scenarios against same-platform baselines with
   explicit regression budgets
+- retain paired Linux/Windows 10k mixed slow-reader/Broadcast capacity evidence
+  with exact healthy-probe and bounded recovery-reader lifecycle accounting
+- keep the 100k endpoint-attempt profile on explicitly labeled dedicated
+  capacity runners; it is not an ordinary hosted-CI or cross-host score gate
 - retain structured 24-hour candidate and 72-hour release endurance evidence
 - exercise recoverable network, resource-pressure, callback, and shutdown
   failures without weakening lifecycle or thread-affinity contracts
@@ -84,12 +88,15 @@ matrix, and immutable evidence are explicit and machine checked.
 1. compatibility manifest and guard pass in every ordinary CI producer
 2. provisional metrics exporter contracts pass under concurrency and teardown
 3. fixed Release benchmarks stay within reviewed same-runner regression budgets
-4. fault-injection contracts pass on Linux and Windows
-5. one frozen commit completes the 24-hour candidate endurance gate
-6. the same frozen commit completes the 72-hour release endurance gate
-7. all supported platform, sanitizer, package, benchmark, and evidence gates
+4. the same candidate commit produces strict paired Linux/Windows 10k mixed
+   capacity evidence; 100k endpoint-attempt evidence, when claimed, comes from
+   the dedicated capacity lane with the same immutable identity
+5. fault-injection contracts pass on Linux and Windows
+6. one frozen commit completes the 24-hour candidate endurance gate
+7. the same frozen commit completes the 72-hour release endurance gate
+8. all supported platform, sanitizer, package, benchmark, and evidence gates
    are green and retained
-8. any release offered for external adoption has an explicit owner-approved
+9. any release offered for external adoption has an explicit owner-approved
    license; otherwise artifacts remain engineering previews with no use grant
 
 ## 7. Verification
@@ -104,6 +111,10 @@ matrix, and immutable evidence are explicit and machine checked.
 - `tests/ci/test_core_capacity_matrix.py` verifies the independent 12-scenario
   Core capacity baseline/candidate profile, matching Linux/Windows parameters,
   reviewed budgets, and the evidence-only Linux accept-topology decision
+- `tests/cmake/test_capacity_profile_contract.py` verifies v1/v2 compatibility,
+  the scale-ready v3 mixed profile, exact bounded reader/probe lifecycle
+  accounting, the 10k candidate and 100k dedicated parameter sets, and paired
+  evidence failure fixtures
 - `tests/integration/resilience/test_fault_injection.cpp` verifies the declared
   reset, callback, overload, recovery, and forced-shutdown profiles
 - `tests/ci/test_endurance_gate.py` verifies the uninterrupted-process 24/72-

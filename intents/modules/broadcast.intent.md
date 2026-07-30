@@ -132,6 +132,17 @@ state.
   server-close, zero-failure healthy probes, a common paced interval, and
   internally consistent connect/probe P99 and attempt-rate measurements before
   the slow/Broadcast recovery result can pass.
+- The scale-ready mixed profile hands every slow client socket to exactly one
+  member of a fixed-size recovery-reader pool after the pressure sample. Each
+  worker owns a stable disjoint socket shard, uses nonblocking bounded reads,
+  and remains live through graceful server close; the driver does not touch
+  those sockets again until all workers join.
+- `gamenet.capacity_profile.v3` records the configured reader-worker ceiling
+  and exact worker/assigned/closed socket counts. The mixed profile cannot pass
+  unless every slow socket is assigned once, every assigned socket reaches a
+  terminal client-side close, and the actual worker count equals the smaller
+  of the configured ceiling and slow-client population. Historical v1
+  slow-only and v2 mixed artifacts retain their original validation contracts.
 
 ## Migration Provenance
 

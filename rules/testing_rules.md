@@ -207,6 +207,11 @@ For lifecycle-sensitive modules, tests should include:
   typed reason, reconcile EndpointOverloaded with the TCP rejecting scopes,
   and remain below the recovery threshold for a configured stable window
   before reporting recovery
+- the scale-ready mixed capacity profile must recover slow clients through a
+  fixed-size nonblocking reader pool with stable disjoint socket ownership;
+  exact worker/assigned/closed counts must converge before teardown, and 10k
+  candidate versus 100k dedicated endpoint-attempt parameter drift must be
+  rejected by structured evidence guards
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

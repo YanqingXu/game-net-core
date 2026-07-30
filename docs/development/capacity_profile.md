@@ -9,8 +9,9 @@ The mixed scenario additionally measures short-lived healthy echo traffic
 while the slow-reader pressure and recovery phases are active.
 
 It is opt-in benchmark tooling, not CTest and not an installed target. The
-slow-only stdout document remains `gamenet.capacity_profile.v1`; mixed evidence
-uses `gamenet.capacity_profile.v2`.
+slow-only stdout document remains `gamenet.capacity_profile.v1`. Historical
+mixed evidence uses `gamenet.capacity_profile.v2`; the scale-ready bounded
+recovery-reader contract uses `gamenet.capacity_profile.v3`.
 
 ## Contract
 
@@ -51,9 +52,9 @@ reads connection-owned Buffer state directly from its driver thread.
 
 ## Mixed pressure contract
 
-`mixed-pressure-recovery` preserves the v1 slow-reader and Broadcast contract,
-then starts one persistent bounded client worker pool immediately after all
-slow targets and dispatch progress have been published. The pool paces an exact
+`mixed-pressure-recovery` preserves the v1 slow-reader and Broadcast contract.
+It starts one persistent bounded probe worker pool immediately after all slow
+targets and dispatch progress have been published. The pool paces an exact
 number of attempts over one monotonic interval. Each attempt has a nonblocking
 connect deadline, sends one fixed small payload, requires its exact echo, and
 closes abortively. Post-publication probe connections are classified under the
@@ -64,7 +65,14 @@ server's cumulative accepted and closed counts have converged. Loop/server
 output budgets reserve headroom for that one batch; the per-connection slow
 client limit and Broadcast routing/dispatch limits do not change.
 
-The v2 validator additionally requires:
+After the pressure sample, v3 hands each slow socket to exactly one member of a
+fixed-size recovery-reader pool. Each worker owns a stable disjoint shard,
+performs bounded nonblocking reads, and remains alive through graceful server
+close. The driver does not touch those sockets until all reader workers join.
+The v3 artifact records the configured concurrency ceiling and exact
+worker/assigned/closed counts.
+
+The mixed validator requires:
 
 - `attempted = probe_succeeded + typed failures`;
 - client connected = server accepted = server closed;
@@ -74,6 +82,9 @@ The v2 validator additionally requires:
 - zero connect, send, receive, and payload-mismatch failures;
 - a complete paced interval, a recomputable actual attempt rate, and bounded
   connect/probe/schedule-lag nearest-rank P99 values.
+- for v3, actual reader workers equal
+  `min(reader_concurrency_limit, connections)`, every slow socket is assigned
+  exactly once, and every assigned socket reaches a terminal client-side close.
 
 ## Build and run
 
@@ -123,7 +134,8 @@ build-capacity\benchmarks\Release\gamenet_capacity_profile.exe `
   --probe-batch-size 10 `
   --probe-concurrency 4 `
   --probe-payload-bytes 32 `
-  --probe-connect-timeout-ms 1000 |
+  --probe-connect-timeout-ms 1000 `
+  --reader-concurrency 16 |
   py -3 tools\validate_capacity_profile.py `
     --expected-platform windows `
     --expected-backend iocp `
@@ -190,9 +202,9 @@ planned 10k Broadcast TCP scale.
 
 ## 2026-07-30 M3-P1-D2 mixed seed
 
-Five Windows MSVC Release repetitions used the mixed command above. All five
-v2 artifacts passed the strict validator, as did a separate v1 compatibility
-run:
+Five Windows MSVC Release repetitions used the mixed command above before the
+bounded-reader scale step. All five historical v2 artifacts passed the strict
+validator, as did a separate v1 compatibility run:
 
 | Observation | Five-run result |
 | --- | ---: |
@@ -210,3 +222,42 @@ It proves that bounded healthy traffic can complete with exact lifecycle
 accounting while the same server is applying and recovering from slow-reader
 Broadcast pressure. The next P1-D slice promotes the matching profile into the
 planned 10k candidate gate and defines the separate 100k/endurance lane.
+
+## M3-P1-D3 candidate and dedicated gates
+
+The manual-only `.github/workflows/capacity-gate.yml` workflow promotes the
+scale-ready v3 profile without turning developer pushes into uncontrolled
+capacity tests:
+
+| Profile | Slow sockets | Broadcast endpoint attempts | Healthy probes | Recovery readers | Repetitions | Runner class |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `candidate-10k` | 1,000 | 10,000 | 500 | 16 | 3 | hosted Linux and Windows |
+| `dedicated-100k` | 10,000 | 100,000 | 10,000 | 64 | 1 | dedicated Linux and Windows |
+
+Both profiles keep the reviewed 32 KiB payload, 32/64/256 KiB watermarks, and
+the same typed overload, recovery, healthy-probe lifecycle, fixed-storage, and
+RSS contracts. The dedicated profile therefore admits an aggregate pending
+ceiling of 2,621,440,000 bytes and requires both provisioned runner labels and
+the explicit `RUN_DEDICATED_100K` acknowledgement.
+
+`tools/run_capacity_gate.py` owns the fixed profile definitions. It rejects
+parameter drift, validates every raw v3 sample, hashes the executable,
+toolchain record, and samples, then writes a canonical
+`gamenet.capacity_gate.v1` manifest. The aggregation-only verifier accepts one
+Linux/epoll and one Windows/IOCP artifact, revalidates their contents and
+hashes, and emits `gamenet.capacity_gate_pair.v1`. Cross-host latency,
+throughput, and RSS values remain observational; the pair gate compares
+contract identity and pass/fail evidence rather than treating unlike hosts as
+a performance contest.
+
+A local Windows Release orchestration preflight completed all three
+`candidate-10k` repetitions with exact 10,000 endpoint attempts, 500/500
+healthy probes, and 16 workers accounting for all 1,000 recovery sockets in
+each repetition. This is implementation evidence, not an immutable
+cross-platform release artifact.
+
+The mixed capacity gate complements rather than replaces the one-process
+long-soak lane. Candidate promotion still requires the capacity pair and the
+24-hour endurance artifact from the same frozen commit; the 72-hour soak and
+the dedicated 100k pair remain production-readiness evidence on provisioned
+hosts.

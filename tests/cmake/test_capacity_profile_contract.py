@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -193,23 +196,173 @@ def valid_mixed_document() -> dict[str, object]:
     return document
 
 
+def valid_scale_ready_document() -> dict[str, object]:
+    document = copy.deepcopy(valid_mixed_document())
+    document["schema"] = "gamenet.capacity_profile.v3"
+    document["parameters"]["reader_concurrency_limit"] = 16  # type: ignore[index]
+    document["recovery_readers"] = {
+        "workers": 4,
+        "assigned_sockets": 4,
+        "closed_sockets": 4,
+    }
+    document["checks"]["recovery_reader_pool_accounted"] = True  # type: ignore[index]
+    return document
+
+
+def capacity_gate_document(
+    profile: object,
+    *,
+    platform: str,
+    backend: str,
+) -> dict[str, object]:
+    document = valid_scale_ready_document()
+    parameters = profile.parameters  # type: ignore[attr-defined]
+    connections = int(parameters["connections"])
+    messages = int(parameters["messages"])
+    payload_bytes = int(parameters["payload_bytes"])
+    endpoint_attempts = connections * messages
+    dropped = connections
+    accepted = endpoint_attempts - dropped
+    document["platform"] = platform
+    document["backend"] = backend
+    document["parameters"] = {
+        name: parameters[name]
+        for name in (
+            "connections",
+            "threads",
+            "messages",
+            "payload_bytes",
+            "pressure_settle_ms",
+            "recovery_stable_ms",
+            "timeout_ms",
+            "iocp_accept_depth",
+            "probe_target_per_second",
+            "probe_duration_ms",
+            "probe_batch_size",
+            "probe_concurrency",
+            "probe_payload_bytes",
+            "probe_connect_timeout_ms",
+            "reader_concurrency_limit",
+        )
+    }
+    aggregate_limit = (
+        connections
+        * int(parameters["connection_hard_limit_bytes"])
+    )
+    document["limits"].update(  # type: ignore[union-attr]
+        {
+            "connection_low_water_bytes": parameters[
+                "connection_low_water_bytes"
+            ],
+            "connection_high_water_bytes": parameters[
+                "connection_high_water_bytes"
+            ],
+            "connection_hard_limit_bytes": parameters[
+                "connection_hard_limit_bytes"
+            ],
+            "aggregate_pending_hard_limit_bytes": aggregate_limit,
+            "broadcast_global_outstanding_limit_bytes": (
+                endpoint_attempts * payload_bytes
+            ),
+            "recovery_pending_threshold_bytes": parameters[
+                "recovery_pending_threshold_bytes"
+            ],
+        }
+    )
+    document["terminal"]["scheduled_endpoints"] = endpoint_attempts  # type: ignore[index]
+    document["terminal"]["accepted_endpoints"] = accepted  # type: ignore[index]
+    document["terminal"]["dropped_endpoints"] = dropped  # type: ignore[index]
+    reasons = document["terminal"]["reasons"]  # type: ignore[index]
+    for name in reasons:  # type: ignore[union-attr]
+        reasons[name] = 0  # type: ignore[index]
+    reasons["endpoint_overloaded"] = dropped  # type: ignore[index]
+    document["terminal"]["tcp_rejections"] = {  # type: ignore[index]
+        "connection": dropped,
+        "loop": 0,
+        "server": 0,
+        "global": 0,
+        "total": dropped,
+    }
+    document["pressure"]["pending_current_bytes"] = aggregate_limit  # type: ignore[index]
+    document["pressure"]["pending_peak_bytes"] = aggregate_limit  # type: ignore[index]
+    document["pressure"]["overloaded_connections"] = connections  # type: ignore[index]
+    document["recovery"]["pending_peak_bytes"] = aggregate_limit  # type: ignore[index]
+    document["process"]["client_received_bytes"] = accepted * payload_bytes  # type: ignore[index]
+
+    probe_attempts = (
+        int(parameters["probe_target_per_second"])
+        * int(parameters["probe_duration_ms"])
+        // 1000
+    )
+    probe_batches = (
+        probe_attempts + int(parameters["probe_batch_size"]) - 1
+    ) // int(parameters["probe_batch_size"])
+    elapsed_ms = float(parameters["probe_duration_ms"]) + 1.0
+    document["healthy_churn"].update(  # type: ignore[union-attr]
+        {
+            "attempted": probe_attempts,
+            "client_connected": probe_attempts,
+            "server_accepted": probe_attempts,
+            "probe_succeeded": probe_attempts,
+            "server_closed": probe_attempts,
+            "batches": probe_batches,
+            "elapsed_ms": elapsed_ms,
+            "attempts_per_second": (
+                probe_attempts / (elapsed_ms / 1000.0)
+            ),
+        }
+    )
+    document["recovery_readers"] = {
+        "workers": min(
+            int(parameters["reader_concurrency_limit"]),
+            connections,
+        ),
+        "assigned_sockets": connections,
+        "closed_sockets": connections,
+    }
+    return document
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     source = repo_root / "benchmarks" / "capacity" / "main.cpp"
     validator = repo_root / "tools" / "validate_capacity_profile.py"
     intent = repo_root / "intents" / "modules" / "broadcast.intent.md"
+    release_intent = (
+        repo_root
+        / "intents"
+        / "usecases"
+        / "production_candidate_release.intent.md"
+    )
     testing_rules = repo_root / "rules" / "testing_rules.md"
     docs = repo_root / "docs" / "development" / "capacity_profile.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
+    capacity_workflow = (
+        repo_root / ".github" / "workflows" / "capacity-gate.yml"
+    )
+    gate_runner = repo_root / "tools" / "run_capacity_gate.py"
+    pair_verifier = (
+        repo_root / "tools" / "verify_capacity_gate_evidence_set.py"
+    )
 
     cmake_text = benchmark_cmake.read_text(encoding="utf-8")
     source_text = source.read_text(encoding="utf-8")
     validator_text = validator.read_text(encoding="utf-8")
     intent_text = intent.read_text(encoding="utf-8")
+    release_intent_text = release_intent.read_text(encoding="utf-8")
     rules_text = testing_rules.read_text(encoding="utf-8")
     docs_text = docs.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
+    capacity_workflow_text = capacity_workflow.read_text(
+        encoding="utf-8"
+    )
+    gate_runner_text = gate_runner.read_text(encoding="utf-8")
+    pair_verifier_text = pair_verifier.read_text(encoding="utf-8")
 
     for fragment in (
         "add_executable(gamenet_capacity_profile",
@@ -224,6 +377,7 @@ def main() -> None:
 
     for fragment in (
         "gamenet.capacity_profile.v1",
+        "gamenet.capacity_profile.v3",
         "slow-broadcast-recovery",
         "mixed-pressure-recovery",
         "TcpTransportEndpoint",
@@ -238,19 +392,39 @@ def main() -> None:
         "HealthyProbePool",
         "connectToWithDeadline",
         "healthyProbeAccounted",
+        "drainAvailable",
+        "readerClosedSockets",
+        "recoveryReaderPoolAccounted",
     ):
         require(source_text, fragment, source)
     for fragment in (
         "gamenet.capacity_profile.v1",
         "gamenet.capacity_profile.v2",
+        "gamenet.capacity_profile.v3",
         "EndpointOverloaded does not reconcile with TCP rejection scopes",
         "recovery did not sustain its stable window",
         "healthy probe accounting is inconsistent",
+        "recovery reader accounting is inconsistent",
         "RSS is deliberately observational",
     ):
         require(validator_text, fragment, validator)
     require(intent_text, "gamenet_capacity_profile --scenario slow-broadcast-recovery", intent)
     require(rules_text, "the slow-broadcast-recovery capacity profile must use real TCP", testing_rules)
+    require(
+        intent_text,
+        "fixed-size recovery-reader pool",
+        intent,
+    )
+    require(
+        release_intent_text,
+        "10k mixed slow-reader/Broadcast capacity evidence",
+        release_intent,
+    )
+    require(
+        rules_text,
+        "candidate versus 100k dedicated endpoint-attempt",
+        testing_rules,
+    )
     for fragment in (
         "gamenet.capacity_profile.v1",
         "owner-loop-only",
@@ -259,6 +433,8 @@ def main() -> None:
         "accepted / `EndpointOverloaded`",
         "100/1k and 1k/10k+ scale",
         "M3-P1-D scale seed",
+        "gamenet.capacity_profile.v3",
+        "fixed-size recovery-reader pool",
     ):
         require(docs_text, fragment, docs)
     require(
@@ -266,9 +442,44 @@ def main() -> None:
         "tests/cmake/test_capacity_profile_contract.py",
         workflow,
     )
+    for fragment in (
+        "name: capacity-gate",
+        "workflow_dispatch:",
+        "candidate-10k",
+        "dedicated-100k",
+        "RUN_DEDICATED_100K",
+        '["self-hosted","linux","x64","gamenet-endurance"]',
+        '["self-hosted","windows","x64","gamenet-windows"]',
+        "tools/run_capacity_gate.py",
+        "tools/verify_capacity_gate_evidence_set.py",
+        "Require successful capacity producers",
+        "capacity-gate-pair-",
+    ):
+        require(capacity_workflow_text, fragment, capacity_workflow)
+    assert "\n  push:" not in capacity_workflow_text
+    assert "\n  pull_request:" not in capacity_workflow_text
+    for fragment in (
+        "gamenet.capacity_gate.v1",
+        '"candidate-10k"',
+        '"dedicated-100k"',
+        "connections=1000",
+        "connections=10000",
+        "validate_gate_document",
+        "capacity gate requires the scale-ready v3 schema",
+    ):
+        require(gate_runner_text, fragment, gate_runner)
+    for fragment in (
+        "gamenet.capacity_gate_pair.v1",
+        "Linux/Windows capacity identity mismatch",
+        "capacity parameters drifted from the reviewed profile",
+        "capacity repetition contract drifted",
+    ):
+        require(pair_verifier_text, fragment, pair_verifier)
 
     sys.path.insert(0, str(repo_root / "tools"))
     import validate_capacity_profile as capacity_validator
+    import run_capacity_gate as capacity_gate
+    import verify_capacity_gate_evidence_set as capacity_pair
 
     document = valid_document()
     capacity_validator.validate_document(
@@ -281,6 +492,14 @@ def main() -> None:
     mixed_document = valid_mixed_document()
     capacity_validator.validate_document(
         mixed_document,
+        expected_platform="windows",
+        expected_backend="iocp",
+        expected_build_type="Release",
+        expected_connections=4,
+    )
+    scale_ready_document = valid_scale_ready_document()
+    capacity_validator.validate_document(
+        scale_ready_document,
         expected_platform="windows",
         expected_backend="iocp",
         expected_build_type="Release",
@@ -367,6 +586,203 @@ def main() -> None:
             pass
         else:
             raise AssertionError(f"validator accepted mixed mutation: {label}")
+
+    scale_ready_mutations = (
+        (
+            "reader worker mismatch",
+            ("recovery_readers", "workers"),
+            3,
+        ),
+        (
+            "reader assignment mismatch",
+            ("recovery_readers", "assigned_sockets"),
+            3,
+        ),
+        (
+            "reader close mismatch",
+            ("recovery_readers", "closed_sockets"),
+            3,
+        ),
+        (
+            "reader false check",
+            ("checks", "recovery_reader_pool_accounted"),
+            False,
+        ),
+    )
+    for label, path, value in scale_ready_mutations:
+        mutated = copy.deepcopy(scale_ready_document)
+        cursor = mutated
+        for key in path[:-1]:
+            cursor = cursor[key]  # type: ignore[index,assignment]
+        cursor[path[-1]] = value  # type: ignore[index]
+        try:
+            capacity_validator.validate_document(mutated, label=label)
+        except capacity_validator.CapacityProfileValidationError:
+            pass
+        else:
+            raise AssertionError(
+                f"validator accepted scale-ready mutation: {label}"
+            )
+
+    candidate_profile = capacity_gate.PROFILES["candidate-10k"]
+    dedicated_profile = capacity_gate.PROFILES["dedicated-100k"]
+    assert candidate_profile.endpoint_attempts == 10_000
+    assert candidate_profile.repetitions == 3
+    assert candidate_profile.parameters["connections"] == 1_000
+    assert candidate_profile.parameters["reader_concurrency_limit"] == 16
+    assert dedicated_profile.endpoint_attempts == 100_000
+    assert dedicated_profile.repetitions == 1
+    assert dedicated_profile.parameters["connections"] == 10_000
+    assert dedicated_profile.parameters["reader_concurrency_limit"] == 64
+
+    with tempfile.TemporaryDirectory(
+        prefix="gamenet-capacity-pair-"
+    ) as directory:
+        evidence_root = Path(directory)
+        candidate_sha = "a" * 40
+        run_id = "12345"
+        run_attempt = 2
+        fixtures: dict[
+            str,
+            tuple[Path, dict[str, object], dict[str, object]],
+        ] = {}
+        for job, platform, backend in (
+            ("linux-capacity-gate", "linux", "epoll"),
+            ("windows-capacity-gate", "windows", "iocp"),
+        ):
+            artifact_name = (
+                f"capacity-gate-candidate-10k-{job}-"
+                f"{candidate_sha}-{run_id}-{run_attempt}"
+            )
+            root = evidence_root / artifact_name
+            root.mkdir()
+            toolchain = root / "toolchain.txt"
+            toolchain.write_text(
+                f"{platform} fixture toolchain\n",
+                encoding="utf-8",
+            )
+            samples: list[dict[str, object]] = []
+            first_document: dict[str, object] | None = None
+            for repetition in range(
+                1,
+                candidate_profile.repetitions + 1,
+            ):
+                document = capacity_gate_document(
+                    candidate_profile,
+                    platform=platform,
+                    backend=backend,
+                )
+                if first_document is None:
+                    first_document = copy.deepcopy(document)
+                path = root / f"sample-{repetition}.json"
+                path.write_text(
+                    json.dumps(document, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                samples.append(
+                    {
+                        "repetition": repetition,
+                        "path": path.name,
+                        "bytes": path.stat().st_size,
+                        "sha256": sha256(path),
+                    }
+                )
+            manifest: dict[str, object] = {
+                "schema": capacity_gate.SCHEMA,
+                "result": "pass",
+                "profile": candidate_profile.name,
+                "candidate_sha": candidate_sha,
+                "run_id": run_id,
+                "run_attempt": run_attempt,
+                "job": job,
+                "artifact_name": artifact_name,
+                "platform": platform,
+                "backend": backend,
+                "build_type": "Release",
+                "repetitions": candidate_profile.repetitions,
+                "endpoint_attempts": (
+                    candidate_profile.endpoint_attempts
+                ),
+                "probe_attempts": candidate_profile.probe_attempts,
+                "parameters": candidate_profile.parameters,
+                "executable_sha256": "e" * 64,
+                "toolchain": {
+                    "path": toolchain.name,
+                    "bytes": toolchain.stat().st_size,
+                    "sha256": sha256(toolchain),
+                },
+                "samples": samples,
+            }
+            (root / "capacity-manifest.json").write_text(
+                json.dumps(manifest, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            assert first_document is not None
+            fixtures[job] = (root, manifest, first_document)
+
+        pair = capacity_pair.verify_evidence_set(evidence_root)
+        assert pair["schema"] == capacity_pair.SCHEMA
+        assert pair["result"] == "pass"
+        assert pair["profile"] == "candidate-10k"
+        assert pair["endpoint_attempts"] == 10_000
+        assert len(pair["platforms"]) == 2
+
+        def expect_pair_failure(label: str) -> None:
+            try:
+                capacity_pair.verify_evidence_set(evidence_root)
+            except capacity_pair.CapacityGatePairError:
+                pass
+            else:
+                raise AssertionError(
+                    f"paired capacity verifier accepted {label}"
+                )
+
+        windows_root, windows_manifest, windows_document = fixtures[
+            "windows-capacity-gate"
+        ]
+        drifted_manifest = copy.deepcopy(windows_manifest)
+        drifted_manifest["parameters"]["connections"] = 999  # type: ignore[index]
+        (windows_root / "capacity-manifest.json").write_text(
+            json.dumps(drifted_manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        expect_pair_failure("parameter drift")
+        (windows_root / "capacity-manifest.json").write_text(
+            json.dumps(windows_manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        legacy_document = copy.deepcopy(windows_document)
+        legacy_document["schema"] = "gamenet.capacity_profile.v2"
+        sample_path = windows_root / "sample-1.json"
+        sample_path.write_text(
+            json.dumps(legacy_document, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        legacy_manifest = copy.deepcopy(windows_manifest)
+        legacy_manifest["samples"][0]["bytes"] = sample_path.stat().st_size  # type: ignore[index]
+        legacy_manifest["samples"][0]["sha256"] = sha256(sample_path)  # type: ignore[index]
+        (windows_root / "capacity-manifest.json").write_text(
+            json.dumps(legacy_manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        expect_pair_failure("legacy v2 sample")
+        sample_path.write_text(
+            json.dumps(windows_document, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (windows_root / "capacity-manifest.json").write_text(
+            json.dumps(windows_manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        bad_hash_manifest = copy.deepcopy(windows_manifest)
+        bad_hash_manifest["samples"][0]["sha256"] = "0" * 64  # type: ignore[index]
+        (windows_root / "capacity-manifest.json").write_text(
+            json.dumps(bad_hash_manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        expect_pair_failure("sample hash tampering")
 
 
 if __name__ == "__main__":

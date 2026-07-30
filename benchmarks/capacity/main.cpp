@@ -72,6 +72,7 @@ struct Config {
     std::size_t probeConcurrency{4};
     std::size_t probePayloadBytes{32};
     std::chrono::milliseconds probeConnectTimeout{1000};
+    std::size_t readerConcurrency{16};
 };
 
 bool isMixedProfile(const Config& config) noexcept {
@@ -151,6 +152,12 @@ struct HealthyProbeResult {
     }
 };
 
+struct RecoveryReaderResult {
+    std::uint64_t workers{};
+    std::uint64_t assignedSockets{};
+    std::uint64_t closedSockets{};
+};
+
 struct Result {
     std::uint64_t workingSetBeforeBytes{};
     std::uint64_t workingSetPressureBytes{};
@@ -175,6 +182,7 @@ struct Result {
     gamenet::net::NetworkFixedStorageRetentionSnapshot fixedAfterTeardown;
     RejectionSnapshot rejections;
     HealthyProbeResult healthyProbe;
+    RecoveryReaderResult recoveryReaders;
 
     bool pendingWithinLimit{};
     bool broadcastWithinLimit{};
@@ -190,6 +198,7 @@ struct Result {
     bool healthyProbeZeroFailures{true};
     bool healthyProbeClosed{true};
     bool healthyProbePaced{true};
+    bool recoveryReaderPoolAccounted{true};
 
     bool passed() const noexcept {
         return pendingWithinLimit &&
@@ -205,7 +214,8 @@ struct Result {
             healthyProbeAccounted &&
             healthyProbeZeroFailures &&
             healthyProbeClosed &&
-            healthyProbePaced;
+            healthyProbePaced &&
+            recoveryReaderPoolAccounted;
     }
 };
 
@@ -289,7 +299,8 @@ void printUsage(std::ostream& output) {
         << "  --probe-batch-size N      mixed maximum live probe batch\n"
         << "  --probe-concurrency N     mixed persistent connector workers\n"
         << "  --probe-payload-bytes N   mixed exact echo payload\n"
-        << "  --probe-connect-timeout-ms N\n";
+        << "  --probe-connect-timeout-ms N\n"
+        << "  --reader-concurrency N    mixed recovery reader ceiling\n";
 }
 
 Config parseArgs(int argc, char* argv[]) {
@@ -363,6 +374,9 @@ Config parseArgs(int argc, char* argv[]) {
             config.probeConnectTimeout =
                 std::chrono::milliseconds(
                     parseSize(value, option, 1, 30000));
+        } else if (option == "--reader-concurrency") {
+            config.readerConcurrency =
+                parseSize(value, option, 1, 1024);
         } else {
             usageError(
                 std::string("unknown option: ") +
@@ -519,6 +533,11 @@ std::string socketFailure(std::string_view operation) {
         gamenet::net::sockets::errorMessage(error);
 }
 
+struct ClientDrainResult {
+    std::uint64_t bytes{};
+    bool closed{false};
+};
+
 class ClientSocket {
 public:
     ClientSocket() = default;
@@ -652,6 +671,65 @@ public:
             reinterpret_cast<const char*>(&resetOnClose),
             static_cast<socklen_t>(sizeof(resetOnClose)));
         close();
+    }
+
+    void makeNonblocking() {
+#ifdef _WIN32
+        u_long nonBlocking = 1;
+        if (::ioctlsocket(
+                fd_,
+                FIONBIO,
+                &nonBlocking) == SOCKET_ERROR) {
+            throw std::runtime_error(
+                socketFailure("ioctlsocket(FIONBIO=1)"));
+        }
+#else
+        const int flags = ::fcntl(fd_, F_GETFL, 0);
+        if (flags < 0 ||
+            ::fcntl(
+                fd_,
+                F_SETFL,
+                flags | O_NONBLOCK) < 0) {
+            throw std::runtime_error(
+                socketFailure("fcntl(O_NONBLOCK=1)"));
+        }
+#endif
+    }
+
+    ClientDrainResult drainAvailable(
+        std::array<char, 64U * 1024U>& buffer,
+        bool shutdownExpected) {
+        for (;;) {
+            const int received = ::recv(
+                fd_,
+                buffer.data(),
+                static_cast<int>(buffer.size()),
+                0);
+            if (received > 0) {
+                return {
+                    .bytes = static_cast<std::uint64_t>(
+                        received),
+                    .closed = false,
+                };
+            }
+            if (received == 0) {
+                return {.bytes = 0, .closed = true};
+            }
+            const int error =
+                gamenet::net::sockets::lastError();
+            if (gamenet::net::sockets::isInterrupted(error)) {
+                continue;
+            }
+            if (gamenet::net::sockets::isWouldBlock(error)) {
+                return {};
+            }
+            if (shutdownExpected) {
+                return {.bytes = 0, .closed = true};
+            }
+            throw std::runtime_error(
+                std::string("recv: ") +
+                gamenet::net::sockets::errorMessage(error));
+        }
     }
 
     std::uint64_t drainUntilClosed(
@@ -1605,6 +1683,15 @@ void finalizeChecks(
                 result.healthyProbe.probeP99Us,
                 result.healthyProbe.scheduleLagP99Us,
             }) <= result.healthyProbe.elapsedMs * 1000.0 + 1.0;
+        result.recoveryReaderPoolAccounted =
+            result.recoveryReaders.workers ==
+                (std::min)(
+                    config.readerConcurrency,
+                    config.connections) &&
+            result.recoveryReaders.assignedSockets ==
+                config.connections &&
+            result.recoveryReaders.closedSockets ==
+                config.connections;
     }
 }
 
@@ -1730,7 +1817,7 @@ void printDocument(
     const std::size_t aggregatePendingLimit =
         config.connections * config.hardLimitBytes;
     const auto schema = isMixedProfile(config)
-        ? "gamenet.capacity_profile.v2"
+        ? "gamenet.capacity_profile.v3"
         : "gamenet.capacity_profile.v1";
     std::cout
         << std::fixed << std::setprecision(6)
@@ -1778,7 +1865,9 @@ void printDocument(
             << "    \"probe_payload_bytes\": "
             << config.probePayloadBytes << ",\n"
             << "    \"probe_connect_timeout_ms\": "
-            << config.probeConnectTimeout.count();
+            << config.probeConnectTimeout.count() << ",\n"
+            << "    \"reader_concurrency_limit\": "
+            << config.readerConcurrency;
     }
     std::cout
         << "\n"
@@ -1943,6 +2032,16 @@ void printDocument(
             << result.healthyProbe.totalFailures() << "\n"
             << "    }\n"
             << "  }";
+        std::cout
+            << ",\n"
+            << "  \"recovery_readers\": {\n"
+            << "    \"workers\": "
+            << result.recoveryReaders.workers << ",\n"
+            << "    \"assigned_sockets\": "
+            << result.recoveryReaders.assignedSockets << ",\n"
+            << "    \"closed_sockets\": "
+            << result.recoveryReaders.closedSockets << "\n"
+            << "  }";
     }
     std::cout
         << ",\n"
@@ -2005,7 +2104,12 @@ void printDocument(
             << (result.healthyProbeClosed ? "true" : "false")
             << ",\n"
             << "    \"healthy_probe_paced\": "
-            << (result.healthyProbePaced ? "true" : "false");
+            << (result.healthyProbePaced ? "true" : "false")
+            << ",\n"
+            << "    \"recovery_reader_pool_accounted\": "
+            << (result.recoveryReaderPoolAccounted
+                    ? "true"
+                    : "false");
     }
     std::cout
         << ",\n"
@@ -2232,6 +2336,8 @@ int run(const Config& config) {
             std::vector<std::thread> readers;
             std::thread probeThread;
             std::atomic<std::uint64_t> receivedBytes{0};
+            std::atomic<std::uint64_t> readerClosedSockets{0};
+            std::atomic<bool> readerFailed{false};
             std::mutex readerFailureMutex;
             std::exception_ptr readerFailure;
             gamenet::net::TcpServerStopFuture gracefulStop;
@@ -2306,25 +2412,132 @@ int run(const Config& config) {
                 result.workingSetPressureBytes =
                     sampleWorkingSetBytes();
 
-                readers.reserve(clients.size());
-                for (std::size_t index = 0;
-                     index < clients.size();
-                     ++index) {
-                    readers.emplace_back([&, index] {
-                        try {
-                            receivedBytes.fetch_add(
-                                clients[index].drainUntilClosed(
-                                    stopIssued),
-                                std::memory_order_relaxed);
-                        } catch (...) {
-                            std::lock_guard lock(
-                                readerFailureMutex);
-                            if (!readerFailure) {
-                                readerFailure =
-                                    std::current_exception();
+                if (isMixedProfile(config)) {
+                    for (auto& client : clients) {
+                        client.makeNonblocking();
+                    }
+                    const std::size_t readerWorkerCount =
+                        (std::min)(
+                            config.readerConcurrency,
+                            clients.size());
+                    result.recoveryReaders.workers =
+                        readerWorkerCount;
+                    result.recoveryReaders.assignedSockets =
+                        clients.size();
+                    readers.reserve(readerWorkerCount);
+                    for (std::size_t workerIndex = 0;
+                         workerIndex < readerWorkerCount;
+                         ++workerIndex) {
+                        readers.emplace_back(
+                            [&, workerIndex, readerWorkerCount] {
+                                try {
+                                    std::vector<unsigned char>
+                                        closed;
+                                    for (std::size_t index =
+                                             workerIndex;
+                                         index < clients.size();
+                                         index +=
+                                             readerWorkerCount) {
+                                        closed.push_back(0);
+                                    }
+                                    std::size_t remaining =
+                                        closed.size();
+                                    std::array<
+                                        char,
+                                        64U * 1024U>
+                                        buffer{};
+                                    std::optional<
+                                        Clock::time_point>
+                                        shutdownDeadline;
+                                    while (remaining != 0) {
+                                        const bool shutdownExpected =
+                                            stopIssued.load(
+                                                std::memory_order_acquire);
+                                        if (shutdownExpected &&
+                                            !shutdownDeadline) {
+                                            shutdownDeadline =
+                                                Clock::now() +
+                                                config.timeout;
+                                        }
+                                        bool progressed = false;
+                                        std::size_t localIndex = 0;
+                                        for (std::size_t index =
+                                                 workerIndex;
+                                             index < clients.size();
+                                             index +=
+                                                 readerWorkerCount,
+                                             ++localIndex) {
+                                            if (closed[localIndex] != 0) {
+                                                continue;
+                                            }
+                                            const auto drained =
+                                                clients[index]
+                                                    .drainAvailable(
+                                                        buffer,
+                                                        shutdownExpected);
+                                            if (drained.bytes != 0) {
+                                                receivedBytes.fetch_add(
+                                                    drained.bytes,
+                                                    std::memory_order_relaxed);
+                                                progressed = true;
+                                            }
+                                            if (drained.closed) {
+                                                closed[localIndex] = 1;
+                                                --remaining;
+                                                readerClosedSockets.fetch_add(
+                                                    1,
+                                                    std::memory_order_release);
+                                                progressed = true;
+                                            }
+                                        }
+                                        if (remaining != 0 &&
+                                            shutdownDeadline &&
+                                            Clock::now() >=
+                                                *shutdownDeadline) {
+                                            throw std::runtime_error(
+                                                "bounded recovery reader "
+                                                "shutdown timed out");
+                                        }
+                                        if (!progressed) {
+                                            std::this_thread::sleep_for(
+                                                1ms);
+                                        }
+                                    }
+                                } catch (...) {
+                                    readerFailed.store(
+                                        true,
+                                        std::memory_order_release);
+                                    std::lock_guard lock(
+                                        readerFailureMutex);
+                                    if (!readerFailure) {
+                                        readerFailure =
+                                            std::current_exception();
+                                    }
+                                }
+                            });
+                    }
+                } else {
+                    readers.reserve(clients.size());
+                    for (std::size_t index = 0;
+                         index < clients.size();
+                         ++index) {
+                        readers.emplace_back([&, index] {
+                            try {
+                                receivedBytes.fetch_add(
+                                    clients[index]
+                                        .drainUntilClosed(
+                                            stopIssued),
+                                    std::memory_order_relaxed);
+                            } catch (...) {
+                                std::lock_guard lock(
+                                    readerFailureMutex);
+                                if (!readerFailure) {
+                                    readerFailure =
+                                        std::current_exception();
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
 
                 const auto recoveryStarted = Clock::now();
@@ -2333,6 +2546,11 @@ int run(const Config& config) {
                 std::optional<Clock::time_point> stableSince;
                 bool recovered = false;
                 while (Clock::now() < recoveryDeadline) {
+                    if (readerFailed.load(
+                            std::memory_order_acquire)) {
+                        throw std::runtime_error(
+                            "bounded recovery reader failed");
+                    }
                     const auto output =
                         aggregateOutput(handles);
                     const auto broadcast =
@@ -2402,6 +2620,11 @@ int run(const Config& config) {
                 if (reader.joinable()) {
                     reader.join();
                 }
+            }
+            if (isMixedProfile(config)) {
+                result.recoveryReaders.closedSockets =
+                    readerClosedSockets.load(
+                        std::memory_order_acquire);
             }
             if (readerFailure) {
                 try {

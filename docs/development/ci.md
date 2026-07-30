@@ -659,6 +659,34 @@ is 18,137,088 bytes (70,848 bytes per connection), and slow-client working-set
 delta is 67,493,888 bytes with four high-water callbacks. These are raw
 environment-specific snapshots, not performance thresholds.
 
+## Mixed Capacity Gate
+
+The manual-only `.github/workflows/capacity-gate.yml` workflow produces paired
+Linux/epoll and Windows/IOCP evidence for the scale-ready mixed
+slow-reader/healthy-probe profile. `candidate-10k` runs three repetitions on
+hosted runners; `dedicated-100k` runs one repetition only on the provisioned
+capacity runner labels and requires the exact `RUN_DEDICATED_100K`
+acknowledgement.
+
+Each producer invokes `tools/run_capacity_gate.py`, whose fixed profile owns
+the connection scale, Broadcast endpoint-attempt scale, healthy-probe scale,
+watermarks, timeout, and bounded recovery-reader count. Every raw
+`gamenet.capacity_profile.v3` sample is strictly validated before the producer
+writes a hashed `gamenet.capacity_gate.v1` manifest.
+
+The aggregation job first requires both producer jobs to finish successfully.
+It downloads only the current attempt's canonical artifacts and runs
+`tools/verify_capacity_gate_evidence_set.py`, which revalidates raw samples,
+hashes, platform/backend identity, Release build identity, reviewed parameters,
+and cross-platform profile equality before emitting
+`gamenet.capacity_gate_pair.v1`. Raw timing, rate, and RSS measurements from
+different hosts are not compared.
+
+This workflow is an evidence producer, not an automatic release action. The
+10k pair is one candidate-promotion input; the 100k pair is a separate
+dedicated-host gate. Neither replaces the 24/72-hour one-process endurance
+workflow.
+
 ## Phase 4 Benchmark Evidence Boundary
 
 The same manual `core-benchmark` workflow now also builds
