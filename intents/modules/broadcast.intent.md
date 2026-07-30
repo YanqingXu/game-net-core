@@ -114,6 +114,24 @@ state.
   observational process working-set peak must be no smaller than the explicit
   baseline, pressure, recovery, and post-teardown samples even when the
   independent periodic sampler misses a short-lived phase maximum.
+- `gamenet_capacity_profile --scenario mixed-pressure-recovery` keeps the same
+  real slow-reader Broadcast target set while a persistent bounded client pool
+  paces short-lived healthy probes through that same TcpServer. Probe sockets
+  use explicit nonblocking connect deadlines, send one fixed small payload,
+  require its exact echo, close abortively, and are never admitted as Broadcast
+  targets.
+- Mixed-profile client workers own only distinct attempt slots and sockets.
+  Server connection/message callbacks remain owner-loop-affine; benchmark
+  coordination classifies post-publication connections as probes under one
+  benchmark mutex and waits for cumulative server accept/close convergence
+  before reusing the next batch.
+- The mixed profile reserves explicit loop/server output headroom for at most
+  one configured probe batch without changing slow connections' per-connection
+  hard limit or Broadcast admission limits. Its v2 evidence requires exact
+  attempt = success + typed failure, client-connect = server-accept =
+  server-close, zero-failure healthy probes, a common paced interval, and
+  internally consistent connect/probe P99 and attempt-rate measurements before
+  the slow/Broadcast recovery result can pass.
 
 ## Migration Provenance
 

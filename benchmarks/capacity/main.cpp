@@ -1,5 +1,6 @@
 #include "gamenet/broadcast/BroadcastDispatcher.h"
 #include "gamenet/broadcast/BroadcastRouter.h"
+#include "gamenet/core/base/Logger.h"
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/InetAddress.h"
@@ -13,6 +14,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -29,12 +31,14 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #ifdef _WIN32
 #include <psapi.h>
 #else
+#include <fcntl.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 #endif
@@ -62,7 +66,17 @@ struct Config {
     std::chrono::milliseconds pressureSettle{500};
     std::chrono::milliseconds recoveryStable{250};
     std::chrono::milliseconds timeout{30000};
+    std::size_t probeTargetPerSecond{100};
+    std::chrono::milliseconds probeDuration{2000};
+    std::size_t probeBatchSize{10};
+    std::size_t probeConcurrency{4};
+    std::size_t probePayloadBytes{32};
+    std::chrono::milliseconds probeConnectTimeout{1000};
 };
+
+bool isMixedProfile(const Config& config) noexcept {
+    return config.scenario == "mixed-pressure-recovery";
+}
 
 struct ConnectionHandle {
     std::shared_ptr<gamenet::net::TcpConnection> connection;
@@ -112,6 +126,31 @@ struct RejectionSnapshot {
     }
 };
 
+struct HealthyProbeResult {
+    std::uint64_t attempted{};
+    std::uint64_t clientConnected{};
+    std::uint64_t serverAccepted{};
+    std::uint64_t probeSucceeded{};
+    std::uint64_t serverClosed{};
+    std::uint64_t batches{};
+    std::uint64_t connectFailures{};
+    std::uint64_t sendFailures{};
+    std::uint64_t receiveFailures{};
+    std::uint64_t payloadMismatches{};
+    double elapsedMs{};
+    double attemptsPerSecond{};
+    double connectP99Us{};
+    double probeP99Us{};
+    double scheduleLagP99Us{};
+
+    std::uint64_t totalFailures() const noexcept {
+        return connectFailures +
+            sendFailures +
+            receiveFailures +
+            payloadMismatches;
+    }
+};
+
 struct Result {
     std::uint64_t workingSetBeforeBytes{};
     std::uint64_t workingSetPressureBytes{};
@@ -135,6 +174,7 @@ struct Result {
     gamenet::net::NetworkFixedStorageRetentionSnapshot fixedRecovery;
     gamenet::net::NetworkFixedStorageRetentionSnapshot fixedAfterTeardown;
     RejectionSnapshot rejections;
+    HealthyProbeResult healthyProbe;
 
     bool pendingWithinLimit{};
     bool broadcastWithinLimit{};
@@ -146,6 +186,10 @@ struct Result {
     bool recoveryRetainedWithinTarget{};
     bool fixedStorageCoherent{};
     bool teardownReleased{};
+    bool healthyProbeAccounted{true};
+    bool healthyProbeZeroFailures{true};
+    bool healthyProbeClosed{true};
+    bool healthyProbePaced{true};
 
     bool passed() const noexcept {
         return pendingWithinLimit &&
@@ -157,7 +201,11 @@ struct Result {
             recoveryStable &&
             recoveryRetainedWithinTarget &&
             fixedStorageCoherent &&
-            teardownReleased;
+            teardownReleased &&
+            healthyProbeAccounted &&
+            healthyProbeZeroFailures &&
+            healthyProbeClosed &&
+            healthyProbePaced;
     }
 };
 
@@ -223,7 +271,7 @@ std::size_t checkedMultiply(
 void printUsage(std::ostream& output) {
     output
         << "Usage: gamenet_capacity_profile [options]\n"
-        << "  --scenario slow-broadcast-recovery\n"
+        << "  --scenario slow-broadcast-recovery|mixed-pressure-recovery\n"
         << "  --connections N          real slow-reader TCP clients\n"
         << "  --threads N              TcpServer worker loops\n"
         << "  --messages N             broadcasts issued under pressure\n"
@@ -235,7 +283,13 @@ void printUsage(std::ostream& output) {
         << "  --pressure-settle-ms N\n"
         << "  --recovery-stable-ms N\n"
         << "  --timeout-ms N\n"
-        << "  --iocp-accept-depth N\n";
+        << "  --iocp-accept-depth N\n"
+        << "  --probe-rate N            mixed healthy attempts/second\n"
+        << "  --probe-duration-ms N     mixed healthy paced duration\n"
+        << "  --probe-batch-size N      mixed maximum live probe batch\n"
+        << "  --probe-concurrency N     mixed persistent connector workers\n"
+        << "  --probe-payload-bytes N   mixed exact echo payload\n"
+        << "  --probe-connect-timeout-ms N\n";
 }
 
 Config parseArgs(int argc, char* argv[]) {
@@ -289,6 +343,26 @@ Config parseArgs(int argc, char* argv[]) {
         } else if (option == "--iocp-accept-depth") {
             config.iocpAcceptDepth =
                 parseSize(value, option, 1, 64);
+        } else if (option == "--probe-rate") {
+            config.probeTargetPerSecond =
+                parseSize(value, option, 1, 100000);
+        } else if (option == "--probe-duration-ms") {
+            config.probeDuration =
+                std::chrono::milliseconds(
+                    parseSize(value, option, 100, 600000));
+        } else if (option == "--probe-batch-size") {
+            config.probeBatchSize =
+                parseSize(value, option, 1, 10000);
+        } else if (option == "--probe-concurrency") {
+            config.probeConcurrency =
+                parseSize(value, option, 1, 1024);
+        } else if (option == "--probe-payload-bytes") {
+            config.probePayloadBytes =
+                parseSize(value, option, 1, 64U * 1024U);
+        } else if (option == "--probe-connect-timeout-ms") {
+            config.probeConnectTimeout =
+                std::chrono::milliseconds(
+                    parseSize(value, option, 1, 30000));
         } else {
             usageError(
                 std::string("unknown option: ") +
@@ -296,9 +370,11 @@ Config parseArgs(int argc, char* argv[]) {
         }
     }
 
-    if (config.scenario != "slow-broadcast-recovery") {
+    if (config.scenario != "slow-broadcast-recovery" &&
+        config.scenario != "mixed-pressure-recovery") {
         usageError(
-            "--scenario must be slow-broadcast-recovery");
+            "--scenario must be slow-broadcast-recovery or "
+            "mixed-pressure-recovery");
     }
     if (config.lowWaterBytes > config.highWaterBytes ||
         config.highWaterBytes > config.hardLimitBytes) {
@@ -318,6 +394,29 @@ Config parseArgs(int argc, char* argv[]) {
             "logical broadcast endpoint count"),
         config.payloadBytes,
         "logical broadcast bytes");
+    if (isMixedProfile(config)) {
+        if (config.probeConcurrency > config.probeBatchSize) {
+            usageError(
+                "--probe-concurrency must not exceed "
+                "--probe-batch-size");
+        }
+        if (config.probeDuration > config.timeout ||
+            config.probeConnectTimeout > config.timeout) {
+            usageError(
+                "probe duration and connect timeout must not exceed "
+                "--timeout-ms");
+        }
+        const auto attempts =
+            static_cast<std::uint64_t>(
+                config.probeTargetPerSecond) *
+            static_cast<std::uint64_t>(
+                config.probeDuration.count()) /
+            1000U;
+        if (attempts == 0) {
+            usageError(
+                "probe rate and duration produce zero attempts");
+        }
+    }
     return config;
 }
 
@@ -453,7 +552,7 @@ public:
         if (!gamenet::net::sockets::isValid(socket.fd_)) {
             throw std::runtime_error(socketFailure("socket"));
         }
-        socket.configure(timeout);
+        socket.configure(timeout, true);
         if (::connect(
                 socket.fd_,
                 address.getSockAddr(),
@@ -461,6 +560,98 @@ public:
             throw std::runtime_error(socketFailure("connect"));
         }
         return socket;
+    }
+
+    static ClientSocket connectToWithDeadline(
+        const gamenet::net::InetAddress& address,
+        std::chrono::milliseconds timeout) {
+        gamenet::net::sockets::ensureInitialized();
+        ClientSocket socket;
+        socket.fd_ =
+            gamenet::net::sockets::createNonblocking(
+                address.family());
+        if (!gamenet::net::sockets::isValid(socket.fd_)) {
+            throw std::runtime_error(socketFailure("socket"));
+        }
+        socket.configure(timeout, false);
+        if (::connect(
+                socket.fd_,
+                address.getSockAddr(),
+                address.getSockAddrLen()) != 0) {
+            const int connectError =
+                gamenet::net::sockets::lastError();
+            if (!gamenet::net::sockets::isInProgress(
+                    connectError) &&
+                !gamenet::net::sockets::isWouldBlock(
+                    connectError)) {
+                throw std::runtime_error(
+                    "connect: " +
+                    gamenet::net::sockets::errorMessage(
+                        connectError));
+            }
+            socket.waitForConnect(timeout);
+        }
+        socket.setBlocking();
+        return socket;
+    }
+
+    void sendAll(std::string_view payload) {
+        std::size_t sent = 0;
+        while (sent < payload.size()) {
+            const int count = static_cast<int>((std::min)(
+                payload.size() - sent,
+                static_cast<std::size_t>(
+                    (std::numeric_limits<int>::max)())));
+#ifdef MSG_NOSIGNAL
+            constexpr int flags = MSG_NOSIGNAL;
+#else
+            constexpr int flags = 0;
+#endif
+            const int written = ::send(
+                fd_,
+                payload.data() + sent,
+                count,
+                flags);
+            if (written <= 0) {
+                throw std::runtime_error(socketFailure("send"));
+            }
+            sent += static_cast<std::size_t>(written);
+        }
+    }
+
+    void receiveExact(std::string& destination) {
+        std::size_t received = 0;
+        while (received < destination.size()) {
+            const int count = static_cast<int>((std::min)(
+                destination.size() - received,
+                static_cast<std::size_t>(
+                    (std::numeric_limits<int>::max)())));
+            const int read = ::recv(
+                fd_,
+                destination.data() + received,
+                count,
+                0);
+            if (read <= 0) {
+                throw std::runtime_error(socketFailure("recv"));
+            }
+            received += static_cast<std::size_t>(read);
+        }
+    }
+
+    void closeAbortively() noexcept {
+        if (!gamenet::net::sockets::isValid(fd_)) {
+            return;
+        }
+        linger resetOnClose{};
+        resetOnClose.l_onoff = 1;
+        resetOnClose.l_linger = 0;
+        (void)::setsockopt(
+            fd_,
+            SOL_SOCKET,
+            SO_LINGER,
+            reinterpret_cast<const char*>(&resetOnClose),
+            static_cast<socklen_t>(sizeof(resetOnClose)));
+        close();
     }
 
     std::uint64_t drainUntilClosed(
@@ -494,7 +685,94 @@ public:
     }
 
 private:
-    void configure(std::chrono::milliseconds timeout) {
+    void waitForConnect(std::chrono::milliseconds timeout) {
+        const auto deadline = Clock::now() + timeout;
+        while (true) {
+            const auto remaining = deadline - Clock::now();
+            if (remaining <= Clock::duration::zero()) {
+                throw std::runtime_error(
+                    "connect: deadline expired");
+            }
+            const auto remainingMicroseconds =
+                std::chrono::duration_cast<
+                    std::chrono::microseconds>(remaining);
+            timeval timeoutValue{};
+            timeoutValue.tv_sec =
+                static_cast<decltype(timeoutValue.tv_sec)>(
+                    remainingMicroseconds.count() / 1000000);
+            timeoutValue.tv_usec =
+                static_cast<decltype(timeoutValue.tv_usec)>(
+                    remainingMicroseconds.count() % 1000000);
+            fd_set writable;
+            fd_set failed;
+            FD_ZERO(&writable);
+            FD_ZERO(&failed);
+            FD_SET(fd_, &writable);
+            FD_SET(fd_, &failed);
+#ifdef _WIN32
+            constexpr int descriptorCount = 0;
+#else
+            const int descriptorCount = fd_ + 1;
+#endif
+            const int ready = ::select(
+                descriptorCount,
+                nullptr,
+                &writable,
+                &failed,
+                &timeoutValue);
+            if (ready > 0) {
+                const int socketError =
+                    gamenet::net::sockets::getSocketError(fd_);
+                if (socketError != 0) {
+                    throw std::runtime_error(
+                        "connect: " +
+                        gamenet::net::sockets::errorMessage(
+                            socketError));
+                }
+                return;
+            }
+            if (ready == 0) {
+                throw std::runtime_error(
+                    "connect: deadline expired");
+            }
+            const int selectError =
+                gamenet::net::sockets::lastError();
+            if (!gamenet::net::sockets::isInterrupted(
+                    selectError)) {
+                throw std::runtime_error(
+                    "select(connect): " +
+                    gamenet::net::sockets::errorMessage(
+                        selectError));
+            }
+        }
+    }
+
+    void setBlocking() {
+#ifdef _WIN32
+        u_long nonBlocking = 0;
+        if (::ioctlsocket(
+                fd_,
+                FIONBIO,
+                &nonBlocking) == SOCKET_ERROR) {
+            throw std::runtime_error(
+                socketFailure("ioctlsocket(FIONBIO=0)"));
+        }
+#else
+        const int flags = ::fcntl(fd_, F_GETFL, 0);
+        if (flags < 0 ||
+            ::fcntl(
+                fd_,
+                F_SETFL,
+                flags & ~O_NONBLOCK) < 0) {
+            throw std::runtime_error(
+                socketFailure("fcntl(O_NONBLOCK=0)"));
+        }
+#endif
+    }
+
+    void configure(
+        std::chrono::milliseconds timeout,
+        bool slowReader) {
         const int noDelay = 1;
         if (::setsockopt(
                 fd_,
@@ -533,16 +811,19 @@ private:
                 socketFailure("setsockopt(socket timeout)"));
         }
 
-        const int receiveBufferBytes = 4096;
-        if (::setsockopt(
-                fd_,
-                SOL_SOCKET,
-                SO_RCVBUF,
-                reinterpret_cast<const char*>(&receiveBufferBytes),
-                static_cast<socklen_t>(
-                    sizeof(receiveBufferBytes))) != 0) {
-            throw std::runtime_error(
-                socketFailure("setsockopt(SO_RCVBUF)"));
+        if (slowReader) {
+            const int receiveBufferBytes = 4096;
+            if (::setsockopt(
+                    fd_,
+                    SOL_SOCKET,
+                    SO_RCVBUF,
+                    reinterpret_cast<const char*>(
+                        &receiveBufferBytes),
+                    static_cast<socklen_t>(
+                        sizeof(receiveBufferBytes))) != 0) {
+                throw std::runtime_error(
+                    socketFailure("setsockopt(SO_RCVBUF)"));
+            }
         }
     }
 
@@ -555,6 +836,180 @@ private:
 
     gamenet::net::SocketFd fd_{
         gamenet::net::kInvalidSocket};
+};
+
+enum class ProbeFailure {
+    None,
+    Connect,
+    Send,
+    Receive,
+    PayloadMismatch,
+};
+
+struct ProbeAttempt {
+    bool clientConnected{false};
+    bool succeeded{false};
+    ProbeFailure failure{ProbeFailure::None};
+    double connectUs{};
+    double probeUs{};
+};
+
+class HealthyProbePool {
+public:
+    HealthyProbePool(
+        const Config& config,
+        gamenet::net::InetAddress address)
+        : address_(std::move(address)),
+          connectTimeout_(config.probeConnectTimeout),
+          payload_(config.probePayloadBytes, 'h'),
+          workerCount_(config.probeConcurrency) {
+        workers_.reserve(workerCount_);
+        try {
+            for (std::size_t index = 0;
+                 index < workerCount_;
+                 ++index) {
+                workers_.emplace_back(
+                    [this] { workerMain(); });
+            }
+        } catch (...) {
+            {
+                std::lock_guard lock(mutex_);
+                stopping_ = true;
+            }
+            workAvailable_.notify_all();
+            for (auto& worker : workers_) {
+                worker.join();
+            }
+            throw;
+        }
+    }
+
+    HealthyProbePool(const HealthyProbePool&) = delete;
+    HealthyProbePool& operator=(const HealthyProbePool&) = delete;
+
+    ~HealthyProbePool() {
+        {
+            std::lock_guard lock(mutex_);
+            stopping_ = true;
+        }
+        workAvailable_.notify_all();
+        for (auto& worker : workers_) {
+            worker.join();
+        }
+    }
+
+    std::vector<ProbeAttempt> runBatch(
+        std::size_t attemptCount) {
+        {
+            std::lock_guard lock(mutex_);
+            slots_.assign(attemptCount, {});
+            attemptCount_ = attemptCount;
+            nextIndex_.store(0, std::memory_order_relaxed);
+            completedWorkers_ = 0;
+            ++generation_;
+        }
+        workAvailable_.notify_all();
+        {
+            std::unique_lock lock(mutex_);
+            batchComplete_.wait(lock, [&] {
+                return completedWorkers_ == workerCount_;
+            });
+        }
+        return slots_;
+    }
+
+private:
+    void workerMain() {
+        std::uint64_t observedGeneration = 0;
+        while (true) {
+            {
+                std::unique_lock lock(mutex_);
+                workAvailable_.wait(lock, [&] {
+                    return stopping_ ||
+                        generation_ != observedGeneration;
+                });
+                if (stopping_) {
+                    return;
+                }
+                observedGeneration = generation_;
+            }
+
+            while (true) {
+                const std::size_t index =
+                    nextIndex_.fetch_add(
+                        1,
+                        std::memory_order_relaxed);
+                if (index >= attemptCount_) {
+                    break;
+                }
+
+                ProbeAttempt attempt;
+                ProbeFailure stage = ProbeFailure::Connect;
+                ClientSocket socket;
+                try {
+                    const auto connectStarted = Clock::now();
+                    socket = ClientSocket::connectToWithDeadline(
+                        address_,
+                        connectTimeout_);
+                    const auto connectFinished = Clock::now();
+                    attempt.clientConnected = true;
+                    attempt.connectUs =
+                        std::chrono::duration<
+                            double,
+                            std::micro>(
+                                connectFinished -
+                                connectStarted)
+                            .count();
+
+                    stage = ProbeFailure::Send;
+                    const auto probeStarted = Clock::now();
+                    socket.sendAll(payload_);
+                    stage = ProbeFailure::Receive;
+                    std::string response(payload_.size(), '\0');
+                    socket.receiveExact(response);
+                    attempt.probeUs =
+                        std::chrono::duration<
+                            double,
+                            std::micro>(
+                                Clock::now() - probeStarted)
+                            .count();
+                    if (response != payload_) {
+                        attempt.failure =
+                            ProbeFailure::PayloadMismatch;
+                    } else {
+                        attempt.succeeded = true;
+                    }
+                } catch (const std::exception&) {
+                    attempt.failure = stage;
+                }
+                socket.closeAbortively();
+                slots_[index] = attempt;
+            }
+
+            {
+                std::lock_guard lock(mutex_);
+                ++completedWorkers_;
+                if (completedWorkers_ == workerCount_) {
+                    batchComplete_.notify_one();
+                }
+            }
+        }
+    }
+
+    gamenet::net::InetAddress address_;
+    std::chrono::milliseconds connectTimeout_;
+    std::string payload_;
+    std::size_t workerCount_;
+    std::vector<ProbeAttempt> slots_;
+    std::vector<std::thread> workers_;
+    std::atomic<std::size_t> nextIndex_{0};
+    std::mutex mutex_;
+    std::condition_variable workAvailable_;
+    std::condition_variable batchComplete_;
+    std::size_t attemptCount_{0};
+    std::size_t completedWorkers_{0};
+    std::uint64_t generation_{0};
+    bool stopping_{false};
 };
 
 class SharedState {
@@ -604,12 +1059,71 @@ public:
         return failure_;
     }
 
-    void markDisconnected() noexcept {
-        disconnected_.fetch_add(1, std::memory_order_release);
+    bool classifyConnected(
+        const gamenet::net::TcpConnection* connection,
+        std::size_t slowConnectionLimit) {
+        const auto ordinal =
+            connectedClaims_.fetch_add(
+                1,
+                std::memory_order_acq_rel);
+        if (ordinal < slowConnectionLimit) {
+            return false;
+        }
+        {
+            std::lock_guard lock(mutex_);
+            probeConnections_.insert(connection);
+            ++probeAccepted_;
+        }
+        cv_.notify_all();
+        return true;
+    }
+
+    void markDisconnected(
+        const gamenet::net::TcpConnection* connection) noexcept {
+        bool probe = false;
+        {
+            std::lock_guard lock(mutex_);
+            probe = probeConnections_.erase(connection) != 0;
+            if (probe) {
+                ++probeClosed_;
+            }
+        }
+        if (!probe) {
+            disconnected_.fetch_add(
+                1,
+                std::memory_order_release);
+        }
+        cv_.notify_all();
     }
 
     std::size_t disconnected() const noexcept {
         return disconnected_.load(std::memory_order_acquire);
+    }
+
+    bool waitForProbeAccepted(
+        std::size_t expected,
+        std::chrono::milliseconds timeout) {
+        std::unique_lock lock(mutex_);
+        return cv_.wait_for(lock, timeout, [&] {
+            return probeAccepted_ >= expected ||
+                !failure_.empty();
+        }) && probeAccepted_ >= expected;
+    }
+
+    bool waitForProbeClosed(
+        std::size_t expected,
+        std::chrono::milliseconds timeout) {
+        std::unique_lock lock(mutex_);
+        return cv_.wait_for(lock, timeout, [&] {
+            return probeClosed_ >= expected ||
+                !failure_.empty();
+        }) && probeClosed_ >= expected;
+    }
+
+    std::pair<std::size_t, std::size_t>
+    probeConnectionCounts() const {
+        std::lock_guard lock(mutex_);
+        return {probeAccepted_, probeClosed_};
     }
 
     void markDriverDone() noexcept {
@@ -628,9 +1142,151 @@ private:
         gamenet::broadcast::DispatchProgress>> progress_;
     std::string failure_;
     bool published_{false};
+    std::unordered_set<const gamenet::net::TcpConnection*>
+        probeConnections_;
+    std::size_t probeAccepted_{0};
+    std::size_t probeClosed_{0};
+    std::atomic<std::size_t> connectedClaims_{0};
     std::atomic<std::size_t> disconnected_{0};
     std::atomic<bool> driverDone_{false};
 };
+
+double nearestRankP99(std::vector<double>& samples) {
+    if (samples.empty()) {
+        return 0.0;
+    }
+    std::sort(samples.begin(), samples.end());
+    const auto rank = static_cast<std::size_t>(
+        std::ceil(0.99 * static_cast<double>(samples.size())));
+    return samples[(std::max)(std::size_t{1}, rank) - 1];
+}
+
+void runHealthyProbes(
+    const Config& config,
+    const gamenet::net::InetAddress& address,
+    SharedState& state,
+    Result& result) {
+    const std::uint64_t expectedAttempts =
+        static_cast<std::uint64_t>(
+            config.probeTargetPerSecond) *
+        static_cast<std::uint64_t>(
+            config.probeDuration.count()) /
+        1000U;
+    std::vector<double> connectSamples;
+    std::vector<double> probeSamples;
+    std::vector<double> scheduleLagSamples;
+    const auto started = Clock::now();
+
+    {
+        HealthyProbePool pool(config, address);
+        while (result.healthyProbe.attempted <
+               expectedAttempts) {
+            const auto remaining =
+                expectedAttempts -
+                result.healthyProbe.attempted;
+            const std::size_t batchSize =
+                static_cast<std::size_t>((std::min)(
+                    static_cast<std::uint64_t>(
+                        config.probeBatchSize),
+                    remaining));
+            const auto scheduledAttempts =
+                result.healthyProbe.attempted +
+                batchSize;
+            const double scheduleFraction =
+                static_cast<double>(scheduledAttempts) /
+                static_cast<double>(expectedAttempts);
+            const auto scheduledAt =
+                started +
+                std::chrono::duration_cast<
+                    Clock::duration>(
+                        std::chrono::duration<double>(
+                            std::chrono::duration<double>(
+                                config.probeDuration)
+                                .count() *
+                            scheduleFraction));
+            std::this_thread::sleep_until(scheduledAt);
+
+            auto attempts = pool.runBatch(batchSize);
+            result.healthyProbe.attempted =
+                scheduledAttempts;
+            ++result.healthyProbe.batches;
+            for (const auto& attempt : attempts) {
+                if (attempt.clientConnected) {
+                    ++result.healthyProbe.clientConnected;
+                    connectSamples.push_back(
+                        attempt.connectUs);
+                }
+                if (attempt.succeeded) {
+                    ++result.healthyProbe.probeSucceeded;
+                    probeSamples.push_back(attempt.probeUs);
+                    continue;
+                }
+                switch (attempt.failure) {
+                case ProbeFailure::Connect:
+                    ++result.healthyProbe.connectFailures;
+                    break;
+                case ProbeFailure::Send:
+                    ++result.healthyProbe.sendFailures;
+                    break;
+                case ProbeFailure::Receive:
+                    ++result.healthyProbe.receiveFailures;
+                    break;
+                case ProbeFailure::PayloadMismatch:
+                    ++result.healthyProbe.payloadMismatches;
+                    break;
+                case ProbeFailure::None:
+                    ++result.healthyProbe.receiveFailures;
+                    break;
+                }
+            }
+
+            if (!state.waitForProbeAccepted(
+                    static_cast<std::size_t>(
+                        result.healthyProbe.clientConnected),
+                    config.timeout)) {
+                throw std::runtime_error(
+                    "timed out waiting for healthy probe accepts");
+            }
+            if (!state.waitForProbeClosed(
+                    static_cast<std::size_t>(
+                        result.healthyProbe.clientConnected),
+                    config.timeout)) {
+                throw std::runtime_error(
+                    "timed out waiting for healthy probe closes");
+            }
+            scheduleLagSamples.push_back((std::max)(
+                0.0,
+                std::chrono::duration<
+                    double,
+                    std::micro>(
+                        Clock::now() - scheduledAt)
+                    .count()));
+        }
+    }
+
+    const auto finished = Clock::now();
+    result.healthyProbe.elapsedMs =
+        std::chrono::duration<double, std::milli>(
+            finished - started)
+            .count();
+    if (result.healthyProbe.elapsedMs <= 0.0) {
+        throw std::runtime_error(
+            "healthy probe clock did not advance");
+    }
+    const auto [serverAccepted, serverClosed] =
+        state.probeConnectionCounts();
+    result.healthyProbe.serverAccepted = serverAccepted;
+    result.healthyProbe.serverClosed = serverClosed;
+    result.healthyProbe.attemptsPerSecond =
+        static_cast<double>(result.healthyProbe.attempted) /
+        (result.healthyProbe.elapsedMs / 1000.0);
+    result.healthyProbe.connectP99Us =
+        nearestRankP99(connectSamples);
+    result.healthyProbe.probeP99Us =
+        nearestRankP99(probeSamples);
+    result.healthyProbe.scheduleLagP99Us =
+        nearestRankP99(scheduleLagSamples);
+}
 
 AggregateOutputSnapshot aggregateOutput(
     const std::vector<ConnectionHandle>& handles) {
@@ -908,6 +1564,48 @@ void finalizeChecks(
         result.fixedAfterTeardown.acceptExFixedPoolBytes == 0 &&
         result.fixedAfterTeardown.iocpCompletionBatchBytes == 0 &&
         result.fixedAfterTeardown.connectionLocalReadBytes == 0;
+
+    if (isMixedProfile(config)) {
+        const std::uint64_t expectedAttempts =
+            static_cast<std::uint64_t>(
+                config.probeTargetPerSecond) *
+            static_cast<std::uint64_t>(
+                config.probeDuration.count()) /
+            1000U;
+        const std::uint64_t expectedBatches =
+            (expectedAttempts + config.probeBatchSize - 1U) /
+            config.probeBatchSize;
+        const auto postConnectFailures =
+            result.healthyProbe.sendFailures +
+            result.healthyProbe.receiveFailures +
+            result.healthyProbe.payloadMismatches;
+        result.healthyProbeAccounted =
+            result.healthyProbe.attempted == expectedAttempts &&
+            result.healthyProbe.batches == expectedBatches &&
+            result.healthyProbe.attempted ==
+                result.healthyProbe.probeSucceeded +
+                    result.healthyProbe.totalFailures() &&
+            result.healthyProbe.clientConnected ==
+                result.healthyProbe.probeSucceeded +
+                    postConnectFailures &&
+            result.healthyProbe.serverAccepted ==
+                result.healthyProbe.clientConnected;
+        result.healthyProbeZeroFailures =
+            result.healthyProbe.totalFailures() == 0;
+        result.healthyProbeClosed =
+            result.healthyProbe.serverClosed ==
+                result.healthyProbe.serverAccepted;
+        result.healthyProbePaced =
+            result.healthyProbe.elapsedMs > 0.0 &&
+            result.healthyProbe.elapsedMs + 1.0 >=
+                static_cast<double>(
+                    config.probeDuration.count()) &&
+            (std::max)({
+                result.healthyProbe.connectP99Us,
+                result.healthyProbe.probeP99Us,
+                result.healthyProbe.scheduleLagP99Us,
+            }) <= result.healthyProbe.elapsedMs * 1000.0 + 1.0;
+    }
 }
 
 std::string jsonEscape(std::string_view value) {
@@ -1031,10 +1729,13 @@ void printDocument(
     std::string_view error) {
     const std::size_t aggregatePendingLimit =
         config.connections * config.hardLimitBytes;
+    const auto schema = isMixedProfile(config)
+        ? "gamenet.capacity_profile.v2"
+        : "gamenet.capacity_profile.v1";
     std::cout
         << std::fixed << std::setprecision(6)
         << "{\n"
-        << "  \"schema\": \"gamenet.capacity_profile.v1\",\n"
+        << "  \"schema\": \"" << schema << "\",\n"
         << "  \"status\": \""
         << (error.empty() && result.passed() ? "ok" : "error")
         << "\",\n"
@@ -1062,7 +1763,25 @@ void printDocument(
         << config.recoveryStable.count() << ",\n"
         << "    \"timeout_ms\": " << config.timeout.count() << ",\n"
         << "    \"iocp_accept_depth\": "
-        << config.iocpAcceptDepth << "\n"
+        << config.iocpAcceptDepth;
+    if (isMixedProfile(config)) {
+        std::cout
+            << ",\n"
+            << "    \"probe_target_per_second\": "
+            << config.probeTargetPerSecond << ",\n"
+            << "    \"probe_duration_ms\": "
+            << config.probeDuration.count() << ",\n"
+            << "    \"probe_batch_size\": "
+            << config.probeBatchSize << ",\n"
+            << "    \"probe_concurrency\": "
+            << config.probeConcurrency << ",\n"
+            << "    \"probe_payload_bytes\": "
+            << config.probePayloadBytes << ",\n"
+            << "    \"probe_connect_timeout_ms\": "
+            << config.probeConnectTimeout.count();
+    }
+    std::cout
+        << "\n"
         << "  },\n"
         << "  \"limits\": {\n"
         << "    \"connection_low_water_bytes\": "
@@ -1184,7 +1903,49 @@ void printDocument(
         "      ");
     std::cout
         << "    }\n"
-        << "  },\n"
+        << "  }";
+    if (isMixedProfile(config)) {
+        std::cout
+            << ",\n"
+            << "  \"healthy_churn\": {\n"
+            << "    \"attempted\": "
+            << result.healthyProbe.attempted << ",\n"
+            << "    \"client_connected\": "
+            << result.healthyProbe.clientConnected << ",\n"
+            << "    \"server_accepted\": "
+            << result.healthyProbe.serverAccepted << ",\n"
+            << "    \"probe_succeeded\": "
+            << result.healthyProbe.probeSucceeded << ",\n"
+            << "    \"server_closed\": "
+            << result.healthyProbe.serverClosed << ",\n"
+            << "    \"batches\": "
+            << result.healthyProbe.batches << ",\n"
+            << "    \"elapsed_ms\": "
+            << result.healthyProbe.elapsedMs << ",\n"
+            << "    \"attempts_per_second\": "
+            << result.healthyProbe.attemptsPerSecond << ",\n"
+            << "    \"connect_p99_us\": "
+            << result.healthyProbe.connectP99Us << ",\n"
+            << "    \"probe_p99_us\": "
+            << result.healthyProbe.probeP99Us << ",\n"
+            << "    \"schedule_lag_p99_us\": "
+            << result.healthyProbe.scheduleLagP99Us << ",\n"
+            << "    \"failures\": {\n"
+            << "      \"connect\": "
+            << result.healthyProbe.connectFailures << ",\n"
+            << "      \"send\": "
+            << result.healthyProbe.sendFailures << ",\n"
+            << "      \"receive\": "
+            << result.healthyProbe.receiveFailures << ",\n"
+            << "      \"payload_mismatch\": "
+            << result.healthyProbe.payloadMismatches << ",\n"
+            << "      \"total\": "
+            << result.healthyProbe.totalFailures() << "\n"
+            << "    }\n"
+            << "  }";
+    }
+    std::cout
+        << ",\n"
         << "  \"process\": {\n"
         << "    \"working_set_before_bytes\": "
         << result.workingSetBeforeBytes << ",\n"
@@ -1230,7 +1991,24 @@ void printDocument(
         << "    \"fixed_storage_coherent\": "
         << (result.fixedStorageCoherent ? "true" : "false") << ",\n"
         << "    \"teardown_released\": "
-        << (result.teardownReleased ? "true" : "false") << ",\n"
+        << (result.teardownReleased ? "true" : "false");
+    if (isMixedProfile(config)) {
+        std::cout
+            << ",\n"
+            << "    \"healthy_probe_accounted\": "
+            << (result.healthyProbeAccounted ? "true" : "false")
+            << ",\n"
+            << "    \"healthy_probe_zero_failures\": "
+            << (result.healthyProbeZeroFailures ? "true" : "false")
+            << ",\n"
+            << "    \"healthy_probe_closed\": "
+            << (result.healthyProbeClosed ? "true" : "false")
+            << ",\n"
+            << "    \"healthy_probe_paced\": "
+            << (result.healthyProbePaced ? "true" : "false");
+    }
+    std::cout
+        << ",\n"
         << "    \"passed\": "
         << (result.passed() ? "true" : "false") << "\n"
         << "  }\n"
@@ -1238,6 +2016,8 @@ void printDocument(
 }
 
 int run(const Config& config) {
+    gamenet::base::Logger::setLogLevel(
+        gamenet::base::Logger::FATAL);
     Result result;
     SharedState state;
     std::atomic<bool> stopIssued{false};
@@ -1261,7 +2041,7 @@ int run(const Config& config) {
         gamenet::net::TcpServer server(
             &loop,
             gamenet::net::InetAddress(0, true),
-            "slow-broadcast-recovery-profile");
+            config.scenario + "-profile");
         server.setThreadNum(static_cast<int>(config.threads));
         server.setIocpAcceptDepth(config.iocpAcceptDepth);
         server.setConnectionBackpressureOptions({
@@ -1271,9 +2051,14 @@ int run(const Config& config) {
             .maxInputBufferBytes = 2U * 1024U * 1024U,
         });
 
+        const std::size_t outputHeadroomConnections =
+            config.connections +
+            (isMixedProfile(config)
+                 ? config.probeBatchSize
+                 : 0);
         const std::size_t loopBudgetLimit =
             checkedMultiply(
-                config.connections,
+                outputHeadroomConnections,
                 config.hardLimitBytes,
                 "loop output budget");
         const std::size_t serverBudgetLimit =
@@ -1288,7 +2073,7 @@ int run(const Config& config) {
                     (std::min)(
                         loopBudgetLimit,
                         checkedMultiply(
-                            config.connections,
+                            outputHeadroomConnections,
                             config.lowWaterBytes,
                             "loop recovery budget")),
             },
@@ -1298,7 +2083,7 @@ int run(const Config& config) {
                     (std::min)(
                         serverBudgetLimit,
                         checkedMultiply(
-                            config.connections,
+                            outputHeadroomConnections,
                             config.lowWaterBytes,
                             "server recovery budget")),
             },
@@ -1344,7 +2129,12 @@ int run(const Config& config) {
         server.setConnectionCallback(
             [&](const gamenet::net::TcpConnectionPtr& connection) {
                 if (!connection->connected()) {
-                    state.markDisconnected();
+                    state.markDisconnected(connection.get());
+                    return;
+                }
+                if (state.classifyConnected(
+                        connection.get(),
+                        config.connections)) {
                     return;
                 }
                 try {
@@ -1413,6 +2203,23 @@ int run(const Config& config) {
                     server.stop();
                 }
             });
+        if (isMixedProfile(config)) {
+            server.setMessageCallback(
+                [&](const gamenet::net::TcpConnectionPtr& connection,
+                    gamenet::net::Buffer* buffer) {
+                    const std::size_t readable =
+                        buffer->readableBytes();
+                    const auto sendResult =
+                        connection->trySend(
+                            buffer->peek(),
+                            readable);
+                    buffer->retrieve(readable);
+                    if (sendResult !=
+                        gamenet::net::TcpSendResult::Accepted) {
+                        connection->forceClose();
+                    }
+                });
+        }
 
         server.start();
         result.fixedBaseline =
@@ -1423,10 +2230,16 @@ int run(const Config& config) {
         std::thread driver([&] {
             std::vector<ClientSocket> clients;
             std::vector<std::thread> readers;
+            std::thread probeThread;
             std::atomic<std::uint64_t> receivedBytes{0};
             std::mutex readerFailureMutex;
             std::exception_ptr readerFailure;
             gamenet::net::TcpServerStopFuture gracefulStop;
+            const auto joinProbe = [&] {
+                if (probeThread.joinable()) {
+                    probeThread.join();
+                }
+            };
             try {
                 clients.reserve(config.connections);
                 for (std::size_t index = 0;
@@ -1451,6 +2264,19 @@ int run(const Config& config) {
                         failure.empty()
                             ? "timed out waiting for real TCP endpoints"
                             : failure);
+                }
+                if (isMixedProfile(config)) {
+                    probeThread = std::thread([&] {
+                        try {
+                            runHealthyProbes(
+                                config,
+                                address,
+                                state,
+                                result);
+                        } catch (const std::exception& error) {
+                            state.fail(error.what());
+                        }
+                    });
                 }
 
                 const auto pressureStarted = Clock::now();
@@ -1557,6 +2383,11 @@ int run(const Config& config) {
                         result.recoveryOutput,
                         server.outputMemoryStats());
 
+                joinProbe();
+                const auto probeFailure = state.failure();
+                if (!probeFailure.empty()) {
+                    throw std::runtime_error(probeFailure);
+                }
                 stopIssued.store(true, std::memory_order_release);
                 gracefulStop = server.stopGracefully({
                     .drainTimeout = config.timeout,
@@ -1565,6 +2396,7 @@ int run(const Config& config) {
                 state.fail(error.what());
                 stopIssued.store(true, std::memory_order_release);
                 server.stop();
+                joinProbe();
             }
             for (auto& reader : readers) {
                 if (reader.joinable()) {

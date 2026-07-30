@@ -1,13 +1,16 @@
-# Slow Broadcast Recovery Capacity Profile
+# Slow and Mixed Broadcast Recovery Capacity Profiles
 
 `gamenet_capacity_profile` is the M3-Q1 bridge into the M3-P1 capacity
-matrix. Its `slow-broadcast-recovery` scenario combines real TCP slow readers,
-`TcpTransportEndpoint`, `BroadcastRouter`/`BroadcastDispatcher`, hierarchical
-TCP output budgets, retained Buffer capacity, fixed network storage, and
-process RSS in one run.
+matrix. Its `slow-broadcast-recovery` and `mixed-pressure-recovery` scenarios
+combine real TCP slow readers, `TcpTransportEndpoint`,
+`BroadcastRouter`/`BroadcastDispatcher`, hierarchical TCP output budgets,
+retained Buffer capacity, fixed network storage, and process RSS in one run.
+The mixed scenario additionally measures short-lived healthy echo traffic
+while the slow-reader pressure and recovery phases are active.
 
 It is opt-in benchmark tooling, not CTest and not an installed target. The
-versioned stdout document is `gamenet.capacity_profile.v1`.
+slow-only stdout document remains `gamenet.capacity_profile.v1`; mixed evidence
+uses `gamenet.capacity_profile.v2`.
 
 ## Contract
 
@@ -46,6 +49,32 @@ therefore cannot exceed the reported peak merely because the sampler missed it.
 posts each low-frequency sample through the endpoint owner executor; it never
 reads connection-owned Buffer state directly from its driver thread.
 
+## Mixed pressure contract
+
+`mixed-pressure-recovery` preserves the v1 slow-reader and Broadcast contract,
+then starts one persistent bounded client worker pool immediately after all
+slow targets and dispatch progress have been published. The pool paces an exact
+number of attempts over one monotonic interval. Each attempt has a nonblocking
+connect deadline, sends one fixed small payload, requires its exact echo, and
+closes abortively. Post-publication probe connections are classified under the
+benchmark coordination mutex and never become Broadcast targets.
+
+At most one probe batch is live. The next batch is not released until the
+server's cumulative accepted and closed counts have converged. Loop/server
+output budgets reserve headroom for that one batch; the per-connection slow
+client limit and Broadcast routing/dispatch limits do not change.
+
+The v2 validator additionally requires:
+
+- `attempted = probe_succeeded + typed failures`;
+- client connected = server accepted = server closed;
+- client connected = successful probes plus post-connect typed failures;
+- exact attempt and batch counts from the configured rate, duration, and batch
+  size;
+- zero connect, send, receive, and payload-mismatch failures;
+- a complete paced interval, a recomputable actual attempt rate, and bounded
+  connect/probe/schedule-lag nearest-rank P99 values.
+
 ## Build and run
 
 ```powershell
@@ -73,6 +102,34 @@ build-capacity\benchmarks\Release\gamenet_capacity_profile.exe `
 
 Linux uses the same target and arguments, with the executable under
 `build-capacity/benchmarks/` and expected backend `epoll`.
+
+The mixed profile extends the same scale parameters with the probe workload:
+
+```powershell
+build-capacity\benchmarks\Release\gamenet_capacity_profile.exe `
+  --scenario mixed-pressure-recovery `
+  --connections 100 --threads 4 --messages 10 `
+  --payload-bytes 32768 `
+  --low-water-bytes 32768 `
+  --high-water-bytes 65536 `
+  --hard-limit-bytes 262144 `
+  --recovery-threshold-bytes 0 `
+  --pressure-settle-ms 500 `
+  --recovery-stable-ms 250 `
+  --timeout-ms 60000 `
+  --iocp-accept-depth 32 `
+  --probe-rate 100 `
+  --probe-duration-ms 2000 `
+  --probe-batch-size 10 `
+  --probe-concurrency 4 `
+  --probe-payload-bytes 32 `
+  --probe-connect-timeout-ms 1000 |
+  py -3 tools\validate_capacity_profile.py `
+    --expected-platform windows `
+    --expected-backend iocp `
+    --expected-build-type Release `
+    --expected-connections 100 -
+```
 
 ## 2026-07-30 local M3-P1 seed
 
@@ -129,6 +186,27 @@ Both Windows MSVC Release artifacts passed the strict v1 validator:
 
 These are local capacity seeds, not portable thresholds. The 1,000-client run
 also proves the endpoint-attempt accounting and recovery contract at the
-planned 10k Broadcast TCP scale. The next P1-D slice adds bounded short-lived
-healthy probes during this pressure/recovery window rather than inferring
-mixed-workload behavior from this slow-client-only run.
+planned 10k Broadcast TCP scale.
+
+## 2026-07-30 M3-P1-D2 mixed seed
+
+Five Windows MSVC Release repetitions used the mixed command above. All five
+v2 artifacts passed the strict validator, as did a separate v1 compatibility
+run:
+
+| Observation | Five-run result |
+| --- | ---: |
+| healthy attempted / succeeded / server accepted / server closed | 200 / 200 / 200 / 200 every run |
+| typed healthy failures | 0 every run |
+| actual attempts/s | 99.358 median; 98.898–99.423 range |
+| worst connect / echo / schedule-lag P99 | 10,740.4 / 508.7 / 22,992.3 us |
+| slow pending peak | 26,214,400 B every run |
+| slow Broadcast accepted / overload | 900–950 / 50–100 |
+| slow recovery | 262.080–283.776 ms |
+| RSS peak | 30,298,112–31,965,184 B |
+
+This is a local functional/capacity seed, not a cross-platform latency budget.
+It proves that bounded healthy traffic can complete with exact lifecycle
+accounting while the same server is applying and recovering from slow-reader
+Broadcast pressure. The next P1-D slice promotes the matching profile into the
+planned 10k candidate gate and defines the separate 100k/endurance lane.

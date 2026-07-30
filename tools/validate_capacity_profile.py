@@ -9,8 +9,12 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "gamenet.capacity_profile.v1"
-SCENARIO = "slow-broadcast-recovery"
+SCHEMA_V1 = "gamenet.capacity_profile.v1"
+SCHEMA_V2 = "gamenet.capacity_profile.v2"
+SCENARIOS = {
+    SCHEMA_V1: "slow-broadcast-recovery",
+    SCHEMA_V2: "mixed-pressure-recovery",
+}
 REASONS = {
     "none",
     "offline_session",
@@ -30,7 +34,7 @@ REASONS = {
     "invalid_plan",
     "send_rejected",
 }
-CHECKS = {
+BASE_CHECKS = {
     "pending_within_limit",
     "broadcast_within_limit",
     "terminal_accounted",
@@ -42,6 +46,12 @@ CHECKS = {
     "fixed_storage_coherent",
     "teardown_released",
     "passed",
+}
+MIXED_CHECKS = BASE_CHECKS | {
+    "healthy_probe_accounted",
+    "healthy_probe_zero_failures",
+    "healthy_probe_closed",
+    "healthy_probe_paced",
 }
 
 
@@ -194,10 +204,15 @@ def validate_document(
     label: str = "capacity profile document",
 ) -> dict[str, Any]:
     require(isinstance(document, dict), f"{label} must be a JSON object")
-    require(document.get("schema") == SCHEMA, f"{label}: schema must be {SCHEMA}")
+    schema = document.get("schema")
+    require(schema in SCENARIOS, f"{label}: unsupported schema")
     require(document.get("status") == "ok", f"{label}: status must be ok")
     require(document.get("error") is None, f"{label}: successful result must have null error")
-    require(document.get("scenario") == SCENARIO, f"{label}: unsupported scenario")
+    require(
+        document.get("scenario") == SCENARIOS[schema],
+        f"{label}: schema/scenario mismatch",
+    )
+    mixed_profile = schema == SCHEMA_V2
     if expected_platform is not None:
         require(document.get("platform") == expected_platform, f"{label}: platform mismatch")
     if expected_backend is not None:
@@ -223,7 +238,9 @@ def validate_document(
     recovery_stable_ms = positive_integer(
         parameters.get("recovery_stable_ms"), f"{label}.recovery_stable_ms"
     )
-    positive_integer(parameters.get("timeout_ms"), f"{label}.timeout_ms")
+    timeout_ms = positive_integer(
+        parameters.get("timeout_ms"), f"{label}.timeout_ms"
+    )
     positive_integer(parameters.get("iocp_accept_depth"), f"{label}.iocp_accept_depth")
     if expected_connections is not None:
         require(connections == expected_connections, f"{label}: connection count mismatch")
@@ -459,9 +476,188 @@ def validate_document(
         require_zero=True,
     )
 
-    require(set(checks) == CHECKS, f"{label}: check set mismatch")
+    if mixed_profile:
+        probe_target = positive_integer(
+            parameters.get("probe_target_per_second"),
+            f"{label}.probe_target_per_second",
+        )
+        probe_duration_ms = positive_integer(
+            parameters.get("probe_duration_ms"),
+            f"{label}.probe_duration_ms",
+        )
+        probe_batch_size = positive_integer(
+            parameters.get("probe_batch_size"),
+            f"{label}.probe_batch_size",
+        )
+        probe_concurrency = positive_integer(
+            parameters.get("probe_concurrency"),
+            f"{label}.probe_concurrency",
+        )
+        positive_integer(
+            parameters.get("probe_payload_bytes"),
+            f"{label}.probe_payload_bytes",
+        )
+        probe_connect_timeout_ms = positive_integer(
+            parameters.get("probe_connect_timeout_ms"),
+            f"{label}.probe_connect_timeout_ms",
+        )
+        require(
+            probe_concurrency <= probe_batch_size,
+            f"{label}: probe concurrency exceeds batch size",
+        )
+        require(
+            probe_duration_ms <= timeout_ms
+            and probe_connect_timeout_ms <= timeout_ms,
+            f"{label}: probe duration/deadline exceeds overall timeout",
+        )
+        healthy = object_field(document, "healthy_churn", label)
+        require(
+            set(healthy)
+            == {
+                "attempted",
+                "client_connected",
+                "server_accepted",
+                "probe_succeeded",
+                "server_closed",
+                "batches",
+                "elapsed_ms",
+                "attempts_per_second",
+                "connect_p99_us",
+                "probe_p99_us",
+                "schedule_lag_p99_us",
+                "failures",
+            },
+            f"{label}: healthy probe field set mismatch",
+        )
+        attempted = non_negative_integer(
+            healthy.get("attempted"), f"{label}.healthy_churn.attempted"
+        )
+        client_connected = non_negative_integer(
+            healthy.get("client_connected"),
+            f"{label}.healthy_churn.client_connected",
+        )
+        server_accepted = non_negative_integer(
+            healthy.get("server_accepted"),
+            f"{label}.healthy_churn.server_accepted",
+        )
+        probe_succeeded = non_negative_integer(
+            healthy.get("probe_succeeded"),
+            f"{label}.healthy_churn.probe_succeeded",
+        )
+        server_closed = non_negative_integer(
+            healthy.get("server_closed"),
+            f"{label}.healthy_churn.server_closed",
+        )
+        batches = non_negative_integer(
+            healthy.get("batches"), f"{label}.healthy_churn.batches"
+        )
+        elapsed_ms = non_negative_number(
+            healthy.get("elapsed_ms"), f"{label}.healthy_churn.elapsed_ms"
+        )
+        attempt_rate = non_negative_number(
+            healthy.get("attempts_per_second"),
+            f"{label}.healthy_churn.attempts_per_second",
+        )
+        connect_p99 = non_negative_number(
+            healthy.get("connect_p99_us"),
+            f"{label}.healthy_churn.connect_p99_us",
+        )
+        probe_p99 = non_negative_number(
+            healthy.get("probe_p99_us"),
+            f"{label}.healthy_churn.probe_p99_us",
+        )
+        schedule_lag_p99 = non_negative_number(
+            healthy.get("schedule_lag_p99_us"),
+            f"{label}.healthy_churn.schedule_lag_p99_us",
+        )
+        failures = object_field(healthy, "failures", f"{label}.healthy_churn")
+        require(
+            set(failures)
+            == {"connect", "send", "receive", "payload_mismatch", "total"},
+            f"{label}: healthy probe failure set mismatch",
+        )
+        failure_counts = {
+            name: non_negative_integer(
+                value,
+                f"{label}.healthy_churn.failures.{name}",
+            )
+            for name, value in failures.items()
+        }
+        require(
+            failure_counts["total"]
+            == failure_counts["connect"]
+            + failure_counts["send"]
+            + failure_counts["receive"]
+            + failure_counts["payload_mismatch"],
+            f"{label}: healthy probe failure total is inconsistent",
+        )
+        expected_attempts = probe_target * probe_duration_ms // 1000
+        require(
+            expected_attempts > 0 and attempted == expected_attempts,
+            f"{label}: healthy probe attempt count mismatch",
+        )
+        require(
+            batches
+            == (expected_attempts + probe_batch_size - 1) // probe_batch_size,
+            f"{label}: healthy probe batch count mismatch",
+        )
+        require(
+            attempted == probe_succeeded + failure_counts["total"]
+            and client_connected
+            == probe_succeeded
+            + failure_counts["send"]
+            + failure_counts["receive"]
+            + failure_counts["payload_mismatch"]
+            and server_accepted == client_connected
+            and server_closed == server_accepted,
+            f"{label}: healthy probe accounting is inconsistent",
+        )
+        require(
+            failure_counts["total"] == 0,
+            f"{label}: healthy probe failures are not allowed",
+        )
+        require(
+            elapsed_ms > 0.0
+            and elapsed_ms + 1.0 >= float(probe_duration_ms),
+            f"{label}: healthy probe paced interval is too short",
+        )
+        require(
+            math.isclose(
+                attempt_rate,
+                attempted / (elapsed_ms / 1000.0),
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: healthy probe attempt rate is inconsistent",
+        )
+        require(
+            max(connect_p99, probe_p99, schedule_lag_p99)
+            <= elapsed_ms * 1000.0 + 1.0,
+            f"{label}: healthy probe P99 exceeds total elapsed time",
+        )
+        expected_checks = MIXED_CHECKS
+    else:
+        require(
+            not {
+                "probe_target_per_second",
+                "probe_duration_ms",
+                "probe_batch_size",
+                "probe_concurrency",
+                "probe_payload_bytes",
+                "probe_connect_timeout_ms",
+            }
+            & set(parameters),
+            f"{label}: v1 document reported healthy probe parameters",
+        )
+        require(
+            "healthy_churn" not in document,
+            f"{label}: v1 document reported healthy churn",
+        )
+        expected_checks = BASE_CHECKS
+
+    require(set(checks) == expected_checks, f"{label}: check set mismatch")
     require(
-        all(checks.get(name) is True for name in CHECKS),
+        all(checks.get(name) is True for name in expected_checks),
         f"{label}: all capacity checks must be true",
     )
     # RSS is deliberately observational: allocator/kernel retention is recorded

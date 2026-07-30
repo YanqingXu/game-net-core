@@ -148,6 +148,51 @@ def valid_document() -> dict[str, object]:
     }
 
 
+def valid_mixed_document() -> dict[str, object]:
+    document = copy.deepcopy(valid_document())
+    document["schema"] = "gamenet.capacity_profile.v2"
+    document["scenario"] = "mixed-pressure-recovery"
+    document["parameters"].update(  # type: ignore[union-attr]
+        {
+            "probe_target_per_second": 100,
+            "probe_duration_ms": 2000,
+            "probe_batch_size": 10,
+            "probe_concurrency": 4,
+            "probe_payload_bytes": 32,
+            "probe_connect_timeout_ms": 1000,
+        }
+    )
+    document["healthy_churn"] = {
+        "attempted": 200,
+        "client_connected": 200,
+        "server_accepted": 200,
+        "probe_succeeded": 200,
+        "server_closed": 200,
+        "batches": 20,
+        "elapsed_ms": 2001.0,
+        "attempts_per_second": 99.950025,
+        "connect_p99_us": 500.0,
+        "probe_p99_us": 200.0,
+        "schedule_lag_p99_us": 1000.0,
+        "failures": {
+            "connect": 0,
+            "send": 0,
+            "receive": 0,
+            "payload_mismatch": 0,
+            "total": 0,
+        },
+    }
+    document["checks"].update(  # type: ignore[union-attr]
+        {
+            "healthy_probe_accounted": True,
+            "healthy_probe_zero_failures": True,
+            "healthy_probe_closed": True,
+            "healthy_probe_paced": True,
+        }
+    )
+    return document
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
@@ -180,6 +225,7 @@ def main() -> None:
     for fragment in (
         "gamenet.capacity_profile.v1",
         "slow-broadcast-recovery",
+        "mixed-pressure-recovery",
         "TcpTransportEndpoint",
         "SO_RCVBUF",
         "aggregateRetention",
@@ -189,12 +235,17 @@ def main() -> None:
         "recoveryStable",
         "workingSetRecoveryDeltaBytes",
         "sampledWorkingSetPeak",
+        "HealthyProbePool",
+        "connectToWithDeadline",
+        "healthyProbeAccounted",
     ):
         require(source_text, fragment, source)
     for fragment in (
         "gamenet.capacity_profile.v1",
+        "gamenet.capacity_profile.v2",
         "EndpointOverloaded does not reconcile with TCP rejection scopes",
         "recovery did not sustain its stable window",
+        "healthy probe accounting is inconsistent",
         "RSS is deliberately observational",
     ):
         require(validator_text, fragment, validator)
@@ -227,6 +278,14 @@ def main() -> None:
         expected_build_type="Release",
         expected_connections=4,
     )
+    mixed_document = valid_mixed_document()
+    capacity_validator.validate_document(
+        mixed_document,
+        expected_platform="windows",
+        expected_backend="iocp",
+        expected_build_type="Release",
+        expected_connections=4,
+    )
 
     mutations = (
         ("pending overflow", ("pressure", "pending_peak_bytes"), 8388609),
@@ -253,6 +312,61 @@ def main() -> None:
             pass
         else:
             raise AssertionError(f"validator accepted mutation: {label}")
+
+    v1_probe_parameters = copy.deepcopy(document)
+    v1_probe_parameters["parameters"]["probe_target_per_second"] = 100
+    try:
+        capacity_validator.validate_document(
+            v1_probe_parameters,
+            label="v1 probe parameter injection",
+        )
+    except capacity_validator.CapacityProfileValidationError:
+        pass
+    else:
+        raise AssertionError("validator accepted v1 probe parameters")
+
+    mixed_mutations = (
+        ("probe attempt mismatch", ("healthy_churn", "attempted"), 199),
+        ("probe batch mismatch", ("healthy_churn", "batches"), 19),
+        ("probe close mismatch", ("healthy_churn", "server_closed"), 199),
+        (
+            "probe failure mismatch",
+            ("healthy_churn", "failures", "total"),
+            1,
+        ),
+        (
+            "probe rate mismatch",
+            ("healthy_churn", "attempts_per_second"),
+            90.0,
+        ),
+        (
+            "probe paced interval too short",
+            ("healthy_churn", "elapsed_ms"),
+            1990.0,
+        ),
+        (
+            "probe P99 exceeds elapsed",
+            ("healthy_churn", "connect_p99_us"),
+            2_002_000.0,
+        ),
+        (
+            "probe false check",
+            ("checks", "healthy_probe_accounted"),
+            False,
+        ),
+    )
+    for label, path, value in mixed_mutations:
+        mutated = copy.deepcopy(mixed_document)
+        cursor = mutated
+        for key in path[:-1]:
+            cursor = cursor[key]  # type: ignore[index,assignment]
+        cursor[path[-1]] = value  # type: ignore[index]
+        try:
+            capacity_validator.validate_document(mutated, label=label)
+        except capacity_validator.CapacityProfileValidationError:
+            pass
+        else:
+            raise AssertionError(f"validator accepted mixed mutation: {label}")
 
 
 if __name__ == "__main__":
