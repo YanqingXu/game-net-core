@@ -371,6 +371,18 @@ budget/server contracts each passed 50/50 focused repetitions, including a
 and zero pending bytes after stop. The Windows partial-write contract was also
 made independent of ambient system timer-resolution changes while preserving a
 reader slower than each physical write chunk.
+M3-Q1-B replaces BroadcastDispatcher's per-task global accounting mutex with
+an immutable, atomically published owner registry and the fixed reservation
+order owner task -> owner logical bytes -> global logical bytes. First-owner
+registration alone uses a mutex; repeated admission, later-scope rollback,
+queue rollback, completion release, shutdown, and snapshots do not. The
+provisional diagnostics now expose global and per-owner current/peak/rejection
+state while preserving aggregate `tasks == 0` as the exact convergence marker.
+The outstanding-budget contract passed 100/100 focused repetitions with 32
+concurrent producers at owner/global limits and a concurrent shutdown race;
+all five Broadcast contracts then passed 20 consecutive repetitions. The
+resulting MSVC Debug tree passed all 119 tests and all 33 repository guards;
+the public API manifest and deterministic compatibility diff also passed.
 The current inventory is unit=8, contract=98, integration=13, threading=92,
 lifecycle=97, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed before M3-Q1-A. After Q1-A, all 119 MSVC Debug tests and all

@@ -186,3 +186,15 @@ required independent stable-surface review. Direct contracts live in
 `tests/contract/tcp_connection/test_tcp_output_memory_budget.cpp`,
 `tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp`,
 and `tests/contract/tcp_server/test_tcp_server_output_memory.cpp`.
+
+M3-Q1-B extends the provisional `BroadcastDispatcher` diagnostics with global
+current/peak/rejection observations and a low-frequency per-owner snapshot.
+The existing `outstanding().tasks` / `.bytes`, dispatch limits, rejection
+reasons, and shutdown entry points remain source compatible; `tasks == 0`
+continues to be the exact convergence marker. Owner registration is published
+once, while repeated owner-task -> owner-byte -> global-byte reservation,
+rollback, completion release, shutdown, and snapshots use atomic state without
+the former per-task dispatcher mutex. This remains a provisional-surface
+change and therefore does not alter a stable-header fingerprint. The direct
+contract is
+`tests/contract/broadcast/test_broadcast_outstanding_budget.cpp`.

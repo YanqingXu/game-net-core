@@ -42,8 +42,16 @@ state.
 - Endpoint send may re-enter transport/core callbacks on the endpoint loop; no
   router/dispatcher lock is held. An endpoint exception is contained as
   `SendRejected` and does not leak an outstanding reservation.
-- Dispatcher accounting is shared thread-safe state, but its mutex is released
-  before EventLoop admission, endpoint calls, metrics, or user callbacks.
+- Dispatcher owner identities are registered once into an immutable,
+  atomically published registry. The registration mutex is used only on the
+  first observation of an owner; repeated task reservation, rollback,
+  completion release, shutdown checks, and snapshots do not acquire it.
+- Outstanding admission follows the fixed atomic hierarchy owner task ->
+  owner logical bytes -> global logical bytes. A later-scope rejection rolls
+  back every earlier scope synchronously in reverse order.
+- Shutdown and the final reservation check share one atomic admission gate.
+  A task is therefore ordered either before shutdown and retained normally, or
+  after shutdown and fully rolled back as `OwnerShutdown`.
 
 ## Backpressure Contract
 
@@ -57,6 +65,11 @@ state.
 - Across consecutive plans, per-owner outstanding task/byte counts and a global
   outstanding logical-byte count are reserved before queue admission and
   released exactly once after task completion or admission rollback.
+- The dispatcher exposes low-frequency global and per-owner atomic snapshots
+  of current/peak tasks and bytes plus rejection counts. A multi-counter
+  snapshot is diagnostic rather than transactionally consistent, but aggregate
+  `tasks == 0` remains the convergence marker and is cleared only after that
+  task's global-byte and owner scopes are released.
 - `BroadcastDispatcher::shutdown()` is a thread-safe, idempotent admission
   close. Later chunks/plans are rejected with `OwnerShutdown`; tasks already
   admitted retain their shared payload and publish normal terminal progress.
@@ -91,7 +104,9 @@ state.
 - `tests/contract/broadcast/test_broadcast_outstanding_budget.cpp` verifies
   per-owner/global reservations across multiple valid plans, exact rollback,
   low-priority shedding, QueueFull versus Shutdown/OwnerUnavailable mapping,
-  endpoint overload/close reasons, and final zero outstanding state.
+  endpoint overload/close reasons, concurrent no-overshoot at owner/global
+  scopes, shutdown races, immutable owner-registry reuse, and final zero
+  outstanding state.
 
 ## Migration Provenance
 

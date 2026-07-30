@@ -7,12 +7,14 @@
 #include "support/TestAssert.h"
 
 #include <atomic>
+#include <barrier>
 #include <chrono>
 #include <future>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -375,6 +377,345 @@ int main() {
     }
     GAMENET_TEST_ASSERT(pendingAtShutdown.progress->snapshot().acceptedEndpoints == 1);
     GAMENET_TEST_ASSERT(stoppingDispatcher.outstanding().tasks == 0);
+
+    constexpr std::size_t kConcurrentPlans = 32;
+    constexpr std::size_t kConcurrentLimit = 8;
+
+    std::promise<void> atomicOwnerBlocked;
+    auto atomicOwnerBlockedFuture = atomicOwnerBlocked.get_future();
+    std::promise<void> releaseAtomicOwner;
+    auto releaseAtomicOwnerFuture =
+        releaseAtomicOwner.get_future().share();
+    ownerLoop->queueInLoop([&] {
+        atomicOwnerBlocked.set_value();
+        releaseAtomicOwnerFuture.wait();
+    });
+    gamenet::test::waitUntilReady(
+        atomicOwnerBlockedFuture,
+        2s,
+        "atomic owner did not enter barrier");
+
+    gamenet::broadcast::BroadcastDispatcher atomicOwnerDispatcher({
+        .maxEndpointsPerTask = 1,
+        .maxBytesPerTask = 16,
+        .maxOutstandingTasksPerOwner = kConcurrentLimit,
+        .maxOutstandingBytesPerOwner = kConcurrentPlans,
+        .maxGlobalOutstandingBytes = kConcurrentPlans,
+        .lowPriorityOutstandingBytes = kConcurrentPlans,
+    });
+    std::vector<gamenet::broadcast::BroadcastPlan> ownerPlans;
+    ownerPlans.reserve(kConcurrentPlans);
+    for (std::size_t index = 0; index < kConcurrentPlans; ++index) {
+        ownerPlans.push_back(router.route(
+            std::make_shared<const std::string>("x"), targets));
+    }
+    std::vector<gamenet::broadcast::DispatchSummary> ownerSummaries(
+        kConcurrentPlans);
+    std::barrier ownerStart(
+        static_cast<std::ptrdiff_t>(kConcurrentPlans));
+    std::vector<std::thread> ownerProducers;
+    ownerProducers.reserve(kConcurrentPlans);
+    for (std::size_t index = 0; index < kConcurrentPlans; ++index) {
+        ownerProducers.emplace_back([&, index] {
+            ownerStart.arrive_and_wait();
+            ownerSummaries[index] =
+                atomicOwnerDispatcher.dispatch(
+                    std::move(ownerPlans[index]));
+        });
+    }
+    for (auto& producer : ownerProducers) {
+        producer.join();
+    }
+
+    std::size_t ownerAccepted = 0;
+    std::size_t ownerRejected = 0;
+    for (const auto& summary : ownerSummaries) {
+        ownerAccepted += summary.acceptedEndpoints;
+        ownerRejected += summary.reasonCount(
+            gamenet::broadcast::BroadcastReason::
+                OwnerOutstandingTaskLimit);
+    }
+    GAMENET_TEST_ASSERT(ownerAccepted == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerRejected == kConcurrentPlans - kConcurrentLimit);
+    const auto ownerOutstanding =
+        atomicOwnerDispatcher.outstanding();
+    GAMENET_TEST_ASSERT(
+        ownerOutstanding.tasks == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerOutstanding.bytes == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerOutstanding.peakTasks == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerOutstanding.peakBytes == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerOutstanding.rejectedGlobalByteReservations == 0);
+    GAMENET_TEST_ASSERT(ownerOutstanding.accepting);
+    const auto ownerStats =
+        atomicOwnerDispatcher.outstandingStats();
+    GAMENET_TEST_ASSERT(ownerStats.owners.size() == 1);
+    GAMENET_TEST_ASSERT(
+        ownerStats.owners.front().ownerId ==
+        ownerLoop->executor().id());
+    GAMENET_TEST_ASSERT(
+        ownerStats.owners.front().tasks == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerStats.owners.front().bytes == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerStats.owners.front().peakTasks == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerStats.owners.front().rejectedTaskReservations ==
+        kConcurrentPlans - kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        ownerStats.owners.front().rejectedByteReservations == 0);
+
+    const auto ownerSendsBefore = endpoint->sends();
+    releaseAtomicOwner.set_value();
+    const auto ownerAtomicDeadline =
+        std::chrono::steady_clock::now() + 2s;
+    while ((atomicOwnerDispatcher.outstanding().tasks != 0 ||
+            endpoint->sends() !=
+                ownerSendsBefore + kConcurrentLimit) &&
+           std::chrono::steady_clock::now() <
+               ownerAtomicDeadline) {
+        std::this_thread::yield();
+    }
+    GAMENET_TEST_ASSERT(
+        atomicOwnerDispatcher.outstanding().tasks == 0);
+    GAMENET_TEST_ASSERT(
+        atomicOwnerDispatcher.outstanding().bytes == 0);
+    const auto ownerRecoveredStats =
+        atomicOwnerDispatcher.outstandingStats();
+    GAMENET_TEST_ASSERT(ownerRecoveredStats.owners.size() == 1);
+    GAMENET_TEST_ASSERT(
+        ownerRecoveredStats.owners.front().tasks == 0);
+    GAMENET_TEST_ASSERT(
+        ownerRecoveredStats.owners.front().bytes == 0);
+    GAMENET_TEST_ASSERT(
+        ownerRecoveredStats.owners.front().peakTasks ==
+        kConcurrentLimit);
+
+    std::promise<void> firstAtomicGlobalBlocked;
+    std::promise<void> secondAtomicGlobalBlocked;
+    auto firstAtomicGlobalBlockedFuture =
+        firstAtomicGlobalBlocked.get_future();
+    auto secondAtomicGlobalBlockedFuture =
+        secondAtomicGlobalBlocked.get_future();
+    std::promise<void> releaseAtomicGlobal;
+    auto releaseAtomicGlobalFuture =
+        releaseAtomicGlobal.get_future().share();
+    ownerLoop->queueInLoop([&] {
+        firstAtomicGlobalBlocked.set_value();
+        releaseAtomicGlobalFuture.wait();
+    });
+    secondOwnerLoop->queueInLoop([&] {
+        secondAtomicGlobalBlocked.set_value();
+        releaseAtomicGlobalFuture.wait();
+    });
+    gamenet::test::waitUntilReady(
+        firstAtomicGlobalBlockedFuture,
+        2s,
+        "first atomic global owner did not enter barrier");
+    gamenet::test::waitUntilReady(
+        secondAtomicGlobalBlockedFuture,
+        2s,
+        "second atomic global owner did not enter barrier");
+
+    gamenet::broadcast::BroadcastDispatcher atomicGlobalDispatcher({
+        .maxEndpointsPerTask = 1,
+        .maxBytesPerTask = 16,
+        .maxOutstandingTasksPerOwner = kConcurrentPlans,
+        .maxOutstandingBytesPerOwner = kConcurrentPlans,
+        .maxGlobalOutstandingBytes = kConcurrentLimit,
+        .lowPriorityOutstandingBytes = kConcurrentLimit,
+    });
+    std::vector<gamenet::broadcast::BroadcastPlan> globalPlans;
+    globalPlans.reserve(kConcurrentPlans);
+    for (std::size_t index = 0; index < kConcurrentPlans; ++index) {
+        globalPlans.push_back(router.route(
+            std::make_shared<const std::string>("x"),
+            index % 2 == 0 ? targets : secondTargets));
+    }
+    std::vector<gamenet::broadcast::DispatchSummary> globalSummaries(
+        kConcurrentPlans);
+    std::barrier globalStart(
+        static_cast<std::ptrdiff_t>(kConcurrentPlans));
+    std::vector<std::thread> globalProducers;
+    globalProducers.reserve(kConcurrentPlans);
+    for (std::size_t index = 0; index < kConcurrentPlans; ++index) {
+        globalProducers.emplace_back([&, index] {
+            globalStart.arrive_and_wait();
+            globalSummaries[index] =
+                atomicGlobalDispatcher.dispatch(
+                    std::move(globalPlans[index]));
+        });
+    }
+    for (auto& producer : globalProducers) {
+        producer.join();
+    }
+
+    std::size_t globalAccepted = 0;
+    std::size_t globalRejected = 0;
+    for (const auto& summary : globalSummaries) {
+        globalAccepted += summary.acceptedEndpoints;
+        globalRejected += summary.reasonCount(
+            gamenet::broadcast::BroadcastReason::
+                GlobalOutstandingByteLimit);
+    }
+    GAMENET_TEST_ASSERT(globalAccepted == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        globalRejected == kConcurrentPlans - kConcurrentLimit);
+    const auto globalOutstanding =
+        atomicGlobalDispatcher.outstanding();
+    GAMENET_TEST_ASSERT(
+        globalOutstanding.tasks == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        globalOutstanding.bytes == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        globalOutstanding.peakBytes == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(
+        globalOutstanding.rejectedGlobalByteReservations ==
+        kConcurrentPlans - kConcurrentLimit);
+    const auto globalStats =
+        atomicGlobalDispatcher.outstandingStats();
+    GAMENET_TEST_ASSERT(globalStats.owners.size() == 2);
+    std::size_t ownerTaskTotal = 0;
+    std::size_t ownerByteTotal = 0;
+    for (const auto& owner : globalStats.owners) {
+        ownerTaskTotal += owner.tasks;
+        ownerByteTotal += owner.bytes;
+        GAMENET_TEST_ASSERT(
+            owner.rejectedTaskReservations == 0);
+        GAMENET_TEST_ASSERT(
+            owner.rejectedByteReservations == 0);
+    }
+    GAMENET_TEST_ASSERT(ownerTaskTotal == kConcurrentLimit);
+    GAMENET_TEST_ASSERT(ownerByteTotal == kConcurrentLimit);
+
+    const auto globalSendsBefore =
+        endpoint->sends() + secondEndpoint->sends();
+    releaseAtomicGlobal.set_value();
+    const auto globalAtomicDeadline =
+        std::chrono::steady_clock::now() + 2s;
+    while ((atomicGlobalDispatcher.outstanding().tasks != 0 ||
+            endpoint->sends() + secondEndpoint->sends() !=
+                globalSendsBefore + kConcurrentLimit) &&
+           std::chrono::steady_clock::now() <
+               globalAtomicDeadline) {
+        std::this_thread::yield();
+    }
+    GAMENET_TEST_ASSERT(
+        atomicGlobalDispatcher.outstanding().tasks == 0);
+    GAMENET_TEST_ASSERT(
+        atomicGlobalDispatcher.outstanding().bytes == 0);
+    for (const auto& owner :
+         atomicGlobalDispatcher.outstandingStats().owners) {
+        GAMENET_TEST_ASSERT(owner.tasks == 0);
+        GAMENET_TEST_ASSERT(owner.bytes == 0);
+    }
+
+    std::promise<void> shutdownRaceBlocked;
+    auto shutdownRaceBlockedFuture =
+        shutdownRaceBlocked.get_future();
+    std::promise<void> releaseShutdownRace;
+    auto releaseShutdownRaceFuture =
+        releaseShutdownRace.get_future().share();
+    ownerLoop->queueInLoop([&] {
+        shutdownRaceBlocked.set_value();
+        releaseShutdownRaceFuture.wait();
+    });
+    gamenet::test::waitUntilReady(
+        shutdownRaceBlockedFuture,
+        2s,
+        "shutdown-race owner did not enter barrier");
+
+    gamenet::broadcast::BroadcastDispatcher shutdownRaceDispatcher({
+        .maxEndpointsPerTask = 1,
+        .maxBytesPerTask = 16,
+        .maxOutstandingTasksPerOwner = kConcurrentPlans,
+        .maxOutstandingBytesPerOwner = kConcurrentPlans,
+        .maxGlobalOutstandingBytes = kConcurrentPlans,
+        .lowPriorityOutstandingBytes = kConcurrentPlans,
+    });
+    std::vector<gamenet::broadcast::BroadcastPlan> shutdownRacePlans;
+    shutdownRacePlans.reserve(kConcurrentPlans);
+    for (std::size_t index = 0; index < kConcurrentPlans; ++index) {
+        shutdownRacePlans.push_back(router.route(
+            std::make_shared<const std::string>("x"), targets));
+    }
+    std::vector<gamenet::broadcast::DispatchSummary>
+        shutdownRaceSummaries(kConcurrentPlans);
+    std::barrier shutdownStart(
+        static_cast<std::ptrdiff_t>(kConcurrentPlans + 1));
+    std::vector<std::thread> shutdownProducers;
+    shutdownProducers.reserve(kConcurrentPlans);
+    for (std::size_t index = 0; index < kConcurrentPlans; ++index) {
+        shutdownProducers.emplace_back([&, index] {
+            shutdownStart.arrive_and_wait();
+            shutdownRaceSummaries[index] =
+                shutdownRaceDispatcher.dispatch(
+                    std::move(shutdownRacePlans[index]));
+        });
+    }
+    std::thread shutdownThread([&] {
+        shutdownStart.arrive_and_wait();
+        shutdownRaceDispatcher.shutdown();
+    });
+    for (auto& producer : shutdownProducers) {
+        producer.join();
+    }
+    shutdownThread.join();
+
+    std::size_t shutdownAccepted = 0;
+    std::size_t shutdownRejected = 0;
+    for (const auto& summary : shutdownRaceSummaries) {
+        shutdownAccepted += summary.acceptedEndpoints;
+        shutdownRejected += summary.reasonCount(
+            gamenet::broadcast::BroadcastReason::OwnerShutdown);
+        GAMENET_TEST_ASSERT(
+            summary.reasonCount(
+                gamenet::broadcast::BroadcastReason::
+                    OwnerOutstandingTaskLimit) == 0);
+        GAMENET_TEST_ASSERT(
+            summary.reasonCount(
+                gamenet::broadcast::BroadcastReason::
+                    GlobalOutstandingByteLimit) == 0);
+    }
+    GAMENET_TEST_ASSERT(
+        shutdownAccepted + shutdownRejected == kConcurrentPlans);
+    const auto shutdownRaceOutstanding =
+        shutdownRaceDispatcher.outstanding();
+    GAMENET_TEST_ASSERT(!shutdownRaceOutstanding.accepting);
+    GAMENET_TEST_ASSERT(
+        shutdownRaceOutstanding.tasks == shutdownAccepted);
+    GAMENET_TEST_ASSERT(
+        shutdownRaceOutstanding.bytes == shutdownAccepted);
+    GAMENET_TEST_ASSERT(
+        shutdownRaceOutstanding.peakTasks <= kConcurrentPlans);
+    auto rejectedAfterRace = shutdownRaceDispatcher.dispatch(
+        router.route(
+            std::make_shared<const std::string>("x"), targets));
+    GAMENET_TEST_ASSERT(
+        rejectedAfterRace.reasonCount(
+            gamenet::broadcast::BroadcastReason::OwnerShutdown) == 1);
+
+    releaseShutdownRace.set_value();
+    const auto shutdownRaceDeadline =
+        std::chrono::steady_clock::now() + 2s;
+    while (shutdownRaceDispatcher.outstanding().tasks != 0 &&
+           std::chrono::steady_clock::now() <
+               shutdownRaceDeadline) {
+        std::this_thread::yield();
+    }
+    GAMENET_TEST_ASSERT(
+        shutdownRaceDispatcher.outstanding().tasks == 0);
+    GAMENET_TEST_ASSERT(
+        shutdownRaceDispatcher.outstanding().bytes == 0);
+    for (const auto& owner :
+         shutdownRaceDispatcher.outstandingStats().owners) {
+        GAMENET_TEST_ASSERT(owner.tasks == 0);
+        GAMENET_TEST_ASSERT(owner.bytes == 0);
+    }
 
     secondOwnerThread.stop();
     ownerThread.stop();

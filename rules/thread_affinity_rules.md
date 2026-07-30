@@ -287,9 +287,14 @@ No other direct mutation path is allowed for core loop state.
   admission. A rejected data handoff may request terminal endpoint close through
   the endpoint control-safe close path but may not mutate endpoint state
   off-thread
-- Broadcast routing is management-loop-only. Outstanding reservations are
-  synchronized value accounting; endpoint sends still execute only on their
-  endpoint owner loops
+- Broadcast routing is management-loop-only. Dispatcher outstanding admission
+  may be concurrent but mutates only the fixed atomic owner-task ->
+  owner-byte -> global-byte reservation chain; endpoint sends still execute
+  only on their endpoint owner loops
+- Broadcast owner identities are first-observation registry metadata. Their
+  immutable registry publication may take a registration mutex, but repeated
+  reservation, rollback, completion release, shutdown, and snapshot paths do
+  not acquire it
 
 ## 15. Forbidden
 - Direct Poller mutation from non-owner thread

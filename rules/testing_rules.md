@@ -181,6 +181,10 @@ For lifecycle-sensitive modules, tests should include:
 - consecutive Broadcast plans cannot bypass per-owner/global outstanding
   budgets; every reservation is released on queue rejection, endpoint terminal
   result and callback exception
+- concurrent Broadcast reservations never overshoot owner task/byte or global
+  byte limits; later-scope rejection rolls back earlier scopes, shutdown races
+  choose one admission side, stable snapshots report peak/rejection evidence,
+  and all scopes converge to zero
 - hierarchical TCP output admission rejects at the exact connection, loop,
   server, or optional shared-global scope; concurrent reservations never
   overshoot, later-scope failure rolls back earlier scopes, hysteretic recovery

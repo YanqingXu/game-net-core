@@ -1,12 +1,14 @@
 #include "gamenet/broadcast/BroadcastDispatcher.h"
 
+#include "gamenet/core/base/Logger.h"
 #include "gamenet/core/net/EventLoop.h"
 
 #include <algorithm>
+#include <atomic>
+#include <functional>
 #include <limits>
 #include <mutex>
 #include <stdexcept>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -64,6 +66,32 @@ void emitMetricNoexcept(
     }
 }
 
+bool fitsWithin(
+    std::size_t current,
+    std::size_t amount,
+    std::size_t limit) noexcept {
+    return current <= limit && amount <= limit - current;
+}
+
+class ReservationRollback {
+public:
+    explicit ReservationRollback(
+        const std::function<void()>& release) noexcept
+        : release_(&release) {}
+
+    ~ReservationRollback() {
+        if (armed_) {
+            (*release_)();
+        }
+    }
+
+    void dismiss() noexcept { armed_ = false; }
+
+private:
+    const std::function<void()>* release_;
+    bool armed_{true};
+};
+
 }  // namespace
 
 struct DispatchProgress::State {
@@ -82,24 +110,277 @@ DispatchProgressSnapshot DispatchProgress::snapshot() const noexcept {
 }
 
 struct BroadcastDispatcher::State {
-    struct OwnerOutstanding {
-        std::size_t tasks{};
-        std::size_t bytes{};
+    class AtomicLimit {
+    public:
+        struct ReserveResult {
+            bool accepted{false};
+            std::size_t observedCurrent{0};
+        };
+
+        ReserveResult tryReserve(
+            std::size_t amount,
+            std::size_t limit) noexcept {
+            if (amount == 0) {
+                return {
+                    .accepted = true,
+                    .observedCurrent =
+                        current_.load(std::memory_order_acquire),
+                };
+            }
+
+            std::size_t current =
+                current_.load(std::memory_order_acquire);
+            for (;;) {
+                if (!fitsWithin(current, amount, limit)) {
+                    rejected_.fetch_add(1, std::memory_order_relaxed);
+                    return {
+                        .accepted = false,
+                        .observedCurrent = current,
+                    };
+                }
+                const std::size_t candidate = current + amount;
+                if (current_.compare_exchange_weak(
+                        current,
+                        candidate,
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire)) {
+                    updatePeak(candidate);
+                    return {
+                        .accepted = true,
+                        .observedCurrent = candidate,
+                    };
+                }
+            }
+        }
+
+        void release(std::size_t amount) noexcept {
+            if (amount == 0) {
+                return;
+            }
+            const std::size_t previous =
+                current_.fetch_sub(amount, std::memory_order_acq_rel);
+            if (previous < amount) {
+                LOG_FATAL << "Broadcast outstanding reservation underflow";
+            }
+        }
+
+        std::size_t current() const noexcept {
+            return current_.load(std::memory_order_acquire);
+        }
+
+        std::size_t peak() const noexcept {
+            return peak_.load(std::memory_order_relaxed);
+        }
+
+        std::uint64_t rejected() const noexcept {
+            return rejected_.load(std::memory_order_relaxed);
+        }
+
+    private:
+        void updatePeak(std::size_t candidate) noexcept {
+            std::size_t peak =
+                peak_.load(std::memory_order_relaxed);
+            while (peak < candidate &&
+                   !peak_.compare_exchange_weak(
+                       peak,
+                       candidate,
+                       std::memory_order_relaxed,
+                       std::memory_order_relaxed)) {
+            }
+        }
+
+        std::atomic<std::size_t> current_{0};
+        std::atomic<std::size_t> peak_{0};
+        std::atomic<std::uint64_t> rejected_{0};
     };
 
-    mutable std::mutex mutex;
-    std::unordered_map<std::uint64_t, OwnerOutstanding> owners;
-    std::size_t tasks{};
-    std::size_t bytes{};
-    bool accepting{true};
+    struct OwnerOutstanding {
+        OwnerOutstanding(
+            std::uint64_t owner,
+            const DispatchLimits& limits) noexcept
+            : ownerId(owner),
+              taskLimit(limits.maxOutstandingTasksPerOwner),
+              byteLimit(limits.maxOutstandingBytesPerOwner) {}
+
+        std::uint64_t ownerId{};
+        std::size_t taskLimit{};
+        std::size_t byteLimit{};
+        AtomicLimit tasks;
+        AtomicLimit bytes;
+    };
+
+    using OwnerRegistry =
+        std::vector<std::shared_ptr<OwnerOutstanding>>;
+
+    explicit State(const DispatchLimits& limits)
+        : globalByteLimit(limits.maxGlobalOutstandingBytes),
+          lowPriorityByteLimit(limits.lowPriorityOutstandingBytes),
+          owners(std::make_shared<const OwnerRegistry>()) {}
+
+    std::shared_ptr<OwnerOutstanding> ownerFor(
+        std::uint64_t ownerId,
+        const DispatchLimits& limits) {
+        auto registry = owners.load(std::memory_order_acquire);
+        if (const auto found = findOwner(*registry, ownerId)) {
+            return found;
+        }
+
+        std::lock_guard lock(ownerRegistrationMutex);
+        registry = owners.load(std::memory_order_acquire);
+        if (const auto found = findOwner(*registry, ownerId)) {
+            return found;
+        }
+
+        auto owner =
+            std::make_shared<OwnerOutstanding>(ownerId, limits);
+        auto updated = std::make_shared<OwnerRegistry>(*registry);
+        const auto position = std::lower_bound(
+            updated->begin(),
+            updated->end(),
+            ownerId,
+            [](const auto& candidate, std::uint64_t id) {
+                return candidate->ownerId < id;
+            });
+        updated->insert(position, owner);
+        std::shared_ptr<const OwnerRegistry> published =
+            std::move(updated);
+        owners.store(std::move(published), std::memory_order_release);
+        return owner;
+    }
+
+    BroadcastReason tryReserve(
+        const std::shared_ptr<OwnerOutstanding>& owner,
+        std::size_t bytes,
+        BroadcastPriority priority) noexcept {
+        if (!accepting.load(std::memory_order_seq_cst)) {
+            return BroadcastReason::OwnerShutdown;
+        }
+
+        const auto ownerTasks =
+            owner->tasks.tryReserve(1, owner->taskLimit);
+        if (!ownerTasks.accepted) {
+            return BroadcastReason::OwnerOutstandingTaskLimit;
+        }
+
+        const auto ownerBytes =
+            owner->bytes.tryReserve(bytes, owner->byteLimit);
+        if (!ownerBytes.accepted) {
+            owner->tasks.release(1);
+            return BroadcastReason::OwnerOutstandingByteLimit;
+        }
+
+        const std::size_t effectiveGlobalLimit =
+            priority == BroadcastPriority::Low
+            ? lowPriorityByteLimit
+            : globalByteLimit;
+        const auto global =
+            globalBytes.tryReserve(bytes, effectiveGlobalLimit);
+        if (!global.accepted) {
+            owner->bytes.release(bytes);
+            owner->tasks.release(1);
+            if (priority == BroadcastPriority::Low &&
+                fitsWithin(
+                    global.observedCurrent,
+                    bytes,
+                    globalByteLimit)) {
+                return BroadcastReason::LowPrioritySoftLimit;
+            }
+            return BroadcastReason::GlobalOutstandingByteLimit;
+        }
+
+        // Sequential consistency gives shutdown and this final check one
+        // admission order. A losing reservation rolls every byte/task scope
+        // back before reporting OwnerShutdown.
+        if (!accepting.load(std::memory_order_seq_cst)) {
+            globalBytes.release(bytes);
+            owner->bytes.release(bytes);
+            owner->tasks.release(1);
+            return BroadcastReason::OwnerShutdown;
+        }
+
+        const auto aggregateTask = globalTasks.tryReserve(
+            1, (std::numeric_limits<std::size_t>::max)());
+        if (!aggregateTask.accepted) {
+            LOG_FATAL << "Broadcast global outstanding task counter overflow";
+        }
+        return BroadcastReason::None;
+    }
+
+    void release(
+        const std::shared_ptr<OwnerOutstanding>& owner,
+        std::size_t bytes) noexcept {
+        globalBytes.release(bytes);
+        owner->bytes.release(bytes);
+        owner->tasks.release(1);
+        // Keep the legacy aggregate task count as the convergence marker:
+        // observing zero with acquire semantics also observes all preceding
+        // byte/owner releases for this task.
+        globalTasks.release(1);
+    }
+
+    DispatchOutstandingSnapshot globalSnapshot() const noexcept {
+        return {
+            .tasks = globalTasks.current(),
+            .bytes = globalBytes.current(),
+            .peakTasks = globalTasks.peak(),
+            .peakBytes = globalBytes.peak(),
+            .rejectedGlobalByteReservations = globalBytes.rejected(),
+            .accepting = accepting.load(std::memory_order_seq_cst),
+        };
+    }
+
+    std::vector<DispatchOwnerOutstandingSnapshot>
+    ownerSnapshots() const {
+        const auto registry = owners.load(std::memory_order_acquire);
+        std::vector<DispatchOwnerOutstandingSnapshot> snapshots;
+        snapshots.reserve(registry->size());
+        for (const auto& owner : *registry) {
+            snapshots.push_back({
+                .ownerId = owner->ownerId,
+                .tasks = owner->tasks.current(),
+                .bytes = owner->bytes.current(),
+                .peakTasks = owner->tasks.peak(),
+                .peakBytes = owner->bytes.peak(),
+                .rejectedTaskReservations =
+                    owner->tasks.rejected(),
+                .rejectedByteReservations =
+                    owner->bytes.rejected(),
+            });
+        }
+        return snapshots;
+    }
+
+    static std::shared_ptr<OwnerOutstanding> findOwner(
+        const OwnerRegistry& registry,
+        std::uint64_t ownerId) noexcept {
+        const auto found = std::lower_bound(
+            registry.begin(),
+            registry.end(),
+            ownerId,
+            [](const auto& candidate, std::uint64_t id) {
+                return candidate->ownerId < id;
+            });
+        if (found == registry.end() ||
+            (*found)->ownerId != ownerId) {
+            return {};
+        }
+        return *found;
+    }
+
+    const std::size_t globalByteLimit;
+    const std::size_t lowPriorityByteLimit;
+    AtomicLimit globalTasks;
+    AtomicLimit globalBytes;
+    std::atomic<bool> accepting{true};
+    std::atomic<std::shared_ptr<const OwnerRegistry>> owners;
+    std::mutex ownerRegistrationMutex;
 };
 
 BroadcastDispatcher::BroadcastDispatcher(
     DispatchLimits limits,
     BroadcastMetricCallback metricCallback)
     : limits_(limits),
-      metricCallback_(std::move(metricCallback)),
-      state_(std::make_shared<State>()) {
+      metricCallback_(std::move(metricCallback)) {
     if (limits_.maxEndpointsPerTask == 0 || limits_.maxBytesPerTask == 0 ||
         limits_.maxOutstandingTasksPerOwner == 0 ||
         limits_.maxOutstandingBytesPerOwner == 0 ||
@@ -107,6 +388,7 @@ BroadcastDispatcher::BroadcastDispatcher(
         limits_.lowPriorityOutstandingBytes > limits_.maxGlobalOutstandingBytes) {
         throw std::invalid_argument("BroadcastDispatcher requires coherent positive limits");
     }
+    state_ = std::make_shared<State>(limits_);
 }
 
 DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
@@ -193,6 +475,14 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
             validEndpoints.push_back(endpoint);
         }
 
+        if (validEndpoints.empty()) {
+            continue;
+        }
+
+        const auto ownerId = batch.ownerExecutor.id();
+        const auto ownerOutstanding =
+            state_->ownerFor(ownerId, limits_);
+
         for (std::size_t offset = 0; offset < validEndpoints.size();
              offset += chunkSize) {
             const auto end =
@@ -204,42 +494,36 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                     validEndpoints.begin() +
                         static_cast<std::ptrdiff_t>(end));
             const auto bytes = logicalBytes(plan.payload_->size(), chunk.size());
-            const auto ownerId = batch.ownerExecutor.id();
 
-            BroadcastReason reservationFailure = BroadcastReason::None;
-            {
-                std::lock_guard lock(state_->mutex);
-                auto& owner = state_->owners[ownerId];
-                if (!state_->accepting) {
-                    reservationFailure = BroadcastReason::OwnerShutdown;
-                } else if (owner.tasks >= limits_.maxOutstandingTasksPerOwner) {
-                    reservationFailure =
-                        BroadcastReason::OwnerOutstandingTaskLimit;
-                } else if (
-                    bytes > limits_.maxOutstandingBytesPerOwner - owner.bytes) {
-                    reservationFailure =
-                        BroadcastReason::OwnerOutstandingByteLimit;
-                } else if (
-                    bytes > limits_.maxGlobalOutstandingBytes - state_->bytes) {
-                    reservationFailure =
-                        BroadcastReason::GlobalOutstandingByteLimit;
-                } else if (
-                    plan.priority_ == BroadcastPriority::Low &&
-                    bytes > limits_.lowPriorityOutstandingBytes - std::min(
-                        state_->bytes, limits_.lowPriorityOutstandingBytes)) {
-                    reservationFailure =
-                        BroadcastReason::LowPrioritySoftLimit;
-                } else {
-                    ++owner.tasks;
-                    owner.bytes += bytes;
-                    ++state_->tasks;
-                    state_->bytes += bytes;
-                }
-                if (reservationFailure != BroadcastReason::None &&
-                    owner.tasks == 0 && owner.bytes == 0) {
-                    state_->owners.erase(ownerId);
-                }
-            }
+            auto payload = plan.payload_;
+            auto metricCallback = metricCallback_;
+            const auto dispatcherState = state_;
+            const auto released =
+                std::make_shared<std::atomic<bool>>(false);
+            std::function<void()> releaseReservation =
+                [dispatcherState,
+                 progressState,
+                 ownerOutstanding,
+                 released,
+                 bytes] {
+                    if (released->exchange(
+                            true, std::memory_order_acq_rel)) {
+                        return;
+                    }
+                    dispatcherState->release(ownerOutstanding, bytes);
+                    std::lock_guard lock(progressState->mutex);
+                    --progressState->snapshot.outstandingTasks;
+                    progressState->snapshot.outstandingBytes -= bytes;
+                    progressState->snapshot.complete =
+                        progressState->sealed &&
+                        progressState->snapshot.outstandingTasks == 0;
+                };
+
+            const BroadcastReason reservationFailure =
+                state_->tryReserve(
+                    ownerOutstanding,
+                    bytes,
+                    plan.priority_);
             if (reservationFailure != BroadcastReason::None) {
                 for (const auto& endpoint : chunk) {
                     recordImmediateDrop(reservationFailure, endpoint->id());
@@ -252,33 +536,7 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                 ++progressState->snapshot.outstandingTasks;
                 progressState->snapshot.outstandingBytes += bytes;
             }
-
-            auto payload = plan.payload_;
-            auto metricCallback = metricCallback_;
-            const auto dispatcherState = state_;
-            const auto releaseReservation =
-                [dispatcherState, progressState, ownerId, bytes] {
-                    {
-                        std::lock_guard lock(dispatcherState->mutex);
-                        const auto found = dispatcherState->owners.find(ownerId);
-                        if (found != dispatcherState->owners.end()) {
-                            --found->second.tasks;
-                            found->second.bytes -= bytes;
-                            --dispatcherState->tasks;
-                            dispatcherState->bytes -= bytes;
-                            if (found->second.tasks == 0 &&
-                                found->second.bytes == 0) {
-                                dispatcherState->owners.erase(found);
-                            }
-                        }
-                    }
-                    std::lock_guard lock(progressState->mutex);
-                    --progressState->snapshot.outstandingTasks;
-                    progressState->snapshot.outstandingBytes -= bytes;
-                    progressState->snapshot.complete =
-                        progressState->sealed &&
-                        progressState->snapshot.outstandingTasks == 0;
-                };
+            ReservationRollback rollback(releaseReservation);
 
             const auto posted = batch.ownerExecutor.post(
                 [payload = std::move(payload),
@@ -289,7 +547,7 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                     struct ReleaseGuard {
                         std::function<void()> release;
                         ~ReleaseGuard() { release(); }
-                    } guard{releaseReservation};
+                    } guard{std::move(releaseReservation)};
 
                     for (const auto& endpoint : endpoints) {
                         BroadcastMetric metric{
@@ -329,12 +587,14 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
 
             if (posted != gamenet::net::PostResult::Accepted) {
                 releaseReservation();
+                rollback.dismiss();
                 const auto reason = postFailureReason(posted);
                 for (std::size_t index = offset; index < end; ++index) {
                     recordImmediateDrop(reason, validEndpoints[index]->id());
                 }
                 continue;
             }
+            rollback.dismiss();
 
             const auto admitted = end - offset;
             summary.scheduledEndpoints += admitted;
@@ -357,21 +617,23 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
 }
 
 DispatchOutstandingSnapshot BroadcastDispatcher::outstanding() const noexcept {
-    std::lock_guard lock(state_->mutex);
+    return state_->globalSnapshot();
+}
+
+DispatchOutstandingStats
+BroadcastDispatcher::outstandingStats() const {
     return {
-        .tasks = state_->tasks,
-        .bytes = state_->bytes,
+        .global = state_->globalSnapshot(),
+        .owners = state_->ownerSnapshots(),
     };
 }
 
 void BroadcastDispatcher::shutdown() noexcept {
-    std::lock_guard lock(state_->mutex);
-    state_->accepting = false;
+    state_->accepting.store(false, std::memory_order_seq_cst);
 }
 
 bool BroadcastDispatcher::accepting() const noexcept {
-    std::lock_guard lock(state_->mutex);
-    return state_->accepting;
+    return state_->accepting.load(std::memory_order_seq_cst);
 }
 
 }  // namespace gamenet::broadcast

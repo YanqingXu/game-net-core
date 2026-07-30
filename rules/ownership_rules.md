@@ -249,8 +249,12 @@ It must not blur these roles.
 - Pipeline connection state owns pending-auth frames and one immutable current
   binding; queued commands own value copies of that binding
 - Broadcast plans temporarily share endpoint/payload ownership. Dispatcher
-  reservations own accounting obligations until queue rollback or endpoint-loop
-  task completion, and release exactly once
+  reservations own accounting obligations in owner-task -> owner-byte ->
+  global-byte order until queue rollback or endpoint-loop task completion, and
+  release exactly once in reverse order
+- BroadcastDispatcher state owns immutable per-owner budget identities for its
+  lifetime. A budget identity owns only atomic counters and never owns an
+  EventLoop, executor, endpoint, payload, task, or callback
 
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions

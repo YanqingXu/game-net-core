@@ -4,7 +4,9 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace gamenet::broadcast {
 
@@ -62,6 +64,25 @@ struct DispatchSummary {
 struct DispatchOutstandingSnapshot {
     std::size_t tasks{};
     std::size_t bytes{};
+    std::size_t peakTasks{};
+    std::size_t peakBytes{};
+    std::uint64_t rejectedGlobalByteReservations{};
+    bool accepting{};
+};
+
+struct DispatchOwnerOutstandingSnapshot {
+    std::uint64_t ownerId{};
+    std::size_t tasks{};
+    std::size_t bytes{};
+    std::size_t peakTasks{};
+    std::size_t peakBytes{};
+    std::uint64_t rejectedTaskReservations{};
+    std::uint64_t rejectedByteReservations{};
+};
+
+struct DispatchOutstandingStats {
+    DispatchOutstandingSnapshot global;
+    std::vector<DispatchOwnerOutstandingSnapshot> owners;
 };
 
 class BroadcastDispatcher {
@@ -71,7 +92,12 @@ public:
         BroadcastMetricCallback metricCallback = {});
 
     DispatchSummary dispatch(BroadcastPlan plan) const;
+    // Cross-thread-safe atomic snapshot. Current fields converge exactly and
+    // tasks==0 observes prior scope releases; other multi-counter combinations
+    // are diagnostic rather than transactional.
     DispatchOutstandingSnapshot outstanding() const noexcept;
+    // Low-frequency per-owner diagnostic snapshot.
+    DispatchOutstandingStats outstandingStats() const;
     // Thread-safe, idempotent admission close. Already-admitted tasks retain
     // their payload/endpoints and publish terminal progress.
     void shutdown() noexcept;
