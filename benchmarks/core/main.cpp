@@ -16,8 +16,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <exception>
 #include <fstream>
+#include <functional>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -95,6 +98,16 @@ struct Result {
     std::optional<double> p50LatencyUs;
     std::optional<double> p99LatencyUs;
     std::optional<double> approxBytesPerConnection;
+    std::optional<double> connectionEstablishSeconds;
+    std::optional<double> connectionEstablishPerSecond;
+    std::optional<double> idleObservationSeconds;
+    std::optional<double> idleProcessCpuSeconds;
+    std::optional<double> idleProcessCpuPercent;
+    std::optional<double> connectionCloseSeconds;
+    std::optional<double> serverStopSeconds;
+    std::optional<std::string> serverStopOutcome;
+    std::optional<std::uint64_t> serverStopInitialConnections;
+    std::optional<std::uint64_t> serverStopForcedConnections;
     std::optional<double> backpressureRecoverySeconds;
     std::uint64_t highWaterCallbacks{0};
 };
@@ -138,6 +151,23 @@ public:
         }
         return std::chrono::duration<double>(
                    Clock::now() - *acceptDrainStarted_)
+            .count();
+    }
+
+    void beginClientClose() {
+        std::lock_guard lock(mutex_);
+        if (!clientCloseStarted_) {
+            clientCloseStarted_ = Clock::now();
+        }
+    }
+
+    std::optional<double> clientCloseElapsedSeconds() const {
+        std::lock_guard lock(mutex_);
+        if (!clientCloseStarted_) {
+            return std::nullopt;
+        }
+        return std::chrono::duration<double>(
+                   Clock::now() - *clientCloseStarted_)
             .count();
     }
 
@@ -320,6 +350,7 @@ private:
     std::condition_variable cv_;
     bool clientsCreated_{false};
     std::optional<Clock::time_point> acceptDrainStarted_;
+    std::optional<Clock::time_point> clientCloseStarted_;
     std::string failure_;
 };
 
@@ -457,6 +488,42 @@ std::uint64_t sampleWorkingSetBytes() {
         throw std::runtime_error("sysconf(_SC_PAGESIZE) failed");
     }
     return residentPages * static_cast<std::uint64_t>(pageSize);
+#endif
+}
+
+double sampleProcessCpuSeconds() {
+#ifdef _WIN32
+    FILETIME created{};
+    FILETIME exited{};
+    FILETIME kernel{};
+    FILETIME user{};
+    if (::GetProcessTimes(
+            ::GetCurrentProcess(),
+            &created,
+            &exited,
+            &kernel,
+            &user) == FALSE) {
+        throw std::runtime_error("GetProcessTimes failed");
+    }
+    ULARGE_INTEGER kernelTicks{};
+    kernelTicks.LowPart = kernel.dwLowDateTime;
+    kernelTicks.HighPart = kernel.dwHighDateTime;
+    ULARGE_INTEGER userTicks{};
+    userTicks.LowPart = user.dwLowDateTime;
+    userTicks.HighPart = user.dwHighDateTime;
+    constexpr double kFiletimeTicksPerSecond = 10000000.0;
+    return static_cast<double>(kernelTicks.QuadPart + userTicks.QuadPart) /
+           kFiletimeTicksPerSecond;
+#else
+    timespec processTime{};
+    if (::clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &processTime) != 0) {
+        const int error = gamenet::net::sockets::lastError();
+        throw std::runtime_error(
+            "clock_gettime(CLOCK_PROCESS_CPUTIME_ID): " +
+            gamenet::net::sockets::errorMessage(error));
+    }
+    return static_cast<double>(processTime.tv_sec) +
+           static_cast<double>(processTime.tv_nsec) / 1000000000.0;
 #endif
 }
 
@@ -688,6 +755,26 @@ void recordWorkingSet(Result& result, const Config& config) {
         static_cast<double>(result.workingSetDelta) / static_cast<double>(config.connections);
 }
 
+void observeIdleProcessCpu(const Config& config, Result& result) {
+    const auto wallStarted = Clock::now();
+    const double cpuStarted = sampleProcessCpuSeconds();
+    std::this_thread::sleep_for(config.settle);
+    const double cpuFinished = sampleProcessCpuSeconds();
+    const auto wallFinished = Clock::now();
+    if (cpuFinished < cpuStarted) {
+        throw std::runtime_error("process CPU clock moved backwards");
+    }
+    const double wallSeconds =
+        std::chrono::duration<double>(wallFinished - wallStarted).count();
+    if (wallSeconds <= 0.0) {
+        throw std::runtime_error("idle observation clock did not advance");
+    }
+    const double cpuSeconds = cpuFinished - cpuStarted;
+    result.idleObservationSeconds = wallSeconds;
+    result.idleProcessCpuSeconds = cpuSeconds;
+    result.idleProcessCpuPercent = cpuSeconds * 100.0 / wallSeconds;
+}
+
 double percentile(std::vector<double> samples, double fraction) {
     if (samples.empty()) {
         throw std::runtime_error("cannot calculate percentile without samples");
@@ -758,6 +845,7 @@ void runEcho(
         result.p50LatencyUs = percentile(allSamples, 0.50);
         result.p99LatencyUs = percentile(std::move(allSamples), 0.99);
     }
+    state.beginClientClose();
     clients.clear();
 }
 
@@ -768,12 +856,23 @@ void runConnections(
     Result& result) {
     const auto started = Clock::now();
     auto clients = connectClients(config, address, state, false);
-    std::this_thread::sleep_for(config.settle);
+    const double establishSeconds =
+        config.preloadBeforeLoop
+        ? state.acceptDrainElapsedSeconds()
+        : std::chrono::duration<double>(Clock::now() - started).count();
+    if (establishSeconds <= 0.0) {
+        throw std::runtime_error("connection establishment clock did not advance");
+    }
+    result.connectionEstablishSeconds = establishSeconds;
+    result.connectionEstablishPerSecond =
+        static_cast<double>(config.connections) / establishSeconds;
+    observeIdleProcessCpu(config, result);
     recordWorkingSet(result, config);
     result.elapsedSeconds =
         config.preloadBeforeLoop
         ? state.acceptDrainElapsedSeconds()
         : std::chrono::duration<double>(Clock::now() - started).count();
+    state.beginClientClose();
     for (auto& client : clients) {
         client.closeAbortively();
     }
@@ -827,6 +926,7 @@ void runSlowClient(
     }
 
     result.elapsedSeconds = std::chrono::duration<double>(Clock::now() - started).count();
+    state.beginClientClose();
     clients.clear();
 }
 
@@ -858,9 +958,20 @@ std::string jsonEscape(std::string_view value) {
     return escaped;
 }
 
-void printOptional(std::ostream& output, const std::optional<double>& value) {
+template <typename Value>
+void printOptional(std::ostream& output, const std::optional<Value>& value) {
     if (value) {
         output << *value;
+    } else {
+        output << "null";
+    }
+}
+
+void printOptionalString(
+    std::ostream& output,
+    const std::optional<std::string>& value) {
+    if (value) {
+        output << '"' << jsonEscape(*value) << '"';
     } else {
         output << "null";
     }
@@ -888,6 +999,25 @@ std::string_view completionMode() noexcept {
 #else
     return "epoll_wait_batch";
 #endif
+}
+
+std::string_view stopOutcomeName(
+    gamenet::net::TcpServerStopOutcome outcome) noexcept {
+    switch (outcome) {
+    case gamenet::net::TcpServerStopOutcome::Drained:
+        return "drained";
+    case gamenet::net::TcpServerStopOutcome::ForcedAfterTimeout:
+        return "forced_after_timeout";
+    case gamenet::net::TcpServerStopOutcome::ForcedByImmediateStop:
+        return "forced_by_immediate_stop";
+    case gamenet::net::TcpServerStopOutcome::AlreadyStopped:
+        return "already_stopped";
+    case gamenet::net::TcpServerStopOutcome::ServerDestroyed:
+        return "server_destroyed";
+    case gamenet::net::TcpServerStopOutcome::SchedulingFailed:
+        return "scheduling_failed";
+    }
+    return "unknown";
 }
 
 void printResult(const Config& config, const Result& result, const SharedState& state) {
@@ -942,6 +1072,26 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "    \"working_set_delta_bytes\": " << result.workingSetDelta << ",\n"
               << "    \"approx_bytes_per_connection\": ";
     printOptional(std::cout, result.approxBytesPerConnection);
+    std::cout << ",\n    \"connection_establish_seconds\": ";
+    printOptional(std::cout, result.connectionEstablishSeconds);
+    std::cout << ",\n    \"connection_establish_per_second\": ";
+    printOptional(std::cout, result.connectionEstablishPerSecond);
+    std::cout << ",\n    \"idle_observation_seconds\": ";
+    printOptional(std::cout, result.idleObservationSeconds);
+    std::cout << ",\n    \"idle_process_cpu_seconds\": ";
+    printOptional(std::cout, result.idleProcessCpuSeconds);
+    std::cout << ",\n    \"idle_process_cpu_percent\": ";
+    printOptional(std::cout, result.idleProcessCpuPercent);
+    std::cout << ",\n    \"connection_close_seconds\": ";
+    printOptional(std::cout, result.connectionCloseSeconds);
+    std::cout << ",\n    \"server_stop_seconds\": ";
+    printOptional(std::cout, result.serverStopSeconds);
+    std::cout << ",\n    \"server_stop_outcome\": ";
+    printOptionalString(std::cout, result.serverStopOutcome);
+    std::cout << ",\n    \"server_stop_initial_connections\": ";
+    printOptional(std::cout, result.serverStopInitialConnections);
+    std::cout << ",\n    \"server_stop_forced_connections\": ";
+    printOptional(std::cout, result.serverStopForcedConnections);
     std::cout << ",\n"
               << "    \"requested_bytes\": " << result.requestedBytes << ",\n"
               << "    \"accepted_bytes\": " << result.acceptedBytes << ",\n"
@@ -989,6 +1139,92 @@ int run(const Config& config) {
         config.scenario == "slow-client" ? config.slowBytes : config.payloadBytes,
         'x');
 
+    const auto baseExecutor = loop.executor();
+    std::atomic<bool> completionCheckQueued{false};
+    std::function<void()> checkCompletion;
+    bool connectionMapRetryScheduled = false;
+    bool stopRequested = false;
+    bool finishing = false;
+    std::jthread stopWaiter;
+
+    auto requestStop = [&](bool force) {
+        if (!stopRequested) {
+            stopRequested = true;
+            const auto stopStarted = Clock::now();
+            auto stopFuture = server.stopGracefully({
+                .drainTimeout = config.timeout,
+            });
+            stopWaiter = std::jthread(
+                [&, stopStarted, stopFuture = std::move(stopFuture)] {
+                    const auto stopResult = stopFuture.get();
+                    const auto stopFinished = Clock::now();
+                    if (!baseExecutor.tryQueue(
+                            [&, stopStarted, stopFinished, stopResult] {
+                                result.serverStopSeconds =
+                                    std::chrono::duration<double>(
+                                        stopFinished - stopStarted)
+                                        .count();
+                                result.serverStopOutcome =
+                                    stopOutcomeName(stopResult.outcome);
+                                result.serverStopInitialConnections =
+                                    stopResult.initialConnectionCount;
+                                result.serverStopForcedConnections =
+                                    stopResult.forcedConnectionCount;
+                                finishing = true;
+                                loop.quit();
+                            })) {
+                        state.fail(
+                            "server-stop completion could not reach the base loop");
+                        loop.quit();
+                    }
+                });
+        }
+        if (force) {
+            server.stop();
+        }
+    };
+
+    auto scheduleCompletionCheck = [&] {
+        bool expected = false;
+        if (!completionCheckQueued.compare_exchange_strong(
+                expected,
+                true,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            return;
+        }
+        if (!baseExecutor.tryQueue([&] {
+                completionCheckQueued.store(false, std::memory_order_release);
+                checkCompletion();
+            })) {
+            completionCheckQueued.store(false, std::memory_order_release);
+            state.fail("benchmark completion check could not reach the base loop");
+            loop.quit();
+        }
+    };
+
+    checkCompletion = [&] {
+        loop.assertInLoopThread();
+        if (finishing || stopRequested || !state.driverDone()) {
+            return;
+        }
+        if (state.connected() != state.disconnected()) {
+            return;
+        }
+        if (server.connectionCount() != 0) {
+            if (!connectionMapRetryScheduled) {
+                connectionMapRetryScheduled = true;
+                loop.runAfter(1ms, [&] {
+                    connectionMapRetryScheduled = false;
+                    checkCompletion();
+                });
+            }
+            return;
+        }
+        result.connectionCloseSeconds = state.clientCloseElapsedSeconds();
+        requestStop(false);
+    };
+
     server.setConnectionCallback([&](const gamenet::net::TcpConnectionPtr& connection) {
         if (connection->connected()) {
             if (config.scenario == "slow-client") {
@@ -1002,6 +1238,7 @@ int run(const Config& config) {
             state.markConnected();
         } else {
             state.markDisconnected();
+            scheduleCompletionCheck();
         }
     });
     if (config.scenario == "echo") {
@@ -1044,6 +1281,7 @@ int run(const Config& config) {
             state.fail(error.what());
         }
         state.markDriverDone();
+        scheduleCompletionCheck();
     });
 
     if (config.preloadBeforeLoop) {
@@ -1054,28 +1292,17 @@ int run(const Config& config) {
         }
     }
 
-    bool finishing = false;
-    loop.runEvery(10ms, [&] {
-        if (finishing || !state.driverDone()) {
-            return;
-        }
-        if (state.connected() != state.disconnected()) {
-            return;
-        }
-        if (server.connectionCount() == 0) {
-            finishing = true;
-            server.stop();
-            loop.runAfter(100ms, [&] { loop.quit(); });
-        }
-    });
     loop.runAfter(config.timeout + config.settle + 5s, [&] {
         if (finishing) {
             return;
         }
         state.fail("benchmark overall timeout");
-        server.stop();
+        requestStop(true);
     });
     loop.loop();
+    if (stopWaiter.joinable()) {
+        stopWaiter.join();
+    }
     driver.join();
 
     result.highWaterCallbacks = state.highWaterCallbacks();

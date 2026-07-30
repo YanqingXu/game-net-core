@@ -61,6 +61,9 @@ $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benc
   --preload-before-loop 1 --threads 1 `
   --settle-ms 0 --timeout-ms 30000
 
+& $exe --scenario connections --connections 1000 --threads 1 `
+  --settle-ms 2000 --timeout-ms 120000
+
 & $exe --scenario connections --connections 10000 --threads 1 `
   --settle-ms 2000 --timeout-ms 120000
 
@@ -71,7 +74,16 @@ $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benc
 
 The 10k connection command is the structured idle-memory profile used by
 M3-G4; compare `working_set_delta_bytes` and
-`approx_bytes_per_connection` against the same-runner baseline. The two echo
+`approx_bytes_per_connection` against the same-runner baseline. For M3-P1,
+run the same sequential-connect, one-worker command at both 1k and 10k and
+also compare
+`connection_establish_per_second`, `idle_process_cpu_percent`,
+`connection_close_seconds`, and `server_stop_seconds`. The idle CPU interval is
+exactly the measured settle window; benchmark completion uses a coalesced
+base-loop executor notification, so no recurring coordination timer wakes the
+process during that window. Keep this capacity profile distinct from the
+explicit `--connect-concurrency` accept-burst profile below; burst-handshake
+convergence is not an idle-resource measurement. The two echo
 commands provide the first one-worker/two-worker scaling point.
 They do not alter the poller. Current Windows candidates report
 `get_queued_completion_status_ex_batch_64`, while Linux reports
@@ -115,10 +127,18 @@ churn profile that measures a sustained ready backlog and base-loop saturation.
 - `connections` samples process working set before client creation and after
   all accepted idle connections have settled. `approx_bytes_per_connection`
   is the process working-set delta divided by configured connections, not an
-  allocator-level object-size claim. `--connect-concurrency` optionally creates
-  clients from a bounded simultaneous worker set for an explicit accept-burst
-  profile; it defaults to one. `--iocp-accept-depth` applies the public bounded
-  TcpServer option and defaults to four. Connections-only
+  allocator-level object-size claim. `connection_establish_seconds` and
+  `connection_establish_per_second` stop before the idle interval;
+  `idle_observation_seconds`, `idle_process_cpu_seconds`, and
+  `idle_process_cpu_percent` quantify process CPU while all connections remain
+  open and inactive. `connection_close_seconds` ends only after disconnect
+  callback counts and the base connection map converge. `server_stop_seconds`
+  then covers `stopGracefully()` through worker join, while
+  `server_stop_outcome`, initial count, and forced count prove the typed
+  termination result. `--connect-concurrency` optionally creates clients from
+  a bounded simultaneous worker set for an explicit accept-burst profile; it
+  defaults to one. `--iocp-accept-depth` applies the public bounded TcpServer
+  option and defaults to four. Connections-only
   `--preload-before-loop 1` waits for all client sockets before starting the
   base loop and measures only the subsequent callback drain.
 - `slow-client` gives clients a small receive buffer, holds reads through the
@@ -133,10 +153,17 @@ churn profile that measures a sustained ready backlog and base-loop saturation.
 Every current run writes one `gamenet.core_benchmark.v2` JSON document to stdout.
 Stable keys include scenario parameters, platform, backend, completion mode,
 build type, throughput, P50/P99, connection count, EventLoop worker count,
-working-set before/after/delta, approximate bytes per connection,
+precise connection establishment/rate, idle process CPU, connection close and
+typed graceful-stop evidence, working-set before/after/delta, approximate bytes per connection,
 requested/accepted/rejected admission accounting, configured low/high/hard and
 input limits, pending-output peak, throttle observations, recovery duration,
 and high-water callback count.
+
+For compatibility, `elapsed_seconds` retains its historical connections
+meaning and includes the settle interval. Capacity analysis should use the new
+phase-specific fields instead of subtracting configured time from that legacy
+aggregate. All CPU/RSS values are process-level observations, not per-object
+allocator accounting or portable production thresholds.
 Diagnostics are written to stderr, and setup/I/O/timeout failures return a
 non-zero exit code with `status: "error"` when lifecycle-safe reporting is
 possible.

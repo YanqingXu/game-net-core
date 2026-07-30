@@ -112,6 +112,10 @@ def validate_document(
         parameters.get("max_input_buffer_bytes"),
         f"{label}.max_input_buffer_bytes",
     )
+    settle_ms = non_negative_integer(
+        parameters.get("settle_ms"),
+        f"{label}.settle_ms",
+    )
     if expected_connections is not None:
         require(connections == expected_connections, f"{label}: connection count mismatch")
     if expected_slow_bytes is not None:
@@ -147,7 +151,10 @@ def validate_document(
         abs(approximate_per_connection - working_set_delta / connections) <= 0.001,
         f"{label}: per-connection working-set estimate is inconsistent",
     )
-    non_negative_number(measurements.get("elapsed_seconds"), f"{label}.elapsed_seconds")
+    elapsed_seconds = non_negative_number(
+        measurements.get("elapsed_seconds"),
+        f"{label}.elapsed_seconds",
+    )
     throughput = non_negative_number(
         measurements.get("throughput_mib_per_second"),
         f"{label}.throughput_mib_per_second",
@@ -163,6 +170,127 @@ def validate_document(
         f"{label}.p99_latency_us",
         nullable=True,
     )
+    connection_establish_seconds = non_negative_number(
+        measurements.get("connection_establish_seconds"),
+        f"{label}.connection_establish_seconds",
+        nullable=True,
+    )
+    connection_establish_per_second = non_negative_number(
+        measurements.get("connection_establish_per_second"),
+        f"{label}.connection_establish_per_second",
+        nullable=True,
+    )
+    idle_observation_seconds = non_negative_number(
+        measurements.get("idle_observation_seconds"),
+        f"{label}.idle_observation_seconds",
+        nullable=True,
+    )
+    idle_process_cpu_seconds = non_negative_number(
+        measurements.get("idle_process_cpu_seconds"),
+        f"{label}.idle_process_cpu_seconds",
+        nullable=True,
+    )
+    idle_process_cpu_percent = non_negative_number(
+        measurements.get("idle_process_cpu_percent"),
+        f"{label}.idle_process_cpu_percent",
+        nullable=True,
+    )
+    connection_close_seconds = non_negative_number(
+        measurements.get("connection_close_seconds"),
+        f"{label}.connection_close_seconds",
+        nullable=True,
+    )
+    server_stop_seconds = non_negative_number(
+        measurements.get("server_stop_seconds"),
+        f"{label}.server_stop_seconds",
+        nullable=True,
+    )
+    server_stop_outcome = measurements.get("server_stop_outcome")
+    require(
+        isinstance(server_stop_outcome, str),
+        f"{label}.server_stop_outcome must be a string",
+    )
+    server_stop_initial_connections = non_negative_integer(
+        measurements.get("server_stop_initial_connections"),
+        f"{label}.server_stop_initial_connections",
+    )
+    server_stop_forced_connections = non_negative_integer(
+        measurements.get("server_stop_forced_connections"),
+        f"{label}.server_stop_forced_connections",
+    )
+    require(
+        connection_close_seconds is not None,
+        f"{label}: successful run must report connection-close convergence",
+    )
+    require(
+        server_stop_seconds is not None,
+        f"{label}: successful run must report server-stop duration",
+    )
+    require(server_stop_outcome == "drained", f"{label}: successful stop must drain")
+    require(
+        server_stop_initial_connections == 0,
+        f"{label}: server stop began before the connection map was empty",
+    )
+    require(
+        server_stop_forced_connections == 0,
+        f"{label}: successful server stop forced connections",
+    )
+    connection_only = (
+        connection_establish_seconds,
+        connection_establish_per_second,
+        idle_observation_seconds,
+        idle_process_cpu_seconds,
+        idle_process_cpu_percent,
+    )
+    if scenario == "connections":
+        require(
+            all(value is not None for value in connection_only),
+            f"{label}: connections scenario must report establish and idle CPU metrics",
+        )
+        require(
+            connection_establish_seconds > 0.0,
+            f"{label}: connection establishment duration must be positive",
+        )
+        require(
+            idle_observation_seconds > 0.0,
+            f"{label}: idle observation duration must be positive",
+        )
+        expected_rate = connections / connection_establish_seconds
+        require(
+            math.isclose(
+                connection_establish_per_second,
+                expected_rate,
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: connection establishment rate is inconsistent",
+        )
+        require(
+            idle_observation_seconds + 0.001 >= settle_ms / 1000.0,
+            f"{label}: idle observation is shorter than configured settle time",
+        )
+        expected_cpu_percent = (
+            idle_process_cpu_seconds * 100.0 / idle_observation_seconds
+        )
+        require(
+            math.isclose(
+                idle_process_cpu_percent,
+                expected_cpu_percent,
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: idle CPU percent is inconsistent",
+        )
+        require(
+            elapsed_seconds + 0.001 >=
+            connection_establish_seconds + idle_observation_seconds,
+            f"{label}: legacy elapsed time omits an establishment or idle phase",
+        )
+    else:
+        require(
+            all(value is None for value in connection_only),
+            f"{label}: non-connections scenario reported idle-capacity metrics",
+        )
     if scenario == "echo":
         messages = non_negative_integer(
             parameters.get("messages_per_connection"),

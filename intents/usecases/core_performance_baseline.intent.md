@@ -22,6 +22,10 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - exercise the public TcpServer/TcpConnection path over loopback TCP
 - measure echo round-trip latency and application-byte throughput
 - measure process working-set growth while holding idle connections
+- measure process CPU during an explicit idle observation interval without a
+  recurring benchmark coordination poll
+- separately report connection establishment, client-close/base-map
+  convergence, and graceful server/worker stop duration
 - optionally create connections through a bounded simultaneous client-worker
   set so accept-burst elapsed time is measured without changing sequential
   canonical defaults
@@ -69,8 +73,12 @@ applies reviewed same-runner relative regression budgets outside the executable.
   profile before attributing connection churn to the base loop; live
   client/kernel handshake time is not an accept-loop bottleneck measurement
 - hold the requested accepted connections through a configurable settle interval
-- report connection-callback convergence elapsed time plus before/after/delta
-  working set and approximate delta per connection
+- report precise connection-establishment seconds/rate before the settle
+  interval, process CPU seconds/percent during that idle interval,
+  client-close/base-map convergence, graceful server/worker stop outcome/time,
+  and before/after/delta working set plus approximate delta per connection
+- retain legacy `elapsed_seconds` semantics, which include the settle interval,
+  so existing same-runner regression budgets do not silently change meaning
 - close connection-scenario client sockets abortively after measurement so
   repeated local burst samples do not accumulate client-side `TIME_WAIT`
 
@@ -115,8 +123,13 @@ applies reviewed same-runner relative regression budgets outside the executable.
   parallel connection creation uses one distinct pre-sized socket slot per
   worker index
 - benchmark coordination uses atomics, a condition variable, and isolated result storage
+- driver/disconnect completion coalesces through one capacity-aware base-loop
+  executor task; the idle observation window has no recurring coordination
+  timer that would manufacture idle CPU
 - no benchmark worker directly mutates loop-owned server or connection state
-- server stop and final connection-map inspection execute on the base EventLoop thread
+- final connection-map inspection and graceful-stop initiation execute on the
+  base EventLoop thread; a benchmark-owned waiter observes only the shared
+  stop future and posts the terminal sample back to that owner loop
 
 ---
 
@@ -124,8 +137,11 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - the benchmark executable owns all configuration, payload, result, and client sockets
 - TcpServer continues to own accepted TcpConnection bookkeeping and worker-loop teardown
 - client sockets close before the benchmark asks the base loop to stop the server
-- the base loop exits only after connected/disconnected callback counts converge and
-  TcpServer reports no remaining base-loop connections
+- the base loop exits only after connected/disconnected callback counts
+  converge, TcpServer reports no remaining base-loop connections, and the
+  graceful stop future proves worker-loop join completion
+- the stop waiter owns only its thread, a copied future/executor capability,
+  and value timestamps; it owns no TcpServer, EventLoop, connection, or socket
 - benchmark callbacks capture only state that outlives the EventLoop and TcpServer
 
 ---
@@ -137,6 +153,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - production-candidate regression compares baseline and candidate only on the
   same runner, uses three-sample medians, and retains both raw sample sets
 - working-set deltas are process-level observations and include allocator/runtime effects
+- idle CPU is process CPU divided by monotonic wall time for the configured
+  observation interval; it includes the server's real idle runtime overhead
+  but excludes an artificial recurring benchmark poll
 - loopback results are regression baselines, not production network capacity claims
 - IOCP single-versus-batched evidence must retain distinct completion-mode
   values and be compared only on the same runner with matching scenario inputs
