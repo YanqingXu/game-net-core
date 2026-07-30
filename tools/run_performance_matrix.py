@@ -30,6 +30,7 @@ class Scenario:
     schema: str
     arguments: tuple[str, ...]
     canonical: bool = False
+    require_zero_churn_failures: bool = False
 
 
 SCENARIOS = (
@@ -71,6 +72,58 @@ SCENARIOS = (
         "--batch", "64", "--fanout", "4096", "--tick-us", "1000", "--timeout-ms", "30000")),
 )
 
+CAPACITY_SCENARIOS = (
+    Scenario("core", "connections-1000", "connections", "gamenet.core_benchmark.v2", (
+        "--scenario", "connections", "--connections", "1000", "--threads", "1",
+        "--settle-ms", "2000", "--timeout-ms", "120000")),
+    Scenario("core", "connections-10000", "connections", "gamenet.core_benchmark.v2", (
+        "--scenario", "connections", "--connections", "10000", "--threads", "1",
+        "--settle-ms", "2000", "--timeout-ms", "120000")),
+    *tuple(
+        Scenario(
+            "core",
+            f"echo-{payload}-{workers}-workers",
+            "echo",
+            "gamenet.core_benchmark.v2",
+            (
+                "--scenario", "echo",
+                "--connections", "16",
+                "--threads", str(workers),
+                "--messages", "2000",
+                "--payload", str(payload),
+                "--settle-ms", "500",
+                "--timeout-ms", "60000",
+            ),
+        )
+        for payload in (64, 256, 1024)
+        for workers in (1, 2, 4)
+    ),
+    Scenario(
+        "core",
+        "connection-churn-1000",
+        "connection-churn",
+        "gamenet.core_benchmark.v2",
+        (
+            "--scenario", "connection-churn",
+            "--connections", "100",
+            "--connect-concurrency", "16",
+            "--iocp-accept-depth", "32",
+            "--threads", "4",
+            "--churn-rate", "1000",
+            "--churn-duration-ms", "5000",
+            "--churn-connect-timeout-ms", "1000",
+            "--settle-ms", "0",
+            "--timeout-ms", "60000",
+        ),
+        require_zero_churn_failures=True,
+    ),
+)
+
+SCENARIO_PROFILES = {
+    "regression": SCENARIOS,
+    "core-capacity": CAPACITY_SCENARIOS,
+}
+
 
 class MatrixError(ValueError):
     pass
@@ -99,10 +152,11 @@ def validate_document(
     platform: str,
     backend: str,
     build_type: str,
+    allow_legacy_core_v1: bool = True,
 ) -> dict[str, Any]:
     require(isinstance(document, dict), f"{scenario.key}: output must be a JSON object")
     allowed_schemas = {scenario.schema}
-    if scenario.group == "core":
+    if scenario.group == "core" and allow_legacy_core_v1:
         allowed_schemas.add("gamenet.core_benchmark.v1")
     require(document.get("schema") in allowed_schemas, f"{scenario.key}: schema mismatch")
     require(document.get("status") == "ok", f"{scenario.key}: benchmark status is not ok")
@@ -121,6 +175,7 @@ def validate_document(
                 expected_backend=backend,
                 expected_build_type=build_type,
                 expected_scenario=scenario.reported_scenario,
+                require_zero_churn_failures=scenario.require_zero_churn_failures,
                 label=scenario.key,
             )
         except CoreBenchmarkValidationError as error:
@@ -131,10 +186,16 @@ def validate_document(
 def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
     require(re.fullmatch(r"[0-9a-f]{40}", args.commit_sha) is not None, "commit SHA must be 40 lowercase hex digits")
     require(args.repetitions >= 3 and args.repetitions % 2 == 1, "repetitions must be an odd number of at least 3")
-    executables = {
-        "core": args.core_executable.resolve(),
-        "phase4": args.phase4_executable.resolve(),
+    scenarios = SCENARIO_PROFILES[args.matrix_profile]
+    executable_arguments = {
+        "core": args.core_executable,
+        "phase4": args.phase4_executable,
     }
+    executables = {}
+    for group in {scenario.group for scenario in scenarios}:
+        executable = executable_arguments[group]
+        require(executable is not None, f"{group} benchmark executable argument missing")
+        executables[group] = executable.resolve()
     for group, executable in executables.items():
         require(executable.is_file(), f"{group} benchmark executable missing: {executable}")
     prepare_empty_directory(args.output_root, "performance matrix output")
@@ -142,7 +203,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
         (args.output_root / group).mkdir()
 
     manifest_scenarios = []
-    for scenario in SCENARIOS:
+    for scenario in scenarios:
         samples = []
         parameters = None
         actual_schema = None
@@ -171,6 +232,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
                 args.platform,
                 args.backend,
                 args.build_type,
+                allow_legacy_core_v1=args.matrix_profile == "regression",
             )
             if parameters is None:
                 parameters = validated["parameters"]
@@ -208,6 +270,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
 
     manifest = {
         "schema": SCHEMA,
+        "profile": args.matrix_profile,
         "commit_sha": args.commit_sha,
         "platform": args.platform,
         "backend": args.backend,
@@ -229,7 +292,7 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the fixed GameNet performance regression matrix")
     parser.add_argument("--core-executable", type=Path, required=True)
-    parser.add_argument("--phase4-executable", type=Path, required=True)
+    parser.add_argument("--phase4-executable", type=Path)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--canonical-core-dir", type=Path)
     parser.add_argument("--canonical-phase4-dir", type=Path)
@@ -237,6 +300,11 @@ def main() -> int:
     parser.add_argument("--backend", choices=("epoll", "iocp"), required=True)
     parser.add_argument("--build-type", default="Release")
     parser.add_argument("--commit-sha", required=True)
+    parser.add_argument(
+        "--matrix-profile",
+        choices=tuple(SCENARIO_PROFILES),
+        default="regression",
+    )
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--process-timeout-seconds", type=int, default=90)
     args = parser.parse_args()
@@ -245,7 +313,11 @@ def main() -> int:
     except (MatrixError, OSError, subprocess.SubprocessError) as error:
         print(f"performance matrix failed: {error}", file=sys.stderr)
         return 1
-    print(f"performance matrix completed: {len(manifest['scenarios'])} scenarios x {args.repetitions}")
+    print(
+        "performance matrix completed: "
+        f"{manifest['profile']} "
+        f"{len(manifest['scenarios'])} scenarios x {args.repetitions}"
+    )
     return 0
 
 

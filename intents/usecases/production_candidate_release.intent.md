@@ -101,6 +101,9 @@ matrix, and immutable evidence are explicit and machine checked.
 - `tests/ci/test_performance_regression.py` verifies the fixed 12-scenario,
   three-repetition baseline/candidate matrix, reviewed budgets, same-runner
   workflow wiring, retained evidence, and a real failing-regression fixture
+- `tests/ci/test_core_capacity_matrix.py` verifies the independent 12-scenario
+  Core capacity baseline/candidate profile, matching Linux/Windows parameters,
+  reviewed budgets, and the evidence-only Linux accept-topology decision
 - `tests/integration/resilience/test_fault_injection.cpp` verifies the declared
   reset, callback, overload, recovery, and forced-shutdown profiles
 - `tests/ci/test_endurance_gate.py` verifies the uninterrupted-process 24/72-

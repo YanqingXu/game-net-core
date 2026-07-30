@@ -8,6 +8,7 @@ permissions:
 
 env:
   GAMENET_PERFORMANCE_BASELINE_SHA: 2b1be4343f7c478eb40542451f30aad8ca474003
+  GAMENET_CORE_CAPACITY_BASELINE_SHA: bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,6 +31,13 @@ jobs:
           path: performance-baseline
           persist-credentials: false
 
+      - name: Checkout Core capacity baseline
+        uses: actions/checkout@v4
+        with:
+          ref: bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043
+          path: core-capacity-baseline
+          persist-credentials: false
+
       - name: Record Phase 4 benchmark toolchain evidence
         run: |
           set -euo pipefail
@@ -45,6 +53,7 @@ jobs:
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
 
       - name: Configure
@@ -73,6 +82,18 @@ jobs:
           cmake --build build-benchmark-baseline \
             --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
 
+      - name: Configure and build Core capacity baseline
+        run: |
+          set -euo pipefail
+          cmake -S core-capacity-baseline -B build-core-capacity-baseline \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGAMENET_BUILD_TESTING=OFF \
+            -DGAMENET_BUILD_BENCHMARKS=ON \
+            -DGAMENET_ENABLE_TLS=OFF \
+            -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+          cmake --build build-core-capacity-baseline \
+            --target gamenet_core_benchmark --parallel
+
       - name: Run candidate performance matrix
         shell: bash
         run: |
@@ -91,6 +112,16 @@ jobs:
           python3 tools/validate_core_benchmark.py \
             --input-dir benchmark-results \
             --platform linux --backend epoll --build-type Release
+
+      - name: Run candidate Core capacity matrix
+        run: |
+          set -euo pipefail
+          python3 tools/run_performance_matrix.py \
+            --matrix-profile core-capacity \
+            --core-executable build-benchmark/benchmarks/gamenet_core_benchmark \
+            --output-root phase4-benchmark-results/core-capacity-samples/candidate \
+            --platform linux --backend epoll --build-type Release \
+            --commit-sha "${GITHUB_SHA}" --repetitions 3
 
       - name: Verify Core hard-limit benchmark semantics
         shell: bash
@@ -119,6 +150,16 @@ jobs:
             --platform linux --backend epoll --build-type Release \
             --commit-sha "${GAMENET_PERFORMANCE_BASELINE_SHA}" --repetitions 3
 
+      - name: Run baseline Core capacity matrix
+        run: |
+          set -euo pipefail
+          python3 tools/run_performance_matrix.py \
+            --matrix-profile core-capacity \
+            --core-executable build-core-capacity-baseline/benchmarks/gamenet_core_benchmark \
+            --output-root phase4-benchmark-results/core-capacity-samples/baseline \
+            --platform linux --backend epoll --build-type Release \
+            --commit-sha "${GAMENET_CORE_CAPACITY_BASELINE_SHA}" --repetitions 3
+
       - name: Validate Phase 4 JSON artifacts
         run: |
           set -euo pipefail
@@ -145,6 +186,26 @@ jobs:
             --platform linux --backend epoll \
             --output phase4-benchmark-results/performance-regression.json
 
+      - name: Enforce same-runner Core capacity budgets
+        run: |
+          set -euo pipefail
+          python3 tools/compare_performance_regression.py \
+            --baseline-root phase4-benchmark-results/core-capacity-samples/baseline \
+            --candidate-root phase4-benchmark-results/core-capacity-samples/candidate \
+            --budget benchmarks/core_capacity_regression_budgets.json \
+            --baseline-sha "${GAMENET_CORE_CAPACITY_BASELINE_SHA}" \
+            --candidate-sha "${GITHUB_SHA}" \
+            --platform linux --backend epoll \
+            --output phase4-benchmark-results/core-capacity-regression.json
+
+      - name: Evaluate Linux accept topology
+        run: |
+          set -euo pipefail
+          python3 tools/evaluate_core_accept_topology.py \
+            --input-root phase4-benchmark-results/core-capacity-samples/candidate \
+            --candidate-sha "${GITHUB_SHA}" \
+            --output phase4-benchmark-results/core-accept-topology-decision.json
+
       - name: Write Linux Phase 4 benchmark job evidence
         if: always()
         env:
@@ -160,10 +221,14 @@ jobs:
             --command 'cmake -S . -B build-benchmark -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-benchmark --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' \
             --command 'python3 tools/run_performance_matrix.py --candidate --repetitions 3' \
+            --command 'python3 tools/run_performance_matrix.py --matrix-profile core-capacity --candidate --repetitions 3' \
             --command 'gamenet_core_benchmark --scenario slow-client --connections 2 --slow-bytes 33554432' \
             --command 'python3 tools/validate_core_benchmark.py --scenario slow-client --require-overload' \
             --command 'python3 tools/run_performance_matrix.py --baseline 2b1be4343f7c478eb40542451f30aad8ca474003 --repetitions 3' \
+            --command 'python3 tools/run_performance_matrix.py --matrix-profile core-capacity --baseline bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043 --repetitions 3' \
             --command 'python3 tools/compare_performance_regression.py --platform linux --backend epoll' \
+            --command 'python3 tools/compare_performance_regression.py --budget benchmarks/core_capacity_regression_budgets.json --platform linux --backend epoll' \
+            --command 'python3 tools/evaluate_core_accept_topology.py --platform linux --backend epoll' \
             --command 'python3 tools/validate_phase4_benchmark.py --platform linux --backend epoll --build-type Release'
 
       - name: Upload Linux raw JSON
@@ -199,6 +264,13 @@ jobs:
           path: performance-baseline
           persist-credentials: false
 
+      - name: Checkout Core capacity baseline
+        uses: actions/checkout@v4
+        with:
+          ref: bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043
+          path: core-capacity-baseline
+          persist-credentials: false
+
       - name: Record Phase 4 benchmark toolchain evidence
         shell: pwsh
         run: |
@@ -221,6 +293,7 @@ jobs:
           python tests/cmake/test_core_benchmark_contract.py
           python tests/cmake/test_phase4_benchmark_contract.py
           python tests/ci/test_performance_regression.py
+          python tests/ci/test_core_capacity_matrix.py
           python tests/ci/test_endurance_gate.py
 
       - name: Configure
@@ -255,6 +328,21 @@ jobs:
             --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel
           if ($LASTEXITCODE -ne 0) { throw "baseline build failed" }
 
+      - name: Configure and build Core capacity baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          cmake -S core-capacity-baseline -B build-core-capacity-baseline-windows `
+            -G "Visual Studio 18 2026" -A x64 `
+            -DGAMENET_BUILD_TESTING=OFF `
+            -DGAMENET_BUILD_BENCHMARKS=ON `
+            -DGAMENET_ENABLE_TLS=OFF `
+            -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+          if ($LASTEXITCODE -ne 0) { throw "capacity baseline configure failed" }
+          cmake --build build-core-capacity-baseline-windows --config Release `
+            --target gamenet_core_benchmark --parallel
+          if ($LASTEXITCODE -ne 0) { throw "capacity baseline build failed" }
+
       - name: Run candidate performance matrix
         shell: pwsh
         run: |
@@ -276,6 +364,18 @@ jobs:
             --input-dir benchmark-results `
             --platform windows --backend iocp --build-type Release
           if ($LASTEXITCODE -ne 0) { throw "Core benchmark artifact validation failed" }
+
+      - name: Run candidate Core capacity matrix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/run_performance_matrix.py `
+            --matrix-profile core-capacity `
+            --core-executable build-benchmark-windows/benchmarks/Release/gamenet_core_benchmark.exe `
+            --output-root phase4-benchmark-results/core-capacity-samples/candidate `
+            --platform windows --backend iocp --build-type Release `
+            --commit-sha "$env:GITHUB_SHA" --repetitions 3
+          if ($LASTEXITCODE -ne 0) { throw "candidate Core capacity matrix failed" }
 
       - name: Verify Core hard-limit benchmark semantics
         shell: pwsh
@@ -311,6 +411,18 @@ jobs:
             --commit-sha "$env:GAMENET_PERFORMANCE_BASELINE_SHA" --repetitions 3
           if ($LASTEXITCODE -ne 0) { throw "baseline performance matrix failed" }
 
+      - name: Run baseline Core capacity matrix
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/run_performance_matrix.py `
+            --matrix-profile core-capacity `
+            --core-executable build-core-capacity-baseline-windows/benchmarks/Release/gamenet_core_benchmark.exe `
+            --output-root phase4-benchmark-results/core-capacity-samples/baseline `
+            --platform windows --backend iocp --build-type Release `
+            --commit-sha "$env:GAMENET_CORE_CAPACITY_BASELINE_SHA" --repetitions 3
+          if ($LASTEXITCODE -ne 0) { throw "baseline Core capacity matrix failed" }
+
       - name: Validate Phase 4 JSON artifacts
         shell: pwsh
         run: |
@@ -339,6 +451,20 @@ jobs:
             --output phase4-benchmark-results/performance-regression.json
           if ($LASTEXITCODE -ne 0) { throw "performance regression budget failed" }
 
+      - name: Enforce same-runner Core capacity budgets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/compare_performance_regression.py `
+            --baseline-root phase4-benchmark-results/core-capacity-samples/baseline `
+            --candidate-root phase4-benchmark-results/core-capacity-samples/candidate `
+            --budget benchmarks/core_capacity_regression_budgets.json `
+            --baseline-sha "$env:GAMENET_CORE_CAPACITY_BASELINE_SHA" `
+            --candidate-sha "$env:GITHUB_SHA" `
+            --platform windows --backend iocp `
+            --output phase4-benchmark-results/core-capacity-regression.json
+          if ($LASTEXITCODE -ne 0) { throw "Core capacity regression budget failed" }
+
       - name: Write Windows Phase 4 benchmark job evidence
         if: always()
         shell: pwsh
@@ -355,10 +481,13 @@ jobs:
             --command 'cmake -S . -B build-benchmark-windows -G Visual Studio 18 2026 -A x64 -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
             --command 'cmake --build build-benchmark-windows --config Release --target gamenet_core_benchmark gamenet_phase4_benchmark --parallel' `
             --command 'python tools/run_performance_matrix.py --candidate --repetitions 3' `
+            --command 'python tools/run_performance_matrix.py --matrix-profile core-capacity --candidate --repetitions 3' `
             --command 'gamenet_core_benchmark --scenario slow-client --connections 2 --slow-bytes 33554432' `
             --command 'python tools/validate_core_benchmark.py --scenario slow-client --require-overload' `
             --command 'python tools/run_performance_matrix.py --baseline 2b1be4343f7c478eb40542451f30aad8ca474003 --repetitions 3' `
+            --command 'python tools/run_performance_matrix.py --matrix-profile core-capacity --baseline bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043 --repetitions 3' `
             --command 'python tools/compare_performance_regression.py --platform windows --backend iocp' `
+            --command 'python tools/compare_performance_regression.py --budget benchmarks/core_capacity_regression_budgets.json --platform windows --backend iocp' `
             --command 'python tools/validate_phase4_benchmark.py --platform windows --backend iocp --build-type Release'
 
       - name: Upload Windows raw JSON

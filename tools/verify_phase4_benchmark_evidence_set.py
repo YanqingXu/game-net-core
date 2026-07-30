@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
+import statistics
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +17,9 @@ JOB_SCHEMA = "gamenet.ci_evidence.v1"
 BENCHMARK_SCHEMA = "gamenet.phase4_benchmark_evidence.v1"
 PERFORMANCE_SCHEMA = "gamenet.performance_regression.v1"
 MATRIX_SCHEMA = "gamenet.performance_matrix.v1"
+ACCEPT_TOPOLOGY_SCHEMA = "gamenet.core_accept_topology_decision.v1"
 PERFORMANCE_BASELINE_SHA = "2b1be4343f7c478eb40542451f30aad8ca474003"
+CORE_CAPACITY_BASELINE_SHA = "bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043"
 PERFORMANCE_REPETITIONS = 3
 EXPECTED_JOBS = {
     "linux-release-benchmark": ("linux", "epoll"),
@@ -35,6 +39,16 @@ EXPECTED_PERFORMANCE_SCENARIOS = {
     "phase4.framing",
     "phase4.logic-queue",
     "phase4.logic-queue-heavy",
+}
+EXPECTED_CORE_CAPACITY_SCENARIOS = {
+    "core.connections-1000",
+    "core.connections-10000",
+    *{
+        f"core.echo-{payload}-{workers}-workers"
+        for payload in (64, 256, 1024)
+        for workers in (1, 2, 4)
+    },
+    "core.connection-churn-1000",
 }
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 
@@ -112,6 +126,8 @@ def verify_matrix_manifest(
     platform: str,
     backend: str,
     evidence_paths: set[str],
+    expected_profile: str,
+    expected_scenarios: set[str],
 ) -> str:
     manifest_relative = f"{relative_root}/matrix-manifest.json"
     require(manifest_relative in evidence_paths, f"performance matrix manifest is not hashed: {manifest_relative}")
@@ -119,6 +135,10 @@ def verify_matrix_manifest(
     manifest_path = matrix_root / "matrix-manifest.json"
     matrix = load_json(manifest_path, "performance matrix manifest")
     require(matrix.get("schema") == MATRIX_SCHEMA, "unexpected performance matrix schema")
+    require(
+        matrix.get("profile", "regression") == expected_profile,
+        "performance matrix profile mismatch",
+    )
     require(matrix.get("commit_sha") == expected_sha, "performance matrix commit mismatch")
     require(matrix.get("platform") == platform, "performance matrix platform mismatch")
     require(matrix.get("backend") == backend, "performance matrix backend mismatch")
@@ -127,7 +147,8 @@ def verify_matrix_manifest(
     scenarios = matrix.get("scenarios")
     require(isinstance(scenarios, list), "performance matrix scenarios must be an array")
     require(
-        {item.get("key") for item in scenarios if isinstance(item, dict)} == EXPECTED_PERFORMANCE_SCENARIOS,
+        {item.get("key") for item in scenarios if isinstance(item, dict)}
+        == expected_scenarios,
         "performance matrix scenario inventory mismatch",
     )
     for scenario in scenarios:
@@ -147,6 +168,207 @@ def verify_matrix_manifest(
             require(sample_path.is_file(), f"performance sample missing: {job_relative}")
             require(sha256_file(sample_path) == sample.get("sha256"), f"performance sample hash mismatch: {job_relative}")
     return sha256_file(manifest_path)
+
+
+def verify_accept_topology_decision(
+    job_root: Path,
+    candidate_sha: str,
+    candidate_matrix_sha: str,
+    evidence_paths: set[str],
+) -> tuple[dict[str, Any], str]:
+    topology_relative = "core-accept-topology-decision.json"
+    require(
+        topology_relative in evidence_paths,
+        "Linux accept-topology decision is not hashed",
+    )
+    topology_path = job_root / topology_relative
+    topology = load_json(topology_path, "Linux accept-topology decision")
+    require(
+        topology.get("schema") == ACCEPT_TOPOLOGY_SCHEMA,
+        "unexpected Linux accept-topology schema",
+    )
+    require(
+        topology.get("candidate_sha") == candidate_sha,
+        "Linux accept-topology candidate mismatch",
+    )
+    require(
+        topology.get("platform") == "linux"
+        and topology.get("backend") == "epoll",
+        "Linux accept-topology platform/backend mismatch",
+    )
+    require(
+        topology.get("matrix_manifest_sha256") == candidate_matrix_sha,
+        "Linux accept-topology matrix hash mismatch",
+    )
+
+    matrix_root = job_root / "core-capacity-samples" / "candidate"
+    matrix = load_json(
+        matrix_root / "matrix-manifest.json",
+        "Linux candidate capacity matrix",
+    )
+    churn_entries = [
+        scenario
+        for scenario in matrix.get("scenarios", [])
+        if isinstance(scenario, dict)
+        and scenario.get("key") == "core.connection-churn-1000"
+    ]
+    require(
+        len(churn_entries) == 1,
+        "Linux candidate capacity matrix has no unique churn scenario",
+    )
+    churn = churn_entries[0]
+    parameters = churn.get("parameters")
+    require(
+        isinstance(parameters, dict)
+        and parameters.get("connections") == 100
+        and parameters.get("event_loop_threads") == 4
+        and parameters.get("churn_target_per_second") == 1000
+        and parameters.get("churn_duration_ms") == 5000,
+        "Linux accept-topology churn parameters drifted",
+    )
+    require(
+        topology.get("parameters") == parameters,
+        "Linux accept-topology parameters differ from the capacity matrix",
+    )
+    samples = churn.get("samples")
+    require(
+        isinstance(samples, list) and len(samples) == PERFORMANCE_REPETITIONS,
+        "Linux accept-topology sample count mismatch",
+    )
+    require(
+        topology.get("samples") == samples,
+        "Linux accept-topology sample inventory differs from the capacity matrix",
+    )
+
+    metric_names = (
+        "churn_attempts_per_second",
+        "churn_connect_p99_us",
+        "churn_accept_p99_us",
+        "churn_close_p99_us",
+        "churn_schedule_lag_p99_us",
+    )
+    values = {name: [] for name in metric_names}
+    for sample in samples:
+        require(
+            isinstance(sample, dict),
+            "Linux accept-topology sample must be an object",
+        )
+        relative = sample.get("path")
+        require(
+            isinstance(relative, str) and relative,
+            "Linux accept-topology sample path is missing",
+        )
+        job_relative = f"core-capacity-samples/candidate/{relative}"
+        require(
+            job_relative in evidence_paths,
+            f"Linux accept-topology sample is not hashed: {job_relative}",
+        )
+        sample_path = job_root / job_relative
+        require(
+            sha256_file(sample_path) == sample.get("sha256"),
+            f"Linux accept-topology sample hash mismatch: {job_relative}",
+        )
+        document = load_json(sample_path, "Linux accept-topology sample")
+        measurements = document.get("measurements")
+        require(
+            isinstance(measurements, dict),
+            "Linux accept-topology sample measurements are missing",
+        )
+        for name in metric_names:
+            value = measurements.get(name)
+            require(
+                not isinstance(value, bool)
+                and isinstance(value, (int, float))
+                and math.isfinite(float(value))
+                and float(value) >= 0.0,
+                f"Linux accept-topology metric is invalid: {name}",
+            )
+            values[name].append(float(value))
+
+    expected_medians = {
+        name: float(statistics.median(samples))
+        for name, samples in values.items()
+    }
+    medians = topology.get("medians")
+    require(
+        isinstance(medians, dict) and set(medians) == set(metric_names),
+        "Linux accept-topology median inventory mismatch",
+    )
+    for name, expected in expected_medians.items():
+        actual = medians.get(name)
+        require(
+            isinstance(actual, (int, float))
+            and not isinstance(actual, bool)
+            and math.isclose(float(actual), expected, rel_tol=1e-9, abs_tol=1e-9),
+            f"Linux accept-topology median mismatch: {name}",
+        )
+
+    batch_cadence_us = (
+        float(parameters["connections"])
+        / float(parameters["churn_target_per_second"])
+        * 1_000_000.0
+    )
+    actual_rate_ratio = (
+        expected_medians["churn_attempts_per_second"]
+        / float(parameters["churn_target_per_second"])
+    )
+    rate_missed = actual_rate_ratio < 0.95
+    accept_dominant = (
+        expected_medians["churn_accept_p99_us"]
+        >= expected_medians["churn_connect_p99_us"]
+        and expected_medians["churn_accept_p99_us"]
+        >= expected_medians["churn_close_p99_us"]
+    )
+    accept_saturated = (
+        expected_medians["churn_accept_p99_us"] >= batch_cadence_us * 0.5
+    )
+    trigger_experiment = rate_missed and accept_dominant and accept_saturated
+    criteria = topology.get("criteria")
+    require(isinstance(criteria, dict), "Linux accept-topology criteria are missing")
+    expected_numeric = {
+        "rate_floor_ratio": 0.95,
+        "accept_cadence_saturation_ratio": 0.5,
+        "batch_cadence_us": batch_cadence_us,
+        "actual_rate_ratio": actual_rate_ratio,
+    }
+    for name, expected in expected_numeric.items():
+        actual = criteria.get(name)
+        require(
+            isinstance(actual, (int, float))
+            and not isinstance(actual, bool)
+            and math.isclose(float(actual), expected, rel_tol=1e-9, abs_tol=1e-9),
+            f"Linux accept-topology criterion mismatch: {name}",
+        )
+    expected_flags = {
+        "rate_missed": rate_missed,
+        "accept_dominant": accept_dominant,
+        "accept_saturated": accept_saturated,
+        "trigger_experiment": trigger_experiment,
+    }
+    for name, expected in expected_flags.items():
+        require(
+            criteria.get(name) is expected,
+            f"Linux accept-topology flag mismatch: {name}",
+        )
+    expected_result = (
+        "experiment_so_reuseport"
+        if trigger_experiment
+        else "retain_single_listener"
+    )
+    require(
+        topology.get("result") == expected_result,
+        "Linux accept-topology result does not match its evidence",
+    )
+    digest = sha256_file(topology_path)
+    return (
+        {
+            "result": expected_result,
+            "medians": medians,
+            "criteria": criteria,
+            "sha256": digest,
+        },
+        digest,
+    )
 
 
 def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -183,6 +405,9 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     platforms: list[dict[str, Any]] = []
     common_parameters: dict[str, Any] | None = None
     common_performance_contract: list[tuple[str, tuple[tuple[Any, ...], ...]]] | None = None
+    common_capacity_contract: list[tuple[str, tuple[tuple[Any, ...], ...]]] | None = None
+    common_capacity_parameters: dict[str, Any] | None = None
+    linux_accept_topology: dict[str, Any] | None = None
     for job, (job_root, job_manifest, evidence_paths) in sorted(by_job.items()):
         expected_platform, expected_backend = EXPECTED_JOBS[job]
         runner = job_manifest.get("runner")
@@ -231,6 +456,10 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         require(performance.get("result") == "pass", f"performance regression gate did not pass: {job}")
         require(performance.get("platform") == expected_platform, f"performance platform mismatch: {job}")
         require(performance.get("backend") == expected_backend, f"performance backend mismatch: {job}")
+        require(
+            performance.get("matrix_profile", "regression") == "regression",
+            f"performance matrix profile mismatch: {job}",
+        )
         require(performance.get("baseline_sha") == PERFORMANCE_BASELINE_SHA, f"performance baseline mismatch: {job}")
         require(performance.get("candidate_sha") == job_manifest.get("checkout_sha"), f"performance candidate mismatch: {job}")
         require(performance.get("repetitions") == PERFORMANCE_REPETITIONS, f"performance repetitions mismatch: {job}")
@@ -265,6 +494,8 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             expected_platform,
             expected_backend,
             evidence_paths,
+            "regression",
+            EXPECTED_PERFORMANCE_SCENARIOS,
         )
         candidate_matrix_sha = verify_matrix_manifest(
             job_root,
@@ -273,7 +504,153 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             expected_platform,
             expected_backend,
             evidence_paths,
+            "regression",
+            EXPECTED_PERFORMANCE_SCENARIOS,
         )
+
+        capacity_relative = "core-capacity-regression.json"
+        require(
+            capacity_relative in evidence_paths,
+            f"Core capacity regression evidence is not hashed: {job}",
+        )
+        capacity_path = job_root / capacity_relative
+        capacity = load_json(capacity_path, "Core capacity regression evidence")
+        require(
+            capacity.get("schema") == PERFORMANCE_SCHEMA,
+            f"unexpected Core capacity schema: {job}",
+        )
+        require(
+            capacity.get("result") == "pass",
+            f"Core capacity regression gate did not pass: {job}",
+        )
+        require(
+            capacity.get("matrix_profile") == "core-capacity",
+            f"Core capacity matrix profile mismatch: {job}",
+        )
+        require(
+            capacity.get("platform") == expected_platform,
+            f"Core capacity platform mismatch: {job}",
+        )
+        require(
+            capacity.get("backend") == expected_backend,
+            f"Core capacity backend mismatch: {job}",
+        )
+        require(
+            capacity.get("baseline_sha") == CORE_CAPACITY_BASELINE_SHA,
+            f"Core capacity baseline mismatch: {job}",
+        )
+        require(
+            capacity.get("candidate_sha") == job_manifest.get("checkout_sha"),
+            f"Core capacity candidate mismatch: {job}",
+        )
+        require(
+            capacity.get("repetitions") == PERFORMANCE_REPETITIONS,
+            f"Core capacity repetitions mismatch: {job}",
+        )
+        capacity_budget_sha = capacity.get("budget_sha256")
+        require(
+            isinstance(capacity_budget_sha, str)
+            and re.fullmatch(r"[0-9a-f]{64}", capacity_budget_sha) is not None,
+            f"invalid Core capacity budget hash: {job}",
+        )
+        capacity_comparisons = capacity.get("comparisons")
+        require(
+            isinstance(capacity_comparisons, list),
+            f"Core capacity comparisons missing: {job}",
+        )
+        require(
+            {
+                item.get("key")
+                for item in capacity_comparisons
+                if isinstance(item, dict)
+            }
+            == EXPECTED_CORE_CAPACITY_SCENARIOS,
+            f"Core capacity comparison inventory mismatch: {job}",
+        )
+        capacity_contract = []
+        capacity_parameters = {}
+        for comparison in capacity_comparisons:
+            require(
+                isinstance(comparison, dict),
+                f"Core capacity comparison must be an object: {job}",
+            )
+            require(
+                comparison.get("result") == "pass",
+                f"Core capacity scenario did not pass: {job}",
+            )
+            parameters = comparison.get("parameters")
+            require(
+                isinstance(parameters, dict),
+                f"Core capacity parameters missing: {job}",
+            )
+            capacity_parameters[comparison["key"]] = parameters
+            metrics = comparison.get("metrics")
+            require(
+                isinstance(metrics, list) and metrics,
+                f"Core capacity metric results missing: {job}",
+            )
+            capacity_contract.append(
+                (
+                    comparison["key"],
+                    tuple(
+                        (
+                            metric.get("name"),
+                            metric.get("direction"),
+                            metric.get("max_regression_ratio"),
+                            metric.get("absolute_slack"),
+                        )
+                        for metric in metrics
+                        if isinstance(metric, dict)
+                    ),
+                )
+            )
+        capacity_contract.sort()
+        if common_capacity_contract is None:
+            common_capacity_contract = capacity_contract
+        else:
+            require(
+                capacity_contract == common_capacity_contract,
+                "Linux and Windows Core capacity budgets differ",
+            )
+        if common_capacity_parameters is None:
+            common_capacity_parameters = capacity_parameters
+        else:
+            require(
+                capacity_parameters == common_capacity_parameters,
+                "Linux and Windows Core capacity parameters do not match",
+            )
+
+        capacity_baseline_matrix_sha = verify_matrix_manifest(
+            job_root,
+            "core-capacity-samples/baseline",
+            CORE_CAPACITY_BASELINE_SHA,
+            expected_platform,
+            expected_backend,
+            evidence_paths,
+            "core-capacity",
+            EXPECTED_CORE_CAPACITY_SCENARIOS,
+        )
+        capacity_candidate_matrix_sha = verify_matrix_manifest(
+            job_root,
+            "core-capacity-samples/candidate",
+            job_manifest["checkout_sha"],
+            expected_platform,
+            expected_backend,
+            evidence_paths,
+            "core-capacity",
+            EXPECTED_CORE_CAPACITY_SCENARIOS,
+        )
+
+        topology_sha = None
+        if expected_platform == "linux":
+            linux_accept_topology, topology_sha = (
+                verify_accept_topology_decision(
+                    job_root,
+                    job_manifest["checkout_sha"],
+                    capacity_candidate_matrix_sha,
+                    evidence_paths,
+                )
+            )
 
         platforms.append(
             {
@@ -286,6 +663,12 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
                 "performance_regression_sha256": sha256_file(performance_path),
                 "performance_baseline_matrix_sha256": baseline_matrix_sha,
                 "performance_candidate_matrix_sha256": candidate_matrix_sha,
+                "core_capacity_regression_sha256": sha256_file(capacity_path),
+                "core_capacity_baseline_matrix_sha256":
+                    capacity_baseline_matrix_sha,
+                "core_capacity_candidate_matrix_sha256":
+                    capacity_candidate_matrix_sha,
+                "accept_topology_decision_sha256": topology_sha,
             }
         )
 
@@ -306,6 +689,12 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         "parameters": common_parameters,
         "performance_baseline_sha": PERFORMANCE_BASELINE_SHA,
         "performance_comparisons": [item[0] for item in common_performance_contract or []],
+        "core_capacity_baseline_sha": CORE_CAPACITY_BASELINE_SHA,
+        "core_capacity_comparisons": [
+            item[0] for item in common_capacity_contract or []
+        ],
+        "core_capacity_parameters": common_capacity_parameters,
+        "linux_accept_topology": linux_accept_topology,
         "platforms": platforms,
     }
     return aggregate, platforms

@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 134 |
+| 61 | 30 | 20 | 11 | 136 |
 
 ## Production-Hardening Worktree State
 

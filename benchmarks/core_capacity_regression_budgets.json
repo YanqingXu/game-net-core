@@ -1,0 +1,98 @@
+{
+  "schema": "gamenet.performance_regression_budget.v1",
+  "matrix_profile": "core-capacity",
+  "baseline_sha": "bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043",
+  "repetitions": 3,
+  "scenarios": [
+    {
+      "key": "core.connections-1000",
+      "metrics": [
+        {"name": "connection_establish_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "approx_bytes_per_connection", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 8192.0},
+        {"name": "idle_process_cpu_percent", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 1.0}
+      ]
+    },
+    {
+      "key": "core.connections-10000",
+      "metrics": [
+        {"name": "connection_establish_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "approx_bytes_per_connection", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 4096.0},
+        {"name": "idle_process_cpu_percent", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 1.0}
+      ]
+    },
+    {
+      "key": "core.echo-64-1-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 500.0}
+      ]
+    },
+    {
+      "key": "core.echo-64-2-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 500.0}
+      ]
+    },
+    {
+      "key": "core.echo-64-4-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 750.0}
+      ]
+    },
+    {
+      "key": "core.echo-256-1-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 500.0}
+      ]
+    },
+    {
+      "key": "core.echo-256-2-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 500.0}
+      ]
+    },
+    {
+      "key": "core.echo-256-4-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 750.0}
+      ]
+    },
+    {
+      "key": "core.echo-1024-1-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 500.0}
+      ]
+    },
+    {
+      "key": "core.echo-1024-2-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 500.0}
+      ]
+    },
+    {
+      "key": "core.echo-1024-4-workers",
+      "metrics": [
+        {"name": "messages_per_second", "direction": "higher", "max_regression_ratio": 0.3, "absolute_slack": 0.0},
+        {"name": "p999_latency_us", "direction": "lower", "max_regression_ratio": 0.75, "absolute_slack": 750.0}
+      ]
+    },
+    {
+      "key": "core.connection-churn-1000",
+      "metrics": [
+        {"name": "churn_attempts_per_second", "direction": "higher", "max_regression_ratio": 0.1, "absolute_slack": 0.0},
+        {"name": "churn_worker_skew_ratio", "direction": "lower", "max_regression_ratio": 0.5, "absolute_slack": 0.05},
+        {"name": "churn_connect_p99_us", "direction": "lower", "max_regression_ratio": 0.9, "absolute_slack": 50000.0},
+        {"name": "churn_accept_p99_us", "direction": "lower", "max_regression_ratio": 0.9, "absolute_slack": 50000.0},
+        {"name": "churn_close_p99_us", "direction": "lower", "max_regression_ratio": 0.9, "absolute_slack": 50000.0},
+        {"name": "churn_schedule_lag_p99_us", "direction": "lower", "max_regression_ratio": 0.9, "absolute_slack": 100000.0}
+      ]
+    }
+  ]
+}

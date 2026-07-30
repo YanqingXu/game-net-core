@@ -104,6 +104,7 @@ jobs:
             "tools/check_scope_boundaries.py"
             "tests/api/test_public_api_manifest.py"
             "tests/ci/test_performance_regression.py"
+            "tests/ci/test_core_capacity_matrix.py"
             "tests/ci/test_endurance_gate.py"
             "tests/cmake/test_sanitizer_flags.py"
             "tests/cmake/test_install_package_contract.py"

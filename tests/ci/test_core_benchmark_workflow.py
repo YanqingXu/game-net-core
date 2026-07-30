@@ -56,6 +56,10 @@ def main() -> None:
     require(runner_text, '"echo-4-workers"', runner)
     require(runner_text, '"connections-1024"', runner)
     require(runner_text, '"slow-client-16"', runner)
+    require(runner_text, "CAPACITY_SCENARIOS", runner)
+    require(runner_text, '"connections-10000"', runner)
+    require(runner_text, '"connection-churn-1000"', runner)
+    require(runner_text, '"core-capacity"', runner)
     validator = repo_root / "tools" / "validate_core_benchmark.py"
     validator_text = validator.read_text(encoding="utf-8")
     require(validator_text, 'SCHEMA = "gamenet.core_benchmark.v2"', validator)
@@ -76,6 +80,15 @@ def main() -> None:
     assert text.count("--expected-connections 2") == 2
     assert text.count("--expected-slow-bytes 33554432") == 2
     assert text.count("--require-overload") >= 4
+    assert text.count("Checkout Core capacity baseline") == 2
+    assert text.count("Run candidate Core capacity matrix") == 2
+    assert text.count("Run baseline Core capacity matrix") == 2
+    assert text.count("Enforce same-runner Core capacity budgets") == 2
+    assert text.count("--matrix-profile core-capacity") >= 6
+    assert text.count("core_capacity_regression_budgets.json") >= 4
+    assert text.count("core-capacity-regression.json") == 2
+    assert text.count("Evaluate Linux accept topology") == 1
+    assert text.count("core-accept-topology-decision.json") >= 1
     assert "ConvertFrom-Json" not in text
     canonical_artifact_name = (
         "core-benchmark-${{ github.job }}-${{ github.sha }}-"

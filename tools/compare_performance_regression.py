@@ -61,9 +61,14 @@ def load_matrix(
     platform: str,
     backend: str,
     repetitions: int,
+    matrix_profile: str,
 ) -> tuple[dict[str, Any], dict[str, tuple[dict[str, Any], list[dict[str, Any]]]]]:
     manifest = read_json(root / "matrix-manifest.json", "matrix manifest")
     require(manifest.get("schema") == MATRIX_SCHEMA, "matrix manifest schema mismatch")
+    require(
+        manifest.get("profile", "regression") == matrix_profile,
+        "matrix profile mismatch",
+    )
     require(manifest.get("commit_sha") == expected_sha, "matrix commit SHA mismatch")
     require(manifest.get("platform") == platform, "matrix platform mismatch")
     require(manifest.get("backend") == backend, "matrix backend mismatch")
@@ -105,11 +110,26 @@ def compare(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
     require(budget.get("baseline_sha") == args.baseline_sha, "baseline SHA is not the reviewed budget baseline")
     repetitions = budget.get("repetitions")
     require(isinstance(repetitions, int) and repetitions >= 3 and repetitions % 2 == 1, "invalid budget repetitions")
+    matrix_profile = budget.get("matrix_profile", "regression")
+    require(
+        matrix_profile in {"regression", "core-capacity"},
+        "invalid budget matrix profile",
+    )
     baseline_manifest, baseline = load_matrix(
-        args.baseline_root, args.baseline_sha, args.platform, args.backend, repetitions
+        args.baseline_root,
+        args.baseline_sha,
+        args.platform,
+        args.backend,
+        repetitions,
+        matrix_profile,
     )
     candidate_manifest, candidate = load_matrix(
-        args.candidate_root, args.candidate_sha, args.platform, args.backend, repetitions
+        args.candidate_root,
+        args.candidate_sha,
+        args.platform,
+        args.backend,
+        repetitions,
+        matrix_profile,
     )
     budget_scenarios = budget.get("scenarios")
     require(isinstance(budget_scenarios, list) and budget_scenarios, "performance budget scenarios missing")
@@ -179,6 +199,7 @@ def compare(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
         "platform": args.platform,
         "backend": args.backend,
         "build_type": "Release",
+        "matrix_profile": matrix_profile,
         "baseline_sha": args.baseline_sha,
         "candidate_sha": args.candidate_sha,
         "repetitions": repetitions,
@@ -217,4 +238,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

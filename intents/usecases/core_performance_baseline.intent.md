@@ -39,6 +39,13 @@ applies reviewed same-runner relative regression budgets outside the executable.
   JSON document
 - provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
   and 4/16-slow-client Release matrix three times for both baseline and candidate
+- keep that reviewed 12-scenario release-regression inventory frozen while a
+  separate Core capacity profile runs matching 1k/10k idle, 64/256/1,024-byte
+  small-echo at 1/2/4 workers, and 1k/s sustained-churn scenarios three times
+  for both the reviewed capacity baseline and candidate on the same runner
+- retain a structured Linux accept-topology decision that can trigger a
+  `SO_REUSEPORT` experiment only when sustained rate misses target and the
+  isolated ready-accept phase is both dominant and saturated
 - return a non-zero exit code when setup, I/O, timeout, or schema production fails
 
 ---
@@ -194,6 +201,11 @@ applies reviewed same-runner relative regression budgets outside the executable.
   host context, and command are recorded
 - production-candidate regression compares baseline and candidate only on the
   same runner, uses three-sample medians, and retains both raw sample sets
+- the frozen 12-scenario release-regression matrix and its historical baseline
+  remain unchanged; the Core capacity matrix has its own reviewed baseline,
+  budget, scenario inventory, and artifact roots
+- Linux and Windows capacity jobs use identical scenario arguments; a paired
+  evidence verifier rejects parameter, repetition, baseline, or inventory drift
 - small-echo capacity evidence spans fixed 64/256/1,024-byte payloads and
   1/2/4 worker loops; payload and worker count remain part of the comparison key
 - working-set deltas are process-level observations and include allocator/runtime effects
@@ -203,6 +215,11 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - loopback results are regression baselines, not production network capacity claims
 - IOCP single-versus-batched evidence must retain distinct completion-mode
   values and be compared only on the same runner with matching scenario inputs
+- the Linux accept-topology decision uses the three candidate churn samples.
+  It triggers only an experiment, not an implementation change, when median
+  actual attempt rate is below 95% of target, median ready-accept P99 is at
+  least half of one batch cadence, and ready-accept P99 is no smaller than both
+  connect and close P99. Otherwise the evidence retains the single listener
 - the frozen v1 baseline and v2 candidate are compared only on their common
   reviewed performance metrics; v2 admission/accounting fields are validated
   independently and are not inferred for v1 samples
@@ -215,6 +232,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
   process-memory sampling, documentation commands, and CI guard parity
 - `tests/ci/test_core_benchmark_workflow.py` verifies the manual-only trigger,
   paired Release platform jobs, expanded fixed matrix, JSON validation, and artifacts
+- `tests/ci/test_core_capacity_matrix.py` verifies the separate capacity
+  inventory, baseline/budget contract, exact same-runner comparison, Linux
+  topology-decision positive/negative fixtures, and paired parameter parity
 - the guard runs in ordinary CI and long-soak preflight, but the benchmark executable
   is intentionally not run as a correctness gate
 

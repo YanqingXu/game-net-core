@@ -69,6 +69,7 @@ jobs:
           python3 tools/compare_public_api_manifest.py \
             --output ci-evidence/public-api-diff.json
           python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
@@ -264,6 +265,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
@@ -449,6 +451,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
@@ -594,6 +597,7 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
           python3 tests/cmake/test_sanitizer_flags.py
           python3 tests/cmake/test_install_package_contract.py
@@ -773,6 +777,7 @@ jobs:
           python tools/check_scope_boundaries.py
           python tests/api/test_public_api_manifest.py
           python tests/ci/test_performance_regression.py
+          python tests/ci/test_core_capacity_matrix.py
           python tests/ci/test_endurance_gate.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py
@@ -985,6 +990,7 @@ jobs:
           python tools/check_scope_boundaries.py
           python tests/api/test_public_api_manifest.py
           python tests/ci/test_performance_regression.py
+          python tests/ci/test_core_capacity_matrix.py
           python tests/ci/test_endurance_gate.py
           python tests/cmake/test_sanitizer_flags.py
           python tests/cmake/test_install_package_contract.py

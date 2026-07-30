@@ -191,6 +191,168 @@ def write_performance_fixture(
     )
 
 
+def write_capacity_fixture(
+    root: Path,
+    candidate_sha: str,
+    platform: str,
+    backend: str,
+    budget: dict,
+) -> None:
+    def parameters_for(key: str) -> dict:
+        if key == "core.connection-churn-1000":
+            return {
+                "connections": 100,
+                "event_loop_threads": 4,
+                "churn_target_per_second": 1000,
+                "churn_duration_ms": 5000,
+                "churn_connect_timeout_ms": 1000,
+            }
+        return {"fixture_key": key}
+
+    candidate_manifest_sha = None
+    candidate_churn_samples = None
+    candidate_churn_parameters = None
+    for identity, commit_sha in (
+        ("baseline", budget["baseline_sha"]),
+        ("candidate", candidate_sha),
+    ):
+        matrix_root = root / "core-capacity-samples" / identity
+        matrix_root.mkdir(parents=True)
+        scenarios = []
+        for scenario_budget in budget["scenarios"]:
+            key = scenario_budget["key"]
+            short_key = key.split(".", 1)[1]
+            parameters = parameters_for(key)
+            samples = []
+            for repetition in range(1, budget["repetitions"] + 1):
+                relative = Path("core") / f"{short_key}-{repetition}.json"
+                sample = matrix_root / relative
+                sample.parent.mkdir(exist_ok=True)
+                document = {"fixture": key, "repetition": repetition}
+                if key == "core.connection-churn-1000":
+                    document["measurements"] = {
+                        "churn_attempts_per_second": 999.0,
+                        "churn_connect_p99_us": 10000.0,
+                        "churn_accept_p99_us": 1000.0,
+                        "churn_close_p99_us": 20000.0,
+                        "churn_schedule_lag_p99_us": 20000.0,
+                    }
+                sample.write_text(
+                    json.dumps(document) + "\n",
+                    encoding="utf-8",
+                )
+                samples.append(
+                    {
+                        "path": relative.as_posix(),
+                        "sha256": sha256_file(sample),
+                    }
+                )
+            scenarios.append(
+                {
+                    "key": key,
+                    "parameters": parameters,
+                    "samples": samples,
+                }
+            )
+            if identity == "candidate" and key == "core.connection-churn-1000":
+                candidate_churn_samples = samples
+                candidate_churn_parameters = parameters
+        matrix = {
+            "schema": "gamenet.performance_matrix.v1",
+            "profile": "core-capacity",
+            "commit_sha": commit_sha,
+            "platform": platform,
+            "backend": backend,
+            "build_type": "Release",
+            "repetitions": budget["repetitions"],
+            "scenarios": scenarios,
+        }
+        manifest_path = matrix_root / "matrix-manifest.json"
+        manifest_path.write_text(
+            json.dumps(matrix, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        if identity == "candidate":
+            candidate_manifest_sha = sha256_file(manifest_path)
+
+    comparisons = []
+    for scenario_budget in budget["scenarios"]:
+        metrics = []
+        for metric in scenario_budget["metrics"]:
+            metrics.append(
+                {
+                    **metric,
+                    "baseline_samples": [100.0] * budget["repetitions"],
+                    "candidate_samples": [100.0] * budget["repetitions"],
+                    "baseline_median": 100.0,
+                    "candidate_median": 100.0,
+                    "threshold": 100.0,
+                    "result": "pass",
+                }
+            )
+        comparisons.append(
+            {
+                "key": scenario_budget["key"],
+                "parameters": parameters_for(scenario_budget["key"]),
+                "metrics": metrics,
+                "result": "pass",
+            }
+        )
+    capacity = {
+        "schema": "gamenet.performance_regression.v1",
+        "matrix_profile": "core-capacity",
+        "result": "pass",
+        "platform": platform,
+        "backend": backend,
+        "build_type": "Release",
+        "baseline_sha": budget["baseline_sha"],
+        "candidate_sha": candidate_sha,
+        "repetitions": budget["repetitions"],
+        "budget_sha256": "e" * 64,
+        "comparisons": comparisons,
+    }
+    (root / "core-capacity-regression.json").write_text(
+        json.dumps(capacity, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    if platform == "linux":
+        assert candidate_manifest_sha is not None
+        assert candidate_churn_samples is not None
+        assert candidate_churn_parameters is not None
+        topology = {
+            "schema": "gamenet.core_accept_topology_decision.v1",
+            "result": "retain_single_listener",
+            "candidate_sha": candidate_sha,
+            "platform": "linux",
+            "backend": "epoll",
+            "parameters": candidate_churn_parameters,
+            "samples": candidate_churn_samples,
+            "medians": {
+                "churn_attempts_per_second": 999.0,
+                "churn_connect_p99_us": 10000.0,
+                "churn_accept_p99_us": 1000.0,
+                "churn_close_p99_us": 20000.0,
+                "churn_schedule_lag_p99_us": 20000.0,
+            },
+            "criteria": {
+                "rate_floor_ratio": 0.95,
+                "accept_cadence_saturation_ratio": 0.5,
+                "batch_cadence_us": 100000.0,
+                "actual_rate_ratio": 0.999,
+                "rate_missed": False,
+                "accept_dominant": False,
+                "accept_saturated": False,
+                "trigger_experiment": False,
+            },
+            "matrix_manifest_sha256": candidate_manifest_sha,
+        }
+        (root / "core-accept-topology-decision.json").write_text(
+            json.dumps(topology, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+
 def verify_pair_tool(
     repo_root: Path,
     validator: Path,
@@ -202,6 +364,13 @@ def verify_pair_tool(
     sha = "a" * 40
     budget = json.loads(
         (repo_root / "benchmarks" / "performance_regression_budgets.json").read_text(encoding="utf-8")
+    )
+    capacity_budget = json.loads(
+        (
+            repo_root
+            / "benchmarks"
+            / "core_capacity_regression_budgets.json"
+        ).read_text(encoding="utf-8")
     )
     with tempfile.TemporaryDirectory(prefix="gamenet-phase4-benchmark-pair-") as temp:
         evidence_root = Path(temp) / "evidence"
@@ -245,6 +414,13 @@ def verify_pair_tool(
             )
             assert result.returncode == 0, result.stderr
             write_performance_fixture(root, sha, platform, backend, budget)
+            write_capacity_fixture(
+                root,
+                sha,
+                platform,
+                backend,
+                capacity_budget,
+            )
             write_job_manifest(root, job, artifact_name, sha)
 
         output = evidence_root / "pair-manifest.json"
@@ -262,12 +438,83 @@ def verify_pair_tool(
         assert pair["schema"] == "gamenet.phase4_benchmark_pair_evidence.v1"
         assert pair["result"] == "success"
         assert len(pair["platforms"]) == 2
+        assert pair["core_capacity_baseline_sha"] == capacity_budget["baseline_sha"]
+        assert pair["linux_accept_topology"]["result"] == "retain_single_listener"
+
+        linux_manifest = next(
+            path
+            for path in evidence_root.rglob("job-manifest.json")
+            if "linux-release-benchmark" in path.parent.name
+        )
+        linux_root = linux_manifest.parent
+        topology_path = linux_root / "core-accept-topology-decision.json"
+        topology = json.loads(topology_path.read_text(encoding="utf-8"))
+        topology["result"] = "experiment_so_reuseport"
+        topology_path.write_text(
+            json.dumps(topology, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        write_job_manifest(
+            linux_root,
+            "linux-release-benchmark",
+            linux_root.name,
+            sha,
+        )
+        topology_negative = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert topology_negative.returncode != 0
+        assert (
+            "accept-topology result does not match its evidence"
+            in topology_negative.stderr
+        )
+        topology["result"] = "retain_single_listener"
+        topology_path.write_text(
+            json.dumps(topology, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        write_job_manifest(
+            linux_root,
+            "linux-release-benchmark",
+            linux_root.name,
+            sha,
+        )
 
         windows_manifest = next(
             path
             for path in evidence_root.rglob("job-manifest.json")
             if "windows-release-benchmark" in path.parent.name
         )
+        windows_root = windows_manifest.parent
+        windows_capacity = windows_root / "core-capacity-regression.json"
+        mismatched_capacity = json.loads(
+            windows_capacity.read_text(encoding="utf-8")
+        )
+        mismatched_capacity["comparisons"][0]["parameters"]["fixture_key"] = (
+            "cross-platform-drift"
+        )
+        windows_capacity.write_text(
+            json.dumps(mismatched_capacity, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        write_job_manifest(
+            windows_root,
+            "windows-release-benchmark",
+            windows_root.name,
+            sha,
+        )
+        parameter_negative = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert parameter_negative.returncode != 0
+        assert "Core capacity parameters do not match" in parameter_negative.stderr
+
         mismatch = json.loads(windows_manifest.read_text(encoding="utf-8"))
         mismatch["candidate_sha"] = "b" * 40
         windows_manifest.write_text(json.dumps(mismatch, indent=2) + "\n", encoding="utf-8")
@@ -334,6 +581,34 @@ def main() -> None:
     require(windows_candidate, "--canonical-phase4-dir phase4-benchmark-results", workflow)
     require(linux_baseline, "performance-samples/baseline", workflow)
     require(windows_baseline, "performance-samples/baseline", workflow)
+
+    linux_capacity_candidate = step_block(
+        linux,
+        "Run candidate Core capacity matrix",
+    )
+    windows_capacity_candidate = step_block(
+        windows,
+        "Run candidate Core capacity matrix",
+    )
+    linux_capacity_baseline = step_block(
+        linux,
+        "Run baseline Core capacity matrix",
+    )
+    windows_capacity_baseline = step_block(
+        windows,
+        "Run baseline Core capacity matrix",
+    )
+    for step, interpreter, platform, backend, identity in (
+        (linux_capacity_candidate, "python3", "linux", "epoll", "candidate"),
+        (windows_capacity_candidate, "python", "windows", "iocp", "candidate"),
+        (linux_capacity_baseline, "python3", "linux", "epoll", "baseline"),
+        (windows_capacity_baseline, "python", "windows", "iocp", "baseline"),
+    ):
+        require(step, f"{interpreter} tools/run_performance_matrix.py", workflow)
+        require(step, "--matrix-profile core-capacity", workflow)
+        require(step, f"--platform {platform} --backend {backend}", workflow)
+        require(step, f"core-capacity-samples/{identity}", workflow)
+        require(step, "--repetitions 3", workflow)
 
     runner = repo_root / "tools" / "run_performance_matrix.py"
     runner_text = runner.read_text(encoding="utf-8")
@@ -455,6 +730,18 @@ def main() -> None:
         require(regression, "tools/compare_performance_regression.py", workflow)
         require(regression, "performance_regression_budgets.json", workflow)
         require(regression, "performance-regression.json", workflow)
+        capacity = step_block(
+            job,
+            "Enforce same-runner Core capacity budgets",
+        )
+        require(capacity, "tools/compare_performance_regression.py", workflow)
+        require(capacity, "core_capacity_regression_budgets.json", workflow)
+        require(capacity, "core-capacity-regression.json", workflow)
+
+    topology = step_block(linux, "Evaluate Linux accept topology")
+    require(topology, "tools/evaluate_core_accept_topology.py", workflow)
+    require(topology, "core-capacity-samples/candidate", workflow)
+    require(topology, "core-accept-topology-decision.json", workflow)
 
     assert validator.is_file(), f"missing shared Phase 4 benchmark validator: {validator}"
     validator_text = validator.read_text(encoding="utf-8")

@@ -270,3 +270,18 @@ The full baseline/candidate sample sets and `gamenet.performance_regression.v1`
 are retained with the Phase 4 producer evidence. See
 `docs/development/performance_regression.md`. These comparisons are same-runner
 regression gates, not cross-platform capacity comparisons.
+
+M3-P1 adds a separate `core-capacity` profile without changing that frozen
+release-regression set. Each Linux and Windows producer builds capacity
+baseline `bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043` and the candidate on the
+same runner, then runs three matching repetitions of 1k/10k idle,
+64/256/1,024-byte echo at 1/2/4 workers, and sustained 1k/s churn. The paired
+evidence verifier rejects cross-platform parameter drift and retains both raw
+sets plus `core-capacity-regression.json`.
+
+Only the Linux candidate churn samples feed
+`tools/evaluate_core_accept_topology.py`. Its structured result can recommend
+an isolated `SO_REUSEPORT` experiment when the target rate is missed and the
+ready-accept phase is demonstrably dominant and saturated. Otherwise it records
+`retain_single_listener`; the workflow never enables per-worker listeners by
+itself.
