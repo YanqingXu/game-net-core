@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <stdexcept>
 
 #ifndef _WIN32
 #include <sys/uio.h>
@@ -12,8 +13,26 @@
 
 namespace gamenet::net {
 
-Buffer::Buffer()
-    : buffer_(kCheapPrepend + kInitialSize), readerIndex_(kCheapPrepend), writerIndex_(kCheapPrepend) {
+void BufferRetentionOptions::validate() const {
+    if (maxRetainedCapacityBytes < Buffer::kCheapPrepend +
+                                       Buffer::kInitialSize) {
+        throw std::invalid_argument(
+            "Buffer retained capacity must hold the initial storage");
+    }
+    if (trimThresholdBytes >
+        maxRetainedCapacityBytes - Buffer::kCheapPrepend) {
+        throw std::invalid_argument(
+            "Buffer trim threshold must fit below retained capacity");
+    }
+}
+
+Buffer::Buffer(BufferRetentionOptions retentionOptions)
+    : retentionOptions_(retentionOptions),
+      buffer_(kCheapPrepend + kInitialSize),
+      readerIndex_(kCheapPrepend),
+      writerIndex_(kCheapPrepend),
+      peakRetainedCapacityBytes_(buffer_.capacity()) {
+    retentionOptions_.validate();
 }
 
 std::size_t Buffer::readableBytes() const noexcept {
@@ -26,6 +45,52 @@ std::size_t Buffer::writableBytes() const noexcept {
 
 std::size_t Buffer::prependableBytes() const noexcept {
     return readerIndex_;
+}
+
+BufferRetentionSnapshot Buffer::retentionSnapshot() const noexcept {
+    return {
+        .retainedCapacityBytes = buffer_.capacity(),
+        .peakRetainedCapacityBytes = peakRetainedCapacityBytes_,
+        .trimCount = trimCount_,
+        .trimArmed = trimArmed_,
+    };
+}
+
+std::size_t Buffer::maxRetainedCapacityBytes() const noexcept {
+    return retentionOptions_.maxRetainedCapacityBytes;
+}
+
+std::size_t Buffer::trimThresholdBytes() const noexcept {
+    return retentionOptions_.trimThresholdBytes;
+}
+
+bool Buffer::trimRetainedCapacity() noexcept {
+    if (!trimArmed_ ||
+        readableBytes() > retentionOptions_.trimThresholdBytes) {
+        return false;
+    }
+
+    try {
+        std::vector<char> trimmed(
+            retentionOptions_.maxRetainedCapacityBytes);
+        const std::size_t readable = readableBytes();
+        if (readable != 0) {
+            std::copy(
+                begin() + readerIndex_,
+                begin() + writerIndex_,
+                trimmed.data() + kCheapPrepend);
+        }
+        buffer_.swap(trimmed);
+        readerIndex_ = kCheapPrepend;
+        writerIndex_ = readerIndex_ + readable;
+        ++trimCount_;
+        trimArmed_ =
+            buffer_.capacity() >
+            retentionOptions_.maxRetainedCapacityBytes;
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 const char* Buffer::peek() const noexcept {
@@ -43,6 +108,7 @@ const char* Buffer::beginWrite() const noexcept {
 void Buffer::retrieve(std::size_t len) {
     if (len < readableBytes()) {
         readerIndex_ += len;
+        (void)trimRetainedCapacity();
     } else {
         retrieveAll();
     }
@@ -55,6 +121,7 @@ void Buffer::retrieveUntil(const char* end) {
 void Buffer::retrieveAll() {
     readerIndex_ = kCheapPrepend;
     writerIndex_ = kCheapPrepend;
+    (void)trimRetainedCapacity();
 }
 
 std::string Buffer::retrieveAllAsString() {
@@ -155,6 +222,7 @@ const char* Buffer::begin() const noexcept {
 void Buffer::makeSpace(std::size_t len) {
     if (writableBytes() + prependableBytes() - kCheapPrepend < len) {
         buffer_.resize(writerIndex_ + len);
+        updateRetentionState();
         return;
     }
 
@@ -162,6 +230,15 @@ void Buffer::makeSpace(std::size_t len) {
     std::copy(begin() + readerIndex_, begin() + writerIndex_, begin() + kCheapPrepend);
     readerIndex_ = kCheapPrepend;
     writerIndex_ = readerIndex_ + readable;
+}
+
+void Buffer::updateRetentionState() noexcept {
+    peakRetainedCapacityBytes_ =
+        std::max(peakRetainedCapacityBytes_, buffer_.capacity());
+    if (buffer_.capacity() >
+        retentionOptions_.maxRetainedCapacityBytes) {
+        trimArmed_ = true;
+    }
 }
 
 }  // namespace gamenet::net

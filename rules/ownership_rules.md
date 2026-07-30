@@ -96,6 +96,9 @@ It must not blur these roles.
 
 ## 5. TcpConnection
 - TcpConnection owns its input/output buffer members
+- each Buffer exclusively owns its vector storage. A retention trim transfers
+  readable bytes into replacement storage before releasing the historical
+  allocation; it owns no socket, EventLoop, protocol state, or callback
 - TcpConnection owns its cumulative optional-notification drop counter
 - TcpConnection does not own EventLoop
 - TcpConnection lifecycle should be coordinated through shared ownership where needed
@@ -255,6 +258,9 @@ It must not blur these roles.
 - BroadcastDispatcher state owns immutable per-owner budget identities for its
   lifetime. A budget identity owns only atomic counters and never owns an
   EventLoop, executor, endpoint, payload, task, or callback
+- PacketFramer exclusively owns its ring storage. Retention trim copies only
+  its current logical bytes, preserves ring order, and releases the historical
+  allocation without acquiring transport/session ownership
 
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions

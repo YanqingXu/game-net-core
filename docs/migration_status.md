@@ -383,6 +383,16 @@ concurrent producers at owner/global limits and a concurrent shutdown race;
 all five Broadcast contracts then passed 20 consecutive repetitions. The
 resulting MSVC Debug tree passed all 119 tests and all 33 repository guards;
 the public API manifest and deterministic compatibility diff also passed.
+M3-Q1-C adds hysteretic retained-capacity governance to Core Buffer and the
+provisional PacketFramer. Buffer defaults to a 64 KiB-plus-prepend retention
+target with a 16 KiB readable recovery threshold; PacketFramer defaults to one
+maximum-size frame for both target and threshold. Active data may exceed the
+target, but low-water trim preserves unread/ring order, records current/peak/
+trim state, and keeps the old valid allocation if replacement allocation
+fails. Buffer and PacketFramer direct contracts each passed 50/50 repetitions;
+the Buffer unit plus all three PacketFramer contracts passed together, and the
+MSVC Debug tree passed all 119 tests. All 33 repository guards plus the public
+API manifest and deterministic compatibility diff also passed.
 The current inventory is unit=8, contract=98, integration=13, threading=92,
 lifecycle=97, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed before M3-Q1-A. After Q1-A, all 119 MSVC Debug tests and all

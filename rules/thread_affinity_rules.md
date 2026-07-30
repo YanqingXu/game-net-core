@@ -174,6 +174,9 @@ No other direct mutation path is allowed for core loop state.
 - Windows read-storage allocation, bounded reuse, submission, and final
   release are connection owner-loop-only. A pending `WSARecv` keeps the same
   allocation until its real normal/error/cancellation completion is consumed
+- Buffer retention growth, arm state, trim, and snapshots are owner-loop-only;
+  no retention observation becomes cross-thread-safe merely because Buffer is
+  embedded in TcpConnection
 - TcpConnection socket close, completion-obligation consumption, lifecycle
   detach, Channel removal, and disconnected publication are owner-loop-only
 - on Linux, TcpConnection disables and removes its Channel registration before
@@ -295,6 +298,8 @@ No other direct mutation path is allowed for core loop state.
   immutable registry publication may take a registration mutex, but repeated
   reservation, rollback, completion release, shutdown, and snapshot paths do
   not acquire it
+- PacketFramer retention growth, trim, reset, and snapshots remain on its
+  single caller-owner thread and never schedule their own continuation
 
 ## 15. Forbidden
 - Direct Poller mutation from non-owner thread

@@ -3,6 +3,8 @@
 
 #include "support/TestAssert.h"
 #include "support/SocketPair.h"
+
+#include <stdexcept>
 #include <string>
 
 int main() {
@@ -45,6 +47,93 @@ int main() {
 
         gamenet::net::sockets::close(pair.connectionFd);
         pair.connectionFd = gamenet::net::kInvalidSocket;
+    }
+
+    {
+        gamenet::net::Buffer buffer({
+            .maxRetainedCapacityBytes = 2048,
+            .trimThresholdBytes = 128,
+        });
+        const auto initial = buffer.retentionSnapshot();
+        GAMENET_TEST_ASSERT(
+            initial.retainedCapacityBytes >=
+            gamenet::net::Buffer::kCheapPrepend +
+                gamenet::net::Buffer::kInitialSize);
+        GAMENET_TEST_ASSERT(initial.trimCount == 0);
+        GAMENET_TEST_ASSERT(!initial.trimArmed);
+        GAMENET_TEST_ASSERT(
+            buffer.maxRetainedCapacityBytes() == 2048);
+        GAMENET_TEST_ASSERT(buffer.trimThresholdBytes() == 128);
+
+        const std::string historicalPeak(8192, 'r');
+        buffer.append(historicalPeak);
+        const auto grown = buffer.retentionSnapshot();
+        GAMENET_TEST_ASSERT(grown.retainedCapacityBytes > 2048);
+        GAMENET_TEST_ASSERT(
+            grown.peakRetainedCapacityBytes ==
+            grown.retainedCapacityBytes);
+        GAMENET_TEST_ASSERT(grown.trimArmed);
+
+        buffer.retrieve(historicalPeak.size() - 256);
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == 256);
+        GAMENET_TEST_ASSERT(!buffer.trimRetainedCapacity());
+        GAMENET_TEST_ASSERT(
+            buffer.retentionSnapshot().retainedCapacityBytes ==
+            grown.retainedCapacityBytes);
+        GAMENET_TEST_ASSERT(
+            buffer.retentionSnapshot().trimCount == 0);
+
+        buffer.retrieve(128);
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == 128);
+        const auto trimmed = buffer.retentionSnapshot();
+        GAMENET_TEST_ASSERT(
+            trimmed.retainedCapacityBytes <= 2048);
+        GAMENET_TEST_ASSERT(
+            trimmed.peakRetainedCapacityBytes ==
+            grown.peakRetainedCapacityBytes);
+        GAMENET_TEST_ASSERT(trimmed.trimCount == 1);
+        GAMENET_TEST_ASSERT(!trimmed.trimArmed);
+        GAMENET_TEST_ASSERT(
+            buffer.retrieveAllAsString() ==
+            std::string(128, 'r'));
+
+        const auto stableCapacity =
+            buffer.retentionSnapshot().retainedCapacityBytes;
+        for (std::size_t index = 0; index < 100; ++index) {
+            buffer.append("small", 5);
+            GAMENET_TEST_ASSERT(
+                buffer.retrieveAllAsString() == "small");
+        }
+        const auto reused = buffer.retentionSnapshot();
+        GAMENET_TEST_ASSERT(
+            reused.retainedCapacityBytes == stableCapacity);
+        GAMENET_TEST_ASSERT(reused.trimCount == 1);
+    }
+
+    {
+        bool rejectedSmallTarget = false;
+        try {
+            gamenet::net::Buffer invalid({
+                .maxRetainedCapacityBytes = 1024,
+                .trimThresholdBytes = 0,
+            });
+            (void)invalid;
+        } catch (const std::invalid_argument&) {
+            rejectedSmallTarget = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedSmallTarget);
+
+        bool rejectedHighThreshold = false;
+        try {
+            gamenet::net::Buffer invalid({
+                .maxRetainedCapacityBytes = 2048,
+                .trimThresholdBytes = 2041,
+            });
+            (void)invalid;
+        } catch (const std::invalid_argument&) {
+            rejectedHighThreshold = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedHighThreshold);
     }
 
     return 0;

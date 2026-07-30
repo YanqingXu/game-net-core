@@ -48,6 +48,20 @@ PacketFramer::PacketFramer(PacketFramerOptions options) : options_(options) {
         options_.maxFrameBytesPerPush < maximumFrameBytes) {
         throw std::invalid_argument("PacketFramer requires coherent non-zero processing limits");
     }
+    if (!options_.maxRetainedCapacityBytes) {
+        options_.maxRetainedCapacityBytes = maximumFrameBytes;
+    }
+    if (!options_.trimThresholdBytes) {
+        options_.trimThresholdBytes =
+            *options_.maxRetainedCapacityBytes;
+    }
+    if (*options_.maxRetainedCapacityBytes >
+            options_.maxBufferedBytes ||
+        *options_.trimThresholdBytes >
+            *options_.maxRetainedCapacityBytes) {
+        throw std::invalid_argument(
+            "PacketFramer requires a coherent retention target and trim threshold");
+    }
 }
 
 FrameResult PacketFramer::push(std::string_view bytes) {
@@ -104,6 +118,7 @@ FrameResult PacketFramer::push(std::string_view bytes) {
     } else {
         result.status = result.frames.empty() ? FrameStatus::NeedMoreData : FrameStatus::FramesReady;
     }
+    (void)trimRetainedCapacity();
     return result;
 }
 
@@ -143,6 +158,59 @@ std::size_t PacketFramer::maxFrameBytesPerPush() const noexcept {
     return options_.maxFrameBytesPerPush;
 }
 
+std::size_t PacketFramer::maxRetainedCapacityBytes() const noexcept {
+    return *options_.maxRetainedCapacityBytes;
+}
+
+std::size_t PacketFramer::trimThresholdBytes() const noexcept {
+    return *options_.trimThresholdBytes;
+}
+
+PacketFramerRetentionSnapshot
+PacketFramer::retentionSnapshot() const noexcept {
+    return {
+        .retainedCapacityBytes = storage_.capacity(),
+        .peakRetainedCapacityBytes = peakRetainedCapacityBytes_,
+        .trimCount = trimCount_,
+        .trimArmed = trimArmed_,
+    };
+}
+
+bool PacketFramer::trimRetainedCapacity() noexcept {
+    if (!trimArmed_ ||
+        bufferedBytes_ > *options_.trimThresholdBytes) {
+        return false;
+    }
+
+    try {
+        std::vector<char> trimmed(
+            *options_.maxRetainedCapacityBytes);
+        if (bufferedBytes_ != 0) {
+            const auto first =
+                std::min(bufferedBytes_, storage_.size() - head_);
+            std::memcpy(
+                trimmed.data(),
+                storage_.data() + head_,
+                first);
+            if (first != bufferedBytes_) {
+                std::memcpy(
+                    trimmed.data() + first,
+                    storage_.data(),
+                    bufferedBytes_ - first);
+            }
+        }
+        storage_.swap(trimmed);
+        head_ = 0;
+        ++trimCount_;
+        trimArmed_ =
+            storage_.capacity() >
+            *options_.maxRetainedCapacityBytes;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 bool PacketFramer::faulted() const noexcept {
     return faulted_;
 }
@@ -176,6 +244,7 @@ void PacketFramer::appendBytes(std::string_view bytes) {
         }
         storage_.swap(grown);
         head_ = 0;
+        updateRetentionState();
     }
 
     const auto tail = (head_ + bufferedBytes_) % storage_.size();
@@ -203,12 +272,22 @@ void PacketFramer::consume(std::size_t bytes) noexcept {
     head_ = (head_ + bytes) % storage_.size();
     bufferedBytes_ -= bytes;
     if (bufferedBytes_ == 0) head_ = 0;
+    (void)trimRetainedCapacity();
 }
 
 void PacketFramer::clearBuffer() noexcept {
-    storage_.clear();
     head_ = 0;
     bufferedBytes_ = 0;
+    (void)trimRetainedCapacity();
+}
+
+void PacketFramer::updateRetentionState() noexcept {
+    peakRetainedCapacityBytes_ =
+        std::max(peakRetainedCapacityBytes_, storage_.capacity());
+    if (storage_.capacity() >
+        *options_.maxRetainedCapacityBytes) {
+        trimArmed_ = true;
+    }
 }
 
 }  // namespace gamenet::protocol

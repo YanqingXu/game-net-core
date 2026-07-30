@@ -30,6 +30,18 @@ struct PacketFramerOptions {
     std::size_t maxBufferedBytes{2U * (1024U * 1024U + sizeof(std::uint32_t))};
     std::size_t maxFramesPerPush{64};
     std::size_t maxFrameBytesPerPush{1024U * 1024U + sizeof(std::uint32_t)};
+    // Null selects one maximum-size frame; explicit values may be lower when
+    // callers prefer reallocating rare large frames over retaining them.
+    std::optional<std::size_t> maxRetainedCapacityBytes{};
+    // Null selects maxRetainedCapacityBytes.
+    std::optional<std::size_t> trimThresholdBytes{};
+};
+
+struct PacketFramerRetentionSnapshot {
+    std::size_t retainedCapacityBytes{};
+    std::size_t peakRetainedCapacityBytes{};
+    std::uint64_t trimCount{};
+    bool trimArmed{};
 };
 
 class PacketFramer {
@@ -49,6 +61,10 @@ public:
     std::size_t maxBufferedBytes() const noexcept;
     std::size_t maxFramesPerPush() const noexcept;
     std::size_t maxFrameBytesPerPush() const noexcept;
+    std::size_t maxRetainedCapacityBytes() const noexcept;
+    std::size_t trimThresholdBytes() const noexcept;
+    PacketFramerRetentionSnapshot retentionSnapshot() const noexcept;
+    bool trimRetainedCapacity() noexcept;
     bool faulted() const noexcept;
 
 private:
@@ -57,11 +73,15 @@ private:
     std::string copyPayload(std::size_t offset, std::size_t length) const;
     void consume(std::size_t bytes) noexcept;
     void clearBuffer() noexcept;
+    void updateRetentionState() noexcept;
 
     PacketFramerOptions options_;
     std::vector<char> storage_;
     std::size_t head_{};
     std::size_t bufferedBytes_{};
+    std::size_t peakRetainedCapacityBytes_{};
+    std::uint64_t trimCount_{};
+    bool trimArmed_{false};
     bool faulted_{false};
 };
 

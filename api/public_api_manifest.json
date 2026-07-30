@@ -96,7 +96,7 @@
     "include/gamenet/core/base/Timestamp.h": "c668d00e88f50d591a58a7d6eb845f5c0fe7db8296159c098113108827cf1ec1",
     "include/gamenet/core/base/noncopyable.h": "06e896f354470b405c28a955f106e79716b373662e32ef5af9afe35c36c164d2",
     "include/gamenet/core/net/Acceptor.h": "37c8c5d5c0b929a461419bed8e9c52b817a363669c847463fb6b256bf1700943",
-    "include/gamenet/core/net/Buffer.h": "49beb04a234447ada7d422cd8090c4e71c6d821ee5e71603fac3d58663f849e6",
+    "include/gamenet/core/net/Buffer.h": "6f5b9127b90f56373bdfe5497e25b411143489bce65ac26908f6c49deff79b81",
     "include/gamenet/core/net/CallbackException.h": "7d2d1f7de7bd9cff7fdd68ec7b56835238f341dd63ae40ed11d1cbdf39b41b84",
     "include/gamenet/core/net/Callbacks.h": "7cbd8d58eee4e2723319498016ce4768d350069a7277b104029abad42c5f68eb",
     "include/gamenet/core/net/Channel.h": "f3f3255b325aa578fcd8ebe64c534f9ed166c05831177f7054e020d7ac2200be",

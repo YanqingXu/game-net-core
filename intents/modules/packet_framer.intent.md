@@ -23,6 +23,10 @@ format is exactly `uint32 big-endian payload_length | payload`.
 - The configured maximum applies to payload bytes, excluding the prefix.
 - Internal buffered bytes never exceed the configured buffer limit; the limit
   must be large enough to hold one maximum-size frame.
+- Retained ring capacity may temporarily exceed its configured retention
+  target while active buffered bytes require it. Oversized capacity is trimmed
+  to the target only after buffered bytes reach the configured lower recovery
+  threshold.
 - One `push()` emits no more than the configured frame count or frame-byte
   processing budget. Complete buffered work beyond either budget is retained
   and reported through `BudgetExhausted` plus `needsContinuation`.
@@ -45,6 +49,8 @@ format is exactly `uint32 big-endian payload_length | payload`.
   own EventLoop. PacketFramer does not know or own an EventLoop.
 - Moving returned values across threads is allowed. Moving or concurrently
   invoking the framer itself is not an approved cross-thread operation.
+- Retention snapshots and trim decisions are caller-owner observations. They
+  add no synchronization and invoke no callback.
 
 ## Failure Contract
 
@@ -55,6 +61,9 @@ format is exactly `uint32 big-endian payload_length | payload`.
   and requires owner-loop continuation until no complete buffered frame remains.
 - Further input returns `Faulted` and is ignored until explicit `reset()`.
 - Encoding rejects payloads above the configured maximum without truncation.
+- Retention trim is opportunistic and data preserving. Allocation failure
+  leaves the existing ring and arm state valid for a later attempt; fault/reset
+  clears logical bytes but retains no capacity above the configured target.
 
 ## Verification
 
@@ -62,7 +71,8 @@ format is exactly `uint32 big-endian payload_length | payload`.
   input, sticky frames, empty frames, invalid lengths, reset, encoding, and
   segmented input.
 - `tests/contract/protocol/test_packet_framer_budget.cpp` covers frame/byte
-  budgets, continuation, buffer overflow, zero-length floods, and option
+  budgets, continuation, buffer overflow, zero-length floods, retained-capacity
+  hysteresis, wrapped-data preservation, small-frame reuse, and option
   validation.
 - `tests/contract/protocol/test_packet_framer_round_trip_smoke.cpp` exercises
   deterministic arbitrary payload bytes inside valid framed streams, across

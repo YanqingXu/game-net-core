@@ -190,6 +190,10 @@ For lifecycle-sensitive modules, tests should include:
   overshoot, later-scope failure rolls back earlier scopes, hysteretic recovery
   reopens admission only at the configured threshold, and close/stop leaves
   every snapshot at zero
+- Buffer and PacketFramer retained-capacity contracts cross the configured high
+  target, remain untrimmed above the lower recovery threshold, preserve every
+  unread/wrapped byte through trim, converge at or below the target, and reuse
+  that capacity without per-small-read/frame retrimming
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

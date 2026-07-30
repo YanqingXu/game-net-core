@@ -198,3 +198,21 @@ the former per-task dispatcher mutex. This remains a provisional-surface
 change and therefore does not alter a stable-header fingerprint. The direct
 contract is
 `tests/contract/broadcast/test_broadcast_outstanding_budget.cpp`.
+
+M3-Q1-C adds stable Core `BufferRetentionOptions` /
+`BufferRetentionSnapshot` and replaces the zero-argument Buffer constructor
+with an explicit options constructor that retains a default argument, so
+existing `Buffer buffer;` source remains valid. The default target is 64 KiB
+plus the cheap-prepend region and the readable recovery threshold is 16 KiB.
+Active readable bytes may still grow beyond that target; only a later
+low-water observation performs an opportunistic, data-preserving trim. This is
+an additive source change within the 0.3 line, but `Buffer.h` changes its stable
+fingerprint and consumers must rebuild under the existing pre-1.0 policy.
+
+The provisional PacketFramer options append nullable retention target and trim
+threshold fields. Omitting them selects one maximum-size frame for both values,
+preserving existing aggregate initializers and avoiding a reallocation for
+ordinary maximum-size frames. Both components expose owner-thread-only
+current/peak/trim snapshots; no cross-thread guarantee is added. Direct
+contracts live in `tests/contract/buffer/test_buffer_contract.cpp` and
+`tests/contract/protocol/test_packet_framer_budget.cpp`.
