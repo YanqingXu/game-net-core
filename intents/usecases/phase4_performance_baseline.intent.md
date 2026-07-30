@@ -14,10 +14,11 @@ source_paths: tests/integration/benchmark/test_game_server_metrics_smoke.cpp;tes
 ## Intent
 
 The Phase 4 performance baseline is a reproducible, opt-in engineering tool for
-measuring protocol framing, logic-queue delay, broadcast fanout, and
-SessionManager idle-expiry scale. The executable records raw evidence without
-embedded thresholds; the Phase 6 workflow applies reviewed same-runner relative
-regression budgets without expanding any installed library API.
+measuring protocol framing, logic-queue delay, broadcast fanout, EventLoop
+timer-storm behavior, and SessionManager idle-expiry scale. The executable
+records raw evidence without embedded thresholds; the Phase 6 workflow applies
+reviewed same-runner relative regression budgets without expanding any
+installed library API.
 
 ## Scenario Contracts
 
@@ -72,6 +73,27 @@ regression budgets without expanding any installed library API.
   from the frozen three-scenario Phase 6 paired evidence set until a reviewed
   cross-platform baseline and regression budget are added.
 
+### `timer-storm`
+
+- The process main thread owns one `EventLoop`; `messages` one-shot timers are
+  registered with one common already-ready timestamp before the timed drain.
+  `batch` configures `EventLoopOptions::maxTimersPerIteration`.
+- Every timer callback records ready-to-callback lag on the owner thread. The
+  EventLoop metric hook separately records each timer-drain round's
+  oldest-ready latency, drained/remaining counts, and budget-exhausted state.
+- Report callback-lag P50/P99/max, drain-round oldest-ready P50/P99, exact
+  callback/drain/exhausted counts, remaining-ready high water, operations per
+  second, and process working-set before/after/peak values.
+- A run succeeds only when all callbacks execute, the sum of metric drained
+  work equals `messages`, the number of drain rounds equals
+  `ceil(messages / batch)`, and every non-final round reports budget
+  exhaustion. A capacity-aware watchdog may request owner-loop quit after the
+  configured timeout; it never mutates EventLoop state directly.
+- This scale-study scenario measures registration-to-callback overload lag and
+  bounded owner-loop drain behavior at 10k/100k timer populations. It is
+  intentionally excluded from the frozen three-scenario Phase 6 paired
+  evidence set until reviewed cross-platform samples and budgets are added.
+
 ## Threading And Ownership
 
 - The benchmark executable owns all configuration, payloads, samples, worker
@@ -83,6 +105,10 @@ regression budgets without expanding any installed library API.
 - Session expiry setup and measurement run entirely on the process main thread,
   which is both the EventLoop and SessionManager owner. Endpoint close requests
   therefore complete inline without cross-loop scheduling.
+- Timer registration, timer callbacks, EventLoop metric callbacks, and sample
+  mutation run only on the process main/owner thread. The watchdog owns only
+  its synchronization state and a copied executor capability; it uses typed
+  admission and is joined before benchmark state is destroyed.
 - Broadcast endpoint `send` callbacks execute only on their endpoint executor.
   Cross-loop completion and sample aggregation use atomics, a mutex, and a
   condition variable; no callback waits synchronously for another loop.
@@ -106,9 +132,9 @@ regression budgets without expanding any installed library API.
   epoll and Windows IOCP runner.
 - A shared cross-platform validator rejects missing/non-finite required
   measurements (allowing valid zero latency/RSS delta) and inconsistent
-  operation, accepted, rejected, batching, or working-set counts. It writes a
-  semantic manifest containing commit SHA, run id, job, artifact name,
-  parameters, and raw-file SHA-256 hashes.
+  operation, accepted, rejected, batching, timer-drain, or working-set counts.
+  It writes a semantic manifest containing commit SHA, run id, job, artifact
+  name, parameters, and raw-file SHA-256 hashes.
 - Each platform artifact also carries the shared CI job manifest, which binds
   the actual checkout, candidate/PR/merge identities, run attempt, runner,
   commands, toolchain, and every evidence-file hash. Artifact names include the
@@ -124,7 +150,8 @@ regression budgets without expanding any installed library API.
 ## Verification
 
 - `tests/cmake/test_phase4_benchmark_contract.py` verifies the opt-in target,
-  scenario/schema fields, ownership markers, memory sampler, and documentation.
+  scenario/schema fields, ownership markers, memory sampler, timer-drain
+  invariants, and documentation.
 - `tests/ci/test_phase4_benchmark_workflow.py` verifies the paired Release jobs,
   fixed scenario set, schema validation, and same-commit artifact names.
 - `tools/validate_phase4_benchmark.py` validates both platforms with one
@@ -135,8 +162,9 @@ regression budgets without expanding any installed library API.
 ## Migration Provenance
 
 - Source baseline: `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57`.
-- Kept invariants: owner-loop dispatch, bounded batches, queue-lag observation,
-  high-fanout latency sampling, and raw evidence separated from correctness.
+- Kept invariants: owner-loop dispatch, bounded batches, queue/timer-lag
+  observation, high-fanout latency sampling, and raw evidence separated from
+  correctness.
 - Deferred from the source design: business simulation, AOI selection, exporter
   integration, adaptive thresholds, and production capacity claims remain out
   of scope.

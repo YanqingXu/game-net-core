@@ -84,6 +84,7 @@ def main() -> None:
         '"broadcast-fanout"',
         '"session-expiry-scan"',
         '"session-expiry"',
+        '"timer-storm"',
         "PacketFramer",
         "SessionManager",
         "LogicLoop",
@@ -108,6 +109,14 @@ def main() -> None:
         "session_expired",
         "session_remaining",
         "session_close_requests",
+        "runTimerStorm",
+        "EventLoopMetricEvent::TimersDrained",
+        "maxTimersPerIteration",
+        "timer_callback_lag_p99_us",
+        "timer_oldest_ready_latency_p99_us",
+        "timer_metric_drained",
+        "timer_budget_exhausted_iterations",
+        "timer_remaining_high_watermark",
         "WorkingSetSampler",
         "std::vector<std::jthread> producers",
         "FanoutProbe must outlive owner-loop tasks",
@@ -124,8 +133,12 @@ def main() -> None:
         "validate_logic_queue",
         "validate_session_expiry",
         "validate_broadcast_fanout",
+        "validate_timer_storm",
         "logic accepted count must equal configured messages",
         "broadcast accepted count must equal messages times fanout",
+        "timer drain iterations must equal ceil(messages / batch size)",
+        "timer metric-drained count must equal configured messages",
+        "timer budget-exhausted iterations must cover every non-final drain",
         "working set peak delta must equal peak minus before",
         "sha256",
         "no performance thresholds",
@@ -139,7 +152,10 @@ def main() -> None:
         "--scenario broadcast-fanout",
         "--scenario session-expiry-scan",
         "--scenario session-expiry",
+        "--scenario timer-storm",
         "no-ready-bucket",
+        "timer_callback_lag_p99_us",
+        "EventLoopExecutor::tryQueue()",
         "P99",
         "working set",
         "Raw JSON",
@@ -223,6 +239,71 @@ def main() -> None:
             "Release",
             Path(f"{scenario}.json"),
         )
+
+    timer_document = {
+        "schema": "gamenet.phase4_benchmark.v1",
+        "status": "ok",
+        "error": None,
+        "scenario": "timer-storm",
+        "platform": "windows",
+        "backend": "iocp",
+        "build_type": "Release",
+        "parameters": {
+            **session_parameters,
+            "messages": 10000,
+            "batch_size": 1024,
+        },
+        "measurements": {
+            "elapsed_ms": 10.0,
+            "operations_per_second": 1_000_000.0,
+            "timer_callback_lag_p50_us": 100.0,
+            "timer_callback_lag_p99_us": 200.0,
+            "timer_callback_lag_max_us": 250.0,
+            "timer_oldest_ready_latency_p50_us": 110.0,
+            "timer_oldest_ready_latency_p99_us": 210.0,
+            "timer_callbacks": 10000,
+            "timer_metric_drained": 10000,
+            "timer_drain_iterations": 10,
+            "timer_budget_exhausted_iterations": 9,
+            "timer_remaining_high_watermark": 8976,
+            "working_set_before_bytes": 1000000,
+            "working_set_after_bytes": 1200000,
+            "working_set_peak_bytes": 1500000,
+            "working_set_peak_delta_bytes": 500000,
+        },
+    }
+    phase4_validator.validate_document(
+        timer_document,
+        "timer-storm",
+        "windows",
+        "iocp",
+        "Release",
+        Path("timer-storm.json"),
+    )
+    invalid_timer_documents = (
+        ("timer_callbacks", 9999),
+        ("timer_metric_drained", 9999),
+        ("timer_drain_iterations", 9),
+        ("timer_budget_exhausted_iterations", 10),
+        ("timer_remaining_high_watermark", 8975),
+        ("timer_callback_lag_p99_us", 99.0),
+    )
+    for key, value in invalid_timer_documents:
+        mutated = json.loads(json.dumps(timer_document))
+        mutated["measurements"][key] = value
+        try:
+            phase4_validator.validate_document(
+                mutated,
+                "timer-storm",
+                "windows",
+                "iocp",
+                "Release",
+                Path(f"invalid-{key}.json"),
+            )
+        except phase4_validator.BenchmarkValidationError:
+            pass
+        else:
+            raise AssertionError(f"timer validator accepted invalid {key}")
 
     linux_guard = "python3 tests/cmake/test_phase4_benchmark_contract.py"
     windows_guard = "python tests/cmake/test_phase4_benchmark_contract.py"

@@ -81,6 +81,16 @@ struct Result {
     std::optional<std::uint64_t> broadcastDropped;
     std::optional<std::uint64_t> broadcastScheduledTasks;
     std::optional<std::uint64_t> broadcastTaskHighWatermark;
+    std::optional<double> timerCallbackLagP50Us;
+    std::optional<double> timerCallbackLagP99Us;
+    std::optional<double> timerCallbackLagMaxUs;
+    std::optional<double> timerOldestReadyLatencyP50Us;
+    std::optional<double> timerOldestReadyLatencyP99Us;
+    std::optional<std::uint64_t> timerCallbacks;
+    std::optional<std::uint64_t> timerMetricDrained;
+    std::optional<std::uint64_t> timerDrainIterations;
+    std::optional<std::uint64_t> timerBudgetExhaustedIterations;
+    std::optional<std::uint64_t> timerRemainingHighWatermark;
     std::optional<std::uint64_t> workingSetBeforeBytes;
     std::optional<std::uint64_t> workingSetAfterBytes;
     std::optional<std::uint64_t> workingSetPeakBytes;
@@ -124,11 +134,11 @@ std::size_t parseSize(
 void printUsage(std::ostream& output) {
     output
         << "Usage: gamenet_phase4_benchmark [options]\n"
-        << "  --scenario framing|logic-queue|broadcast-fanout|session-expiry-scan|session-expiry\n"
-        << "  --messages N       frames, commands, fanout iterations, or sessions\n"
+        << "  --scenario framing|logic-queue|broadcast-fanout|session-expiry-scan|session-expiry|timer-storm\n"
+        << "  --messages N       frames, commands, fanout iterations, sessions, or timers\n"
         << "  --payload N        payload bytes per item\n"
         << "  --threads N        logic producers or broadcast owner loops\n"
-        << "  --batch N          frames/push, commands/tick, or endpoints/task\n"
+        << "  --batch N          frames/push, commands/tick, endpoints/task, or timers/loop turn\n"
         << "  --fanout N         broadcast endpoints\n"
         << "  --tick-us N        logic tick interval in microseconds\n"
         << "  --timeout-ms N     scenario timeout\n";
@@ -165,10 +175,11 @@ Config parseArgs(int argc, char* argv[]) {
     if (config.scenario != "framing" && config.scenario != "logic-queue" &&
         config.scenario != "broadcast-fanout" &&
         config.scenario != "session-expiry-scan" &&
-        config.scenario != "session-expiry") {
+        config.scenario != "session-expiry" &&
+        config.scenario != "timer-storm") {
         usageError(
             "--scenario must be framing, logic-queue, broadcast-fanout, "
-            "session-expiry-scan, or session-expiry");
+            "session-expiry-scan, session-expiry, or timer-storm");
     }
     return config;
 }
@@ -563,6 +574,125 @@ Result runSessionExpiry(const Config& config) {
     return result;
 }
 
+Result runTimerStorm(const Config& config) {
+    const auto before = sampleWorkingSetBytes();
+    WorkingSetSampler memorySampler(before);
+
+    gamenet::net::EventLoopOptions loopOptions;
+    loopOptions.maxTimersPerIteration = config.batchSize;
+    gamenet::net::EventLoop loop(loopOptions);
+
+    // EventLoop, timer, metric, and sample mutation stay on this owner thread.
+    std::vector<double> callbackLagUs;
+    std::vector<double> oldestReadyLatencyUs;
+    callbackLagUs.reserve(config.messages);
+    oldestReadyLatencyUs.reserve(
+        (config.messages + config.batchSize - 1) / config.batchSize);
+    std::size_t callbacks = 0;
+    std::size_t metricDrained = 0;
+    std::size_t drainIterations = 0;
+    std::size_t exhaustedIterations = 0;
+    std::size_t remainingHighWatermark = 0;
+
+    loop.setEventLoopMetricCallback(
+        [&](const gamenet::net::EventLoopMetricSample& sample) {
+            if (sample.event != gamenet::net::EventLoopMetricEvent::TimersDrained) {
+                return;
+            }
+            ++drainIterations;
+            metricDrained += sample.drainedWork;
+            remainingHighWatermark =
+                (std::max)(remainingHighWatermark, sample.remainingWork);
+            exhaustedIterations += sample.budgetExhausted ? 1U : 0U;
+            oldestReadyLatencyUs.push_back(
+                std::chrono::duration<double, std::micro>(sample.oldestReadyLatency).count());
+        });
+
+    const auto readyAt = Clock::now();
+    for (std::size_t index = 0; index < config.messages; ++index) {
+        loop.runAt(readyAt, [&] {
+            callbackLagUs.push_back(
+                std::chrono::duration<double, std::micro>(Clock::now() - readyAt).count());
+            ++callbacks;
+            if (callbacks == config.messages) {
+                loop.quit();
+            }
+        });
+    }
+
+    std::mutex watchdogMutex;
+    std::condition_variable watchdogCondition;
+    bool finished = false;
+    std::atomic<bool> timedOut{false};
+    const auto executor = loop.executor();
+    std::jthread watchdog([&] {
+        std::unique_lock lock(watchdogMutex);
+        if (watchdogCondition.wait_for(lock, config.timeout, [&] { return finished; })) {
+            return;
+        }
+        timedOut.store(true, std::memory_order_release);
+        lock.unlock();
+        (void)executor.tryQueue([&loop] { loop.quit(); });
+    });
+
+    const auto start = Clock::now();
+    loop.loop();
+    const auto finish = Clock::now();
+    {
+        std::lock_guard lock(watchdogMutex);
+        finished = true;
+    }
+    watchdogCondition.notify_one();
+    watchdog.join();
+
+    const auto after = sampleWorkingSetBytes();
+    const auto peak = memorySampler.stop(after);
+    if (timedOut.load(std::memory_order_acquire)) {
+        throw std::runtime_error("timer-storm benchmark timed out");
+    }
+
+    const auto expectedIterations =
+        (config.messages + config.batchSize - 1) / config.batchSize;
+    const auto expectedExhausted = expectedIterations - 1;
+    const auto expectedRemainingHighWatermark =
+        config.messages > config.batchSize ? config.messages - config.batchSize : 0;
+    if (callbacks != config.messages || metricDrained != config.messages ||
+        drainIterations != expectedIterations ||
+        exhaustedIterations != expectedExhausted ||
+        remainingHighWatermark != expectedRemainingHighWatermark ||
+        callbackLagUs.size() != config.messages ||
+        oldestReadyLatencyUs.size() != expectedIterations) {
+        throw std::runtime_error(
+            "timer-storm benchmark produced inconsistent budget-drain counts");
+    }
+
+    const auto seconds = elapsedSeconds(start, finish);
+    if (seconds <= 0.0) {
+        throw std::runtime_error("timer-storm benchmark clock did not advance");
+    }
+    const auto maximumCallbackLag =
+        *std::max_element(callbackLagUs.begin(), callbackLagUs.end());
+
+    Result result;
+    result.elapsedMs = elapsedMilliseconds(start, finish);
+    result.operationsPerSecond = static_cast<double>(callbacks) / seconds;
+    result.timerCallbackLagP50Us = percentile(callbackLagUs, 0.50);
+    result.timerCallbackLagP99Us = percentile(callbackLagUs, 0.99);
+    result.timerCallbackLagMaxUs = maximumCallbackLag;
+    result.timerOldestReadyLatencyP50Us = percentile(oldestReadyLatencyUs, 0.50);
+    result.timerOldestReadyLatencyP99Us = percentile(oldestReadyLatencyUs, 0.99);
+    result.timerCallbacks = callbacks;
+    result.timerMetricDrained = metricDrained;
+    result.timerDrainIterations = drainIterations;
+    result.timerBudgetExhaustedIterations = exhaustedIterations;
+    result.timerRemainingHighWatermark = remainingHighWatermark;
+    result.workingSetBeforeBytes = before;
+    result.workingSetAfterBytes = after;
+    result.workingSetPeakBytes = peak;
+    result.workingSetPeakDeltaBytes = static_cast<std::int64_t>(peak - before);
+    return result;
+}
+
 struct FanoutProbe {
     std::mutex mutex;
     std::condition_variable condition;
@@ -882,6 +1012,26 @@ void printDocument(
     printOptional(std::cout, result.broadcastScheduledTasks);
     std::cout << ",\n    \"broadcast_task_high_watermark\": ";
     printOptional(std::cout, result.broadcastTaskHighWatermark);
+    std::cout << ",\n    \"timer_callback_lag_p50_us\": ";
+    printOptional(std::cout, result.timerCallbackLagP50Us);
+    std::cout << ",\n    \"timer_callback_lag_p99_us\": ";
+    printOptional(std::cout, result.timerCallbackLagP99Us);
+    std::cout << ",\n    \"timer_callback_lag_max_us\": ";
+    printOptional(std::cout, result.timerCallbackLagMaxUs);
+    std::cout << ",\n    \"timer_oldest_ready_latency_p50_us\": ";
+    printOptional(std::cout, result.timerOldestReadyLatencyP50Us);
+    std::cout << ",\n    \"timer_oldest_ready_latency_p99_us\": ";
+    printOptional(std::cout, result.timerOldestReadyLatencyP99Us);
+    std::cout << ",\n    \"timer_callbacks\": ";
+    printOptional(std::cout, result.timerCallbacks);
+    std::cout << ",\n    \"timer_metric_drained\": ";
+    printOptional(std::cout, result.timerMetricDrained);
+    std::cout << ",\n    \"timer_drain_iterations\": ";
+    printOptional(std::cout, result.timerDrainIterations);
+    std::cout << ",\n    \"timer_budget_exhausted_iterations\": ";
+    printOptional(std::cout, result.timerBudgetExhaustedIterations);
+    std::cout << ",\n    \"timer_remaining_high_watermark\": ";
+    printOptional(std::cout, result.timerRemainingHighWatermark);
     std::cout << ",\n    \"working_set_before_bytes\": ";
     printOptional(std::cout, result.workingSetBeforeBytes);
     std::cout << ",\n    \"working_set_after_bytes\": ";
@@ -900,6 +1050,7 @@ Result run(const Config& config) {
         config.scenario == "session-expiry") {
         return runSessionExpiry(config);
     }
+    if (config.scenario == "timer-storm") return runTimerStorm(config);
     return runBroadcastFanout(config);
 }
 

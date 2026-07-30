@@ -1,9 +1,9 @@
 # Phase 4 Performance Baseline
 
 `gamenet_phase4_benchmark` is the opt-in Release harness for the active
-PacketFramer, SessionManager, LogicLoop, and Broadcast layers. It emits one
-`gamenet.phase4_benchmark.v1` JSON document per invocation. The executable is
-not a CTest, is not installed, and does not define performance thresholds.
+EventLoop, PacketFramer, SessionManager, LogicLoop, and Broadcast layers. It
+emits one `gamenet.phase4_benchmark.v1` JSON document per invocation. The
+executable is not a CTest, is not installed, and does not define performance thresholds.
 
 The existing `gamenet_core_benchmark` and its `gamenet.core_benchmark.v1`
 schema remain unchanged. Core and Phase 4 results are separate artifacts
@@ -64,9 +64,9 @@ The stable parameter object includes fields that are irrelevant to some
 scenarios. For example, `fanout` has no effect on `framing`; it remains present
 so artifacts retain one versioned shape.
 
-`session-expiry-scan` and `session-expiry` are separate scale studies, not part
-of the frozen paired workflow scenario set. Run multiple session counts on the
-same Release build:
+`session-expiry-scan`, `session-expiry`, and `timer-storm` are separate scale
+studies, not part of the frozen paired workflow scenario set. Run multiple
+session counts on the same Release build:
 
 ```powershell
 & $exe --scenario session-expiry-scan --messages 10000 --payload 1 `
@@ -81,6 +81,25 @@ same Release build:
   --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
 & $exe --scenario session-expiry --messages 1000000 --payload 1 `
   --threads 1 --batch 1 --fanout 1 --tick-us 1000 --timeout-ms 30000
+```
+
+For the M3-P1 timer-capacity row, use the same Release binary and keep `batch`
+fixed while changing only the timer population:
+
+```powershell
+& $exe --scenario timer-storm --messages 10000 --payload 1 `
+  --threads 1 --batch 1024 --fanout 1 --tick-us 1000 --timeout-ms 30000 `
+  > timer-storm-10000.json
+& $exe --scenario timer-storm --messages 100000 --payload 1 `
+  --threads 1 --batch 1024 --fanout 1 --tick-us 1000 --timeout-ms 30000 `
+  > timer-storm-100000.json
+
+python tools/validate_phase4_benchmark.py `
+  --input timer-storm-10000.json --scenario timer-storm `
+  --platform windows --backend iocp --build-type Release
+python tools/validate_phase4_benchmark.py `
+  --input timer-storm-100000.json --scenario timer-storm `
+  --platform windows --backend iocp --build-type Release
 ```
 
 ## Measurements
@@ -155,6 +174,33 @@ endpoint/session construction and dispatch. `working_set_peak_bytes` and
 not allocator-level object sizes or a broadcast memory cap. The before/after
 samples are retained to make sampler interpretation explicit.
 
+### Timer-storm lag and bounded drain
+
+`timer-storm` registers `messages` one-shot timers with one common ready
+timestamp on the main-thread-owned EventLoop. Registration happens before the
+timed drain, while ready-to-callback lag deliberately starts at that common
+timestamp and therefore includes timer registration backlog. `batch` maps
+directly to `EventLoopOptions::maxTimersPerIteration`.
+
+`timer_callback_lag_p50_us`, `timer_callback_lag_p99_us`, and
+`timer_callback_lag_max_us` describe every callback. The separate
+`timer_oldest_ready_latency_p50_us` and
+`timer_oldest_ready_latency_p99_us` values come from the EventLoop's
+`TimersDrained` metric once per drain round. Exact callback, drain-round,
+metric-drained, budget-exhausted-round, and remaining-ready high-water counts
+prove that a large ready population was actually portioned by the configured
+fairness budget. Process working-set samples cover EventLoop construction,
+timer metadata registration, and drain.
+
+All timer state and measurement vectors remain on the EventLoop owner thread.
+A watchdog thread waits only on benchmark-owned synchronization and, on
+timeout, uses `EventLoopExecutor::tryQueue()` to request owner-thread quit. It
+is joined before any captured state is destroyed.
+
+The 10k run is the local profile and 100k is the candidate capacity profile.
+They are raw same-binary capacity evidence, not thresholds and not yet members
+of the frozen three-scenario paired workflow.
+
 ## JSON And Failure Contract
 
 Every successful run writes exactly one JSON document to stdout with:
@@ -175,9 +221,12 @@ verifies mathematical count invariants:
 framing throughput against decoded operations and wire bytes, Logic accepted
 and rejected totals plus queue byte/depth high water, and Broadcast
 messages-by-fanout delivery plus per-owner batching and working-set peak/delta
-relationships. Rejected/dropped counts must be zero for a successful baseline.
-The semantic validator does not compare timing or memory scores. Phase 6 keeps
-that schema/count validation separate from the same-runner relative regression
+relationships. For timer storms it verifies callback and metric-drain totals,
+the exact ceiling-divided drain count, non-final exhausted rounds, remaining
+high water, percentile ordering, operation rate, and working-set relationships.
+Rejected/dropped counts must be zero for a successful baseline. The semantic
+validator does not compare timing or memory scores. Phase 6 keeps that
+schema/count validation separate from the same-runner relative regression
 comparator and its reviewed JSON budget.
 
 ## Raw JSON Evidence

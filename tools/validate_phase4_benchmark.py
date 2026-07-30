@@ -14,6 +14,7 @@ from typing import Any
 SCHEMA = "gamenet.phase4_benchmark.v1"
 MANIFEST_SCHEMA = "gamenet.phase4_benchmark_evidence.v1"
 SCENARIOS = ("framing", "logic-queue", "broadcast-fanout")
+SCALE_STUDY_SCENARIOS = ("session-expiry-scan", "session-expiry", "timer-storm")
 
 
 class BenchmarkValidationError(ValueError):
@@ -260,6 +261,83 @@ def validate_broadcast_fanout(
     require(peak_delta == peak - before, "working set peak delta must equal peak minus before")
 
 
+def validate_timer_storm(
+    parameters: dict[str, Any], measurements: dict[str, Any], elapsed_ms: float
+) -> None:
+    timers = require_positive_count(parameters.get("messages"), "timer-storm timers")
+    batch_size = require_positive_count(parameters.get("batch_size"), "timer-storm batch size")
+    require_operation_rate(measurements, elapsed_ms, timers, "timer storm")
+    require_percentiles(measurements, "timer_callback_lag", "timer callback lag")
+    require_percentiles(
+        measurements,
+        "timer_oldest_ready_latency",
+        "timer oldest-ready latency",
+    )
+    callback_p99 = require_nonnegative_number(
+        measurements.get("timer_callback_lag_p99_us"),
+        "timer callback lag P99",
+    )
+    callback_max = require_nonnegative_number(
+        measurements.get("timer_callback_lag_max_us"),
+        "timer callback lag maximum",
+    )
+    require(
+        callback_max >= callback_p99,
+        "timer callback lag maximum must be greater than or equal to P99",
+    )
+
+    callbacks = require_positive_count(
+        measurements.get("timer_callbacks"), "timer callbacks"
+    )
+    metric_drained = require_positive_count(
+        measurements.get("timer_metric_drained"), "timer metric drained"
+    )
+    drain_iterations = require_positive_count(
+        measurements.get("timer_drain_iterations"), "timer drain iterations"
+    )
+    exhausted_iterations = require_nonnegative_count(
+        measurements.get("timer_budget_exhausted_iterations"),
+        "timer budget-exhausted iterations",
+    )
+    remaining_high_watermark = require_nonnegative_count(
+        measurements.get("timer_remaining_high_watermark"),
+        "timer remaining high water",
+    )
+    expected_iterations = (timers + batch_size - 1) // batch_size
+    require(callbacks == timers, "timer callback count must equal configured messages")
+    require(
+        metric_drained == timers,
+        "timer metric-drained count must equal configured messages",
+    )
+    require(
+        drain_iterations == expected_iterations,
+        "timer drain iterations must equal ceil(messages / batch size)",
+    )
+    require(
+        exhausted_iterations == expected_iterations - 1,
+        "timer budget-exhausted iterations must cover every non-final drain",
+    )
+    require(
+        remaining_high_watermark == max(timers - batch_size, 0),
+        "timer remaining high water must match the first bounded drain",
+    )
+
+    before = require_positive_count(
+        measurements.get("working_set_before_bytes"), "working set before"
+    )
+    after = require_positive_count(
+        measurements.get("working_set_after_bytes"), "working set after"
+    )
+    peak = require_positive_count(
+        measurements.get("working_set_peak_bytes"), "working set peak"
+    )
+    peak_delta = require_nonnegative_count(
+        measurements.get("working_set_peak_delta_bytes"), "working set peak delta"
+    )
+    require(peak >= before and peak >= after, "working set peak must cover before and after samples")
+    require(peak_delta == peak - before, "working set peak delta must equal peak minus before")
+
+
 def validate_document(
     document: Any,
     expected_scenario: str,
@@ -302,6 +380,8 @@ def validate_document(
             elapsed_ms,
             expected_scenario == "session-expiry",
         )
+    elif expected_scenario == "timer-storm":
+        validate_timer_storm(parameters, measurements, elapsed_ms)
     else:
         validate_broadcast_fanout(parameters, measurements, elapsed_ms)
     return root
@@ -385,10 +465,13 @@ def write_manifest(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate Phase 4 benchmark evidence JSON")
-    parser.add_argument("--input-dir", type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--input-dir", type=Path)
+    inputs.add_argument("--input", type=Path)
     parser.add_argument("--platform", choices=("linux", "windows"), required=True)
     parser.add_argument("--backend", choices=("epoll", "iocp"), required=True)
     parser.add_argument("--build-type", default="Release")
+    parser.add_argument("--scenario", choices=SCENARIOS + SCALE_STUDY_SCENARIOS)
     parser.add_argument("--manifest-output", type=Path)
     parser.add_argument("--commit-sha")
     parser.add_argument("--run-id")
@@ -400,6 +483,31 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
+        if args.input is not None:
+            require(args.scenario is not None, "--input requires --scenario")
+            require(
+                args.manifest_output is None,
+                "single-file validation cannot write a frozen evidence manifest",
+            )
+            try:
+                document = json.loads(args.input.read_text(encoding="utf-8-sig"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as error:
+                raise BenchmarkValidationError(
+                    f"failed to read benchmark JSON {args.input}: {error}"
+                ) from error
+            validate_document(
+                document,
+                args.scenario,
+                args.platform,
+                args.backend,
+                args.build_type,
+                args.input,
+            )
+            return 0
+        require(
+            args.scenario is None,
+            "--scenario is only valid with single-file --input",
+        )
         validated = validate_directory(args.input_dir, args.platform, args.backend, args.build_type)
         if args.manifest_output is not None:
             metadata = (args.commit_sha, args.run_id, args.job, args.artifact_name)
