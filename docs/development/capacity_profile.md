@@ -260,4 +260,7 @@ The mixed capacity gate complements rather than replaces the one-process
 long-soak lane. Candidate promotion still requires the capacity pair and the
 24-hour endurance artifact from the same frozen commit; the 72-hour soak and
 the dedicated 100k pair remain production-readiness evidence on provisioned
-hosts.
+hosts. The long-soak workflow consumes exact capacity and endurance
+run/attempt identities and uses
+`tools/verify_production_promotion_evidence.py` to revalidate their raw inputs
+before emitting the candidate/release promotion manifest.

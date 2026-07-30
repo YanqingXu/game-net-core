@@ -327,6 +327,77 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def write_promotion_endurance_evidence(
+    root: Path,
+    *,
+    mode: str,
+    seconds: int,
+    candidate_sha: str,
+    workflow_run_id: str,
+    workflow_run_attempt: int,
+) -> Path:
+    root.mkdir(parents=True)
+    log = root / "fault-injection.log"
+    log.write_text("promotion endurance fixture\n", encoding="utf-8")
+    profiles = {
+        name: 3
+        for name in (
+            "abrupt_peer_reset",
+            "callback_exception",
+            "output_overload",
+            "healthy_recovery",
+            "forced_shutdown",
+        )
+    }
+    document = {
+        "schema": "gamenet.production_endurance.v1",
+        "status": "success",
+        "mode": mode,
+        "candidate_sha": candidate_sha,
+        "workflow_run_id": workflow_run_id,
+        "workflow_run_attempt": workflow_run_attempt,
+        "platform": "linux",
+        "backend": "epoll",
+        "target_duration_seconds": seconds,
+        "completed_cycles": 3,
+        "child_elapsed_milliseconds": seconds * 1000,
+        "profiles": profiles,
+        "process_exit_code": 0,
+        "memory": {
+            "supported": True,
+            "samples": 3,
+            "first_rss_bytes": 20 * 1024 * 1024,
+            "last_rss_bytes": 21 * 1024 * 1024,
+            "minimum_rss_bytes": 20 * 1024 * 1024,
+            "maximum_rss_bytes": 22 * 1024 * 1024,
+            "rss_growth_bytes": 1024 * 1024,
+            "max_rss_budget_bytes": 512 * 1024 * 1024,
+            "max_rss_growth_budget_bytes": 64 * 1024 * 1024,
+        },
+        "test": {
+            "name": "integration.resilience.test_fault_injection",
+            "labels": [
+                "endurance",
+                "fault_injection",
+                "threading",
+                "lifecycle",
+            ],
+            "executable_sha256": "b" * 64,
+        },
+        "log": {
+            "file": log.name,
+            "bytes": log.stat().st_size,
+            "sha256": sha256(log),
+        },
+    }
+    result = root / "result.json"
+    result.write_text(
+        json.dumps(document, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return result
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
@@ -349,6 +420,9 @@ def main() -> None:
     pair_verifier = (
         repo_root / "tools" / "verify_capacity_gate_evidence_set.py"
     )
+    promotion_verifier = (
+        repo_root / "tools" / "verify_production_promotion_evidence.py"
+    )
 
     cmake_text = benchmark_cmake.read_text(encoding="utf-8")
     source_text = source.read_text(encoding="utf-8")
@@ -363,6 +437,9 @@ def main() -> None:
     )
     gate_runner_text = gate_runner.read_text(encoding="utf-8")
     pair_verifier_text = pair_verifier.read_text(encoding="utf-8")
+    promotion_verifier_text = promotion_verifier.read_text(
+        encoding="utf-8"
+    )
 
     for fragment in (
         "add_executable(gamenet_capacity_profile",
@@ -421,8 +498,18 @@ def main() -> None:
         release_intent,
     )
     require(
+        release_intent_text,
+        "candidate promotion revalidates the 10k pair",
+        release_intent,
+    )
+    require(
         rules_text,
         "candidate versus 100k dedicated endpoint-attempt",
+        testing_rules,
+    )
+    require(
+        rules_text,
+        "a production promotion artifact must revalidate",
         testing_rules,
     )
     for fragment in (
@@ -475,11 +562,23 @@ def main() -> None:
         "capacity repetition contract drifted",
     ):
         require(pair_verifier_text, fragment, pair_verifier)
+    for fragment in (
+        "gamenet.production_promotion_evidence.v1",
+        "capacity pair manifest does not match revalidated raw evidence",
+        "capacity profile does not satisfy the promotion stage",
+        "release promotion requires candidate-24h evidence",
+    ):
+        require(
+            promotion_verifier_text,
+            fragment,
+            promotion_verifier,
+        )
 
     sys.path.insert(0, str(repo_root / "tools"))
     import validate_capacity_profile as capacity_validator
     import run_capacity_gate as capacity_gate
     import verify_capacity_gate_evidence_set as capacity_pair
+    import verify_production_promotion_evidence as promotion
 
     document = valid_document()
     capacity_validator.validate_document(
@@ -639,6 +738,8 @@ def main() -> None:
         prefix="gamenet-capacity-pair-"
     ) as directory:
         evidence_root = Path(directory)
+        candidate_capacity_root = evidence_root / "candidate-capacity"
+        candidate_capacity_root.mkdir()
         candidate_sha = "a" * 40
         run_id = "12345"
         run_attempt = 2
@@ -654,7 +755,7 @@ def main() -> None:
                 f"capacity-gate-candidate-10k-{job}-"
                 f"{candidate_sha}-{run_id}-{run_attempt}"
             )
-            root = evidence_root / artifact_name
+            root = candidate_capacity_root / artifact_name
             root.mkdir()
             toolchain = root / "toolchain.txt"
             toolchain.write_text(
@@ -720,16 +821,243 @@ def main() -> None:
             assert first_document is not None
             fixtures[job] = (root, manifest, first_document)
 
-        pair = capacity_pair.verify_evidence_set(evidence_root)
+        pair = capacity_pair.verify_evidence_set(
+            candidate_capacity_root
+        )
         assert pair["schema"] == capacity_pair.SCHEMA
         assert pair["result"] == "pass"
         assert pair["profile"] == "candidate-10k"
         assert pair["endpoint_attempts"] == 10_000
         assert len(pair["platforms"]) == 2
+        (candidate_capacity_root / "pair-manifest.json").write_text(
+            json.dumps(pair, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        capacity_pair.verify_retained_pair_manifest(
+            candidate_capacity_root / "pair-manifest.json",
+            pair,
+        )
+        capacity_pair.verify_expected_identity(
+            pair,
+            profile="candidate-10k",
+            candidate_sha=candidate_sha,
+            run_id=run_id,
+            run_attempt=run_attempt,
+        )
+        try:
+            capacity_pair.verify_expected_identity(
+                pair,
+                profile="candidate-10k",
+                candidate_sha=candidate_sha,
+                run_id=run_id,
+                run_attempt=run_attempt + 1,
+            )
+        except capacity_pair.CapacityGatePairError:
+            pass
+        else:
+            raise AssertionError(
+                "capacity identity verifier accepted attempt drift"
+            )
+
+        candidate_endurance = write_promotion_endurance_evidence(
+            evidence_root / "candidate-endurance",
+            mode="candidate-24h",
+            seconds=86_400,
+            candidate_sha=candidate_sha,
+            workflow_run_id="54321",
+            workflow_run_attempt=1,
+        )
+        candidate_promotion = promotion.verify_promotion(
+            stage="candidate",
+            capacity_root=candidate_capacity_root,
+            endurance_evidence=candidate_endurance,
+            candidate_sha=candidate_sha,
+            capacity_run_id=run_id,
+            capacity_run_attempt=run_attempt,
+            promotion_run_id="54321",
+            promotion_run_attempt=1,
+        )
+        assert candidate_promotion["schema"] == promotion.SCHEMA
+        assert candidate_promotion["stage"] == "candidate"
+        assert (
+            candidate_promotion["capacity"]["profile"]
+            == "candidate-10k"
+        )
+        assert len(candidate_promotion["endurance"]) == 1
+
+        dedicated_capacity_root = (
+            evidence_root / "dedicated-capacity"
+        )
+        dedicated_capacity_root.mkdir()
+        dedicated_run_id = "67890"
+        dedicated_run_attempt = 3
+        for job, platform, backend in (
+            ("linux-capacity-gate", "linux", "epoll"),
+            ("windows-capacity-gate", "windows", "iocp"),
+        ):
+            artifact_name = (
+                f"capacity-gate-dedicated-100k-{job}-"
+                f"{candidate_sha}-{dedicated_run_id}-"
+                f"{dedicated_run_attempt}"
+            )
+            root = dedicated_capacity_root / artifact_name
+            root.mkdir()
+            toolchain = root / "toolchain.txt"
+            toolchain.write_text(
+                f"{platform} dedicated fixture toolchain\n",
+                encoding="utf-8",
+            )
+            document = capacity_gate_document(
+                dedicated_profile,
+                platform=platform,
+                backend=backend,
+            )
+            sample_path = root / "sample-1.json"
+            sample_path.write_text(
+                json.dumps(document, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "schema": capacity_gate.SCHEMA,
+                "result": "pass",
+                "profile": dedicated_profile.name,
+                "candidate_sha": candidate_sha,
+                "run_id": dedicated_run_id,
+                "run_attempt": dedicated_run_attempt,
+                "job": job,
+                "artifact_name": artifact_name,
+                "platform": platform,
+                "backend": backend,
+                "build_type": "Release",
+                "repetitions": dedicated_profile.repetitions,
+                "endpoint_attempts": (
+                    dedicated_profile.endpoint_attempts
+                ),
+                "probe_attempts": dedicated_profile.probe_attempts,
+                "parameters": dedicated_profile.parameters,
+                "executable_sha256": "d" * 64,
+                "toolchain": {
+                    "path": toolchain.name,
+                    "bytes": toolchain.stat().st_size,
+                    "sha256": sha256(toolchain),
+                },
+                "samples": [
+                    {
+                        "repetition": 1,
+                        "path": sample_path.name,
+                        "bytes": sample_path.stat().st_size,
+                        "sha256": sha256(sample_path),
+                    }
+                ],
+            }
+            (root / "capacity-manifest.json").write_text(
+                json.dumps(manifest, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        dedicated_pair = capacity_pair.verify_evidence_set(
+            dedicated_capacity_root
+        )
+        (
+            dedicated_capacity_root / "pair-manifest.json"
+        ).write_text(
+            json.dumps(dedicated_pair, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        release_endurance = write_promotion_endurance_evidence(
+            evidence_root / "release-endurance",
+            mode="release-72h",
+            seconds=259_200,
+            candidate_sha=candidate_sha,
+            workflow_run_id="60002",
+            workflow_run_attempt=4,
+        )
+        release_promotion = promotion.verify_promotion(
+            stage="release",
+            capacity_root=dedicated_capacity_root,
+            endurance_evidence=release_endurance,
+            candidate_sha=candidate_sha,
+            capacity_run_id=dedicated_run_id,
+            capacity_run_attempt=dedicated_run_attempt,
+            promotion_run_id="60002",
+            promotion_run_attempt=4,
+            candidate_endurance_evidence=candidate_endurance,
+            candidate_endurance_run_id="54321",
+            candidate_endurance_run_attempt=1,
+        )
+        assert release_promotion["stage"] == "release"
+        assert (
+            release_promotion["capacity"]["profile"]
+            == "dedicated-100k"
+        )
+        assert [
+            item["mode"]
+            for item in release_promotion["endurance"]
+        ] == ["candidate-24h", "release-72h"]
+
+        def expect_promotion_failure(
+            label: str,
+            **overrides: object,
+        ) -> None:
+            arguments: dict[str, object] = {
+                "stage": "candidate",
+                "capacity_root": candidate_capacity_root,
+                "endurance_evidence": candidate_endurance,
+                "candidate_sha": candidate_sha,
+                "capacity_run_id": run_id,
+                "capacity_run_attempt": run_attempt,
+                "promotion_run_id": "54321",
+                "promotion_run_attempt": 1,
+            }
+            arguments.update(overrides)
+            try:
+                promotion.verify_promotion(**arguments)
+            except (
+                promotion.PromotionEvidenceError,
+                promotion.EnduranceEvidenceError,
+                capacity_pair.CapacityGatePairError,
+            ):
+                pass
+            else:
+                raise AssertionError(
+                    f"promotion verifier accepted {label}"
+                )
+
+        expect_promotion_failure(
+            "capacity source attempt drift",
+            capacity_run_attempt=run_attempt + 1,
+        )
+        expect_promotion_failure(
+            "endurance source attempt drift",
+            promotion_run_attempt=2,
+        )
+        expect_promotion_failure(
+            "candidate capacity used for release",
+            stage="release",
+            candidate_endurance_evidence=candidate_endurance,
+            candidate_endurance_run_id="54321",
+            candidate_endurance_run_attempt=1,
+        )
+        candidate_pair_path = (
+            candidate_capacity_root / "pair-manifest.json"
+        )
+        drifted_pair = copy.deepcopy(pair)
+        drifted_pair["probe_attempts"] = 499
+        candidate_pair_path.write_text(
+            json.dumps(drifted_pair, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        expect_promotion_failure("copied pair summary drift")
+        candidate_pair_path.write_text(
+            json.dumps(pair, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
         def expect_pair_failure(label: str) -> None:
             try:
-                capacity_pair.verify_evidence_set(evidence_root)
+                capacity_pair.verify_evidence_set(
+                    candidate_capacity_root
+                )
             except capacity_pair.CapacityGatePairError:
                 pass
             else:

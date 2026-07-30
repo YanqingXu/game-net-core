@@ -50,6 +50,10 @@ smoke run may validate orchestration but is not release evidence.
   for every declared fault profile
 - the release gate accepts 72-hour evidence only for the same frozen commit
   that already passed the 24-hour gate
+- the production workflow consumes one exact capacity workflow run and rerun
+  attempt. Candidate mode revalidates the paired 10k raw evidence; release mode
+  revalidates the paired dedicated 100k raw evidence and the exact retained
+  24-hour endurance attempt before emitting a same-commit promotion manifest
 - GitHub-hosted runners are not eligible because their maximum job execution
   time is shorter than either production duration; the workflow targets a
   dedicated self-hosted endurance runner
@@ -68,8 +72,8 @@ smoke run may validate orchestration but is not release evidence.
   profile, owner-loop callbacks, service recovery, overload rejection, and
   forced graceful-stop convergence in one reusable cycle
 - `tests/ci/test_endurance_gate.py` verifies smoke execution, fixed production
-  durations, workflow/runner wiring, structured checkpoint evidence, and
-  malformed/failed-child negative fixtures
+  durations, workflow/runner wiring, structured checkpoint evidence,
+  candidate/release promotion inputs, and malformed/failed/tampered fixtures
 
 ## 7. Review Checklist
 - Does one process remain alive for the complete claimed duration?

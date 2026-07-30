@@ -45,6 +45,9 @@ def load_and_verify(
     candidate_sha: str,
     platform: str,
     backend: str,
+    *,
+    workflow_run_id: str | None = None,
+    workflow_run_attempt: int | None = None,
 ) -> dict[str, Any]:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -55,6 +58,27 @@ def load_and_verify(
     require(document.get("status") == "success", "endurance evidence did not succeed")
     require(document.get("mode") == mode, "endurance mode mismatch")
     require(document.get("candidate_sha") == candidate_sha, "endurance candidate SHA mismatch")
+    require(
+        (workflow_run_id is None) == (workflow_run_attempt is None),
+        "expected endurance workflow identity is incomplete",
+    )
+    if workflow_run_id is not None:
+        require(
+            workflow_run_id.isdecimal()
+            and int(workflow_run_id, 10) > 0
+            and isinstance(workflow_run_attempt, int)
+            and not isinstance(workflow_run_attempt, bool)
+            and workflow_run_attempt > 0,
+            "invalid expected endurance workflow identity",
+        )
+        require(
+            document.get("workflow_run_id") == workflow_run_id,
+            "endurance workflow run ID mismatch",
+        )
+        require(
+            document.get("workflow_run_attempt") == workflow_run_attempt,
+            "endurance workflow run attempt mismatch",
+        )
     require(document.get("platform") == platform, "endurance platform mismatch")
     require(document.get("backend") == backend, "endurance backend mismatch")
     require(re.fullmatch(r"[0-9a-f]{40}", candidate_sha) is not None, "invalid expected candidate SHA")
@@ -122,6 +146,8 @@ def main() -> int:
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--platform", choices=("linux", "windows"), required=True)
     parser.add_argument("--backend", choices=("epoll", "iocp"), required=True)
+    parser.add_argument("--workflow-run-id")
+    parser.add_argument("--workflow-run-attempt", type=int)
     arguments = parser.parse_args()
     try:
         evidence = load_and_verify(
@@ -130,6 +156,8 @@ def main() -> int:
             arguments.candidate_sha,
             arguments.platform,
             arguments.backend,
+            workflow_run_id=arguments.workflow_run_id,
+            workflow_run_attempt=arguments.workflow_run_attempt,
         )
     except EvidenceError as error:
         print(f"endurance evidence verification failed: {error}", file=sys.stderr)

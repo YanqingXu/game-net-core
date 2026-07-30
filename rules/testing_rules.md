@@ -212,6 +212,11 @@ For lifecycle-sensitive modules, tests should include:
   exact worker/assigned/closed counts must converge before teardown, and 10k
   candidate versus 100k dedicated endpoint-attempt parameter drift must be
   rejected by structured evidence guards
+- a production promotion artifact must revalidate retained raw capacity and
+  endurance evidence rather than trusting a copied summary; candidate mode
+  requires 10k plus 24h, release mode requires dedicated 100k plus same-SHA
+  24h/72h, and SHA, workflow run, rerun attempt, stage, profile, duration, hash,
+  or source-inventory drift must fail closed
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

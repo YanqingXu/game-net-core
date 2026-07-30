@@ -256,11 +256,69 @@ def verify_evidence_set(input_root: Path) -> dict[str, Any]:
     }
 
 
+def verify_expected_identity(
+    result: dict[str, Any],
+    *,
+    profile: str | None = None,
+    candidate_sha: str | None = None,
+    run_id: str | None = None,
+    run_attempt: int | None = None,
+) -> None:
+    if profile is not None:
+        require(
+            result.get("profile") == profile,
+            "capacity pair profile does not match expected profile",
+        )
+    if candidate_sha is not None:
+        require(
+            result.get("candidate_sha") == candidate_sha,
+            "capacity pair candidate SHA does not match expected SHA",
+        )
+    if run_id is not None:
+        require(
+            result.get("run_id") == run_id,
+            "capacity pair run ID does not match expected run",
+        )
+    if run_attempt is not None:
+        require(
+            result.get("run_attempt") == run_attempt,
+            "capacity pair run attempt does not match expected attempt",
+        )
+
+
+def verify_retained_pair_manifest(
+    path: Path,
+    result: dict[str, Any],
+) -> None:
+    require(
+        path.is_file() and not path.is_symlink(),
+        "retained capacity pair manifest is missing",
+    )
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CapacityGatePairError(
+            f"cannot read retained capacity pair manifest: {error}"
+        ) from error
+    require(
+        document == result,
+        "retained capacity pair manifest does not match raw evidence",
+    )
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Verify paired Linux/Windows mixed capacity evidence"
     )
     parser.add_argument("--input-root", type=Path, required=True)
+    parser.add_argument(
+        "--expected-profile",
+        choices=tuple(sorted(run_capacity_gate.PROFILES)),
+    )
+    parser.add_argument("--expected-candidate-sha")
+    parser.add_argument("--expected-run-id")
+    parser.add_argument("--expected-run-attempt", type=int)
+    parser.add_argument("--retained-pair-manifest", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -269,6 +327,18 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parse_args(sys.argv[1:] if argv is None else argv)
     try:
         result = verify_evidence_set(arguments.input_root.resolve())
+        verify_expected_identity(
+            result,
+            profile=arguments.expected_profile,
+            candidate_sha=arguments.expected_candidate_sha,
+            run_id=arguments.expected_run_id,
+            run_attempt=arguments.expected_run_attempt,
+        )
+        if arguments.retained_pair_manifest is not None:
+            verify_retained_pair_manifest(
+                arguments.retained_pair_manifest,
+                result,
+            )
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(
             json.dumps(result, indent=2, sort_keys=True) + "\n",

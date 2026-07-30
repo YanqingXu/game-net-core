@@ -33,6 +33,18 @@ on:
         description: Successful candidate-24h run id required by release-72h
         required: false
         default: ""
+      candidate_run_attempt:
+        description: Exact candidate-24h rerun attempt required by release-72h
+        required: false
+        default: ""
+      capacity_run_id:
+        description: Successful paired capacity workflow run id required by production modes
+        required: false
+        default: ""
+      capacity_run_attempt:
+        description: Exact paired capacity workflow rerun attempt required by production modes
+        required: false
+        default: ""
 
 permissions:
   actions: read
@@ -535,6 +547,9 @@ jobs:
         env:
           GAMENET_ENDURANCE_MODE: "${{ inputs.mode }}"
           GAMENET_CANDIDATE_RUN_ID: "${{ inputs.candidate_run_id }}"
+          GAMENET_CANDIDATE_RUN_ATTEMPT: "${{ inputs.candidate_run_attempt }}"
+          GAMENET_CAPACITY_RUN_ID: "${{ inputs.capacity_run_id }}"
+          GAMENET_CAPACITY_RUN_ATTEMPT: "${{ inputs.capacity_run_attempt }}"
           GAMENET_CANDIDATE_SHA: "${{ github.sha }}"
         run: |
           set -euo pipefail
@@ -544,7 +559,14 @@ jobs:
           import subprocess
 
           mode = os.environ["GAMENET_ENDURANCE_MODE"]
-          run_id = os.environ["GAMENET_CANDIDATE_RUN_ID"]
+          candidate_run_id = os.environ["GAMENET_CANDIDATE_RUN_ID"]
+          candidate_run_attempt = os.environ[
+              "GAMENET_CANDIDATE_RUN_ATTEMPT"
+          ]
+          capacity_run_id = os.environ["GAMENET_CAPACITY_RUN_ID"]
+          capacity_run_attempt = os.environ[
+              "GAMENET_CAPACITY_RUN_ATTEMPT"
+          ]
           expected_sha = os.environ["GAMENET_CANDIDATE_SHA"]
           actual_sha = subprocess.check_output(
               ["git", "rev-parse", "HEAD"], text=True
@@ -553,10 +575,27 @@ jobs:
               raise SystemExit("github.sha is not an immutable commit identity")
           if actual_sha != expected_sha:
               raise SystemExit(f"checkout identity drift: {actual_sha} != {expected_sha}")
-          if mode == "candidate-24h" and run_id:
-              raise SystemExit("candidate-24h must not name prior candidate evidence")
-          if mode == "release-72h" and re.fullmatch(r"[1-9][0-9]*", run_id) is None:
-              raise SystemExit("release-72h requires a positive candidate_run_id")
+          positive = re.compile(r"[1-9][0-9]*")
+          if mode == "candidate-24h" and (
+              candidate_run_id or candidate_run_attempt
+          ):
+              raise SystemExit(
+                  "candidate-24h must not name prior candidate evidence"
+              )
+          if mode == "release-72h" and (
+              positive.fullmatch(candidate_run_id) is None
+              or positive.fullmatch(candidate_run_attempt) is None
+          ):
+              raise SystemExit(
+                  "release-72h requires exact candidate run/attempt"
+              )
+          if (
+              positive.fullmatch(capacity_run_id) is None
+              or positive.fullmatch(capacity_run_attempt) is None
+          ):
+              raise SystemExit(
+                  "production endurance requires exact capacity run/attempt"
+              )
           PY
 
       - name: Record endurance toolchain
@@ -607,13 +646,34 @@ jobs:
             --expect-label endurance=1 \
             --output endurance-evidence/ctest-inventory.json
 
+      - name: Download exact paired capacity evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.capacity_run_id }}
+          pattern: capacity-gate-pair-${{ inputs.mode == 'candidate-24h' && 'candidate-10k' || 'dedicated-100k' }}-${{ github.sha }}-${{ inputs.capacity_run_id }}-${{ inputs.capacity_run_attempt }}
+          merge-multiple: true
+          path: capacity-evidence
+
+      - name: Revalidate exact paired capacity source
+        run: |
+          set -euo pipefail
+          python3 tools/verify_capacity_gate_evidence_set.py \
+            --input-root capacity-evidence \
+            --expected-profile '${{ inputs.mode == 'candidate-24h' && 'candidate-10k' || 'dedicated-100k' }}' \
+            --expected-candidate-sha '${{ github.sha }}' \
+            --expected-run-id '${{ inputs.capacity_run_id }}' \
+            --expected-run-attempt '${{ inputs.capacity_run_attempt }}' \
+            --retained-pair-manifest capacity-evidence/pair-manifest.json \
+            --output endurance-evidence/capacity-pair-revalidated.json
+
       - name: Download retained candidate-24h evidence
         if: inputs.mode == 'release-72h'
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.candidate_run_id }}
-          pattern: production-endurance-candidate-24h-${{ github.job }}-${{ github.sha }}-${{ inputs.candidate_run_id }}-*
+          pattern: production-endurance-candidate-24h-${{ github.job }}-${{ github.sha }}-${{ inputs.candidate_run_id }}-${{ inputs.candidate_run_attempt }}
           merge-multiple: true
           path: prior-candidate-evidence
 
@@ -626,7 +686,9 @@ jobs:
             --mode candidate-24h \
             --candidate-sha '${{ github.sha }}' \
             --platform linux \
-            --backend epoll
+            --backend epoll \
+            --workflow-run-id '${{ inputs.candidate_run_id }}' \
+            --workflow-run-attempt '${{ inputs.candidate_run_attempt }}'
 
       - name: Run uninterrupted production endurance
         run: |
@@ -635,6 +697,8 @@ jobs:
             --test-dir build-production-endurance \
             --mode '${{ inputs.mode }}' \
             --candidate-sha '${{ github.sha }}' \
+            --workflow-run-id '${{ github.run_id }}' \
+            --workflow-run-attempt '${{ github.run_attempt }}' \
             --platform linux \
             --backend epoll \
             --interval-milliseconds 1000 \
@@ -649,7 +713,9 @@ jobs:
             --mode '${{ inputs.mode }}' \
             --candidate-sha '${{ github.sha }}' \
             --platform linux \
-            --backend epoll
+            --backend epoll \
+            --workflow-run-id '${{ github.run_id }}' \
+            --workflow-run-attempt '${{ github.run_attempt }}'
 
       - name: Verify same-commit 24/72-hour pair
         if: inputs.mode == 'release-72h'
@@ -661,7 +727,38 @@ jobs:
             --candidate-sha '${{ github.sha }}' \
             --platform linux \
             --backend epoll \
+            --candidate-run-id '${{ inputs.candidate_run_id }}' \
+            --candidate-run-attempt '${{ inputs.candidate_run_attempt }}' \
+            --release-run-id '${{ github.run_id }}' \
+            --release-run-attempt '${{ github.run_attempt }}' \
             --output endurance-evidence/pair.json
+
+      - name: Verify production promotion evidence
+        env:
+          GAMENET_ENDURANCE_MODE: "${{ inputs.mode }}"
+          GAMENET_CANDIDATE_RUN_ID: "${{ inputs.candidate_run_id }}"
+          GAMENET_CANDIDATE_RUN_ATTEMPT: "${{ inputs.candidate_run_attempt }}"
+        run: |
+          set -euo pipefail
+          args=(
+            --stage "${GAMENET_ENDURANCE_MODE%%-*}"
+            --capacity-root capacity-evidence
+            --endurance-evidence endurance-evidence/run/result.json
+            --candidate-sha '${{ github.sha }}'
+            --capacity-run-id '${{ inputs.capacity_run_id }}'
+            --capacity-run-attempt '${{ inputs.capacity_run_attempt }}'
+            --promotion-run-id '${{ github.run_id }}'
+            --promotion-run-attempt '${{ github.run_attempt }}'
+            --output endurance-evidence/promotion.json
+          )
+          if [ "$GAMENET_ENDURANCE_MODE" = "release-72h" ]; then
+            args+=(
+              --candidate-endurance-evidence prior-candidate-evidence/run/result.json
+              --candidate-endurance-run-id "$GAMENET_CANDIDATE_RUN_ID"
+              --candidate-endurance-run-attempt "$GAMENET_CANDIDATE_RUN_ATTEMPT"
+            )
+          fi
+          python3 tools/verify_production_promotion_evidence.py "${args[@]}"
 
       - name: Write endurance evidence manifest
         if: always()
@@ -677,7 +774,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-production-endurance -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-production-endurance --parallel 1' \
-            --command "python3 tools/run_endurance_gate.py --test-dir build-production-endurance --mode ${{ inputs.mode }} --candidate-sha ${{ github.sha }} --platform linux --backend epoll --interval-milliseconds 1000 --heartbeat-timeout-seconds 120 --output-root endurance-evidence/run"
+            --command "python3 tools/run_endurance_gate.py --test-dir build-production-endurance --mode ${{ inputs.mode }} --candidate-sha ${{ github.sha }} --workflow-run-id ${{ github.run_id }} --workflow-run-attempt ${{ github.run_attempt }} --platform linux --backend epoll --interval-milliseconds 1000 --heartbeat-timeout-seconds 120 --output-root endurance-evidence/run"
 
       - name: Upload production endurance evidence
         if: always()

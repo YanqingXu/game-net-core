@@ -170,6 +170,8 @@ def checkpoint_document(
     *,
     mode: str,
     candidate_sha: str,
+    workflow_run_id: str | None,
+    workflow_run_attempt: int | None,
     platform: str,
     backend: str,
     target_seconds: int,
@@ -194,6 +196,9 @@ def checkpoint_document(
         "child_elapsed_milliseconds": child_elapsed_milliseconds,
         "profiles": {name: cycle for name in PROFILES},
     }
+    if workflow_run_id is not None:
+        document["workflow_run_id"] = workflow_run_id
+        document["workflow_run_attempt"] = workflow_run_attempt
     if message is not None:
         document["message"] = message
     if memory is not None:
@@ -210,6 +215,22 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
     require(0 <= arguments.interval_milliseconds <= 60_000, "interval must be 0..60000 milliseconds")
     require(arguments.heartbeat_timeout_seconds > 0, "heartbeat timeout must be positive")
     target_seconds = duration_for(arguments.mode, arguments.duration_seconds)
+    if arguments.mode in PRODUCTION_DURATIONS:
+        require(
+            isinstance(arguments.workflow_run_id, str)
+            and arguments.workflow_run_id.isdecimal()
+            and int(arguments.workflow_run_id, 10) > 0
+            and isinstance(arguments.workflow_run_attempt, int)
+            and not isinstance(arguments.workflow_run_attempt, bool)
+            and arguments.workflow_run_attempt > 0,
+            "production modes require workflow run identity",
+        )
+    else:
+        require(
+            arguments.workflow_run_id is None
+            and arguments.workflow_run_attempt is None,
+            "smoke mode must not claim workflow run identity",
+        )
     require(not arguments.output_root.exists(), "output root already exists; refusing to overwrite evidence")
     arguments.output_root.mkdir(parents=True)
 
@@ -252,6 +273,8 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
         checkpoint_document(
             mode=arguments.mode,
             candidate_sha=arguments.candidate_sha,
+            workflow_run_id=arguments.workflow_run_id,
+            workflow_run_attempt=arguments.workflow_run_attempt,
             platform=arguments.platform,
             backend=arguments.backend,
             target_seconds=target_seconds,
@@ -347,6 +370,8 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
                         checkpoint_document(
                             mode=arguments.mode,
                             candidate_sha=arguments.candidate_sha,
+                            workflow_run_id=arguments.workflow_run_id,
+                            workflow_run_attempt=arguments.workflow_run_attempt,
                             platform=arguments.platform,
                             backend=arguments.backend,
                             target_seconds=target_seconds,
@@ -391,6 +416,8 @@ def run_endurance(arguments: argparse.Namespace) -> dict[str, Any]:
     final = checkpoint_document(
         mode=arguments.mode,
         candidate_sha=arguments.candidate_sha,
+        workflow_run_id=arguments.workflow_run_id,
+        workflow_run_attempt=arguments.workflow_run_attempt,
         platform=arguments.platform,
         backend=arguments.backend,
         target_seconds=target_seconds,
@@ -435,6 +462,8 @@ def main() -> int:
     parser.add_argument("--mode", choices=("smoke", *PRODUCTION_DURATIONS), required=True)
     parser.add_argument("--duration-seconds", type=int)
     parser.add_argument("--candidate-sha", required=True)
+    parser.add_argument("--workflow-run-id")
+    parser.add_argument("--workflow-run-attempt", type=int)
     parser.add_argument("--platform", choices=("linux", "windows"), required=True)
     parser.add_argument("--backend", choices=("epoll", "iocp"), required=True)
     parser.add_argument("--interval-milliseconds", type=int, default=1000)

@@ -32,6 +32,9 @@ matrix, and immutable evidence are explicit and machine checked.
 - keep the 100k endpoint-attempt profile on explicitly labeled dedicated
   capacity runners; it is not an ordinary hosted-CI or cross-host score gate
 - retain structured 24-hour candidate and 72-hour release endurance evidence
+- emit one promotion manifest that revalidates the retained raw capacity and
+  endurance inputs, binds their exact workflow run/attempt identities to the
+  same immutable commit, and distinguishes candidate from release requirements
 - exercise recoverable network, resource-pressure, callback, and shutdown
   failures without weakening lifecycle or thread-affinity contracts
 - bind every release claim to one immutable candidate commit and a declared
@@ -94,9 +97,12 @@ matrix, and immutable evidence are explicit and machine checked.
 5. fault-injection contracts pass on Linux and Windows
 6. one frozen commit completes the 24-hour candidate endurance gate
 7. the same frozen commit completes the 72-hour release endurance gate
-8. all supported platform, sanitizer, package, benchmark, and evidence gates
+8. candidate promotion revalidates the 10k pair plus 24-hour evidence; release
+   promotion revalidates the dedicated 100k pair plus both 24/72-hour results,
+   with exact source run/attempt identities and the same frozen commit
+9. all supported platform, sanitizer, package, benchmark, and evidence gates
    are green and retained
-9. any release offered for external adoption has an explicit owner-approved
+10. any release offered for external adoption has an explicit owner-approved
    license; otherwise artifacts remain engineering previews with no use grant
 
 ## 7. Verification
@@ -118,8 +124,8 @@ matrix, and immutable evidence are explicit and machine checked.
 - `tests/integration/resilience/test_fault_injection.cpp` verifies the declared
   reset, callback, overload, recovery, and forced-shutdown profiles
 - `tests/ci/test_endurance_gate.py` verifies the uninterrupted-process 24/72-
-  hour duration contract, heartbeat/checkpoint evidence, and remote workflow
-  wiring
+  hour duration contract, heartbeat/checkpoint evidence, exact source-attempt
+  wiring, and the candidate/release promotion manifest
 
 ## 8. Review Checklist
 - Is every release claim backed by structured same-commit evidence?

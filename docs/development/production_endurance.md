@@ -38,6 +38,23 @@ The 72-hour verifier also requires retained successful 24-hour evidence from
 the same candidate SHA, platform, and backend and emits
 `gamenet.production_endurance_pair.v1`.
 
+Production results also record their exact GitHub workflow run id and rerun
+attempt. The workflow refuses a production mode without an exact paired
+capacity source:
+
+| Promotion stage | Capacity source | Endurance source |
+| --- | --- | --- |
+| candidate | paired `candidate-10k` raw artifacts | current `candidate-24h` |
+| release | paired `dedicated-100k` raw artifacts | exact prior `candidate-24h` plus current `release-72h` |
+
+`tools/verify_production_promotion_evidence.py` does not trust copied summary
+fields. It revalidates both platform capacity manifests and raw v3 samples,
+requires the checked-in `pair-manifest.json` to equal the recomputed pair,
+revalidates every endurance result and hashed log, and binds all inputs to the
+same candidate SHA and declared workflow attempts. The resulting
+`gamenet.production_promotion_evidence.v1` is included in the long-soak
+artifact and then hashed by its outer CI evidence manifest.
+
 ## Remote Runner Boundary
 
 The production mode in `long-soak.yml` targets
@@ -45,8 +62,10 @@ The production mode in `long-soak.yml` targets
 to six hours, while self-hosted jobs may run for up to five days, so a genuine
 72-hour single-process claim requires dedicated self-hosted infrastructure.
 The workflow gives the job a 4,620-minute bound and avoids step-level timeouts.
-It uses the GitHub token only before the long child run when a 72-hour run must
-download its prior 24-hour artifact.
+It uses the GitHub token only before the long child run to download the exact
+capacity run/attempt and, for release mode, the exact prior 24-hour
+run/attempt. Capacity evidence is revalidated before the expensive
+uninterrupted process starts.
 
 Official limits:
 

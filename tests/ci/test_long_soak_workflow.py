@@ -535,9 +535,47 @@ def main() -> None:
     require(
         candidate_download,
         "pattern: production-endurance-candidate-24h-${{ github.job }}-"
-        "${{ github.sha }}-${{ inputs.candidate_run_id }}-*",
+        "${{ github.sha }}-${{ inputs.candidate_run_id }}-"
+        "${{ inputs.candidate_run_attempt }}",
         workflow,
     )
+    capacity_download = step_block(
+        production_job, "Download exact paired capacity evidence"
+    )
+    require(
+        capacity_download,
+        "capacity-gate-pair-${{ inputs.mode == 'candidate-24h' && "
+        "'candidate-10k' || 'dedicated-100k' }}-${{ github.sha }}-"
+        "${{ inputs.capacity_run_id }}-${{ inputs.capacity_run_attempt }}",
+        workflow,
+    )
+    promotion_step = step_block(
+        production_job, "Verify production promotion evidence"
+    )
+    require(
+        promotion_step,
+        "tools/verify_production_promotion_evidence.py",
+        workflow,
+    )
+    require(
+        promotion_step,
+        "--candidate-endurance-run-attempt",
+        workflow,
+    )
+    capacity_revalidation = step_block(
+        production_job, "Revalidate exact paired capacity source"
+    )
+    require(
+        capacity_revalidation,
+        "--retained-pair-manifest capacity-evidence/pair-manifest.json",
+        workflow,
+    )
+    endurance_run = step_block(
+        production_job, "Run uninterrupted production endurance"
+    )
+    assert production_job.index(capacity_revalidation) < production_job.index(
+        endurance_run
+    ), "capacity evidence must fail before the expensive endurance process starts"
 
     cmake_calls = re.findall(
         r"^add_gamenet_(?:component_)?test\(([^\n]*)\)$",

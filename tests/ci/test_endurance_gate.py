@@ -135,7 +135,14 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_synthetic_evidence(root: Path, mode: str, seconds: int) -> Path:
+def write_synthetic_evidence(
+    root: Path,
+    mode: str,
+    seconds: int,
+    *,
+    workflow_run_id: str,
+    workflow_run_attempt: int,
+) -> Path:
     root.mkdir()
     log = root / "fault-injection.log"
     log.write_text("retained synthetic verifier fixture\n", encoding="utf-8")
@@ -144,6 +151,8 @@ def write_synthetic_evidence(root: Path, mode: str, seconds: int) -> Path:
         "status": "success",
         "mode": mode,
         "candidate_sha": SHA,
+        "workflow_run_id": workflow_run_id,
+        "workflow_run_attempt": workflow_run_attempt,
         "platform": "linux",
         "backend": "epoll",
         "target_duration_seconds": seconds,
@@ -182,6 +191,9 @@ def main() -> None:
     intent_text = intent.read_text(encoding="utf-8")
     runner = repo_root / "tools" / "run_endurance_gate.py"
     runner_text = runner.read_text(encoding="utf-8")
+    promotion_verifier = (
+        repo_root / "tools" / "verify_production_promotion_evidence.py"
+    )
 
     for fragment in (
         "candidate-24h",
@@ -190,6 +202,8 @@ def main() -> None:
         "259,200",
         "tests/integration/resilience/test_fault_injection.cpp",
         "tests/ci/test_endurance_gate.py",
+        "exact retained",
+        "promotion manifest",
     ):
         require(intent_text, fragment, intent)
     for fragment in (
@@ -200,6 +214,7 @@ def main() -> None:
         '"GAMENET_ENDURANCE_OBSERVATION_ACK"',
         'process.stdin.write("observed\\n")',
         '"output root already exists; refusing to overwrite evidence"',
+        '"production modes require workflow run identity"',
     ):
         require(runner_text, fragment, runner)
     for fragment in (
@@ -213,9 +228,24 @@ def main() -> None:
         "tools/verify_endurance_evidence.py",
         "tools/verify_endurance_evidence_pair.py",
         "candidate_run_id",
+        "candidate_run_attempt",
+        "capacity_run_id",
+        "capacity_run_attempt",
+        "tools/verify_production_promotion_evidence.py",
         "actions/download-artifact@v4",
     ):
         require(workflow_text, fragment, workflow)
+    promotion_text = promotion_verifier.read_text(encoding="utf-8")
+    for fragment in (
+        "gamenet.production_promotion_evidence.v1",
+        '"candidate": "candidate-10k"',
+        '"release": "dedicated-100k"',
+        "verify_evidence_set",
+        "candidate-24h",
+        "release-72h",
+        "capacity pair manifest does not match revalidated raw evidence",
+    ):
+        require(promotion_text, fragment, promotion_verifier)
     production_invocation = workflow_text.split("- name: Run uninterrupted production endurance", 1)[1]
     production_invocation = production_invocation.split("- name: Verify current endurance result", 1)[0]
     assert "--duration-seconds" not in production_invocation, "production workflow must not shorten duration"
@@ -254,9 +284,40 @@ def main() -> None:
         mode_index = override.index("smoke")
         override[mode_index] = "candidate-24h"
         run(override, expected=1)
+        missing_identity = runner_command(
+            repo_root,
+            build,
+            root / "missing-identity",
+        )
+        missing_identity[missing_identity.index("smoke")] = (
+            "candidate-24h"
+        )
+        duration_option = missing_identity.index(
+            "--duration-seconds"
+        )
+        del missing_identity[
+            duration_option : duration_option + 2
+        ]
+        identity_failure = run(missing_identity, expected=1)
+        assert (
+            "production modes require workflow run identity"
+            in identity_failure.stderr
+        )
 
-        candidate = write_synthetic_evidence(root / "candidate", "candidate-24h", 86_400)
-        release = write_synthetic_evidence(root / "release", "release-72h", 259_200)
+        candidate = write_synthetic_evidence(
+            root / "candidate",
+            "candidate-24h",
+            86_400,
+            workflow_run_id="9001",
+            workflow_run_attempt=2,
+        )
+        release = write_synthetic_evidence(
+            root / "release",
+            "release-72h",
+            259_200,
+            workflow_run_id="9002",
+            workflow_run_attempt=1,
+        )
         verifier = repo_root / "tools" / "verify_endurance_evidence.py"
         pair_verifier = repo_root / "tools" / "verify_endurance_evidence_pair.py"
         run([
@@ -272,7 +333,32 @@ def main() -> None:
             "linux",
             "--backend",
             "epoll",
+            "--workflow-run-id",
+            "9001",
+            "--workflow-run-attempt",
+            "2",
         ])
+        run(
+            [
+                sys.executable,
+                str(verifier),
+                "--evidence",
+                str(candidate),
+                "--mode",
+                "candidate-24h",
+                "--candidate-sha",
+                SHA,
+                "--platform",
+                "linux",
+                "--backend",
+                "epoll",
+                "--workflow-run-id",
+                "9001",
+                "--workflow-run-attempt",
+                "3",
+            ],
+            expected=1,
+        )
         pair_output = root / "pair.json"
         run([
             sys.executable,
@@ -287,6 +373,14 @@ def main() -> None:
             "linux",
             "--backend",
             "epoll",
+            "--candidate-run-id",
+            "9001",
+            "--candidate-run-attempt",
+            "2",
+            "--release-run-id",
+            "9002",
+            "--release-run-attempt",
+            "1",
             "--output",
             str(pair_output),
         ])

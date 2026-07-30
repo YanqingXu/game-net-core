@@ -28,6 +28,10 @@ def main() -> int:
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--platform", choices=("linux", "windows"), required=True)
     parser.add_argument("--backend", choices=("epoll", "iocp"), required=True)
+    parser.add_argument("--candidate-run-id")
+    parser.add_argument("--candidate-run-attempt", type=int)
+    parser.add_argument("--release-run-id")
+    parser.add_argument("--release-run-attempt", type=int)
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
 
@@ -38,6 +42,8 @@ def main() -> int:
             arguments.candidate_sha,
             arguments.platform,
             arguments.backend,
+            workflow_run_id=arguments.candidate_run_id,
+            workflow_run_attempt=arguments.candidate_run_attempt,
         )
         release = load_and_verify(
             arguments.release_evidence,
@@ -45,9 +51,47 @@ def main() -> int:
             arguments.candidate_sha,
             arguments.platform,
             arguments.backend,
+            workflow_run_id=arguments.release_run_id,
+            workflow_run_attempt=arguments.release_run_attempt,
         )
         if arguments.output.exists():
             raise EvidenceError("pair output already exists")
+        candidate_entry = {
+            "file": arguments.candidate_evidence.name,
+            "sha256": sha256_file(arguments.candidate_evidence),
+            "completed_cycles": candidate["completed_cycles"],
+            "elapsed_milliseconds": candidate[
+                "child_elapsed_milliseconds"
+            ],
+        }
+        release_entry = {
+            "file": arguments.release_evidence.name,
+            "sha256": sha256_file(arguments.release_evidence),
+            "completed_cycles": release["completed_cycles"],
+            "elapsed_milliseconds": release[
+                "child_elapsed_milliseconds"
+            ],
+        }
+        if arguments.candidate_run_id is not None:
+            candidate_entry.update(
+                {
+                    "workflow_run_id": candidate[
+                        "workflow_run_id"
+                    ],
+                    "workflow_run_attempt": candidate[
+                        "workflow_run_attempt"
+                    ],
+                }
+            )
+        if arguments.release_run_id is not None:
+            release_entry.update(
+                {
+                    "workflow_run_id": release["workflow_run_id"],
+                    "workflow_run_attempt": release[
+                        "workflow_run_attempt"
+                    ],
+                }
+            )
         document = {
             "schema": SCHEMA,
             "generated_at_utc": datetime.now(timezone.utc)
@@ -57,18 +101,8 @@ def main() -> int:
             "candidate_sha": arguments.candidate_sha,
             "platform": arguments.platform,
             "backend": arguments.backend,
-            "candidate_24h": {
-                "file": arguments.candidate_evidence.name,
-                "sha256": sha256_file(arguments.candidate_evidence),
-                "completed_cycles": candidate["completed_cycles"],
-                "elapsed_milliseconds": candidate["child_elapsed_milliseconds"],
-            },
-            "release_72h": {
-                "file": arguments.release_evidence.name,
-                "sha256": sha256_file(arguments.release_evidence),
-                "completed_cycles": release["completed_cycles"],
-                "elapsed_milliseconds": release["child_elapsed_milliseconds"],
-            },
+            "candidate_24h": candidate_entry,
+            "release_72h": release_entry,
         }
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")

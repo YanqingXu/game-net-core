@@ -557,9 +557,20 @@ more iteration than the ordinary PR gate should spend.
 The same manual workflow also exposes fixed `candidate-24h` and `release-72h`
 modes on that dedicated Linux/epoll self-hosted runner. These modes run one
 uninterrupted fault-injection process, retain monotonic heartbeat/checkpoint
-evidence, and reject shortened duration overrides. The 72-hour mode downloads
-and verifies a successful 24-hour artifact from the same candidate SHA before
-starting, then emits a same-commit pair result. See
+evidence, record the exact workflow run/attempt, and reject shortened duration
+overrides. Both production modes require an exact capacity run/attempt and
+revalidate its paired raw evidence before the long process starts:
+`candidate-24h` consumes `candidate-10k`, while `release-72h` consumes
+`dedicated-100k`. The 72-hour mode additionally downloads the exact successful
+24-hour run/attempt from the same candidate SHA.
+
+After the uninterrupted process passes,
+`tools/verify_production_promotion_evidence.py` revalidates all retained
+capacity samples, pair manifest, endurance results, and logs. It emits
+`gamenet.production_promotion_evidence.v1`, binding 10k + 24h for candidate
+promotion or dedicated 100k + 24/72h for release promotion. The outer
+`gamenet.ci_evidence.v1` manifest hashes that promotion result with the
+remaining job evidence. See
 `docs/development/production_endurance.md`.
 
 Phase 3.5 historical evidence: run `29077148022`, job `86311227712`, commit
