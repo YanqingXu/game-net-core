@@ -95,8 +95,10 @@ struct Result {
     std::uint64_t workingSetAfter{0};
     std::int64_t workingSetDelta{0};
     std::optional<double> throughputMiBPerSecond;
+    std::optional<double> messagesPerSecond;
     std::optional<double> p50LatencyUs;
     std::optional<double> p99LatencyUs;
+    std::optional<double> p999LatencyUs;
     std::optional<double> approxBytesPerConnection;
     std::optional<double> connectionEstablishSeconds;
     std::optional<double> connectionEstablishPerSecond;
@@ -775,14 +777,17 @@ void observeIdleProcessCpu(const Config& config, Result& result) {
     result.idleProcessCpuPercent = cpuSeconds * 100.0 / wallSeconds;
 }
 
-double percentile(std::vector<double> samples, double fraction) {
-    if (samples.empty()) {
+double nearestRankPercentile(
+    const std::vector<double>& sortedSamples,
+    double fraction) {
+    if (sortedSamples.empty()) {
         throw std::runtime_error("cannot calculate percentile without samples");
     }
-    std::sort(samples.begin(), samples.end());
-    const double rank = std::ceil(fraction * static_cast<double>(samples.size()));
+    const double rank =
+        std::ceil(fraction * static_cast<double>(sortedSamples.size()));
     const auto nearestRank = static_cast<std::size_t>(rank < 1.0 ? 1.0 : rank);
-    return samples[(std::min)(nearestRank - 1, samples.size() - 1)];
+    return sortedSamples[
+        (std::min)(nearestRank - 1, sortedSamples.size() - 1)];
 }
 
 void runEcho(
@@ -842,8 +847,12 @@ void runEcho(
             static_cast<double>(result.applicationBytes) /
             static_cast<double>(kMebibyte) /
             result.elapsedSeconds;
-        result.p50LatencyUs = percentile(allSamples, 0.50);
-        result.p99LatencyUs = percentile(std::move(allSamples), 0.99);
+        result.messagesPerSecond =
+            static_cast<double>(result.roundTrips) / result.elapsedSeconds;
+        std::sort(allSamples.begin(), allSamples.end());
+        result.p50LatencyUs = nearestRankPercentile(allSamples, 0.50);
+        result.p99LatencyUs = nearestRankPercentile(allSamples, 0.99);
+        result.p999LatencyUs = nearestRankPercentile(allSamples, 0.999);
     }
     state.beginClientClose();
     clients.clear();
@@ -1062,10 +1071,14 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "    \"application_bytes\": " << result.applicationBytes << ",\n"
               << "    \"throughput_mib_per_second\": ";
     printOptional(std::cout, result.throughputMiBPerSecond);
+    std::cout << ",\n    \"messages_per_second\": ";
+    printOptional(std::cout, result.messagesPerSecond);
     std::cout << ",\n    \"p50_latency_us\": ";
     printOptional(std::cout, result.p50LatencyUs);
     std::cout << ",\n    \"p99_latency_us\": ";
     printOptional(std::cout, result.p99LatencyUs);
+    std::cout << ",\n    \"p999_latency_us\": ";
+    printOptional(std::cout, result.p999LatencyUs);
     std::cout << ",\n"
               << "    \"working_set_before_bytes\": " << result.workingSetBefore << ",\n"
               << "    \"working_set_after_bytes\": " << result.workingSetAfter << ",\n"

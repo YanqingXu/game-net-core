@@ -20,7 +20,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
 ## 2. Responsibilities
 - build only when `GAMENET_BUILD_BENCHMARKS=ON`
 - exercise the public TcpServer/TcpConnection path over loopback TCP
-- measure echo round-trip latency and application-byte throughput
+- measure echo round-trip latency, completed-message rate, and bidirectional
+  application-byte throughput
 - measure process working-set growth while holding idle connections
 - measure process CPU during an explicit idle observation interval without a
   recurring benchmark coordination poll
@@ -56,8 +57,15 @@ applies reviewed same-runner relative regression budgets outside the executable.
 ### `echo`
 - establish the requested loopback connections before the timed interval
 - run sequential request/echo round trips per connection from blocking client workers
-- record every completed RTT sample and report P50/P99 in microseconds
-- define throughput as request bytes plus echoed response bytes divided by elapsed time
+- record every completed RTT sample and report nearest-rank P50/P99/P999 in
+  microseconds
+- define one completed request/echo RTT as one message; report messages per
+  second as exact completed RTTs divided by the common timed interval
+- define throughput as request bytes plus echoed response bytes divided by the
+  same timed interval
+- require exact configured RTT and application-byte counts, internally
+  consistent rate/throughput, and ordered P50 <= P99 <= P999 before accepting
+  an artifact
 
 ### `connections`
 - sample process working set after server startup and before client creation
@@ -152,6 +160,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
   host context, and command are recorded
 - production-candidate regression compares baseline and candidate only on the
   same runner, uses three-sample medians, and retains both raw sample sets
+- small-echo capacity evidence spans fixed 64/256/1,024-byte payloads and
+  1/2/4 worker loops; payload and worker count remain part of the comparison key
 - working-set deltas are process-level observations and include allocator/runtime effects
 - idle CPU is process CPU divided by monotonic wall time for the configured
   observation interval; it includes the server's real idle runtime overhead

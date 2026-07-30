@@ -72,6 +72,18 @@ $exe = Resolve-Path build-benchmark-windows/benchmarks/Release/gamenet_core_benc
   --settle-ms 1000 --timeout-ms 30000
 ```
 
+The M3-P1 small-echo capacity seed expands payloads 64, 256, 1024 bytes across
+1/2/4 worker loops while keeping one common 16-connection, 2,000-message load:
+
+```powershell
+foreach ($payload in 64, 256, 1024) {
+  foreach ($workers in 1, 2, 4) {
+    & $exe --scenario echo --connections 16 --threads $workers `
+      --messages 2000 --payload $payload --settle-ms 500 --timeout-ms 60000
+  }
+}
+```
+
 The 10k connection command is the structured idle-memory profile used by
 M3-G4; compare `working_set_delta_bytes` and
 `approx_bytes_per_connection` against the same-runner baseline. For M3-P1,
@@ -121,9 +133,12 @@ churn profile that measures a sustained ready backlog and base-loop saturation.
 ## Scenarios and Measurements
 
 - `echo` creates all clients before timing. Each client performs sequential
-  request/echo round trips. `throughput_mib_per_second` counts request bytes
-  plus echoed response bytes. P50/P99 use nearest-rank RTT samples in
-  microseconds.
+  request/echo round trips. One completed RTT is one message, so
+  `messages_per_second` is the exact completed RTT count divided by the common
+  timed interval. `throughput_mib_per_second` counts request bytes plus echoed
+  response bytes over that same interval. P50/P99/P999 use nearest-rank RTT
+  samples in microseconds. The strict validator recomputes both rates, proves
+  configured RTT and byte counts, and requires ordered percentiles.
 - `connections` samples process working set before client creation and after
   all accepted idle connections have settled. `approx_bytes_per_connection`
   is the process working-set delta divided by configured connections, not an
@@ -152,7 +167,8 @@ churn profile that measures a sustained ready backlog and base-loop saturation.
 
 Every current run writes one `gamenet.core_benchmark.v2` JSON document to stdout.
 Stable keys include scenario parameters, platform, backend, completion mode,
-build type, throughput, P50/P99, connection count, EventLoop worker count,
+build type, message rate, throughput, P50/P99/P999, connection count,
+EventLoop worker count,
 precise connection establishment/rate, idle process CPU, connection close and
 typed graceful-stop evidence, working-set before/after/delta, approximate bytes per connection,
 requested/accepted/rejected admission accounting, configured low/high/hard and

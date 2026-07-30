@@ -160,6 +160,11 @@ def validate_document(
         f"{label}.throughput_mib_per_second",
         nullable=True,
     )
+    messages_per_second = non_negative_number(
+        measurements.get("messages_per_second"),
+        f"{label}.messages_per_second",
+        nullable=True,
+    )
     p50_latency = non_negative_number(
         measurements.get("p50_latency_us"),
         f"{label}.p50_latency_us",
@@ -168,6 +173,11 @@ def validate_document(
     p99_latency = non_negative_number(
         measurements.get("p99_latency_us"),
         f"{label}.p99_latency_us",
+        nullable=True,
+    )
+    p999_latency = non_negative_number(
+        measurements.get("p999_latency_us"),
+        f"{label}.p999_latency_us",
         nullable=True,
     )
     connection_establish_seconds = non_negative_number(
@@ -309,14 +319,54 @@ def validate_document(
             f"{label}: echo application-byte accounting mismatch",
         )
         require(
-            throughput is not None and p50_latency is not None and p99_latency is not None,
+            all(
+                value is not None
+                for value in (
+                    throughput,
+                    messages_per_second,
+                    p50_latency,
+                    p99_latency,
+                    p999_latency,
+                )
+            ),
             f"{label}: echo performance measurements must be present",
         )
-        require(p50_latency <= p99_latency, f"{label}: P50 latency exceeds P99")
+        require(elapsed_seconds > 0.0, f"{label}: echo elapsed time must be positive")
+        require(
+            math.isclose(
+                messages_per_second,
+                round_trips / elapsed_seconds,
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: echo message rate is inconsistent",
+        )
+        require(
+            math.isclose(
+                throughput,
+                application_bytes / (1024.0 * 1024.0) / elapsed_seconds,
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: echo throughput is inconsistent",
+        )
+        require(
+            p50_latency <= p99_latency <= p999_latency,
+            f"{label}: echo latency percentiles are not ordered",
+        )
     else:
         require(round_trips == 0 and application_bytes == 0, f"{label}: non-echo traffic accounting")
         require(
-            throughput is None and p50_latency is None and p99_latency is None,
+            all(
+                value is None
+                for value in (
+                    throughput,
+                    messages_per_second,
+                    p50_latency,
+                    p99_latency,
+                    p999_latency,
+                )
+            ),
             f"{label}: non-echo scenario reported echo performance measurements",
         )
 

@@ -71,8 +71,10 @@ def main() -> None:
         "connections",
         "slow-client",
         "throughput_mib_per_second",
+        "messages_per_second",
         "p50_latency_us",
         "p99_latency_us",
+        "p999_latency_us",
         "working_set_before_bytes",
         "working_set_after_bytes",
         "working_set_delta_bytes",
@@ -143,6 +145,7 @@ def main() -> None:
     require(source_text, "server.connectionCount() != 0", benchmark_source)
     require(source_text, "server.stopGracefully", benchmark_source)
     require(source_text, "completionCheckQueued", benchmark_source)
+    require(source_text, "nearestRankPercentile(allSamples, 0.999)", benchmark_source)
     assert "loop.runEvery(" not in source_text, (
         "idle CPU benchmark must not contain a recurring coordination poll"
     )
@@ -178,6 +181,21 @@ def main() -> None:
         "successful stop must drain",
         benchmark_validator,
     )
+    require(
+        validator_text,
+        "echo message rate is inconsistent",
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "echo throughput is inconsistent",
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "echo latency percentiles are not ordered",
+        benchmark_validator,
+    )
 
     require(docs_text, "-DGAMENET_BUILD_BENCHMARKS=ON", docs)
     require(docs_text, "--scenario echo", docs)
@@ -198,6 +216,9 @@ def main() -> None:
     require(docs_text, "structured idle-memory profile", docs)
     require(docs_text, "idle_process_cpu_percent", docs)
     require(docs_text, "server_stop_seconds", docs)
+    require(docs_text, "P50/P99/P999", docs)
+    require(docs_text, "messages_per_second", docs)
+    require(docs_text, "64, 256, 1024", docs)
     require(docs_text, "--scenario slow-client", docs)
     require(docs_text, "Raw JSON evidence", docs)
 
@@ -228,8 +249,10 @@ def main() -> None:
             "round_trips": 0,
             "application_bytes": 0,
             "throughput_mib_per_second": None,
+            "messages_per_second": None,
             "p50_latency_us": None,
             "p99_latency_us": None,
+            "p999_latency_us": None,
             "working_set_before_bytes": 1000000,
             "working_set_after_bytes": 2000000,
             "working_set_delta_bytes": 1000000,
@@ -277,6 +300,52 @@ def main() -> None:
             pass
         else:
             raise AssertionError(f"core validator accepted invalid {key}")
+
+    echo_document = json.loads(json.dumps(connection_document))
+    echo_document["scenario"] = "echo"
+    echo_document["parameters"].update(
+        {
+            "connections": 4,
+            "messages_per_connection": 1000,
+            "payload_bytes": 64,
+        }
+    )
+    echo_document["measurements"].update(
+        {
+            "elapsed_seconds": 2.0,
+            "round_trips": 4000,
+            "application_bytes": 512000,
+            "throughput_mib_per_second": 0.244140625,
+            "messages_per_second": 2000.0,
+            "p50_latency_us": 10.0,
+            "p99_latency_us": 20.0,
+            "p999_latency_us": 30.0,
+            "working_set_delta_bytes": 4000,
+            "working_set_after_bytes": 1004000,
+            "approx_bytes_per_connection": 1000.0,
+            "connection_establish_seconds": None,
+            "connection_establish_per_second": None,
+            "idle_observation_seconds": None,
+            "idle_process_cpu_seconds": None,
+            "idle_process_cpu_percent": None,
+        }
+    )
+    core_validator.validate_document(echo_document)
+    invalid_echo_documents = (
+        ("messages_per_second", 1900.0),
+        ("throughput_mib_per_second", 0.2),
+        ("p999_latency_us", 15.0),
+        ("p999_latency_us", None),
+    )
+    for key, value in invalid_echo_documents:
+        mutated = json.loads(json.dumps(echo_document))
+        mutated["measurements"][key] = value
+        try:
+            core_validator.validate_document(mutated)
+        except core_validator.CoreBenchmarkValidationError:
+            pass
+        else:
+            raise AssertionError(f"core validator accepted invalid echo {key}")
 
     linux_guard = "python3 tests/cmake/test_core_benchmark_contract.py"
     windows_guard = "python tests/cmake/test_core_benchmark_contract.py"
