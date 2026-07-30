@@ -165,6 +165,7 @@ def main() -> None:
     require(job, "python3 tests/ci/test_endurance_gate.py", workflow)
     require(job, "python3 tests/cmake/test_core_benchmark_contract.py", workflow)
     require(job, "python3 tests/cmake/test_phase4_benchmark_contract.py", workflow)
+    require(job, "python3 tests/cmake/test_capacity_profile_contract.py", workflow)
     require(job, "python3 tests/cmake/test_packet_framer_fuzz_contract.py", workflow)
     require(job, "python3 tests/cmake/test_logger_thread_contract.py", workflow)
     require(job, "python3 tests/cmake/test_build_governance_contract.py", workflow)

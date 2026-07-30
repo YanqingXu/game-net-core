@@ -42,6 +42,10 @@ inline inside TcpConnection.
   fixed storage without exposing connection-owned Buffer or transport state;
   shared read-pool and shared-slab bytes are explicitly zero because the active
   design has neither facility
+- expose one owner-loop-only connection memory-retention snapshot that combines
+  input/output Buffer capacity with the optional Windows local read chunk.
+  Cross-thread aggregators must marshal through the connection owner executor;
+  the snapshot does not make Buffer or transport state concurrently readable
 - bound unread input bytes and close through the normal lifecycle path when an
   application callback leaves the input buffer at its configured hard limit
 - expose force-close style teardown entry that still converges on the same close path
@@ -392,6 +396,10 @@ inline inside TcpConnection.
   cancellation, exposes current/peak bytes through the public process snapshot,
   records shared read pool/slab as zero, and is released before final close
   publication
+- `tests/contract/tcp_connection/test_tcp_connection_lifecycle.cpp` verifies
+  the owner-loop connection snapshot reports both embedded Buffer allocations,
+  coherent current totals, and cross-platform zero-or-bounded transport read
+  storage without changing connection lifecycle
 - `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
   verifies explicit socket close precedes disconnected publication, pending
   operations retain storage, and one final lifecycle detach follows drain

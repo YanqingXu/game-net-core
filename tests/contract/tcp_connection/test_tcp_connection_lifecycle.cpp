@@ -16,6 +16,26 @@ int main() {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair pair;
     auto connection = gamenet::test::makeTcpConnection(loop, pair, "contract#1");
+    {
+        const auto retention = connection->memoryRetentionSnapshot();
+        GAMENET_TEST_ASSERT(
+            retention.inputBuffer.retainedCapacityBytes >=
+            gamenet::net::Buffer::kInitialSize);
+        GAMENET_TEST_ASSERT(
+            retention.outputBuffer.retainedCapacityBytes >=
+            gamenet::net::Buffer::kInitialSize);
+        GAMENET_TEST_ASSERT(
+            retention.totalRetainedBytes ==
+            retention.inputBuffer.retainedCapacityBytes +
+                retention.outputBuffer.retainedCapacityBytes +
+                retention.transportReadStorageBytes);
+#ifdef _WIN32
+        GAMENET_TEST_ASSERT(retention.transportReadStorageBytes == 0);
+#else
+        GAMENET_TEST_ASSERT(retention.transportReadStorageBytes == 0);
+        GAMENET_TEST_ASSERT(retention.peakTransportReadStorageBytes == 0);
+#endif
+    }
 
     bool connectedCallback = false;
     bool messageCallback = false;

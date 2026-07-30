@@ -145,6 +145,16 @@ int main() {
                     retention.iocpCompletionBatchBytes +
                     retention.connectionLocalReadBytes);
         }
+        {
+            const auto retention =
+                connection->memoryRetentionSnapshot();
+            GAMENET_TEST_ASSERT(
+                retention.transportReadStorageBytes ==
+                kReadChunkBytes);
+            GAMENET_TEST_ASSERT(
+                retention.peakTransportReadStorageBytes ==
+                kReadChunkBytes);
+        }
 
         sendTimer = loop.runEvery(1ms, [&] {
             while (sentBytes < payload.size()) {
@@ -202,6 +212,14 @@ int main() {
         GAMENET_TEST_ASSERT(retention.connectionLocalReadBytes == 0);
         GAMENET_TEST_ASSERT(
             retention.peakConnectionLocalReadBytes ==
+            kReadChunkBytes);
+    }
+    {
+        const auto retention =
+            connection->memoryRetentionSnapshot();
+        GAMENET_TEST_ASSERT(retention.transportReadStorageBytes == 0);
+        GAMENET_TEST_ASSERT(
+            retention.peakTransportReadStorageBytes ==
             kReadChunkBytes);
     }
 

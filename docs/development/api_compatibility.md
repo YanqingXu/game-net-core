@@ -235,3 +235,15 @@ changed. Direct contracts live in
 `tests/contract/acceptor/test_acceptor_iocp_pool.cpp`,
 `tests/contract/poller/test_poller_contract.cpp`, and
 `tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`.
+
+## Current M3-Q1-E Additive Review
+
+M3-Q1-E adds the owner-loop-only
+`TcpConnection::memoryRetentionSnapshot()` diagnostic. The returned
+`TcpConnectionMemoryRetentionSnapshot` reports the input/output Buffer
+retained-capacity snapshots, connection-local transport read storage, its
+lifetime peak, and the exact current total. It does not weaken thread affinity:
+cross-thread diagnostics must post through the connection owner executor.
+The direct compatibility and lifecycle evidence is
+`tests/contract/tcp_connection/test_tcp_connection_lifecycle.cpp` and
+`tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`.

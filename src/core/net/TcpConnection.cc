@@ -305,6 +305,26 @@ TcpConnection::outputMemorySnapshot() const noexcept {
     };
 }
 
+TcpConnectionMemoryRetentionSnapshot
+TcpConnection::memoryRetentionSnapshot() const {
+    loop_->assertInLoopThread();
+    TcpConnectionMemoryRetentionSnapshot snapshot{
+        .inputBuffer = inputBuffer_.retentionSnapshot(),
+        .outputBuffer = outputBuffer_.retentionSnapshot(),
+    };
+#ifdef _WIN32
+    snapshot.transportReadStorageBytes =
+        iocpTransport_->readStorageBytes();
+    snapshot.peakTransportReadStorageBytes =
+        iocpTransport_->peakReadStorageBytes();
+#endif
+    snapshot.totalRetainedBytes =
+        snapshot.inputBuffer.retainedCapacityBytes +
+        snapshot.outputBuffer.retainedCapacityBytes +
+        snapshot.transportReadStorageBytes;
+    return snapshot;
+}
+
 std::uint64_t TcpConnection::droppedNotificationCount() const noexcept {
     return droppedNotificationCount_.load(std::memory_order_relaxed);
 }

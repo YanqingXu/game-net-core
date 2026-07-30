@@ -159,6 +159,8 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
                 std::memory_order_relaxed);
 #endif
             readStorageBytes_ = submissionBytes;
+            peakReadStorageBytes_ =
+                (std::max)(peakReadStorageBytes_, readStorageBytes_);
         } catch (const std::bad_alloc&) {
             return WSAENOBUFS;
         }
@@ -245,6 +247,14 @@ ssize_t IocpTcpTransport::completeRead(Buffer* input, int* savedErrno) {
 
 bool IocpTcpTransport::readPending() const noexcept {
     return readPending_;
+}
+
+std::size_t IocpTcpTransport::readStorageBytes() const noexcept {
+    return readStorageBytes_;
+}
+
+std::size_t IocpTcpTransport::peakReadStorageBytes() const noexcept {
+    return peakReadStorageBytes_;
 }
 
 void IocpTcpTransport::releaseReadStorage() noexcept {

@@ -773,6 +773,8 @@ def main() -> None:
     require(workflow, "python tests/cmake/test_core_benchmark_contract.py")
     require(workflow, "python3 tests/cmake/test_phase4_benchmark_contract.py")
     require(workflow, "python tests/cmake/test_phase4_benchmark_contract.py")
+    require(workflow, "python3 tests/cmake/test_capacity_profile_contract.py")
+    require(workflow, "python tests/cmake/test_capacity_profile_contract.py")
     require(workflow, "python tests/cmake/test_packet_framer_fuzz_contract.py")
     require(workflow, "python3 tests/cmake/test_logger_thread_contract.py")
     require(workflow, "python3 tests/cmake/test_event_loop_contracts.py")

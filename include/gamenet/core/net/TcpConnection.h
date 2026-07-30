@@ -39,6 +39,14 @@ class IocpTcpTransport;
 #endif
 class Socket;
 
+struct TcpConnectionMemoryRetentionSnapshot {
+    BufferRetentionSnapshot inputBuffer;
+    BufferRetentionSnapshot outputBuffer;
+    std::size_t transportReadStorageBytes{};
+    std::size_t peakTransportReadStorageBytes{};
+    std::size_t totalRetainedBytes{};
+};
+
 class TcpConnection : public std::enable_shared_from_this<TcpConnection>, private gamenet::base::noncopyable {
 public:
     enum StateE { kConnecting, kConnected, kDisconnecting, kDisconnected };
@@ -84,6 +92,9 @@ public:
     // Connection-local capacity/rejection snapshot. Upper loop/server/global
     // scopes are exposed by TcpServer::outputMemoryStats().
     TcpOutputMemoryBudgetSnapshot outputMemorySnapshot() const noexcept;
+    // Owner-loop-only low-frequency snapshot of connection-owned retained
+    // storage. Cross-thread callers must marshal through the owner executor.
+    TcpConnectionMemoryRetentionSnapshot memoryRetentionSnapshot() const;
     // Cross-thread-safe diagnostic count of optional high-water/write-complete
     // notifications dropped because owner-loop queue admission failed.
     std::uint64_t droppedNotificationCount() const noexcept;

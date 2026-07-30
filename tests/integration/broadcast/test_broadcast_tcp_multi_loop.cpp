@@ -13,10 +13,12 @@
 #include "support/TestAssert.h"
 
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -169,6 +171,10 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
     std::unique_ptr<gamenet::net::TcpClient> normalClient;
     std::shared_ptr<gamenet::transport::TcpTransportEndpoint> slowEndpoint;
     std::shared_ptr<gamenet::transport::TcpTransportEndpoint> normalEndpoint;
+    gamenet::net::TcpConnectionPtr slowConnection;
+    std::unique_ptr<gamenet::broadcast::BroadcastDispatcher> dispatcher;
+    std::vector<std::shared_ptr<gamenet::broadcast::DispatchProgress>>
+        dispatchProgress;
     std::string slowConnectionName;
     std::string expectedBytes;
     std::string receivedBytes;
@@ -177,9 +183,15 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
     bool normalComplete = false;
     bool stopping = false;
     bool slowWasOpenWhenNormalCompleted = false;
+    bool slowRecoveryObserved = false;
+    bool slowRecoveryStarted = false;
+    std::atomic<bool> slowReadComplete{false};
+    std::atomic<std::size_t> slowReceivedBytes{0};
+    std::thread slowReader;
     int disconnectedConnections = 0;
 
     std::function<void()> finishWhenProven;
+    std::function<void()> finishWhenRecovered;
     std::function<void()> stopWhenDisconnected;
     stopWhenDisconnected = [&] {
         loop.assertInLoopThread();
@@ -192,17 +204,71 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
         loop.quit();
     };
 
-    finishWhenProven = [&] {
+    finishWhenRecovered = [&] {
         loop.assertInLoopThread();
-        if (stopping || !normalComplete || !slowHighWaterObserved) return;
+        if (stopping || !slowReadComplete.load(std::memory_order_acquire)) {
+            if (!stopping) {
+                loop.runAfter(1ms, finishWhenRecovered);
+            }
+            return;
+        }
+        GAMENET_TEST_ASSERT(slowConnection);
+        GAMENET_TEST_ASSERT(dispatcher);
+        const auto outstanding = dispatcher->outstanding();
+        if (slowConnection->pendingOutputBytes() != 0 ||
+            outstanding.tasks != 0 ||
+            outstanding.bytes != 0) {
+            loop.runAfter(1ms, finishWhenRecovered);
+            return;
+        }
+        for (const auto& progress : dispatchProgress) {
+            const auto terminal = progress->snapshot();
+            GAMENET_TEST_ASSERT(terminal.complete);
+            GAMENET_TEST_ASSERT(terminal.acceptedEndpoints == 2);
+            GAMENET_TEST_ASSERT(terminal.droppedEndpoints == 0);
+        }
 
-        GAMENET_TEST_ASSERT(slowEndpoint);
-        GAMENET_TEST_ASSERT(slowEndpoint->isOpen());
-        slowWasOpenWhenNormalCompleted = true;
+        slowRecoveryObserved = true;
         stopping = true;
         if (normalClient) normalClient->disconnect();
         gamenet::test::closeTestSocket(slowClientFd);
         slowClientFd = gamenet::net::kInvalidSocket;
+    };
+
+    finishWhenProven = [&] {
+        loop.assertInLoopThread();
+        if (stopping || !normalComplete || !slowHighWaterObserved) return;
+        if (slowRecoveryStarted) return;
+
+        GAMENET_TEST_ASSERT(slowEndpoint);
+        GAMENET_TEST_ASSERT(slowEndpoint->isOpen());
+        slowWasOpenWhenNormalCompleted = true;
+        slowRecoveryStarted = true;
+        slowReader = std::thread([&] {
+            std::array<char, 64 * 1024> bytes{};
+            while (slowReceivedBytes.load(std::memory_order_relaxed) <
+                   expectedBytes.size()) {
+                const int received = ::recv(
+                    slowClientFd,
+                    bytes.data(),
+                    static_cast<int>(bytes.size()),
+                    0);
+                if (received > 0) {
+                    slowReceivedBytes.fetch_add(
+                        static_cast<std::size_t>(received),
+                        std::memory_order_relaxed);
+                    continue;
+                }
+                GAMENET_TEST_ASSERT(received < 0);
+                const int error = gamenet::net::sockets::lastError();
+                GAMENET_TEST_ASSERT(
+                    gamenet::net::sockets::isWouldBlock(error) ||
+                    gamenet::net::sockets::isInterrupted(error));
+                std::this_thread::sleep_for(1ms);
+            }
+            slowReadComplete.store(true, std::memory_order_release);
+        });
+        finishWhenRecovered();
     };
 
     server.setHighWaterMarkCallback(
@@ -230,9 +296,10 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
         const auto connectionName = connection->name();
         auto endpoint = std::make_shared<gamenet::transport::TcpTransportEndpoint>(
             gamenet::transport::TransportSessionId{nextTransportId.fetch_add(1)}, connection);
-        loop.queueInLoop([&, connectionName, endpoint = std::move(endpoint)] {
+        loop.queueInLoop([&, connection, connectionName, endpoint = std::move(endpoint)] {
             if (!slowEndpoint) {
                 slowConnectionName = connectionName;
+                slowConnection = connection;
                 slowEndpoint = endpoint;
                 normalClient = std::make_unique<gamenet::net::TcpClient>(
                     &loop, server.listenAddress(), "broadcast-normal-reader");
@@ -267,9 +334,13 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
                  .hardFanout = 2,
                  .softBytes = messageBytes * 2,
                  .hardBytes = messageBytes * 2});
-            gamenet::broadcast::BroadcastDispatcher dispatcher(
-                {.maxEndpointsPerTask = 1, .maxBytesPerTask = messageBytes});
+            dispatcher =
+                std::make_unique<gamenet::broadcast::BroadcastDispatcher>(
+                    gamenet::broadcast::DispatchLimits{
+                        .maxEndpointsPerTask = 1,
+                        .maxBytesPerTask = messageBytes});
             expectedBytes.reserve(messageCount * messageBytes);
+            dispatchProgress.reserve(messageCount);
             for (std::size_t sequence = 0; sequence < messageCount; ++sequence) {
                 const auto prefix = "sequence-" + std::to_string(sequence) + ":";
                 std::string bytes = prefix;
@@ -277,9 +348,11 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
                 expectedBytes.append(bytes);
                 auto plan = router.route(
                     std::make_shared<const std::string>(std::move(bytes)), targets);
-                const auto summary = dispatcher.dispatch(std::move(plan));
+                const auto summary =
+                    dispatcher->dispatch(std::move(plan));
                 GAMENET_TEST_ASSERT(summary.scheduledEndpoints == 2);
                 GAMENET_TEST_ASSERT(summary.scheduledTasks == 2);
+                dispatchProgress.push_back(summary.progress);
             }
             broadcastScheduled = true;
         });
@@ -293,6 +366,9 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
     });
     loop.loop();
 
+    if (slowReader.joinable()) {
+        slowReader.join();
+    }
     if (gamenet::net::sockets::isValid(slowClientFd)) {
         gamenet::test::closeTestSocket(slowClientFd);
     }
@@ -300,6 +376,11 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
     GAMENET_TEST_ASSERT(slowHighWaterObserved);
     GAMENET_TEST_ASSERT(normalComplete);
     GAMENET_TEST_ASSERT(slowWasOpenWhenNormalCompleted);
+    GAMENET_TEST_ASSERT(slowRecoveryObserved);
+    GAMENET_TEST_ASSERT(slowReadComplete.load(std::memory_order_acquire));
+    GAMENET_TEST_ASSERT(
+        slowReceivedBytes.load(std::memory_order_relaxed) ==
+        expectedBytes.size());
     GAMENET_TEST_ASSERT(disconnectedConnections == 2);
     GAMENET_TEST_ASSERT(server.connectionCount() == 0);
     GAMENET_TEST_ASSERT(receivedBytes == expectedBytes);

@@ -42,3 +42,12 @@ AcceptEx accounting follows the shared slot-vector lifetime. Stopping or
 destroying an Acceptor can leave the current pool bytes nonzero while the IOCP
 Poller still owns completion leases; the count reaches zero only after terminal
 packets release those leases.
+
+## Combined capacity evidence
+
+[`capacity_profile.md`](capacity_profile.md) describes the real-TCP
+slow-reader + Broadcast + recovery profile. It keeps logical pending,
+dispatcher reservations, owner-loop Buffer retention, process fixed storage,
+and observational RSS as separate categories, then validates their individual
+bounds and terminal release points without double-counting connection-local
+read storage.

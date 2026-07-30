@@ -125,6 +125,7 @@ python3 tests/cmake/test_install_package_contract.py
 python3 tests/cmake/test_packet_framer_fuzz_contract.py
 python3 tests/cmake/test_core_benchmark_contract.py
 python3 tests/cmake/test_phase4_benchmark_contract.py
+python3 tests/cmake/test_capacity_profile_contract.py
 python3 tests/cmake/test_logger_thread_contract.py
 python3 tests/cmake/test_event_loop_contracts.py
 python3 tests/cmake/test_event_loop_thread_pool_contracts.py
@@ -807,6 +808,7 @@ py -3 tests\cmake\test_install_package_contract.py
 py -3 tests\cmake\test_packet_framer_fuzz_contract.py
 py -3 tests\cmake\test_core_benchmark_contract.py
 py -3 tests\cmake\test_phase4_benchmark_contract.py
+py -3 tests\cmake\test_capacity_profile_contract.py
 py -3 tests\cmake\test_logger_thread_contract.py
 py -3 tests\cmake\test_event_loop_contracts.py
 py -3 tests\cmake\test_event_loop_thread_pool_contracts.py

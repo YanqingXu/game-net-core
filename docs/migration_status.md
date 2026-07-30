@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 133 |
+| 61 | 30 | 20 | 11 | 134 |
 
 ## Production-Hardening Worktree State
 
@@ -404,6 +404,22 @@ direct contracts each passed 50/50 repetitions, including Acceptor stop before
 final lease release and a cross-thread snapshot observation. The resulting
 MSVC Debug tree passed all 119 tests; all 31 Python repository/API contracts,
 the public API verifier, and deterministic compatibility diff also passed.
+M3-Q1-E adds an opt-in real-TCP
+`gamenet_capacity_profile --scenario slow-broadcast-recovery` and its strict
+`gamenet.capacity_profile.v1` validator. The first Windows MSVC Release seed
+held four 4 KiB-window clients unread while dispatching 64 shared 256 KiB
+payloads across two worker loops. Of 256 endpoint attempts, 40 were accepted
+and 216 were rejected as `EndpointOverloaded`; the latter reconciled exactly
+with 216 connection-scope TCP reservations and zero loop/server/global
+rejections. Aggregate pending peaked at its exact 8 MiB hard-limit sum,
+Broadcast outstanding peaked at 15,728,640 of 67,108,864 bytes, and recovery
+reached zero pending for a 250 ms stable window in 276.303 ms. Recovered
+Buffer capacity was 8,256 bytes, connection-local read storage was the exact
+4 x 4 KiB limit, and every process fixed-storage current counter reached zero
+after teardown. The real Broadcast integration recovery path passed 50
+consecutive Release repetitions. RSS remains an observational capacity
+measurement rather than a correctness threshold; larger 100/1k slow-reader
+and 1k/10k+ Broadcast runs remain M3-P1 candidate work.
 The current inventory is unit=8, contract=98, integration=13, threading=92,
 lifecycle=97, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed before M3-Q1-A. After Q1-A, all 119 MSVC Debug tests and all

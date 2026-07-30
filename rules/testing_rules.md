@@ -200,6 +200,13 @@ For lifecycle-sensitive modules, tests should include:
   its final shared lease is released, one connection contributes no bytes
   before the first read and at most 4 KiB afterward, category/total peaks are
   monotonic, and every current category returns to zero after teardown
+- the slow-broadcast-recovery capacity profile must use real TCP endpoints,
+  hold reads during pressure, keep aggregate connection pending bytes within
+  the configured connection hard-limit sum, keep dispatcher outstanding bytes
+  within its global limit, account every terminal endpoint as accepted or one
+  typed reason, reconcile EndpointOverloaded with the TCP rejecting scopes,
+  and remain below the recovery threshold for a configured stable window
+  before reporting recovery
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

@@ -181,6 +181,10 @@ No other direct mutation path is allowed for core loop state.
 - Buffer retention growth, arm state, trim, and snapshots are owner-loop-only;
   no retention observation becomes cross-thread-safe merely because Buffer is
   embedded in TcpConnection
+- `TcpConnection::memoryRetentionSnapshot()` is likewise owner-loop-only.
+  Capacity profiles spanning worker loops post one sampling task through each
+  endpoint executor and aggregate returned values off-loop; they never read
+  Buffer or transport fields directly from the management thread
 - TcpConnection socket close, completion-obligation consumption, lifecycle
   detach, Channel removal, and disconnected publication are owner-loop-only
 - on Linux, TcpConnection disables and removes its Channel registration before

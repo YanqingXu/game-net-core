@@ -27,6 +27,8 @@ public:
     [[nodiscard]] int startRead(std::size_t maxBytes);
     ssize_t completeRead(Buffer* input, int* savedErrno);
     bool readPending() const noexcept;
+    std::size_t readStorageBytes() const noexcept;
+    std::size_t peakReadStorageBytes() const noexcept;
     void releaseReadStorage() noexcept;
     void enqueueWrite(std::string payload);
     [[nodiscard]] int startWrite();
@@ -48,6 +50,7 @@ private:
     IocpOperation writeOperation_;
     std::unique_ptr<char[]> readStorage_;
     std::size_t readStorageBytes_{0};
+    std::size_t peakReadStorageBytes_{0};
     std::deque<WriteSegment> writeSegments_;
     std::size_t bufferedWriteBytes_{0};
     WSABUF readBuffer_{};

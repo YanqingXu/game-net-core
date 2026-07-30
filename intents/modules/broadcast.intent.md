@@ -107,6 +107,10 @@ state.
   endpoint overload/close reasons, concurrent no-overshoot at owner/global
   scopes, shutdown races, immutable owner-registry reuse, and final zero
   outstanding state.
+- `gamenet_capacity_profile --scenario slow-broadcast-recovery` drives real
+  TcpTransportEndpoint targets into bounded slow-reader output, samples
+  dispatcher/TCP/retained-memory peaks, attributes every terminal rejection,
+  and requires a stable low-water recovery window before teardown.
 
 ## Migration Provenance
 
