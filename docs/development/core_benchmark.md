@@ -84,6 +84,22 @@ foreach ($payload in 64, 256, 1024) {
 }
 ```
 
+The M3-P1 sustained-churn seed uses a paced 100-connection batch with 16
+persistent client connector workers. Five seconds at 1,000 attempts/second
+produces exactly 5,000 attempts:
+
+```powershell
+& $exe --scenario connection-churn --connections 100 `
+  --connect-concurrency 16 --iocp-accept-depth 32 --threads 4 `
+  --churn-rate 1000 --churn-duration-ms 5000 `
+  --churn-connect-timeout-ms 1000 `
+  --settle-ms 0 --timeout-ms 60000 > build-benchmark-windows/churn-1k.json
+
+python tools/validate_core_benchmark.py `
+  --input build-benchmark-windows/churn-1k.json `
+  --scenario connection-churn --require-zero-churn-failures
+```
+
 The 10k connection command is the structured idle-memory profile used by
 M3-G4; compare `working_set_delta_bytes` and
 `approx_bytes_per_connection` against the same-runner baseline. For M3-P1,
@@ -156,6 +172,25 @@ churn profile that measures a sustained ready backlog and base-loop saturation.
   option and defaults to four. Connections-only
   `--preload-before-loop 1` waits for all client sockets before starting the
   base loop and measures only the subsequent callback drain.
+- `connection-churn` derives an exact total attempt count from
+  `--churn-rate` and `--churn-duration-ms`. `--connections` is the maximum
+  live batch; a persistent bounded connector pool paces each batch from one
+  monotonic start time, waits for cumulative accepts, closes clients
+  abortively, and waits for cumulative disconnects before reusing capacity.
+  Each client attempt uses nonblocking connect completion and the explicit
+  `--churn-connect-timeout-ms` deadline, so a stalled client generator becomes
+  an accounted failure instead of an unbounded blocking `connect()`.
+  Results report attempted, accepted, connect-failed, and closed counts;
+  attempt/accept/close rates over one common interval; sorted per-owner-loop
+  accept counts; worker skew `(max - min) / mean`; and per-batch connect,
+  ready-accept callback, close, and schedule-lag P99/max. The phase split keeps
+  client handshake delay separate from a ready backlog that the base loop has
+  not yet turned into callbacks. A fixed-key close-reason object accounts for
+  every terminal callback. The strict validator proves all count/rate/skew,
+  close-reason, and percentile/max identities, and
+  `--require-zero-churn-failures` promotes connect failures to a capture
+  failure. Final close and typed graceful-stop fields retain the common
+  lifecycle contract.
 - `slow-client` gives clients a small receive buffer, holds reads through the
   working-set sample, and calls `trySend()` from each connection owner loop.
   It then drains accepted output to observe write completion and read-throttle
@@ -171,6 +206,7 @@ build type, message rate, throughput, P50/P99/P999, connection count,
 EventLoop worker count,
 precise connection establishment/rate, idle process CPU, connection close and
 typed graceful-stop evidence, working-set before/after/delta, approximate bytes per connection,
+paced churn attempt/accept/close rates and worker skew,
 requested/accepted/rejected admission accounting, configured low/high/hard and
 input limits, pending-output peak, throttle observations, recovery duration,
 and high-water callback count.

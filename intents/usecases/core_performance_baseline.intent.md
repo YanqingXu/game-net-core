@@ -30,6 +30,8 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - optionally create connections through a bounded simultaneous client-worker
   set so accept-burst elapsed time is measured without changing sequential
   canonical defaults
+- generate paced, bounded-batch connection churn with exact attempt,
+  accept/failure, close, rate, and worker-distribution accounting
 - observe working-set growth, bounded output admission, high/low-water read
   throttling, and recovery for slow-reading clients
 - report connection count, EventLoop worker count, backend, completion mode,
@@ -90,6 +92,33 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - close connection-scenario client sockets abortively after measurement so
   repeated local burst samples do not accumulate client-side `TIME_WAIT`
 
+### `connection-churn`
+- derive an exact attempt count from configured target connections/second and
+  duration; `--connections` is the maximum live batch, not the total attempt
+  count
+- pace each bounded batch against one monotonic start time, use at most
+  `--connect-concurrency` persistent client connector workers, and wait for
+  cumulative accept callbacks before closing that batch
+- use nonblocking connect completion with an explicit per-attempt monotonic
+  deadline; timeout or socket failure increments client-connect-failed instead
+  of leaving a generator worker blocked without a bound
+- close churn clients abortively, wait for cumulative disconnect callbacks,
+  and do not reuse the next batch's capacity until the prior batch converges
+- report attempted, accepted, client-connect-failed, and closed counts with the
+  common elapsed interval and internally consistent attempt/accept/close rates
+- report per-batch connect, ready-accept callback, close, and schedule-lag
+  nearest-rank P99/maximum so client handshake delay is not misidentified as
+  base-loop ready-backlog delay
+- record accepted-connection counts per distinct owner EventLoop, including
+  every configured worker, and report `(max - min) / mean` worker skew
+- account every churn close callback by the fixed
+  `TcpConnectionCloseReason` key set so terminal causes sum exactly to closed
+- require attempted = accepted + client-connect-failed and accepted = closed;
+  a strict capacity capture may additionally require zero connect failures
+- begin final close-convergence timing immediately before the last batch closes,
+  then prove the same typed graceful server/worker stop contract as every other
+  successful scenario
+
 ### `slow-client`
 - clients connect with a deliberately small receive buffer and do not read
 - each accepted connection calls `trySend()` with the configured payload from
@@ -130,7 +159,12 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - each blocking benchmark client socket is owned by exactly one driver thread;
   parallel connection creation uses one distinct pre-sized socket slot per
   worker index
+- churn client workers mutate only distinct pre-sized batch slots; callback
+  owner-loop distribution is aggregated under benchmark-owned synchronization
 - benchmark coordination uses atomics, a condition variable, and isolated result storage
+- every condition-variable predicate transition is published while holding the
+  same benchmark mutex used by its waiter; atomics remain snapshot-friendly
+  but do not substitute for the no-lost-wakeup protocol
 - driver/disconnect completion coalesces through one capacity-aware base-loop
   executor task; the idle observation window has no recurring coordination
   timer that would manufacture idle CPU

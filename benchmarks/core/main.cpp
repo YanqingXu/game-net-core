@@ -7,6 +7,7 @@
 #include "gamenet/core/net/TcpServer.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <barrier>
 #include <charconv>
@@ -37,6 +38,7 @@
 #ifdef _WIN32
 #include <psapi.h>
 #else
+#include <fcntl.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 #endif
@@ -51,6 +53,37 @@ using Clock = std::chrono::steady_clock;
 using namespace std::chrono_literals;
 
 constexpr std::size_t kMebibyte = 1024U * 1024U;
+constexpr std::size_t kCloseReasonCount = 10;
+
+using CloseReasonCounts =
+    std::array<std::uint64_t, kCloseReasonCount>;
+
+std::size_t closeReasonIndex(
+    gamenet::net::TcpConnectionCloseReason reason) noexcept {
+    switch (reason) {
+    case gamenet::net::TcpConnectionCloseReason::PeerEof:
+        return 0;
+    case gamenet::net::TcpConnectionCloseReason::Reset:
+        return 1;
+    case gamenet::net::TcpConnectionCloseReason::ConnectTimeout:
+        return 2;
+    case gamenet::net::TcpConnectionCloseReason::InputLimit:
+        return 3;
+    case gamenet::net::TcpConnectionCloseReason::OutputOverload:
+        return 4;
+    case gamenet::net::TcpConnectionCloseReason::AdmissionPolicy:
+        return 5;
+    case gamenet::net::TcpConnectionCloseReason::GracefulShutdown:
+        return 6;
+    case gamenet::net::TcpConnectionCloseReason::ForcedShutdown:
+        return 7;
+    case gamenet::net::TcpConnectionCloseReason::CallbackFailure:
+        return 8;
+    case gamenet::net::TcpConnectionCloseReason::InternalError:
+        return 9;
+    }
+    return 9;
+}
 
 struct Config {
     std::string scenario{"echo"};
@@ -61,6 +94,9 @@ struct Config {
     std::size_t eventLoopThreads{1};
     std::size_t messagesPerConnection{1000};
     std::size_t payloadBytes{256};
+    std::size_t churnTargetPerSecond{1000};
+    std::chrono::milliseconds churnDuration{5000};
+    std::chrono::milliseconds churnConnectTimeout{1000};
     std::size_t slowBytes{8U * kMebibyte};
     std::size_t highWaterBytes{64U * 1024U};
     std::chrono::milliseconds settle{500};
@@ -110,19 +146,58 @@ struct Result {
     std::optional<std::string> serverStopOutcome;
     std::optional<std::uint64_t> serverStopInitialConnections;
     std::optional<std::uint64_t> serverStopForcedConnections;
+    std::uint64_t churnAttemptedConnections{0};
+    std::uint64_t churnAcceptedConnections{0};
+    std::uint64_t churnConnectFailures{0};
+    std::uint64_t churnClosedConnections{0};
+    std::uint64_t churnBatches{0};
+    std::optional<double> churnElapsedSeconds;
+    std::optional<double> churnAttemptsPerSecond;
+    std::optional<double> churnAcceptsPerSecond;
+    std::optional<double> churnClosesPerSecond;
+    std::vector<std::uint64_t> churnWorkerAcceptCounts;
+    std::optional<double> churnWorkerSkewRatio;
+    std::optional<double> churnConnectP99Us;
+    std::optional<double> churnConnectMaxUs;
+    std::optional<double> churnAcceptP99Us;
+    std::optional<double> churnAcceptMaxUs;
+    std::optional<double> churnCloseP99Us;
+    std::optional<double> churnCloseMaxUs;
+    std::optional<double> churnScheduleLagP99Us;
+    std::optional<double> churnScheduleLagMaxUs;
+    CloseReasonCounts churnCloseReasonCounts{};
     std::optional<double> backpressureRecoverySeconds;
     std::uint64_t highWaterCallbacks{0};
 };
 
 class SharedState {
 public:
-    void markConnected() {
-        connected_.fetch_add(1, std::memory_order_release);
+    // condition-variable-predicate-lock: every counter observed by a cv_
+    // predicate is published while holding mutex_ before notification.
+    void markConnected(const gamenet::net::EventLoop* ownerLoop) {
+        {
+            std::lock_guard lock(mutex_);
+            auto entry = std::find_if(
+                workerAcceptCounts_.begin(),
+                workerAcceptCounts_.end(),
+                [ownerLoop](const auto& candidate) {
+                    return candidate.first == ownerLoop;
+                });
+            if (entry == workerAcceptCounts_.end()) {
+                workerAcceptCounts_.emplace_back(ownerLoop, 1);
+            } else {
+                ++entry->second;
+            }
+            connected_.fetch_add(1, std::memory_order_release);
+        }
         cv_.notify_all();
     }
 
     void markDisconnected() {
-        disconnected_.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard lock(mutex_);
+            disconnected_.fetch_add(1, std::memory_order_release);
+        }
         cv_.notify_all();
     }
 
@@ -226,7 +301,10 @@ public:
         if (readingResumed) {
             readResumeObservations_.fetch_add(1, std::memory_order_relaxed);
         }
-        slowWriteCompletes_.fetch_add(1, std::memory_order_release);
+        {
+            std::lock_guard lock(mutex_);
+            slowWriteCompletes_.fetch_add(1, std::memory_order_release);
+        }
         cv_.notify_all();
     }
 
@@ -245,6 +323,16 @@ public:
         return cv_.wait_for(lock, timeout, [&] {
             return connected_.load(std::memory_order_acquire) >= expected || !failure_.empty();
         }) && connected_.load(std::memory_order_acquire) >= expected;
+    }
+
+    bool waitForDisconnections(
+        std::size_t expected,
+        std::chrono::milliseconds timeout) {
+        std::unique_lock lock(mutex_);
+        return cv_.wait_for(lock, timeout, [&] {
+            return disconnected_.load(std::memory_order_acquire) >= expected ||
+                   !failure_.empty();
+        }) && disconnected_.load(std::memory_order_acquire) >= expected;
     }
 
     void fail(std::string message) {
@@ -268,6 +356,28 @@ public:
 
     std::size_t disconnected() const noexcept {
         return disconnected_.load(std::memory_order_acquire);
+    }
+
+    std::vector<std::uint64_t> workerAcceptCounts() const {
+        std::lock_guard lock(mutex_);
+        std::vector<std::uint64_t> counts;
+        counts.reserve(workerAcceptCounts_.size());
+        for (const auto& [ownerLoop, count] : workerAcceptCounts_) {
+            (void)ownerLoop;
+            counts.push_back(count);
+        }
+        std::sort(counts.begin(), counts.end());
+        return counts;
+    }
+
+    void markCloseReason(gamenet::net::TcpConnectionCloseReason reason) {
+        std::lock_guard lock(mutex_);
+        ++closeReasonCounts_[closeReasonIndex(reason)];
+    }
+
+    CloseReasonCounts closeReasonCounts() const {
+        std::lock_guard lock(mutex_);
+        return closeReasonCounts_;
     }
 
     std::uint64_t highWaterCallbacks() const noexcept {
@@ -353,6 +463,9 @@ private:
     bool clientsCreated_{false};
     std::optional<Clock::time_point> acceptDrainStarted_;
     std::optional<Clock::time_point> clientCloseStarted_;
+    std::vector<std::pair<const gamenet::net::EventLoop*, std::uint64_t>>
+        workerAcceptCounts_;
+    CloseReasonCounts closeReasonCounts_{};
     std::string failure_;
 };
 
@@ -386,14 +499,17 @@ std::size_t parseSize(
 void printUsage(std::ostream& output) {
     output
         << "usage: gamenet_core_benchmark [options]\n"
-        << "  --scenario echo|connections|slow-client\n"
-        << "  --connections N       scenario default: echo=4, connections=256, slow-client=4\n"
+        << "  --scenario echo|connections|connection-churn|slow-client\n"
+        << "  --connections N       scenario default: echo=4, connections=256, churn=100, slow-client=4\n"
         << "  --connect-concurrency N simultaneous client connect workers (default 1)\n"
         << "  --iocp-accept-depth N Windows AcceptEx pre-post depth (default 4)\n"
         << "  --preload-before-loop 0|1 preload connections before base loop (default 0)\n"
         << "  --threads N           TcpServer worker EventLoops, including 0 for the base loop\n"
         << "  --messages N          echo messages per connection (default 1000)\n"
         << "  --payload N           echo payload bytes (default 256)\n"
+        << "  --churn-rate N        target connection attempts per second (default 1000)\n"
+        << "  --churn-duration-ms N paced churn duration (default 5000)\n"
+        << "  --churn-connect-timeout-ms N per-attempt deadline (default 1000)\n"
         << "  --slow-bytes N        bytes offered to each slow client (default 8388608)\n"
         << "  --high-water N        output pause/callback threshold (default 65536)\n"
         << "  --settle-ms N         settle interval before memory sampling (default 500)\n"
@@ -430,6 +546,15 @@ Config parseArgs(int argc, char* argv[]) {
             config.messagesPerConnection = parseSize(value, option, 1, 1000000);
         } else if (option == "--payload") {
             config.payloadBytes = parseSize(value, option, 1, 64U * kMebibyte);
+        } else if (option == "--churn-rate") {
+            config.churnTargetPerSecond =
+                parseSize(value, option, 1, 100000);
+        } else if (option == "--churn-duration-ms") {
+            config.churnDuration =
+                std::chrono::milliseconds(parseSize(value, option, 100, 600000));
+        } else if (option == "--churn-connect-timeout-ms") {
+            config.churnConnectTimeout =
+                std::chrono::milliseconds(parseSize(value, option, 1, 30000));
         } else if (option == "--slow-bytes") {
             config.slowBytes = parseSize(value, option, 1, 256U * kMebibyte);
         } else if (option == "--high-water") {
@@ -448,11 +573,17 @@ Config parseArgs(int argc, char* argv[]) {
     }
 
     if (config.scenario != "echo" && config.scenario != "connections" &&
+        config.scenario != "connection-churn" &&
         config.scenario != "slow-client") {
-        usageError("--scenario must be echo, connections, or slow-client");
+        usageError(
+            "--scenario must be echo, connections, connection-churn, or "
+            "slow-client");
     }
     if (!config.connectionsProvided) {
-        config.connections = config.scenario == "connections" ? 256U : 4U;
+        config.connections =
+            config.scenario == "connections"
+            ? 256U
+            : (config.scenario == "connection-churn" ? 100U : 4U);
     }
     if (config.connectConcurrency > config.connections) {
         usageError("--connect-concurrency must not exceed --connections");
@@ -462,6 +593,24 @@ Config parseArgs(int argc, char* argv[]) {
     }
     if (config.highWaterBytes > config.slowBytes && config.scenario == "slow-client") {
         usageError("--high-water must not exceed --slow-bytes for slow-client");
+    }
+    if (config.scenario == "connection-churn") {
+        const auto attempts =
+            static_cast<std::uint64_t>(config.churnTargetPerSecond) *
+            static_cast<std::uint64_t>(config.churnDuration.count()) /
+            1000U;
+        if (attempts == 0) {
+            usageError(
+                "--churn-rate and --churn-duration-ms produce zero attempts");
+        }
+        if (config.churnDuration > config.timeout) {
+            usageError(
+                "--churn-duration-ms must not exceed --timeout-ms");
+        }
+        if (config.churnConnectTimeout > config.timeout) {
+            usageError(
+                "--churn-connect-timeout-ms must not exceed --timeout-ms");
+        }
     }
     return config;
 }
@@ -554,6 +703,10 @@ public:
         close();
     }
 
+    bool valid() const noexcept {
+        return gamenet::net::sockets::isValid(fd_);
+    }
+
     static ClientSocket connectTo(
         const gamenet::net::InetAddress& address,
         std::chrono::milliseconds timeout,
@@ -568,6 +721,34 @@ public:
         if (::connect(socket.fd_, address.getSockAddr(), address.getSockAddrLen()) != 0) {
             throw std::runtime_error(socketFailure("connect"));
         }
+        return socket;
+    }
+
+    static ClientSocket connectToWithDeadline(
+        const gamenet::net::InetAddress& address,
+        std::chrono::milliseconds timeout) {
+        gamenet::net::sockets::ensureInitialized();
+        ClientSocket socket;
+        socket.fd_ =
+            gamenet::net::sockets::createNonblocking(address.family());
+        if (!gamenet::net::sockets::isValid(socket.fd_)) {
+            throw std::runtime_error(socketFailure("socket"));
+        }
+        socket.configure(timeout, false);
+        if (::connect(
+                socket.fd_,
+                address.getSockAddr(),
+                address.getSockAddrLen()) != 0) {
+            const int connectError = gamenet::net::sockets::lastError();
+            if (!gamenet::net::sockets::isInProgress(connectError) &&
+                !gamenet::net::sockets::isWouldBlock(connectError)) {
+                throw std::runtime_error(
+                    "connect: " +
+                    gamenet::net::sockets::errorMessage(connectError));
+            }
+            socket.waitForConnect(timeout);
+        }
+        socket.setBlocking();
         return socket;
     }
 
@@ -623,6 +804,76 @@ public:
     }
 
 private:
+    void waitForConnect(std::chrono::milliseconds timeout) {
+        const auto deadline = Clock::now() + timeout;
+        while (true) {
+            const auto remaining = deadline - Clock::now();
+            if (remaining <= Clock::duration::zero()) {
+                throw std::runtime_error("connect: deadline expired");
+            }
+            const auto remainingMicroseconds =
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    remaining);
+            timeval timeoutValue{};
+            timeoutValue.tv_sec = static_cast<decltype(timeoutValue.tv_sec)>(
+                remainingMicroseconds.count() / 1000000);
+            timeoutValue.tv_usec =
+                static_cast<decltype(timeoutValue.tv_usec)>(
+                    remainingMicroseconds.count() % 1000000);
+            fd_set writable;
+            fd_set failed;
+            FD_ZERO(&writable);
+            FD_ZERO(&failed);
+            FD_SET(fd_, &writable);
+            FD_SET(fd_, &failed);
+#ifdef _WIN32
+            constexpr int descriptorCount = 0;
+#else
+            const int descriptorCount = fd_ + 1;
+#endif
+            const int ready = ::select(
+                descriptorCount,
+                nullptr,
+                &writable,
+                &failed,
+                &timeoutValue);
+            if (ready > 0) {
+                const int socketError =
+                    gamenet::net::sockets::getSocketError(fd_);
+                if (socketError != 0) {
+                    throw std::runtime_error(
+                        "connect: " +
+                        gamenet::net::sockets::errorMessage(socketError));
+                }
+                return;
+            }
+            if (ready == 0) {
+                throw std::runtime_error("connect: deadline expired");
+            }
+            const int selectError = gamenet::net::sockets::lastError();
+            if (!gamenet::net::sockets::isInterrupted(selectError)) {
+                throw std::runtime_error(
+                    "select(connect): " +
+                    gamenet::net::sockets::errorMessage(selectError));
+            }
+        }
+    }
+
+    void setBlocking() {
+#ifdef _WIN32
+        u_long nonBlocking = 0;
+        if (::ioctlsocket(fd_, FIONBIO, &nonBlocking) == SOCKET_ERROR) {
+            throw std::runtime_error(socketFailure("ioctlsocket(FIONBIO=0)"));
+        }
+#else
+        const int flags = ::fcntl(fd_, F_GETFL, 0);
+        if (flags < 0 ||
+            ::fcntl(fd_, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+            throw std::runtime_error(socketFailure("fcntl(O_NONBLOCK=0)"));
+        }
+#endif
+    }
+
     void configure(std::chrono::milliseconds timeout, bool slowReader) {
         const int noDelay = 1;
         if (::setsockopt(
@@ -745,6 +996,132 @@ std::vector<ClientSocket> connectClients(
     }
     return clients;
 }
+
+struct ChurnClientBatch {
+    std::vector<ClientSocket> clients;
+    std::size_t connectFailures{0};
+};
+
+class ChurnConnectorPool {
+public:
+    ChurnConnectorPool(
+        const Config& config,
+        gamenet::net::InetAddress address)
+        : address_(std::move(address)),
+          timeout_(config.churnConnectTimeout),
+          workerCount_((std::min)(
+              config.connectConcurrency,
+              config.connections)) {
+        workers_.reserve(workerCount_);
+        for (std::size_t worker = 0; worker < workerCount_; ++worker) {
+            workers_.emplace_back([this] { workerMain(); });
+        }
+    }
+
+    ChurnConnectorPool(const ChurnConnectorPool&) = delete;
+    ChurnConnectorPool& operator=(const ChurnConnectorPool&) = delete;
+
+    ~ChurnConnectorPool() {
+        {
+            std::lock_guard lock(mutex_);
+            stopping_ = true;
+        }
+        workAvailable_.notify_all();
+        for (auto& worker : workers_) {
+            worker.join();
+        }
+    }
+
+    ChurnClientBatch connectBatch(std::size_t attemptCount) {
+        {
+            std::lock_guard lock(mutex_);
+            slots_.clear();
+            slots_.resize(attemptCount);
+            attemptCount_ = attemptCount;
+            nextIndex_.store(0, std::memory_order_relaxed);
+            connectFailures_.store(0, std::memory_order_relaxed);
+            completedWorkers_ = 0;
+            ++generation_;
+        }
+        workAvailable_.notify_all();
+
+        {
+            std::unique_lock lock(mutex_);
+            batchComplete_.wait(lock, [this] {
+                return completedWorkers_ == workerCount_;
+            });
+        }
+
+        ChurnClientBatch batch;
+        batch.clients.reserve(
+            attemptCount -
+            connectFailures_.load(std::memory_order_relaxed));
+        for (auto& slot : slots_) {
+            if (slot.valid()) {
+                batch.clients.push_back(std::move(slot));
+            }
+        }
+        batch.connectFailures =
+            connectFailures_.load(std::memory_order_relaxed);
+        return batch;
+    }
+
+private:
+    void workerMain() {
+        std::uint64_t observedGeneration = 0;
+        while (true) {
+            {
+                std::unique_lock lock(mutex_);
+                workAvailable_.wait(lock, [&] {
+                    return stopping_ || generation_ != observedGeneration;
+                });
+                if (stopping_) {
+                    return;
+                }
+                observedGeneration = generation_;
+            }
+
+            while (true) {
+                const std::size_t index =
+                    nextIndex_.fetch_add(1, std::memory_order_relaxed);
+                if (index >= attemptCount_) {
+                    break;
+                }
+                try {
+                    slots_[index] =
+                        ClientSocket::connectToWithDeadline(address_, timeout_);
+                } catch (const std::exception&) {
+                    connectFailures_.fetch_add(
+                        1,
+                        std::memory_order_relaxed);
+                }
+            }
+
+            {
+                std::lock_guard lock(mutex_);
+                ++completedWorkers_;
+                if (completedWorkers_ == workerCount_) {
+                    batchComplete_.notify_one();
+                }
+            }
+        }
+    }
+
+    gamenet::net::InetAddress address_;
+    std::chrono::milliseconds timeout_;
+    std::size_t workerCount_;
+    std::vector<ClientSocket> slots_;
+    std::vector<std::thread> workers_;
+    std::atomic<std::size_t> nextIndex_{0};
+    std::atomic<std::size_t> connectFailures_{0};
+    std::mutex mutex_;
+    std::condition_variable workAvailable_;
+    std::condition_variable batchComplete_;
+    std::size_t attemptCount_{0};
+    std::size_t completedWorkers_{0};
+    std::uint64_t generation_{0};
+    bool stopping_{false};
+};
 
 void recordWorkingSet(Result& result, const Config& config) {
     result.workingSetAfter = sampleWorkingSetBytes();
@@ -888,6 +1265,158 @@ void runConnections(
     clients.clear();
 }
 
+void runConnectionChurn(
+    const Config& config,
+    const gamenet::net::InetAddress& address,
+    SharedState& state,
+    Result& result) {
+    const std::uint64_t expectedAttempts =
+        static_cast<std::uint64_t>(config.churnTargetPerSecond) *
+        static_cast<std::uint64_t>(config.churnDuration.count()) /
+        1000U;
+    std::uint64_t attempted = 0;
+    std::uint64_t accepted = 0;
+    std::uint64_t connectFailures = 0;
+    std::vector<double> connectPhaseUs;
+    std::vector<double> acceptPhaseUs;
+    std::vector<double> closePhaseUs;
+    std::vector<double> scheduleLagUs;
+    const auto started = Clock::now();
+
+    {
+        ChurnConnectorPool connectorPool(config, address);
+        while (attempted < expectedAttempts) {
+            const std::size_t batchAttempts = static_cast<std::size_t>(
+                (std::min)(
+                    static_cast<std::uint64_t>(config.connections),
+                    expectedAttempts - attempted));
+            const std::uint64_t scheduledAttempts =
+                attempted + batchAttempts;
+            const auto scheduledAt =
+                started +
+                std::chrono::duration_cast<Clock::duration>(
+                    std::chrono::duration<double>(
+                        static_cast<double>(scheduledAttempts) /
+                        static_cast<double>(config.churnTargetPerSecond)));
+            std::this_thread::sleep_until(scheduledAt);
+
+            const auto connectStarted = Clock::now();
+            auto batch = connectorPool.connectBatch(batchAttempts);
+            const auto connectFinished = Clock::now();
+            attempted = scheduledAttempts;
+            connectFailures += batch.connectFailures;
+            accepted += batch.clients.size();
+            if (!state.waitForConnections(
+                    static_cast<std::size_t>(accepted),
+                    config.timeout)) {
+                throw std::runtime_error(
+                    "timed out waiting for churn accept callbacks");
+            }
+            const auto acceptFinished = Clock::now();
+
+            if (attempted == expectedAttempts) {
+                state.beginClientClose();
+            }
+            const auto closeStarted = Clock::now();
+            for (auto& client : batch.clients) {
+                client.closeAbortively();
+            }
+            batch.clients.clear();
+            if (!state.waitForDisconnections(
+                    static_cast<std::size_t>(accepted),
+                    config.timeout)) {
+                throw std::runtime_error(
+                    "timed out waiting for churn disconnect callbacks");
+            }
+            const auto closeFinished = Clock::now();
+            connectPhaseUs.push_back(
+                std::chrono::duration<double, std::micro>(
+                    connectFinished - connectStarted)
+                    .count());
+            acceptPhaseUs.push_back(
+                std::chrono::duration<double, std::micro>(
+                    acceptFinished - connectFinished)
+                    .count());
+            closePhaseUs.push_back(
+                std::chrono::duration<double, std::micro>(
+                    closeFinished - closeStarted)
+                    .count());
+            scheduleLagUs.push_back((std::max)(
+                0.0,
+                std::chrono::duration<double, std::micro>(
+                    closeFinished - scheduledAt)
+                    .count()));
+        }
+    }
+
+    const auto finished = Clock::now();
+    const double elapsedSeconds =
+        std::chrono::duration<double>(finished - started).count();
+    if (elapsedSeconds <= 0.0) {
+        throw std::runtime_error("connection churn clock did not advance");
+    }
+    result.elapsedSeconds = elapsedSeconds;
+    result.churnElapsedSeconds = elapsedSeconds;
+    result.churnAttemptedConnections = attempted;
+    result.churnAcceptedConnections = state.connected();
+    result.churnConnectFailures = connectFailures;
+    result.churnClosedConnections = state.disconnected();
+    result.churnBatches = connectPhaseUs.size();
+    result.churnAttemptsPerSecond =
+        static_cast<double>(attempted) / elapsedSeconds;
+    result.churnAcceptsPerSecond =
+        static_cast<double>(result.churnAcceptedConnections) /
+        elapsedSeconds;
+    result.churnClosesPerSecond =
+        static_cast<double>(result.churnClosedConnections) /
+        elapsedSeconds;
+    result.churnWorkerAcceptCounts = state.workerAcceptCounts();
+    const std::size_t expectedWorkerCount =
+        (std::max)(std::size_t{1}, config.eventLoopThreads);
+    if (result.churnWorkerAcceptCounts.size() > expectedWorkerCount) {
+        throw std::runtime_error(
+            "churn observed more owner loops than configured");
+    }
+    result.churnWorkerAcceptCounts.resize(expectedWorkerCount, 0);
+    std::sort(
+        result.churnWorkerAcceptCounts.begin(),
+        result.churnWorkerAcceptCounts.end());
+    if (result.churnAcceptedConnections != 0) {
+        const double mean =
+            static_cast<double>(result.churnAcceptedConnections) /
+            static_cast<double>(expectedWorkerCount);
+        result.churnWorkerSkewRatio =
+            static_cast<double>(
+                result.churnWorkerAcceptCounts.back() -
+                result.churnWorkerAcceptCounts.front()) /
+            mean;
+    }
+    auto recordPhase = [](std::vector<double>& samples,
+                          std::optional<double>& p99,
+                          std::optional<double>& maximum) {
+        std::sort(samples.begin(), samples.end());
+        p99 = nearestRankPercentile(samples, 0.99);
+        maximum = samples.back();
+    };
+    recordPhase(
+        connectPhaseUs,
+        result.churnConnectP99Us,
+        result.churnConnectMaxUs);
+    recordPhase(
+        acceptPhaseUs,
+        result.churnAcceptP99Us,
+        result.churnAcceptMaxUs);
+    recordPhase(
+        closePhaseUs,
+        result.churnCloseP99Us,
+        result.churnCloseMaxUs);
+    recordPhase(
+        scheduleLagUs,
+        result.churnScheduleLagP99Us,
+        result.churnScheduleLagMaxUs);
+    recordWorkingSet(result, config);
+}
+
 void runSlowClient(
     const Config& config,
     const gamenet::net::InetAddress& address,
@@ -986,6 +1515,44 @@ void printOptionalString(
     }
 }
 
+void printIntegerArray(
+    std::ostream& output,
+    const std::vector<std::uint64_t>& values) {
+    output << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) {
+            output << ", ";
+        }
+        output << values[index];
+    }
+    output << ']';
+}
+
+void printCloseReasonCounts(
+    std::ostream& output,
+    const CloseReasonCounts& counts) {
+    constexpr std::array<std::string_view, kCloseReasonCount> names{
+        "peer_eof",
+        "reset",
+        "connect_timeout",
+        "input_limit",
+        "output_overload",
+        "admission_policy",
+        "graceful_shutdown",
+        "forced_shutdown",
+        "callback_failure",
+        "internal_error",
+    };
+    output << '{';
+    for (std::size_t index = 0; index < names.size(); ++index) {
+        if (index != 0) {
+            output << ", ";
+        }
+        output << '"' << names[index] << "\": " << counts[index];
+    }
+    output << '}';
+}
+
 std::string_view platformName() noexcept {
 #ifdef _WIN32
     return "windows";
@@ -1031,7 +1598,7 @@ std::string_view stopOutcomeName(
 
 void printResult(const Config& config, const Result& result, const SharedState& state) {
     const std::string failure = state.failure();
-    std::cout << std::fixed << std::setprecision(6)
+    std::cout << std::fixed << std::setprecision(9)
               << "{\n"
               << "  \"schema\": \"gamenet.core_benchmark.v2\",\n"
               << "  \"status\": \"" << (failure.empty() ? "ok" : "error") << "\",\n"
@@ -1057,6 +1624,12 @@ void printResult(const Config& config, const Result& result, const SharedState& 
               << "    \"event_loop_threads\": " << config.eventLoopThreads << ",\n"
               << "    \"messages_per_connection\": " << config.messagesPerConnection << ",\n"
               << "    \"payload_bytes\": " << config.payloadBytes << ",\n"
+              << "    \"churn_target_per_second\": "
+              << config.churnTargetPerSecond << ",\n"
+              << "    \"churn_duration_ms\": "
+              << config.churnDuration.count() << ",\n"
+              << "    \"churn_connect_timeout_ms\": "
+              << config.churnConnectTimeout.count() << ",\n"
               << "    \"slow_bytes_per_connection\": " << config.slowBytes << ",\n"
               << "    \"low_water_bytes\": " << result.outputLowWaterBytes << ",\n"
               << "    \"high_water_bytes\": " << result.outputHighWaterBytes << ",\n"
@@ -1105,6 +1678,47 @@ void printResult(const Config& config, const Result& result, const SharedState& 
     printOptional(std::cout, result.serverStopInitialConnections);
     std::cout << ",\n    \"server_stop_forced_connections\": ";
     printOptional(std::cout, result.serverStopForcedConnections);
+    std::cout << ",\n"
+              << "    \"churn_attempted_connections\": "
+              << result.churnAttemptedConnections << ",\n"
+              << "    \"churn_accepted_connections\": "
+              << result.churnAcceptedConnections << ",\n"
+              << "    \"churn_connect_failures\": "
+              << result.churnConnectFailures << ",\n"
+              << "    \"churn_closed_connections\": "
+              << result.churnClosedConnections << ",\n"
+              << "    \"churn_batches\": "
+              << result.churnBatches;
+    std::cout << ",\n    \"churn_elapsed_seconds\": ";
+    printOptional(std::cout, result.churnElapsedSeconds);
+    std::cout << ",\n    \"churn_attempts_per_second\": ";
+    printOptional(std::cout, result.churnAttemptsPerSecond);
+    std::cout << ",\n    \"churn_accepts_per_second\": ";
+    printOptional(std::cout, result.churnAcceptsPerSecond);
+    std::cout << ",\n    \"churn_closes_per_second\": ";
+    printOptional(std::cout, result.churnClosesPerSecond);
+    std::cout << ",\n    \"churn_worker_accept_counts\": ";
+    printIntegerArray(std::cout, result.churnWorkerAcceptCounts);
+    std::cout << ",\n    \"churn_worker_skew_ratio\": ";
+    printOptional(std::cout, result.churnWorkerSkewRatio);
+    std::cout << ",\n    \"churn_connect_p99_us\": ";
+    printOptional(std::cout, result.churnConnectP99Us);
+    std::cout << ",\n    \"churn_connect_max_us\": ";
+    printOptional(std::cout, result.churnConnectMaxUs);
+    std::cout << ",\n    \"churn_accept_p99_us\": ";
+    printOptional(std::cout, result.churnAcceptP99Us);
+    std::cout << ",\n    \"churn_accept_max_us\": ";
+    printOptional(std::cout, result.churnAcceptMaxUs);
+    std::cout << ",\n    \"churn_close_p99_us\": ";
+    printOptional(std::cout, result.churnCloseP99Us);
+    std::cout << ",\n    \"churn_close_max_us\": ";
+    printOptional(std::cout, result.churnCloseMaxUs);
+    std::cout << ",\n    \"churn_schedule_lag_p99_us\": ";
+    printOptional(std::cout, result.churnScheduleLagP99Us);
+    std::cout << ",\n    \"churn_schedule_lag_max_us\": ";
+    printOptional(std::cout, result.churnScheduleLagMaxUs);
+    std::cout << ",\n    \"churn_close_reason_counts\": ";
+    printCloseReasonCounts(std::cout, result.churnCloseReasonCounts);
     std::cout << ",\n"
               << "    \"requested_bytes\": " << result.requestedBytes << ",\n"
               << "    \"accepted_bytes\": " << result.acceptedBytes << ",\n"
@@ -1248,12 +1862,19 @@ int run(const Config& config) {
                     connection->pendingOutputBytes(),
                     connection->readingPausedByBackpressure());
             }
-            state.markConnected();
+            state.markConnected(connection->getLoop());
         } else {
             state.markDisconnected();
             scheduleCompletionCheck();
         }
     });
+    if (config.scenario == "connection-churn") {
+        server.setCloseInfoCallback(
+            [&](const gamenet::net::TcpConnectionPtr&,
+                const gamenet::net::TcpConnectionCloseInfo& closeInfo) {
+                state.markCloseReason(closeInfo.reason);
+            });
+    }
     if (config.scenario == "echo") {
         server.setMessageCallback(
             [&](const gamenet::net::TcpConnectionPtr& connection, gamenet::net::Buffer* buffer) {
@@ -1287,6 +1908,8 @@ int run(const Config& config) {
                 runEcho(config, address, payload, state, result);
             } else if (config.scenario == "connections") {
                 runConnections(config, address, state, result);
+            } else if (config.scenario == "connection-churn") {
+                runConnectionChurn(config, address, state, result);
             } else {
                 runSlowClient(config, address, state, result);
             }
@@ -1327,6 +1950,7 @@ int run(const Config& config) {
     result.overloadedSends = state.overloadedSends();
     result.closedSends = state.closedSends();
     result.ownerUnavailableSends = state.ownerUnavailableSends();
+    result.churnCloseReasonCounts = state.closeReasonCounts();
     result.pendingOutputPeakBytes = state.pendingOutputPeakBytes();
     result.readPauseObservations = state.readPauseObservations();
     result.readResumeObservations = state.readResumeObservations();

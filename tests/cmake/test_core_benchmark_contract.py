@@ -69,6 +69,7 @@ def main() -> None:
         "gamenet.core_benchmark.v2",
         "echo",
         "connections",
+        "connection-churn",
         "slow-client",
         "throughput_mib_per_second",
         "messages_per_second",
@@ -89,6 +90,27 @@ def main() -> None:
         "server_stop_outcome",
         "server_stop_initial_connections",
         "server_stop_forced_connections",
+        "churn_attempted_connections",
+        "churn_accepted_connections",
+        "churn_connect_failures",
+        "churn_closed_connections",
+        "churn_batches",
+        "churn_elapsed_seconds",
+        "churn_attempts_per_second",
+        "churn_accepts_per_second",
+        "churn_closes_per_second",
+        "churn_worker_accept_counts",
+        "churn_worker_skew_ratio",
+        "churn_connect_timeout_ms",
+        "churn_connect_p99_us",
+        "churn_connect_max_us",
+        "churn_accept_p99_us",
+        "churn_accept_max_us",
+        "churn_close_p99_us",
+        "churn_close_max_us",
+        "churn_schedule_lag_p99_us",
+        "churn_schedule_lag_max_us",
+        "churn_close_reason_counts",
         "requested_bytes",
         "accepted_bytes",
         "rejected_bytes",
@@ -146,6 +168,11 @@ def main() -> None:
     require(source_text, "server.stopGracefully", benchmark_source)
     require(source_text, "completionCheckQueued", benchmark_source)
     require(source_text, "nearestRankPercentile(allSamples, 0.999)", benchmark_source)
+    require(source_text, "class ChurnConnectorPool", benchmark_source)
+    require(source_text, "ClientSocket::connectToWithDeadline", benchmark_source)
+    require(source_text, "state.waitForDisconnections", benchmark_source)
+    require(source_text, "std::setprecision(9)", benchmark_source)
+    require(source_text, "condition-variable-predicate-lock", benchmark_source)
     assert "loop.runEvery(" not in source_text, (
         "idle CPU benchmark must not contain a recurring coordination poll"
     )
@@ -196,6 +223,16 @@ def main() -> None:
         "echo latency percentiles are not ordered",
         benchmark_validator,
     )
+    require(
+        validator_text,
+        "churn attempts do not equal accepted plus connect failures",
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "churn worker accepts do not sum to accepted connections",
+        benchmark_validator,
+    )
 
     require(docs_text, "-DGAMENET_BUILD_BENCHMARKS=ON", docs)
     require(docs_text, "--scenario echo", docs)
@@ -219,6 +256,8 @@ def main() -> None:
     require(docs_text, "P50/P99/P999", docs)
     require(docs_text, "messages_per_second", docs)
     require(docs_text, "64, 256, 1024", docs)
+    require(docs_text, "--scenario connection-churn", docs)
+    require(docs_text, "--require-zero-churn-failures", docs)
     require(docs_text, "--scenario slow-client", docs)
     require(docs_text, "Raw JSON evidence", docs)
 
@@ -237,12 +276,14 @@ def main() -> None:
         "build_type": "Release",
         "parameters": {
             "connections": 1000,
+            "event_loop_threads": 1,
             "slow_bytes_per_connection": 8388608,
             "low_water_bytes": 32768,
             "high_water_bytes": 65536,
             "hard_limit_bytes": 16777216,
             "max_input_buffer_bytes": 2097152,
             "settle_ms": 1000,
+            "timeout_ms": 30000,
         },
         "measurements": {
             "elapsed_seconds": 1.6,
@@ -267,6 +308,37 @@ def main() -> None:
             "server_stop_outcome": "drained",
             "server_stop_initial_connections": 0,
             "server_stop_forced_connections": 0,
+            "churn_attempted_connections": 0,
+            "churn_accepted_connections": 0,
+            "churn_connect_failures": 0,
+            "churn_closed_connections": 0,
+            "churn_batches": 0,
+            "churn_elapsed_seconds": None,
+            "churn_attempts_per_second": None,
+            "churn_accepts_per_second": None,
+            "churn_closes_per_second": None,
+            "churn_worker_accept_counts": [],
+            "churn_worker_skew_ratio": None,
+            "churn_connect_p99_us": None,
+            "churn_connect_max_us": None,
+            "churn_accept_p99_us": None,
+            "churn_accept_max_us": None,
+            "churn_close_p99_us": None,
+            "churn_close_max_us": None,
+            "churn_schedule_lag_p99_us": None,
+            "churn_schedule_lag_max_us": None,
+            "churn_close_reason_counts": {
+                "peer_eof": 0,
+                "reset": 0,
+                "connect_timeout": 0,
+                "input_limit": 0,
+                "output_overload": 0,
+                "admission_policy": 0,
+                "graceful_shutdown": 0,
+                "forced_shutdown": 0,
+                "callback_failure": 0,
+                "internal_error": 0,
+            },
             "requested_bytes": 0,
             "accepted_bytes": 0,
             "rejected_bytes": 0,
@@ -346,6 +418,131 @@ def main() -> None:
             pass
         else:
             raise AssertionError(f"core validator accepted invalid echo {key}")
+
+    churn_document = json.loads(json.dumps(connection_document))
+    churn_document["scenario"] = "connection-churn"
+    churn_document["parameters"].update(
+        {
+            "connections": 100,
+            "event_loop_threads": 4,
+            "churn_target_per_second": 1000,
+            "churn_duration_ms": 1000,
+            "churn_connect_timeout_ms": 1000,
+            "settle_ms": 0,
+        }
+    )
+    churn_document["measurements"].update(
+        {
+            "elapsed_seconds": 1.1,
+            "working_set_delta_bytes": 100000,
+            "working_set_after_bytes": 1100000,
+            "approx_bytes_per_connection": 1000.0,
+            "connection_establish_seconds": None,
+            "connection_establish_per_second": None,
+            "idle_observation_seconds": None,
+            "idle_process_cpu_seconds": None,
+            "idle_process_cpu_percent": None,
+            "churn_attempted_connections": 1000,
+            "churn_accepted_connections": 1000,
+            "churn_connect_failures": 0,
+            "churn_closed_connections": 1000,
+            "churn_batches": 10,
+            "churn_elapsed_seconds": 1.1,
+            "churn_attempts_per_second": 909.090909,
+            "churn_accepts_per_second": 909.090909,
+            "churn_closes_per_second": 909.090909,
+            "churn_worker_accept_counts": [250, 250, 250, 250],
+            "churn_worker_skew_ratio": 0.0,
+            "churn_connect_p99_us": 2000.0,
+            "churn_connect_max_us": 2000.0,
+            "churn_accept_p99_us": 1000.0,
+            "churn_accept_max_us": 1000.0,
+            "churn_close_p99_us": 3000.0,
+            "churn_close_max_us": 3000.0,
+            "churn_schedule_lag_p99_us": 6000.0,
+            "churn_schedule_lag_max_us": 6000.0,
+            "churn_close_reason_counts": {
+                "peer_eof": 1000,
+                "reset": 0,
+                "connect_timeout": 0,
+                "input_limit": 0,
+                "output_overload": 0,
+                "admission_policy": 0,
+                "graceful_shutdown": 0,
+                "forced_shutdown": 0,
+                "callback_failure": 0,
+                "internal_error": 0,
+            },
+        }
+    )
+    core_validator.validate_document(
+        churn_document,
+        require_zero_churn_failures=True,
+    )
+    invalid_churn_documents = (
+        ("churn_accepted_connections", 999),
+        ("churn_closed_connections", 999),
+        ("churn_attempts_per_second", 900.0),
+        ("churn_batches", 9),
+        ("churn_worker_accept_counts", [249, 250, 250, 250]),
+        ("churn_worker_skew_ratio", 0.1),
+        ("churn_accept_p99_us", 1001.0),
+    )
+    for key, value in invalid_churn_documents:
+        mutated = json.loads(json.dumps(churn_document))
+        mutated["measurements"][key] = value
+        try:
+            core_validator.validate_document(mutated)
+        except core_validator.CoreBenchmarkValidationError:
+            pass
+        else:
+            raise AssertionError(f"core validator accepted invalid churn {key}")
+
+    invalid_close_reasons = json.loads(json.dumps(churn_document))
+    invalid_close_reasons["measurements"]["churn_close_reason_counts"][
+        "peer_eof"
+    ] = 999
+    try:
+        core_validator.validate_document(invalid_close_reasons)
+    except core_validator.CoreBenchmarkValidationError:
+        pass
+    else:
+        raise AssertionError("core validator accepted invalid churn close reasons")
+
+    invalid_churn_deadline = json.loads(json.dumps(churn_document))
+    invalid_churn_deadline["parameters"]["timeout_ms"] = 500
+    try:
+        core_validator.validate_document(invalid_churn_deadline)
+    except core_validator.CoreBenchmarkValidationError:
+        pass
+    else:
+        raise AssertionError("core validator accepted a churn deadline beyond timeout")
+
+    failed_connect_churn = json.loads(json.dumps(churn_document))
+    failed_connect_churn["measurements"].update(
+        {
+            "churn_accepted_connections": 990,
+            "churn_connect_failures": 10,
+            "churn_closed_connections": 990,
+            "churn_accepts_per_second": 900.0,
+            "churn_closes_per_second": 900.0,
+            "churn_worker_accept_counts": [247, 247, 248, 248],
+            "churn_worker_skew_ratio": 1.0 / 247.5,
+        }
+    )
+    failed_connect_churn["measurements"]["churn_close_reason_counts"][
+        "peer_eof"
+    ] = 990
+    core_validator.validate_document(failed_connect_churn)
+    try:
+        core_validator.validate_document(
+            failed_connect_churn,
+            require_zero_churn_failures=True,
+        )
+    except core_validator.CoreBenchmarkValidationError:
+        pass
+    else:
+        raise AssertionError("core validator accepted forbidden churn failures")
 
     linux_guard = "python3 tests/cmake/test_core_benchmark_contract.py"
     windows_guard = "python tests/cmake/test_core_benchmark_contract.py"

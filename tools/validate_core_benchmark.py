@@ -10,7 +10,19 @@ from typing import Any
 
 
 SCHEMA = "gamenet.core_benchmark.v2"
-SCENARIOS = {"echo", "connections", "slow-client"}
+SCENARIOS = {"echo", "connections", "connection-churn", "slow-client"}
+CLOSE_REASON_NAMES = {
+    "peer_eof",
+    "reset",
+    "connect_timeout",
+    "input_limit",
+    "output_overload",
+    "admission_policy",
+    "graceful_shutdown",
+    "forced_shutdown",
+    "callback_failure",
+    "internal_error",
+}
 
 
 class CoreBenchmarkValidationError(ValueError):
@@ -28,6 +40,26 @@ def non_negative_integer(value: Any, label: str) -> int:
         f"{label} must be a non-negative integer",
     )
     return value
+
+
+def non_negative_integer_list(value: Any, label: str) -> list[int]:
+    require(isinstance(value, list), f"{label} must be an array")
+    return [
+        non_negative_integer(item, f"{label}[{index}]")
+        for index, item in enumerate(value)
+    ]
+
+
+def close_reason_counts(value: Any, label: str) -> dict[str, int]:
+    require(isinstance(value, dict), f"{label} must be an object")
+    require(
+        set(value) == CLOSE_REASON_NAMES,
+        f"{label} must contain the exact close-reason key set",
+    )
+    return {
+        name: non_negative_integer(value[name], f"{label}.{name}")
+        for name in CLOSE_REASON_NAMES
+    }
 
 
 def non_negative_number(value: Any, label: str, *, nullable: bool = False) -> float | None:
@@ -63,6 +95,7 @@ def validate_document(
     expected_connections: int | None = None,
     expected_slow_bytes: int | None = None,
     require_overload: bool = False,
+    require_zero_churn_failures: bool = False,
     label: str = "Core benchmark document",
 ) -> dict[str, Any]:
     require(isinstance(document, dict), f"{label} must be a JSON object")
@@ -115,6 +148,10 @@ def validate_document(
     settle_ms = non_negative_integer(
         parameters.get("settle_ms"),
         f"{label}.settle_ms",
+    )
+    event_loop_threads = non_negative_integer(
+        parameters.get("event_loop_threads"),
+        f"{label}.event_loop_threads",
     )
     if expected_connections is not None:
         require(connections == expected_connections, f"{label}: connection count mismatch")
@@ -228,6 +265,76 @@ def validate_document(
         measurements.get("server_stop_forced_connections"),
         f"{label}.server_stop_forced_connections",
     )
+    churn_attempted = non_negative_integer(
+        measurements.get("churn_attempted_connections"),
+        f"{label}.churn_attempted_connections",
+    )
+    churn_accepted = non_negative_integer(
+        measurements.get("churn_accepted_connections"),
+        f"{label}.churn_accepted_connections",
+    )
+    churn_connect_failures = non_negative_integer(
+        measurements.get("churn_connect_failures"),
+        f"{label}.churn_connect_failures",
+    )
+    churn_closed = non_negative_integer(
+        measurements.get("churn_closed_connections"),
+        f"{label}.churn_closed_connections",
+    )
+    churn_batches = non_negative_integer(
+        measurements.get("churn_batches"),
+        f"{label}.churn_batches",
+    )
+    churn_elapsed = non_negative_number(
+        measurements.get("churn_elapsed_seconds"),
+        f"{label}.churn_elapsed_seconds",
+        nullable=True,
+    )
+    churn_attempt_rate = non_negative_number(
+        measurements.get("churn_attempts_per_second"),
+        f"{label}.churn_attempts_per_second",
+        nullable=True,
+    )
+    churn_accept_rate = non_negative_number(
+        measurements.get("churn_accepts_per_second"),
+        f"{label}.churn_accepts_per_second",
+        nullable=True,
+    )
+    churn_close_rate = non_negative_number(
+        measurements.get("churn_closes_per_second"),
+        f"{label}.churn_closes_per_second",
+        nullable=True,
+    )
+    churn_worker_accept_counts = non_negative_integer_list(
+        measurements.get("churn_worker_accept_counts"),
+        f"{label}.churn_worker_accept_counts",
+    )
+    churn_worker_skew = non_negative_number(
+        measurements.get("churn_worker_skew_ratio"),
+        f"{label}.churn_worker_skew_ratio",
+        nullable=True,
+    )
+    churn_phase_metrics = {
+        name: non_negative_number(
+            measurements.get(name),
+            f"{label}.{name}",
+            nullable=True,
+        )
+        for name in (
+            "churn_connect_p99_us",
+            "churn_connect_max_us",
+            "churn_accept_p99_us",
+            "churn_accept_max_us",
+            "churn_close_p99_us",
+            "churn_close_max_us",
+            "churn_schedule_lag_p99_us",
+            "churn_schedule_lag_max_us",
+        )
+    }
+    churn_close_reasons = close_reason_counts(
+        measurements.get("churn_close_reason_counts"),
+        f"{label}.churn_close_reason_counts",
+    )
     require(
         connection_close_seconds is not None,
         f"{label}: successful run must report connection-close convergence",
@@ -301,6 +408,161 @@ def validate_document(
             all(value is None for value in connection_only),
             f"{label}: non-connections scenario reported idle-capacity metrics",
         )
+
+    churn_rates = (
+        churn_elapsed,
+        churn_attempt_rate,
+        churn_accept_rate,
+        churn_close_rate,
+        churn_worker_skew,
+    )
+    if scenario == "connection-churn":
+        churn_target = non_negative_integer(
+            parameters.get("churn_target_per_second"),
+            f"{label}.churn_target_per_second",
+        )
+        churn_duration_ms = non_negative_integer(
+            parameters.get("churn_duration_ms"),
+            f"{label}.churn_duration_ms",
+        )
+        churn_connect_timeout_ms = non_negative_integer(
+            parameters.get("churn_connect_timeout_ms"),
+            f"{label}.churn_connect_timeout_ms",
+        )
+        timeout_ms = non_negative_integer(
+            parameters.get("timeout_ms"),
+            f"{label}.timeout_ms",
+        )
+        require(churn_target > 0, f"{label}: churn target must be positive")
+        require(churn_duration_ms > 0, f"{label}: churn duration must be positive")
+        require(
+            churn_connect_timeout_ms > 0,
+            f"{label}: churn connect timeout must be positive",
+        )
+        require(
+            churn_duration_ms <= timeout_ms
+            and churn_connect_timeout_ms <= timeout_ms,
+            f"{label}: churn deadlines exceed the overall timeout",
+        )
+        expected_attempts = churn_target * churn_duration_ms // 1000
+        require(expected_attempts > 0, f"{label}: churn parameters produce zero attempts")
+        require(
+            churn_attempted == expected_attempts,
+            f"{label}: churn attempt count does not match target and duration",
+        )
+        require(
+            churn_batches == (expected_attempts + connections - 1) // connections,
+            f"{label}: churn batch count is inconsistent",
+        )
+        require(
+            churn_attempted == churn_accepted + churn_connect_failures,
+            f"{label}: churn attempts do not equal accepted plus connect failures",
+        )
+        require(
+            churn_accepted == churn_closed,
+            f"{label}: churn accepted connections do not equal closed connections",
+        )
+        require(
+            sum(churn_close_reasons.values()) == churn_closed,
+            f"{label}: churn close reasons do not sum to closed connections",
+        )
+        require(churn_accepted > 0, f"{label}: churn accepted no connections")
+        require(
+            all(value is not None for value in churn_rates),
+            f"{label}: churn rate and worker-skew metrics must be present",
+        )
+        require(
+            all(value is not None for value in churn_phase_metrics.values()),
+            f"{label}: churn phase-latency metrics must be present",
+        )
+        require(churn_elapsed > 0.0, f"{label}: churn elapsed time must be positive")
+        require(
+            math.isclose(
+                elapsed_seconds,
+                churn_elapsed,
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: common and churn elapsed times differ",
+        )
+        require(
+            churn_elapsed + 0.001 >= churn_duration_ms / 1000.0,
+            f"{label}: churn elapsed time is shorter than the paced duration",
+        )
+        for actual, count, rate_name in (
+            (churn_attempt_rate, churn_attempted, "attempt"),
+            (churn_accept_rate, churn_accepted, "accept"),
+            (churn_close_rate, churn_closed, "close"),
+        ):
+            require(
+                math.isclose(
+                    actual,
+                    count / churn_elapsed,
+                    rel_tol=0.001,
+                    abs_tol=0.001,
+                ),
+                f"{label}: churn {rate_name} rate is inconsistent",
+            )
+        expected_worker_count = max(1, event_loop_threads)
+        require(
+            len(churn_worker_accept_counts) == expected_worker_count,
+            f"{label}: churn worker count does not match configured EventLoops",
+        )
+        require(
+            churn_worker_accept_counts == sorted(churn_worker_accept_counts),
+            f"{label}: churn worker accept counts must use stable sorted order",
+        )
+        require(
+            sum(churn_worker_accept_counts) == churn_accepted,
+            f"{label}: churn worker accepts do not sum to accepted connections",
+        )
+        mean_worker_accepts = churn_accepted / expected_worker_count
+        expected_skew = (
+            max(churn_worker_accept_counts) - min(churn_worker_accept_counts)
+        ) / mean_worker_accepts
+        require(
+            math.isclose(
+                churn_worker_skew,
+                expected_skew,
+                rel_tol=0.001,
+                abs_tol=0.001,
+            ),
+            f"{label}: churn worker skew is inconsistent",
+        )
+        for phase in ("connect", "accept", "close", "schedule_lag"):
+            p99 = churn_phase_metrics[f"churn_{phase}_p99_us"]
+            maximum = churn_phase_metrics[f"churn_{phase}_max_us"]
+            require(
+                p99 <= maximum,
+                f"{label}: churn {phase} P99 exceeds maximum",
+            )
+            require(
+                maximum <= churn_elapsed * 1000000.0 + 1.0,
+                f"{label}: churn {phase} maximum exceeds total elapsed time",
+            )
+        if require_zero_churn_failures:
+            require(
+                churn_connect_failures == 0,
+                f"{label}: churn connect failures are not allowed",
+            )
+    else:
+        require(
+            churn_attempted == 0
+            and churn_accepted == 0
+            and churn_connect_failures == 0
+            and churn_closed == 0
+            and churn_batches == 0
+            and all(value is None for value in churn_rates)
+            and all(value is None for value in churn_phase_metrics.values())
+            and churn_worker_accept_counts == []
+            and all(value == 0 for value in churn_close_reasons.values()),
+            f"{label}: non-churn scenario reported churn measurements",
+        )
+        require(
+            not require_zero_churn_failures,
+            f"{label}: zero churn failures can only be required for connection-churn",
+        )
+
     if scenario == "echo":
         messages = non_negative_integer(
             parameters.get("messages_per_connection"),
@@ -526,6 +788,7 @@ def main() -> int:
     parser.add_argument("--expected-connections", type=int)
     parser.add_argument("--expected-slow-bytes", type=int)
     parser.add_argument("--require-overload", action="store_true")
+    parser.add_argument("--require-zero-churn-failures", action="store_true")
     args = parser.parse_args()
 
     paths = list(args.input)
@@ -545,6 +808,7 @@ def main() -> int:
                 expected_connections=args.expected_connections,
                 expected_slow_bytes=args.expected_slow_bytes,
                 require_overload=args.require_overload,
+                require_zero_churn_failures=args.require_zero_churn_failures,
                 label=str(path),
             )
     except CoreBenchmarkValidationError as error:
