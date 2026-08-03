@@ -9,6 +9,7 @@
 #include "support/TestAssert.h"
 
 #include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
+#include "../../../src/core/net/detail/TcpConnectionConstructionHarness.h"
 
 #include <atomic>
 #include <array>
@@ -36,9 +37,93 @@ bool peerClosed(gamenet::net::SocketFd fd) {
         !gamenet::net::sockets::isInterrupted(error);
 }
 
+void verifyConstructionFailureKeepsBaseFdOwnership() {
+    gamenet::net::EventLoop loop;
+    gamenet::net::TcpServer server(
+        &loop,
+        gamenet::net::InetAddress(0, true),
+        "server-construction-failure-contract");
+    server.setThreadNum(1);
+
+    std::atomic<int> connectionCallbacks{0};
+    std::atomic<int> acceptedMetrics{0};
+    server.setConnectionCallback(
+        [&](const gamenet::net::TcpConnectionPtr&) {
+            connectionCallbacks.fetch_add(1, std::memory_order_relaxed);
+        });
+    server.setAdmissionMetricCallback(
+        [&](const gamenet::net::TcpServerAdmissionMetric& metric) {
+            if (metric.event ==
+                gamenet::net::TcpServerAdmissionEvent::Accepted) {
+                acceptedMetrics.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
+
+    server.start();
+    gamenet::net::detail::TcpConnectionConstructionHarness::
+        failNextBeforeSocketClaim();
+    const auto client =
+        gamenet::test::connectTestClient(server.listenAddress());
+
+    bool failedPeerClosed = false;
+    bool stopStarted = false;
+    gamenet::net::TcpServerStopFuture stopFuture;
+    gamenet::net::TcpServerStopResult stopResult;
+    const auto progress = loop.runEvery(1ms, [&] {
+        if (!failedPeerClosed) {
+            failedPeerClosed = peerClosed(client);
+            if (!failedPeerClosed) {
+                return;
+            }
+
+            GAMENET_TEST_ASSERT(
+                gamenet::net::detail::TcpConnectionConstructionHarness::
+                    failureWasConsumed());
+            GAMENET_TEST_ASSERT(
+                !gamenet::net::detail::TcpConnectionConstructionHarness::
+                    failureObservedSocketOwner());
+            GAMENET_TEST_ASSERT(server.connectionCount() == 0);
+            const auto stats = server.admissionStats();
+            GAMENET_TEST_ASSERT(stats.accepted == 0);
+            GAMENET_TEST_ASSERT(stats.activeConnections == 0);
+            GAMENET_TEST_ASSERT(
+                connectionCallbacks.load(std::memory_order_relaxed) == 0);
+            GAMENET_TEST_ASSERT(
+                acceptedMetrics.load(std::memory_order_relaxed) == 0);
+        }
+
+        if (!stopStarted) {
+            stopFuture = server.stopGracefully(
+                gamenet::net::TcpServerStopOptions{
+                    .drainTimeout = 500ms,
+                });
+            stopStarted = true;
+            return;
+        }
+        if (stopFuture.wait_for(0ms) != std::future_status::ready) {
+            return;
+        }
+        stopResult = stopFuture.get();
+        loop.quit();
+    });
+
+    gamenet::test::runLoopWithTimeout(
+        loop,
+        5s,
+        "construction failure did not preserve base fd ownership");
+    loop.cancel(progress);
+    gamenet::test::closeTestSocket(client);
+
+    GAMENET_TEST_ASSERT(failedPeerClosed);
+    GAMENET_TEST_ASSERT(
+        stopResult.outcome == gamenet::net::TcpServerStopOutcome::Drained);
+}
+
 }  // namespace
 
 int main() {
+    verifyConstructionFailureKeepsBaseFdOwnership();
+
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(
         &loop,

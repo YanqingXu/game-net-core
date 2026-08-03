@@ -1831,6 +1831,65 @@ def main() -> None:
     require(tcp_connection_source_text, "reportCallbackException", tcp_connection_source)
     require(tcp_connection_source_text, "if (!loop_->isInLoopThread())", tcp_connection_source)
     require(tcp_connection_source_text, "std::terminate();", tcp_connection_source)
+    require(
+        tcp_connection_source_text,
+        "consumeTcpConnectionConstructionFailureForTesting",
+        tcp_connection_source,
+    )
+    constructor_body_index = tcp_connection_source_text.index(
+        "TcpConnection::TcpConnection("
+    )
+    constructor_empty_socket_index = tcp_connection_source_text.index(
+        "socket_(),",
+        constructor_body_index,
+    )
+    constructor_failure_hook_index = tcp_connection_source_text.index(
+        "if (detail::consumeTcpConnectionConstructionFailureForTesting",
+        constructor_body_index,
+    )
+    constructor_socket_claim_index = tcp_connection_source_text.index(
+        "socket_ = std::make_unique<Socket>(sockfd);",
+        constructor_failure_hook_index,
+    )
+    assert (
+        constructor_empty_socket_index
+        < constructor_failure_hook_index
+        < constructor_socket_claim_index
+    ), (
+        "TcpConnection must finish fallible construction and the injected "
+        "failure point before claiming the accepted fd"
+    )
+
+    server_connection_construction_index = tcp_server_source_text.index(
+        "connection = std::make_shared<TcpConnection>("
+    )
+    server_participant_lock_index = tcp_server_source_text.rindex(
+        "std::lock_guard lock(participant->mutex);",
+        0,
+        server_connection_construction_index,
+    )
+    server_rollback_owner_index = tcp_server_source_text.index(
+        "establishmentRollback->connection = connection;",
+        server_connection_construction_index,
+    )
+    server_fd_release_index = tcp_server_source_text.index(
+        "pendingSocket.releaseFd();",
+        server_rollback_owner_index,
+    )
+    server_map_insert_index = tcp_server_source_text.index(
+        "connections_.emplace(connName, connection);",
+        server_fd_release_index,
+    )
+    assert (
+        server_participant_lock_index
+        < server_connection_construction_index
+        < server_rollback_owner_index
+        < server_fd_release_index
+        < server_map_insert_index
+    ), (
+        "TcpServer must store the pre-armed owner rollback and release the "
+        "base fd guard before provisional bookkeeping"
+    )
 
     server_establishment_saturation_text = (
         server_establishment_saturation_test.read_text(encoding="utf-8")
@@ -1923,6 +1982,21 @@ def main() -> None:
     require(
         server_establishment_saturation_text,
         "healthyConnectCount == 2",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "verifyConstructionFailureKeepsBaseFdOwnership",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "failureWasConsumed()",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "failureObservedSocketOwner()",
         server_establishment_saturation_test,
     )
 

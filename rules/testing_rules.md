@@ -172,6 +172,10 @@ For lifecycle-sensitive modules, tests should include:
   map/load/admission and authentication deadline rollback to zero, accepted fd
   closes once, connectDestroyed plus final TcpConnection release occur on the
   worker, and a later healthy connection plus stop still converge
+- TcpServer injects a TcpConnection construction failure after every fallible
+  member/callback setup step but before the connection Socket claims the fd;
+  the hook observes no connection-side fd owner, the base guard closes the
+  peer exactly once, no provisional/Accepted state escapes, and stop converges
 - TcpClientControl admitted while the normal and reserved queues are full,
   latest-generation coalescing on the lifecycle lane, owner-loop execution,
   detach on destruction, and OwnerUnavailable from surviving handles

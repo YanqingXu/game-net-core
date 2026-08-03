@@ -127,9 +127,13 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   closes and releases the unestablished connection on its owner loop. It is
   cleanup-only and may never execute connectEstablished or user work
 - an accepted fd remains in the base-loop Socket guard until TcpConnection
-  construction succeeds. Construction/allocation failure closes that guard;
-  after transfer, no failure path may release the final TcpConnection owner on
-  the base loop
+  construction succeeds. Every fallible member/callback setup step completes
+  before the connection's Socket claims the fd; a deterministic construction-
+  failure hook must therefore still observe only the base guard as owner.
+  Construction/allocation failure closes that guard exactly once. After the
+  final non-throwing claim, the base guard is released before any later
+  fallible bookkeeping, and no failure path may release the final
+  TcpConnection owner on the base loop
 
 ---
 
@@ -197,10 +201,11 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   when the rollback obligation cannot be committed. If shutdown begins after
   that obligation is Accepted, EventLoop final drain keeps the obligation live
   until the base resolves it to disarm or owner-loop rollback
-- allocation failure before fd transfer closes the base Socket guard. Failure
-  after TcpConnection construction resolves the already-armed owner rollback
-  obligation; map/load/admission scopes are released according to their
-  individual commit flags
+- allocation or injected construction failure before fd transfer closes the
+  base Socket guard exactly once; partial-object unwind cannot own or close the
+  same fd. Failure after TcpConnection construction resolves the already-armed
+  owner rollback obligation; map/load/admission scopes are released according
+  to their individual commit flags
 - stop racing an establishment rejection marks the provisional transaction for
   rollback and cannot join the selected worker while its lifecycle obligation
   remains armed
@@ -247,11 +252,13 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   aggregate stop, BaseReleased/worker-ack handshake, empty admission state,
   join, and future completion
 - `tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp`
-  blocks a selected worker, saturates its normal and reserved functor
-  capacity, and proves rejected establishment performs owner-thread
-  connectDestroyed/destruction, exact base map/load/admission rollback, no
-  connection callback, peer fd close, later healthy admission, and convergent
-  stop
+  first injects a late TcpConnection construction failure and proves the
+  connection Socket has not claimed the fd, the base guard closes it, and no
+  accepted state is published. It then blocks a selected worker, saturates its
+  normal and reserved functor capacity, and proves rejected establishment
+  performs owner-thread connectDestroyed/destruction, exact base
+  map/load/admission rollback, no connection callback, peer fd close, later
+  healthy admission, and convergent stop
 - `tests/contract/tcp_server/test_tcp_server_release_handshake.cpp` verifies
   generation-tagged worker cleanup, base release before Channel destruction,
   stale ack rejection, callback re-entry, and exact-once join

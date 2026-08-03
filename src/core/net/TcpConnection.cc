@@ -7,6 +7,7 @@
 #include "gamenet/core/net/TcpOutputMemoryBudget.h"
 #include "detail/ConnectionBackpressureController.h"
 #include "detail/EventLoopLifecycleRegistry.h"
+#include "detail/TcpConnectionConstructionHarness.h"
 
 #include "gamenet/core/base/Logger.h"
 
@@ -16,6 +17,7 @@
 
 #include <cerrno>
 #include <exception>
+#include <new>
 #include <stdexcept>
 #include <utility>
 
@@ -27,6 +29,10 @@ constexpr std::uint64_t kCloseInfoPublished =
     std::uint64_t{1} << 63;
 constexpr std::uint64_t kCloseReasonMask =
     std::uint64_t{0xFF} << 32;
+
+std::atomic<bool> failNextConstructionBeforeSocketClaim{false};
+std::atomic<bool> constructionFailureWasConsumed{false};
+std::atomic<bool> constructionFailureObservedSocketOwner{false};
 
 std::uint64_t packCloseInfo(
     TcpConnectionCloseReason reason,
@@ -63,6 +69,41 @@ void removeChannelRegistrationInLoop(
 
 }  // namespace
 
+namespace detail {
+
+void injectNextTcpConnectionConstructionFailureForTesting() noexcept {
+    constructionFailureObservedSocketOwner.store(
+        false,
+        std::memory_order_relaxed);
+    constructionFailureWasConsumed.store(false, std::memory_order_relaxed);
+    failNextConstructionBeforeSocketClaim.store(true, std::memory_order_release);
+}
+
+bool consumeTcpConnectionConstructionFailureForTesting(
+    bool connectionSocketOwnsFd) noexcept {
+    if (!failNextConstructionBeforeSocketClaim.exchange(
+            false,
+            std::memory_order_acq_rel)) {
+        return false;
+    }
+    constructionFailureObservedSocketOwner.store(
+        connectionSocketOwnsFd,
+        std::memory_order_relaxed);
+    constructionFailureWasConsumed.store(true, std::memory_order_release);
+    return true;
+}
+
+bool tcpConnectionConstructionFailureWasConsumedForTesting() noexcept {
+    return constructionFailureWasConsumed.load(std::memory_order_acquire);
+}
+
+bool tcpConnectionConstructionFailureObservedSocketOwnerForTesting() noexcept {
+    return constructionFailureObservedSocketOwner.load(
+        std::memory_order_relaxed);
+}
+
+}  // namespace detail
+
 void TcpConnectionBackpressureOptions::validate() const {
     detail::ConnectionBackpressureController::validateThresholds(
         highWaterMarkBytes,
@@ -85,7 +126,7 @@ TcpConnection::TcpConnection(
     : loop_(loop),
       name_(std::move(name)),
       state_(kConnecting),
-      socket_(std::make_unique<Socket>(sockfd)),
+      socket_(),
       channel_(std::make_unique<Channel>(loop, sockfd)),
       backpressure_(std::make_unique<detail::ConnectionBackpressureController>(loop)),
       localAddr_(localAddr),
@@ -98,6 +139,15 @@ TcpConnection::TcpConnection(
     channel_->setWriteCallback([this] { handleWrite(); });
     channel_->setCloseCallback([this] { handleClose(); });
     channel_->setErrorCallback([this] { handleError(); });
+    if (detail::consumeTcpConnectionConstructionFailureForTesting(
+            socket_ != nullptr)) {
+        throw std::bad_alloc{};
+    }
+
+    // The caller remains the sole fd owner through every fallible setup step.
+    // Socket's constructor is non-throwing; unique_ptr assignment is noexcept,
+    // so this final statement is the connection-side ownership linearization.
+    socket_ = std::make_unique<Socket>(sockfd);
 }
 
 TcpConnection::~TcpConnection() {

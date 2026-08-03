@@ -1540,17 +1540,22 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
     };
 
     try {
-        connection = std::make_shared<TcpConnection>(
-            ioLoop,
-            connName,
-            pendingSocket.fd(),
-            localAddr,
-            peerAddr);
         {
             std::lock_guard lock(participant->mutex);
+            // Acquire the rollback synchronization boundary before any
+            // connection-side fd claim. Constructor failure leaves
+            // pendingSocket as the sole owner; success stores the owner-loop
+            // rollback reference and releases the base guard without an
+            // intervening throwing operation.
+            connection = std::make_shared<TcpConnection>(
+                ioLoop,
+                connName,
+                pendingSocket.fd(),
+                localAddr,
+                peerAddr);
             establishmentRollback->connection = connection;
+            (void)pendingSocket.releaseFd();
         }
-        (void)pendingSocket.releaseFd();
 
         const auto [connectionEntry, inserted] =
             connections_.emplace(connName, connection);

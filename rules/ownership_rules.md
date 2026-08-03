@@ -185,6 +185,11 @@ It must not blur these roles.
   connection callback
 - TcpServer owns the transferred fd until TcpConnection construction succeeds
 - Every rejected or failed accepted-socket setup path closes the fd exactly once
+- TcpConnection performs all fallible construction work before its Socket
+  claims an accepted fd. If construction fails, partial-object unwind owns no
+  fd and the TcpServer Socket guard remains the sole closer; after the final
+  non-throwing claim, TcpServer releases that guard before leaving the
+  pre-armed rollback record's synchronization boundary
 - Before TcpConnection construction for a worker, TcpServer owns one
   worker-lifecycle rollback record. The record is allocated and linked while
   the local Socket guard still owns the fd; failure to commit that record

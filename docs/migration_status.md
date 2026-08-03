@@ -8,6 +8,8 @@ Current production-roadmap audit: 2026-07-27
 
 Current local M3 implementation checkpoint: 2026-07-29
 
+Current M3-R1 independent-review checkpoint: 2026-08-03
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -80,6 +82,18 @@ phantom obligation. The Windows MSVC Debug worktree passes the focused IOCP
 lifecycle slice 8/8, the complete lifecycle gate 89/89, the full CTest inventory
 110/110, and all 34 repository guards. These remain local development-gate
 results rather than Release, sanitizer, performance, or frozen-SHA evidence.
+
+M3-R1 candidate `446f86d10c8c78725bf59bbabdebd7f3d1968af3`
+completed clean independent WSL2 Linux/epoll Debug/Release inventories of 120,
+focused 50/50 runs, and full 120/120 suites. Independent review nevertheless
+returned `request changes`: TcpConnection partial construction could close an
+accepted fd while the base `pendingSocket` still owned the same numeric value.
+The remediation worktree now performs every fallible constructor step before
+the connection Socket claims the fd, completes construct/store/release under
+the pre-armed participant boundary, and adds deterministic construction-failure
+coverage. Windows/IOCP and Linux/epoll Debug/Release each pass focused 50/50 and
+full 120/120, with all 36 guards passing. M3-R1 remains open until this
+remediation is committed as a new clean SHA and independently re-reviewed.
 
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target

@@ -14,8 +14,8 @@
 
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
-| P1-01 | P1 | worker 建连投递失败路径已在工作树修复并完成 Windows/IOCP 与 Linux/epoll 本地验证；候选绑定和独立审阅待闭环 | 核心线程/生命周期正确性 |
-| P1-02 | P1 | 当前 SHA 没有完整的同 SHA 远端 CI、性能、容量与 endurance 证据 | 发布证据 |
+| P1-01 | P1 | 候选 `446f86d` 被独立审查发现构造失败 fd 双重所有权并拒绝；remediation 工作树已修复和双平台验证，新候选与复审待闭环 | 核心线程/生命周期正确性 |
+| P1-02 | P1 | `446f86d` 的六个同 SHA CI producer 已通过，但 retained aggregate artifact、性能、容量与 endurance 证据仍不完整 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1 | 0.3 stable Core 表面变化尚未完成独立审查 | API 发布阻塞 |
 | P2-01 | P2 | `EventLoopThreadPool` 非法配置和状态转换没有完整拒绝 | 公共契约 |
@@ -27,11 +27,11 @@
 - 不应把当前 SHA 标记为 `v0.3.0-production-candidate` 的最终候选。
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
-- 在 P1-01 修复后，候选 SHA 会变化，现有本地和远端证据必须针对新 SHA 重建。
+- P1-01 remediation 会产生新候选 SHA；`446f86d` 的审查和远端结果只能作为被拒候选的历史证据。
 
 ### 1.1 M3-R1 remediation 检查点（2026-08-03）
 
-当前未提交工作树已完成 P1-01 的实现与本地验证：
+候选 `446f86d10c8c78725bf59bbabdebd7f3d1968af3` 已完成首次独立审查，但结论为 `request changes`：
 
 - intent、thread-affinity、ownership 和 testing rules 已补充 accepted-fd、establishment handoff、exact rollback 与有界 owner-loop cleanup 合同；
 - 新增 `test_tcp_server_establishment_saturation`，以 8 normal + 4 reserve 的小容量和两个 least-connections worker 验证 map/load/per-peer admission/deadline、Accepted counter/metric、owner 析构与后续恢复；测试总数为 120，contract/threading/lifecycle 分别为 99/93/98，intent 显式 verification paths 为 138；
@@ -39,12 +39,16 @@
 - Windows Debug 120/120、Release 120/120 CTests 通过，36/36 repository/API/CI guards 通过；
 - WSL2 Ubuntu 24.04.4 LTS（Linux 6.18.33.2、G++ 13.3.0、CMake 3.28.3）完成真实 epoll 构建；Debug 与 Release 库存均为 120（threading 93、lifecycle 98），全量均为 120/120；
 - Linux 首次编译发现并修复两个测试基础设施可移植性缺口：IOCP-only harness 方法签名完整置于 `_WIN32` 下，EventLoop fair-budget 测试在 Linux 使用 native nonblocking `socketpair`；对应静态契约守卫已补齐；
-- public API manifest 未变化，回滚登记上限绑定 worker normal functor queue capacity，没有引入无界队列。
+- public API manifest 未变化，回滚登记上限绑定 worker normal functor queue capacity，没有引入无界队列；
+- 独立 reviewer 在 `TcpConnection` partial construction 中发现 exact-once fd 缺口：`socket_` 已取得 fd 后，base `pendingSocket` 尚未 release，后续构造异常会产生 double-close/误关复用 fd 风险；
+- 当前 remediation 已把 connection-side fd claim 移到所有可抛构造步骤之后，并在 participant mutex 内连续执行构造、rollback owner 保存和 base guard release；新增确定性 construction-failure hook 验证抛出点 connection 侧尚未持有 fd；
+- remediation 工作树的 Windows/IOCP 与 WSL2 Linux/epoll Debug/Release focused 均为 50/50、全量均为 120/120，36/36 guards 通过；
+- 独立 reviewer 对 remediation 的只读 pre-review 结论为 `approve-for-candidate-freeze`、无实现 blocker；该结论不替代新 clean SHA 的正式全矩阵复审。
 
-P1-01 仍保持未关闭：上述双平台结果来自基于 `7a56132d` 的未提交工作树，尚未绑定一个 clean、已提交并推送的候选 SHA；同时还缺少独立 reviewer 对 owner-loop 规则未被放宽的确认。
+P1-01 仍保持未关闭：`446f86d` 的独立审查已正式拒绝；当前修复仍是未提交工作树，必须绑定新的 clean candidate SHA，并从独立 clean checkout 重跑全部矩阵。
 
 Linux 命令、逐项审阅矩阵和签字字段已冻结在
-`docs/reviews/m3-r1-closure-review.md`；该文件是外部闭环入口，不代表已经取得审阅批准。
+`docs/reviews/m3-r1-closure-review.md`；该文件现保留首次拒绝结论、阻塞原因和 remediation pre-freeze 证据。
 
 ## 2. 审计范围与方法
 
@@ -280,7 +284,7 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 
 ### P1-01：worker 建连投递失败会破坏 owner-loop 析构规则
 
-状态更新（2026-08-03）：下述内容保留为原始问题证据。当前工作树已通过有界 worker lifecycle rollback registry 修复该路径，并由新增 saturation contract 动态复现旧失败、验证 Windows/IOCP 与 Linux/epoll 修复结果；clean candidate SHA 绑定与独立审阅仍是关闭条件。
+状态更新（2026-08-03）：下述内容保留为原始问题证据。首次候选 `446f86d` 修复了 queue-rejection 的 off-owner release，但独立审查又发现 construction-failure fd 双重所有权，因此拒绝关闭。后续 remediation 已在工作树通过确定性故障注入与双平台验证；新的 clean candidate SHA 绑定和独立复审仍是关闭条件。
 
 证据：
 
@@ -309,7 +313,9 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 
 ### P1-02：当前 SHA 没有发布级同 SHA 证据
 
-当前本地 Release 结果是有效开发证据，但不能替代：
+被拒候选 `446f86d` 的同 SHA remote CI 已提供 Linux/Windows
+Debug/Release、Linux ASan/UBSan、Linux TSan 和 install consumer 的成功
+producer 结果。但这些结果不能替代新 remediation 候选的以下发布证据：
 
 - Linux CMake Debug/Release；
 - Linux ASan/UBSan；
@@ -321,13 +327,12 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 - 当前 SHA 的 24/72 小时 endurance；
 - retained evidence manifests/artifacts。
 
-远端阻塞包括：
+当前证据缺口包括：
 
-- billing lock；
-- Linux endurance runner offline；
-- GitHub checkout 网络不稳定；
-- artifact storage quota；
-- Windows run 尚未用当前已修复工具链重新执行。
+- `446f86d` 已被独立审查拒绝，所有 candidate-bound 结果都必须在新 SHA 重建；
+- attempt 3 的六个 producer 均成功，但 artifact 下载为 0/6，聚合验证明确跳过；
+- 新 remediation 尚无 remote CI、paired benchmark/capacity 或 24/72 小时 endurance；
+- retained manifest、run identity、参数和 artifact hash 尚未形成完整证据链。
 
 关闭条件是新候选 SHA 的必需 jobs 全绿，并且 manifest、candidate SHA、run identity、参数和 artifact hash 完整一致。
 
@@ -454,8 +459,8 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 ## 9. 审计限制
 
 - 原始审计时 P1-01 仅来自静态路径与合同交叉审计；2026-08-03 remediation 已用 deterministic saturation test 动态复现旧路径并验证修复。
-- remediation 工作树已完成 Windows/IOCP 与 WSL2 Linux/epoll 的 Debug/Release 全量 CTest 与 focused repeat；尚未完成 clean candidate 绑定、sanitizer、install consumer 或远端同 SHA 验证。
-- GitHub 远端受 billing、runner、网络和 artifact quota 影响；失败原因已区分，但成功证据仍然缺失。
+- 被拒候选 `446f86d` 已完成 Windows/IOCP 与 WSL2 Linux/epoll 的 Debug/Release、sanitizer、install consumer 和六个同 SHA remote producer；artifact 聚合为 0/6，不构成 retained aggregate evidence。
+- construction-failure remediation 工作树已完成双平台 Debug/Release focused 与全量测试，但尚未绑定新 clean SHA，也未进行新 SHA 的 sanitizer、install consumer、remote CI 或独立复审。
 - 本轮不进行 ABI 检查，也不把 0.x 版本自动视为没有源兼容责任。
 
 ## 10. 最终判断

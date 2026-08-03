@@ -231,6 +231,11 @@ No other direct mutation path is allowed for core loop state.
   TcpConnection, one worker lifecycle rollback obligation must already be
   Accepted; this obligation carries cleanup only and is not an establishment
   priority lane
+- TcpConnection construction may run on the TcpServer base loop only while the
+  base Socket guard remains the sole fd owner through every fallible setup
+  step. The connection claims the fd as its final non-throwing constructor
+  action, and the base guard is released under the pre-armed rollback record's
+  synchronization boundary before later fallible bookkeeping
 - QueueFull, Shutdown, OwnerUnavailable, or a later setup exception rolls back
   base-map/load/admission state on the base loop, then calls connectDestroyed
   and releases the last unestablished TcpConnection reference on its selected
