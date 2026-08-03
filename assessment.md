@@ -10,12 +10,13 @@
 
 > 已具备较强契约与测试基础的 production-hardening preview，尚不是可宣布稳定或可对外采用的 production release。
 
-本轮没有发现 P0。发现 4 项 P1 和 2 项 P2：
+本轮没有发现 P0。发现 4 项 P1 和 2 项 P2；截至 2026-08-03，P1-01 已关闭，
+其余 finding 仍保持开放：
 
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
-| P1-01 | P1 | 候选 `446f86d` 被独立审查发现构造失败 fd 双重所有权并拒绝；remediation 工作树已修复和双平台验证，新候选与复审待闭环 | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `446f86d` 的六个同 SHA CI producer 已通过，但 retained aggregate artifact、性能、容量与 endurance 证据仍不完整 | 发布证据 |
+| P1-01 | P1（已关闭） | 新候选 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
+| P1-02 | P1 | `95a6ab5` 的六个同 SHA CI producer 已通过，但 retained aggregate artifact、性能、容量与 endurance 证据仍不完整 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1 | 0.3 stable Core 表面变化尚未完成独立审查 | API 发布阻塞 |
 | P2-01 | P2 | `EventLoopThreadPool` 非法配置和状态转换没有完整拒绝 | 公共契约 |
@@ -27,9 +28,9 @@
 - 不应把当前 SHA 标记为 `v0.3.0-production-candidate` 的最终候选。
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
-- P1-01 remediation 会产生新候选 SHA；`446f86d` 的审查和远端结果只能作为被拒候选的历史证据。
+- P1-01 已在 `95a6ab5` 关闭；`446f86d` 的拒绝结论保留为历史证据。
 
-### 1.1 M3-R1 remediation 检查点（2026-08-03）
+### 1.1 M3-R1 收口检查点（2026-08-03）
 
 候选 `446f86d10c8c78725bf59bbabdebd7f3d1968af3` 已完成首次独立审查，但结论为 `request changes`：
 
@@ -43,12 +44,18 @@
 - 独立 reviewer 在 `TcpConnection` partial construction 中发现 exact-once fd 缺口：`socket_` 已取得 fd 后，base `pendingSocket` 尚未 release，后续构造异常会产生 double-close/误关复用 fd 风险；
 - 当前 remediation 已把 connection-side fd claim 移到所有可抛构造步骤之后，并在 participant mutex 内连续执行构造、rollback owner 保存和 base guard release；新增确定性 construction-failure hook 验证抛出点 connection 侧尚未持有 fd；
 - remediation 工作树的 Windows/IOCP 与 WSL2 Linux/epoll Debug/Release focused 均为 50/50、全量均为 120/120，36/36 guards 通过；
-- 独立 reviewer 对 remediation 的只读 pre-review 结论为 `approve-for-candidate-freeze`、无实现 blocker；该结论不替代新 clean SHA 的正式全矩阵复审。
+- 独立 reviewer 对 remediation 的只读 pre-review 结论为 `approve-for-candidate-freeze`、无实现 blocker；
+- remediation 已提交为 clean candidate `95a6ab5afbe33c4f84ab11c926e4867da94e8282`；
+- 独立 Codex reviewer 从 `/home/xyq/m3-r1-review-95a6ab5-kubcup/source` 完成 11 行矩阵，Linux/epoll Debug/Release focused 50/50、全量 120/120，并给出 `approve`；
+- 同 SHA GitHub Actions run `30813037693` attempt 2 的 Linux Debug/Release/TSan/ASan-UBSan 与 Windows Debug/Release 六个 producer 全部成功；
+- aggregate job 为 success，但 artifact API 仍是 0，校验与聚合上传步骤被跳过，因此该缺口继续归入 P1-02。
 
-P1-01 仍保持未关闭：`446f86d` 的独立审查已正式拒绝；当前修复仍是未提交工作树，必须绑定新的 clean candidate SHA，并从独立 clean checkout 重跑全部矩阵。
+P1-01 已关闭。批准范围只覆盖 M3-R1 生命周期/所有权问题，不扩展到
+0.3 stable API、retained artifact、性能、容量、endurance 或最终发布决定。
 
 Linux 命令、逐项审阅矩阵和签字字段已冻结在
-`docs/reviews/m3-r1-closure-review.md`；该文件现保留首次拒绝结论、阻塞原因和 remediation pre-freeze 证据。
+`docs/reviews/m3-r1-closure-review.md`；该文件保留首次拒绝历史、remediation
+证据、新候选 clean review 和最终签核。
 
 ## 2. 审计范围与方法
 
@@ -460,7 +467,7 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 - 原始审计时 P1-01 仅来自静态路径与合同交叉审计；2026-08-03 remediation 已用 deterministic saturation test 动态复现旧路径并验证修复。
 - 被拒候选 `446f86d` 已完成 Windows/IOCP 与 WSL2 Linux/epoll 的 Debug/Release、sanitizer、install consumer 和六个同 SHA remote producer；artifact 聚合为 0/6，不构成 retained aggregate evidence。
-- construction-failure remediation 工作树已完成双平台 Debug/Release focused 与全量测试，但尚未绑定新 clean SHA，也未进行新 SHA 的 sanitizer、install consumer、remote CI 或独立复审。
+- construction-failure remediation 已绑定 `95a6ab5`，完成独立 clean review、双平台 Debug/Release、sanitizer、install consumer 和同 SHA 六 producer CI；retained aggregate artifact 仍缺失。
 - 本轮不进行 ABI 检查，也不把 0.x 版本自动视为没有源兼容责任。
 
 ## 10. 最终判断
@@ -469,11 +476,9 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 修复并证明 P1-01；
-2. 补齐 P2-01 的公共状态机合同；
-3. 冻结新的候选 SHA；
-4. 完成 0.3 stable surface 独立审查；
-5. 恢复并跑通同 SHA CI、性能、容量和 endurance；
-6. 由项目所有者完成许可证决定。
+1. 补齐 P2-01 的公共状态机合同；
+2. 完成 0.3 stable surface 独立审查；
+3. 修复 retained artifact 并跑通同 SHA 性能、容量和 endurance；
+4. 由项目所有者完成许可证决定。
 
 具体执行拆分、依赖和关闭门记录在新的 `plan.md`。

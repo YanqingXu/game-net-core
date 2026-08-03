@@ -34,15 +34,14 @@
 - [x] 首次独立 review 拒绝 `446f86d` 并定位 construction-failure fd 双重所有权；
 - [x] remediation 工作树新增确定性构造失败合同，并重新通过 Windows/IOCP 与 Linux/epoll Debug/Release focused 50/50、全量 120/120 和 36/36 guards。
 - [x] 独立 remediation pre-review 结论为 `approve-for-candidate-freeze`，无实现 blocker；
+- [x] M3-R1 remediation 已冻结为 clean candidate `95a6ab5`；
+- [x] 独立 Codex reviewer 从 clean checkout 完成 11 行矩阵并给出 `approve`；
+- [x] 同 SHA CI run `30813037693` attempt 2 的六个 producer 全部成功；aggregate artifact 仍为 0，继续由 P1-02 跟踪。
 
 ### 2.2 未完成
 
-- [ ] P1-01 remediation 的新 clean candidate SHA 绑定与独立全矩阵复审；
 - [ ] P2-01 EventLoopThreadPool 非法状态合同；
 - [ ] 0.3 stable Core 独立审查；
-- [ ] 新候选 SHA 冻结；
-- [ ] 当前候选 clean Debug/Release/install/sanitizer；
-- [ ] 同 SHA remote CI；
 - [ ] 同 SHA paired benchmark/capacity；
 - [ ] 同 SHA 24/72 小时 endurance；
 - [ ] 许可证决定；
@@ -146,7 +145,7 @@ candidate SHA。
 - [x] intent、规则、测试和实现的状态名一致；
 - [x] 独立 reviewer 未发现 owner 规则被放宽，但拒绝了首次候选的 construction-failure fd exact-once 状态；
 - [x] remediation 通过故障注入证明 constructor 抛出时 connection Socket 尚未 claim fd；
-- [ ] remediation 绑定新 clean SHA 后，独立 reviewer 全矩阵批准。
+- [x] remediation 绑定新 clean SHA 后，独立 reviewer 全矩阵批准。
 
 ## 6. M3-R2：EventLoopThreadPool 配置状态机
 
@@ -464,9 +463,8 @@ M4 必须重新执行 intent → rules → contracts → tests → implementatio
 
 下一项任务是：
 
-> **M3-R1 二次收口：把 construction-failure exact-once fd remediation 绑定到新的 clean candidate SHA，并由独立 reviewer 从 clean WSL checkout 重跑 11 行矩阵。**
+> **M3-R2：补齐 EventLoopThreadPool 非法配置和状态转换合同。**
 
-执行与签字清单：`docs/reviews/m3-r1-closure-review.md`。
-
-首次候选 `446f86d` 的结论是 `request changes`，不得复用其批准状态。
-在新候选完成独立批准前，不进入 M3-R2、性能调参或新模块开发。
+M3-R1 已由新候选 `95a6ab5` 的 clean 独立审查关闭；首次候选
+`446f86d` 的 `request changes` 保留为历史记录。M3-R2 仍须遵循
+intent → rules → contracts → tests → implementation 的顺序。

@@ -83,17 +83,19 @@ lifecycle slice 8/8, the complete lifecycle gate 89/89, the full CTest inventory
 110/110, and all 34 repository guards. These remain local development-gate
 results rather than Release, sanitizer, performance, or frozen-SHA evidence.
 
-M3-R1 candidate `446f86d10c8c78725bf59bbabdebd7f3d1968af3`
-completed clean independent WSL2 Linux/epoll Debug/Release inventories of 120,
-focused 50/50 runs, and full 120/120 suites. Independent review nevertheless
-returned `request changes`: TcpConnection partial construction could close an
-accepted fd while the base `pendingSocket` still owned the same numeric value.
-The remediation worktree now performs every fallible constructor step before
-the connection Socket claims the fd, completes construct/store/release under
-the pre-armed participant boundary, and adds deterministic construction-failure
-coverage. Windows/IOCP and Linux/epoll Debug/Release each pass focused 50/50 and
-full 120/120, with all 36 guards passing. M3-R1 remains open until this
-remediation is committed as a new clean SHA and independently re-reviewed.
+M3-R1 is closed at candidate
+`95a6ab5afbe33c4f84ab11c926e4867da94e8282`. The first candidate `446f86d`
+was independently rejected because partial TcpConnection construction could
+close an accepted fd while the base `pendingSocket` still owned the same
+numeric value. The approved remediation performs every fallible constructor
+step before the connection Socket claims the fd, completes construct/store/
+release under the pre-armed participant boundary, and adds deterministic
+construction-failure coverage. A Codex independent reviewer verified all 11
+matrix rows from a clean WSL2 checkout; Linux/epoll Debug and Release each
+passed focused 50/50 and full 120/120. Same-SHA GitHub run `30813037693`, attempt
+2, passed Linux Debug/Release/TSan/ASan-UBSan and Windows Debug/Release. The
+aggregate artifact remained unavailable (0 retained artifacts), so P1-02
+release-evidence work remains open even though M3-R1/P1-01 is closed.
 
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target

@@ -1,10 +1,10 @@
 # M3-R1 Closure Review Packet
 
-Status: `request changes`. Independent review rejected candidate
-`446f86d10c8c78725bf59bbabdebd7f3d1968af3` because its construction-failure
-path did not preserve exact-once accepted-fd ownership. The remediation is
-locally verified but requires a new committed candidate SHA and a fresh clean
-independent review before M3-R1 can close.
+Status: `approved`. Independent review approved candidate
+`95a6ab5afbe33c4f84ab11c926e4867da94e8282` after verifying that the
+construction-failure remediation preserves exact-once accepted-fd ownership.
+M3-R1 / P1-01 is closed. The wider release-evidence and stable-API findings
+remain outside this approval.
 
 This packet is scoped only to M3-R1 / P1-01: worker establishment queue rejection
 must never release an unestablished `TcpConnection` outside its selected owner
@@ -16,7 +16,7 @@ The reviewer must record one committed candidate SHA. A dirty worktree, a
 different SHA, or results copied from an earlier run cannot close M3-R1.
 
 ```text
-candidate SHA: 446f86d10c8c78725bf59bbabdebd7f3d1968af3
+candidate SHA: 95a6ab5afbe33c4f84ab11c926e4867da94e8282
 reviewer name: Codex independent reviewer /root/m3_r1_independent_review
 review date: 2026-08-03 (Asia/Shanghai)
 reviewer is not the implementation author: yes
@@ -31,13 +31,13 @@ CMake version: 3.28.3
 | --- | --- | --- |
 | Intent defines accepted-fd ownership, provisional bookkeeping, queue admission, and owner establishment | `intents/modules/tcp_server.intent.md` | pass |
 | Thread-affinity rules keep construction, rollback, `connectDestroyed`, and final release on the selected owner | `rules/thread_affinity_rules.md` | pass |
-| Ownership rules provide exact-once fd/map/load/admission/deadline release | `rules/ownership_rules.md` | **fail: candidate briefly gives the same fd to both `pendingSocket` and `TcpConnection::socket_`; constructor unwind can close it twice** |
+| Ownership rules provide exact-once fd/map/load/admission/deadline release | `rules/ownership_rules.md` | pass |
 | Rollback storage is bounded by current worker normal-functor capacity | `TcpServer.cc`, `EventLoopLifecycleRegistry.h` | pass |
 | QueueFull/Shutdown/OwnerUnavailable cannot make the base loop the final connection owner | `TcpServer::newConnection`, `resolveEstablishmentRollback`, `drainEstablishmentRollbacks` | pass |
 | Accepted counter/metric is published only after normal-queue admission succeeds | `TcpServer::newConnection` and lifecycle static guard | pass |
 | Stop/join waits for armed establishment rollback obligations | `TcpServer::driveWorkerStopParticipant` | pass |
 | Off-owner release of an unestablished connection terminates deterministically | `TcpConnection::~TcpConnection` | pass |
-| Saturation contract covers small normal+reserve capacity, two-worker selector load, per-peer admission, deadline, no callback/metric, fd close, recovery, and stop | `test_tcp_server_establishment_saturation.cpp` | pass for queue rejection; missing construction-failure injection in this candidate |
+| Saturation contract covers small normal+reserve capacity, two-worker selector load, per-peer admission, deadline, no callback/metric, fd close, recovery, and stop | `test_tcp_server_establishment_saturation.cpp` | pass, including deterministic pre-claim construction-failure injection |
 | No installed public API changed | public API manifest comparison | pass for M3-R1 baseline `7a56132d` to candidate; the separate 0.2-to-0.3 diff still requires API-R1 |
 | Linux/epoll focused 50/50 and full Debug/Release suites pass | commands in section 4 | pass |
 
@@ -201,19 +201,55 @@ untracked source-private harness must be included in the candidate, and the
 new clean committed SHA must receive the full section-4 rerun and 11-row
 sign-off.
 
+### 4.4 Independent run for approved candidate
+
+The independent Codex reviewer ran section 4 from a new clean checkout of
+`95a6ab5afbe33c4f84ab11c926e4867da94e8282` at
+`/home/xyq/m3-r1-review-95a6ab5-kubcup/source`. The checkout HEAD, the
+bundle-verified `origin/main`, and the host `origin/main` all matched that SHA;
+the source remained clean before and after review.
+
+- all five structure guards and the public API manifest comparison passed;
+- Debug and Release inventories were each 120 tests with `threading=93`,
+  `lifecycle=98`, `game_pipeline=7`, and `broadcast=5`;
+- Debug and Release focused construction/saturation runs each passed 50/50;
+- Debug and Release full suites each passed 120/120;
+- compile commands confirmed native `SocketsOps_linux.cc`, `Wakeup_linux.cc`,
+  and `EPollPoller.cc` compilation;
+- every row in the 11-row matrix passed, with no blocking comment.
+
+The evidence directory is `/home/xyq/m3-r1-review-95a6ab5-kubcup/` and contains
+the Linux verification log, guard/API log, both inventory JSON files, and the
+API diff JSON.
+
+### 4.5 Same-SHA remote CI
+
+GitHub Actions run `30813037693`, attempt 2, bound all six producer jobs to the
+approved SHA. Linux Debug, Linux Release, Linux TSan, Linux ASan/UBSan, Windows
+Debug, and Windows Release all completed successfully; Windows jobs also ran
+the install consumer. Attempt 1's Linux Debug checkout failed during a GitHub
+HTTPS fetch and skipped all build/test steps, so only that failed job was
+rerun. The retry completed successfully.
+
+The aggregate job concluded success after verifying producer job results, but
+the artifact API still reported zero retained producer artifacts. Its artifact
+verification and aggregate-upload steps were skipped. Therefore this run is
+valid same-SHA execution evidence for M3-R1, but does not close P1-02 retained
+aggregate evidence.
+
 ## 5. Independent sign-off
 
 ```text
-candidate SHA reviewed: 446f86d10c8c78725bf59bbabdebd7f3d1968af3
-all matrix rows pass: no
+candidate SHA reviewed: 95a6ab5afbe33c4f84ab11c926e4867da94e8282
+all matrix rows pass: yes
 Linux Debug focused 50/50 and full 120/120: pass
 Linux Release focused 50/50 and full 120/120: pass
-owner-loop destruction rule preserved without exception: yes for fully constructed objects; construction-failure fd ownership failed
-blocking comments: TcpConnection partial construction can close the fd while the base pendingSocket still owns the same numeric value
-decision: request changes
+owner-loop destruction rule preserved without exception: yes
+blocking comments: none
+decision: approve
 reviewer signature or review URL: Codex independent reviewer /root/m3_r1_independent_review
 ```
 
-M3-R1 remains open. It can move from `locally-verified` to `closed` only after
-the remediation is committed as a new clean candidate and an independent
-reviewer completes a new all-pass matrix against that exact SHA.
+M3-R1 / P1-01 is closed for the approved SHA. This sign-off does not approve
+the wider 0.3 stable API, retained aggregate evidence, performance, capacity,
+endurance, or final release decision.
