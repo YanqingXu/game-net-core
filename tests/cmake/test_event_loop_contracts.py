@@ -58,6 +58,14 @@ def main() -> None:
         / "detail"
         / "EventLoopActiveBatchHarness.h"
     )
+    iocp_association_harness = (
+        repo_root
+        / "src"
+        / "core"
+        / "net"
+        / "detail"
+        / "EventLoopIocpAssociationHarness.h"
+    )
     channel_source = repo_root / "src" / "core" / "net" / "Channel.cc"
     connector_source = repo_root / "src" / "core" / "net" / "Connector.cc"
     timer_queue_source = repo_root / "src" / "core" / "net" / "TimerQueue.cc"
@@ -91,6 +99,10 @@ def main() -> None:
     assert active_batch_harness.exists(), (
         f"missing source-private active Channel batch harness: {active_batch_harness}"
     )
+    assert iocp_association_harness.exists(), (
+        "missing source-private IOCP association harness: "
+        f"{iocp_association_harness}"
+    )
 
     event_loop_test_text = event_loop_test.read_text(encoding="utf-8")
     event_loop_control_test_text = event_loop_control_test.read_text(encoding="utf-8")
@@ -106,6 +118,9 @@ def main() -> None:
     event_loop_source_text = event_loop_source.read_text(encoding="utf-8")
     control_registry_text = control_registry.read_text(encoding="utf-8")
     active_batch_harness_text = active_batch_harness.read_text(encoding="utf-8")
+    iocp_association_harness_text = iocp_association_harness.read_text(
+        encoding="utf-8"
+    )
     channel_source_text = channel_source.read_text(encoding="utf-8")
     connector_source_text = connector_source.read_text(encoding="utf-8")
     timer_queue_source_text = timer_queue_source.read_text(encoding="utf-8")
@@ -213,6 +228,21 @@ def main() -> None:
         event_loop_fair_budget_test,
     )
     require(
+        event_loop_fair_budget_test_text,
+        "gamenet::net::sockets::createSocketPairOrDie(fds);",
+        event_loop_fair_budget_test,
+    )
+    require(
+        event_loop_fair_budget_test_text,
+        "::socketpair(",
+        event_loop_fair_budget_test,
+    )
+    require(
+        event_loop_fair_budget_test_text,
+        "SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC",
+        event_loop_fair_budget_test,
+    )
+    require(
         wakeup_coalescing_test_text,
         "testMultiProducerBurstPostsOnePacket",
         wakeup_coalescing_test,
@@ -311,6 +341,52 @@ def main() -> None:
         active_batch_harness_text,
         "class EventLoopActiveBatchHarness final",
         active_batch_harness,
+    )
+    require(
+        active_batch_harness_text,
+        "configurePendingFunctorCapacity(",
+        active_batch_harness,
+    )
+    require(
+        active_batch_harness_text,
+        "pending-functor capacity harness requires an idle EventLoop",
+        active_batch_harness,
+    )
+    require(
+        active_batch_harness_text,
+        "options.validate();",
+        active_batch_harness,
+    )
+    require(
+        iocp_association_harness_text,
+        "static void trackCompletion(",
+        iocp_association_harness,
+    )
+    require(
+        iocp_association_harness_text,
+        "static bool postCompletion(",
+        iocp_association_harness,
+    )
+    track_completion_index = iocp_association_harness_text.index(
+        "static void trackCompletion("
+    )
+    post_completion_index = iocp_association_harness_text.index(
+        "static bool postCompletion("
+    )
+    win32_guard_start = iocp_association_harness_text.rfind(
+        "#ifdef _WIN32", 0, track_completion_index
+    )
+    win32_guard_end = iocp_association_harness_text.find(
+        "#endif", post_completion_index
+    )
+    assert (
+        win32_guard_start != -1
+        and win32_guard_end != -1
+        and win32_guard_start < track_completion_index
+        and post_completion_index < win32_guard_end
+    ), (
+        f"{iocp_association_harness} must hide IOCP-only method signatures "
+        "from non-Windows translation units"
     )
     require(
         event_loop_control_test_text,

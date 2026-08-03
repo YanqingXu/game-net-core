@@ -110,6 +110,26 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   graceful/immediate stop into SchedulingFailed; only pre-commit
   OwnerUnavailable/Shutdown can reject the request, with a defined terminal
   result and no partially-started stop
+- accepted-connection establishment is a four-stage transaction:
+  `base owns fd -> base provisional bookkeeping -> worker queue admission ->
+  owner establishment`. The base-map insertion, selector-load increment, peer
+  admission state, and authentication deadline are provisional until worker
+  queue admission returns Accepted; the cumulative Accepted counter and metric
+  are published only after that result. Queue rejection rolls every
+  provisional scope back exactly once and publishes neither Accepted nor a
+  connection callback
+- before constructing a worker-owned TcpConnection on the base loop, TcpServer
+  allocates and links one rollback record while the raw-fd Socket guard is
+  still active, then commits its allocation-free worker lifecycle signal. The
+  per-worker record registry is bounded by that loop's normal functor capacity;
+  exhaustion therefore rejects before construction. A committed record is
+  disarmed only after establishment queue admission succeeds; otherwise it
+  closes and releases the unestablished connection on its owner loop. It is
+  cleanup-only and may never execute connectEstablished or user work
+- an accepted fd remains in the base-loop Socket guard until TcpConnection
+  construction succeeds. Construction/allocation failure closes that guard;
+  after transfer, no failure path may release the final TcpConnection owner on
+  the base loop
 
 ---
 
@@ -122,6 +142,15 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   construction, loop association, and connection injection are setup-time
   base/owner-loop work
 - cross-loop handoff happens only through EventLoop scheduling APIs
+- worker establishment is submitted through typed, capacity-aware normal
+  queue admission. QueueFull, Shutdown, and OwnerUnavailable are observed on
+  the base loop; none may be converted into an off-owner cleanup task or a
+  silent drop
+- the worker lifecycle lane may retain only the pre-armed rollback obligation
+  for an unestablished connection. Its callback runs on the selected owner
+  loop and either disarms without touching the connection after Accepted
+  normal admission or calls connectDestroyed before releasing the rejected
+  connection
 - graceful-stop requests may originate on any thread but orchestration and
   connection-map decisions run on the base loop
 - cross-thread stop admission uses the base loop lifecycle hub; per-worker
@@ -160,6 +189,21 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - `BaseReleased` is generation tagged and a stale release/ack is a no-op
 - connection close reasons are preserved through worker cleanup and base map
   removal; shutdown escalation cannot overwrite an earlier peer/error reason
+- establishment QueueFull rolls back the base map, selector load,
+  active/per-peer admission state, and authentication deadline before the
+  owner-loop rollback obligation releases the connection. No connection or
+  disconnect callback is published for that unestablished object
+- establishment Shutdown/OwnerUnavailable is rejected before construction
+  when the rollback obligation cannot be committed. If shutdown begins after
+  that obligation is Accepted, EventLoop final drain keeps the obligation live
+  until the base resolves it to disarm or owner-loop rollback
+- allocation failure before fd transfer closes the base Socket guard. Failure
+  after TcpConnection construction resolves the already-armed owner rollback
+  obligation; map/load/admission scopes are released according to their
+  individual commit flags
+- stop racing an establishment rejection marks the provisional transaction for
+  rollback and cannot join the selected worker while its lifecycle obligation
+  remains armed
 
 ---
 
@@ -202,6 +246,12 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   queue capacity with live connections, and proves the O(worker-count)
   aggregate stop, BaseReleased/worker-ack handshake, empty admission state,
   join, and future completion
+- `tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp`
+  blocks a selected worker, saturates its normal and reserved functor
+  capacity, and proves rejected establishment performs owner-thread
+  connectDestroyed/destruction, exact base map/load/admission rollback, no
+  connection callback, peer fd close, later healthy admission, and convergent
+  stop
 - `tests/contract/tcp_server/test_tcp_server_release_handshake.cpp` verifies
   generation-tagged worker cleanup, base release before Channel destruction,
   stale ack rejection, callback re-entry, and exact-once join

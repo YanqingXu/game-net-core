@@ -15,6 +15,7 @@
 #endif
 
 #include <cerrno>
+#include <exception>
 #include <stdexcept>
 #include <utility>
 
@@ -99,7 +100,20 @@ TcpConnection::TcpConnection(
     channel_->setErrorCallback([this] { handleError(); });
 }
 
-TcpConnection::~TcpConnection() = default;
+TcpConnection::~TcpConnection() {
+    // M3-R1 requires an object that never reached connectEstablished() to be
+    // rolled back by its selected owner. This narrow invariant makes the old
+    // queue-rejection path deterministic without changing the established
+    // public shared-owner surface in the same remediation.
+    if (state_.load(std::memory_order_relaxed) == kConnecting) {
+        if (!loop_->isInLoopThread()) {
+            LOG_ERROR
+                << "Unestablished TcpConnection released off owner loop: "
+                << name_;
+            std::terminate();
+        }
+    }
+}
 
 EventLoop* TcpConnection::getLoop() const noexcept {
     return loop_;

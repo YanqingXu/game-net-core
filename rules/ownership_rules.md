@@ -185,6 +185,22 @@ It must not blur these roles.
   connection callback
 - TcpServer owns the transferred fd until TcpConnection construction succeeds
 - Every rejected or failed accepted-socket setup path closes the fd exactly once
+- Before TcpConnection construction for a worker, TcpServer owns one
+  worker-lifecycle rollback record. The record is allocated and linked while
+  the local Socket guard still owns the fd; failure to commit that record
+  therefore closes only the raw fd and creates no TcpConnection
+- each worker rollback registry is bounded by the selected EventLoop's normal
+  functor capacity. Registry exhaustion rejects while the Socket guard still
+  owns the fd; queue saturation cannot create an unbounded cleanup payload
+- After construction transfers the fd, the rollback record temporarily shares
+  the TcpConnection with provisional base bookkeeping and the normal
+  establishment functor. Queue/setup rejection first removes the base map,
+  selector load, peer/admission deadline, and functor owners, then the worker
+  lifecycle callback performs connectDestroyed and releases the final record
+  reference on the owner thread
+- Successful normal-queue admission disarms the rollback record while the base
+  map and accepted functor retain the connection. A disarmed record owns no
+  connection when it is reclaimed by the worker
 - Connector transfers a connected fd exactly once at new-connection callback
   entry. The receiver owns cleanup from that point and must establish RAII
   before fallible work; Connector does not retain a second fd owner
@@ -221,6 +237,10 @@ It must not blur these roles.
   stop, or destroy cancels the corresponding token/driver
 - Rejected accepted sockets remain owned by TcpServer's local Socket guard and
   are closed exactly once before the callback returns
+- Provisional accepted connections rejected after fd transfer are not released
+  by the base callback. Their pre-armed worker rollback record owns exact-once
+  close and final destruction; stop/join must wait until no armed record
+  remains
 
 ## 9.1 TCP Output-Memory Budgets
 - TcpConnection owns its per-connection pending-byte count and releases it

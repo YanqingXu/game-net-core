@@ -25,6 +25,11 @@ public:
         const EventLoopLifecycleSource& source) {
         loop.detachLifecycleNode(source);
     }
+
+    static std::size_t normalPendingFunctorCapacity(
+        const EventLoop& loop) noexcept {
+        return loop.options_.maxPendingFunctors;
+    }
 };
 
 }  // namespace gamenet::net::detail

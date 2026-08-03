@@ -114,22 +114,17 @@ public:
 #endif
     }
 
+#ifdef _WIN32
     static void trackCompletion(
         EventLoop& loop,
         IocpOperation* operation) {
-#ifdef _WIN32
         loop.trackCompletionOperation(operation);
-#else
-        (void)loop;
-        (void)operation;
-#endif
     }
 
     static bool postCompletion(
         EventLoop& loop,
         IocpOperation* operation,
         DWORD bytesTransferred) noexcept {
-#ifdef _WIN32
         auto* poller =
             dynamic_cast<IocpPoller*>(loop.poller_.get());
         if (poller == nullptr || operation == nullptr) {
@@ -143,13 +138,8 @@ public:
                        : static_cast<ULONG_PTR>(
                              operation->channel->fd()),
                    &operation->overlapped) != FALSE;
-#else
-        (void)loop;
-        (void)operation;
-        (void)bytesTransferred;
-        return false;
-#endif
     }
+#endif
 
     static std::size_t pollAndDispatch(EventLoop& loop) {
 #ifdef _WIN32

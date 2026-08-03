@@ -66,7 +66,14 @@ void verifyReconnectAndMultiLoopDelivery() {
         const auto connectionName = connection->name();
         if (!connection->connected()) {
             loop.queueInLoop([&, connectionName] {
-                activeEndpoints.erase(connectionName);
+                const auto found = activeEndpoints.find(connectionName);
+                GAMENET_TEST_ASSERT(found != activeEndpoints.end());
+                auto endpoint = std::move(found->second);
+                activeEndpoints.erase(found);
+                GAMENET_TEST_ASSERT(
+                    endpoint->ownerExecutor().post(
+                        [endpoint = std::move(endpoint)] {}) ==
+                    gamenet::net::PostResult::Accepted);
                 advanceWhenDisconnected();
             });
             return;
@@ -200,6 +207,22 @@ void verifyNonReadingPeerDoesNotBlockAnotherOwnerLoop() {
             loop.runAfter(1ms, stopWhenDisconnected);
             return;
         }
+        // Transfer every base-loop observation into an already-accepted owner
+        // functor before stop starts. Final drain then releases each endpoint
+        // and direct connection reference on the selected worker.
+        auto releaseSlowConnection = std::move(slowConnection);
+        GAMENET_TEST_ASSERT(
+            releaseSlowConnection->getLoop()->executor().post(
+                [connection = std::move(releaseSlowConnection)] {}) ==
+            gamenet::net::PostResult::Accepted);
+        GAMENET_TEST_ASSERT(
+            slowEndpoint->ownerExecutor().post(
+                [endpoint = std::move(slowEndpoint)] {}) ==
+            gamenet::net::PostResult::Accepted);
+        GAMENET_TEST_ASSERT(
+            normalEndpoint->ownerExecutor().post(
+                [endpoint = std::move(normalEndpoint)] {}) ==
+            gamenet::net::PostResult::Accepted);
         server.stop();
         loop.quit();
     };

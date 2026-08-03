@@ -48,6 +48,13 @@ def main() -> None:
     server_repeated_stop_test = (
         repo_root / "tests" / "contract" / "tcp_server" / "test_tcp_server_repeated_stop.cpp"
     )
+    server_establishment_saturation_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_server"
+        / "test_tcp_server_establishment_saturation.cpp"
+    )
     client_contract_test = (
         repo_root / "tests" / "contract" / "tcp_client" / "test_tcp_client_contract.cpp"
     )
@@ -435,6 +442,10 @@ def main() -> None:
     )
     assert server_repeated_stop_test.exists(), (
         f"missing TCP server repeated-stop idempotence contract: {server_repeated_stop_test}"
+    )
+    assert server_establishment_saturation_test.exists(), (
+        "missing TCP server establishment-saturation contract: "
+        f"{server_establishment_saturation_test}"
     )
     assert client_contract_test.exists(), f"missing TCP client contract: {client_contract_test}"
     assert connection_lifecycle_test.exists(), f"missing TCP connection lifecycle contract: {connection_lifecycle_test}"
@@ -1609,6 +1620,13 @@ def main() -> None:
     require(tcp_server_intent_text, "test_tcp_server_stop_worker_active_write_soak.cpp", tcp_server_intent)
     require(tcp_server_intent_text, "test_tcp_server_stop_from_worker_callback_soak.cpp", tcp_server_intent)
     require(tcp_server_intent_text, "test_tcp_server_repeated_stop.cpp", tcp_server_intent)
+    require(
+        tcp_server_intent_text,
+        "test_tcp_server_establishment_saturation.cpp",
+        tcp_server_intent,
+    )
+    require(tcp_server_intent_text, "base provisional bookkeeping", tcp_server_intent)
+    require(tcp_server_intent_text, "per-worker record registry", tcp_server_intent)
     require(tcp_server_intent_text, "accept-error policy callbacks run on the base loop thread", tcp_server_intent)
     require(tcp_server_intent_text, "business callback exception closes only the offending connection", tcp_server_intent)
     require(tcp_server_intent_text, "finite global/per-peer connection counts", tcp_server_intent)
@@ -1754,6 +1772,27 @@ def main() -> None:
     require(tcp_server_source_text, "finishGracefulStopInLoop", tcp_server_source)
     require(tcp_server_source_text, "beginAggregateStopInLoop", tcp_server_source)
     require(tcp_server_source_text, "driveWorkerStopParticipant", tcp_server_source)
+    require(tcp_server_source_text, "armEstablishmentRollback", tcp_server_source)
+    require(tcp_server_source_text, "drainEstablishmentRollbacks", tcp_server_source)
+    require(tcp_server_source_text, "ioLoop->executor().post", tcp_server_source)
+    require(tcp_server_source_text, "maxEstablishmentRollbacks", tcp_server_source)
+    require(tcp_server_source_text, "normalPendingFunctorCapacity", tcp_server_source)
+    establishment_post_index = tcp_server_source_text.index(
+        "ioLoop->executor().post"
+    )
+    establishment_accepted_metric_index = tcp_server_source_text.index(
+        "acceptedConnections_.fetch_add",
+        establishment_post_index,
+    )
+    assert establishment_post_index < establishment_accepted_metric_index, (
+        "TcpServer must publish Accepted only after worker normal-queue "
+        "admission succeeds"
+    )
+    require(
+        tcp_server_source_text,
+        "Resolution::DestroyOnOwner",
+        tcp_server_source,
+    )
     require(tcp_server_source_text, "releaseWorkerConnectionsInLoop", tcp_server_source)
     require(tcp_server_source_text, "participant->baseReleased = true;", tcp_server_source)
     require(tcp_server_source_text, "participant->ackReported = true;", tcp_server_source)
@@ -1790,6 +1829,102 @@ def main() -> None:
     require(tcp_connection_source_text, "TcpConnectionCallbackSource::Disconnected", tcp_connection_source)
     require(tcp_connection_source_text, "TcpConnectionCallbackSource::Close", tcp_connection_source)
     require(tcp_connection_source_text, "reportCallbackException", tcp_connection_source)
+    require(tcp_connection_source_text, "if (!loop_->isInLoopThread())", tcp_connection_source)
+    require(tcp_connection_source_text, "std::terminate();", tcp_connection_source)
+
+    server_establishment_saturation_text = (
+        server_establishment_saturation_test.read_text(encoding="utf-8")
+    )
+    require(
+        server_establishment_saturation_text,
+        "saturatedWorker->pendingFunctorCount() == saturatedFunctorCount",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "EventLoopActiveBatchHarness::",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "configurePendingFunctorCapacity(",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "saturatedFunctorCount == 12",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "server.admissionStats().activeConnections == 0",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "connectedCallbacks.load(std::memory_order_relaxed) == 0",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "rejectedPeerClosed",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        ".maxConnectionsPerPeer = 1",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        ".unauthenticatedTimeout = 100ms",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "rejectedStats.accepted == 0",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "acceptedAdmissionMetrics.load(std::memory_order_relaxed) == 0",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "healthyConnectionOwners[0].load(std::memory_order_relaxed) ==",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "alternateWorker",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "healthyConnectionOwners[1].load(std::memory_order_relaxed) ==",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "recoveredStats.accepted == 2",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "acceptedAdmissionMetrics.load(std::memory_order_relaxed) == 2",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "recoveredStats.authenticationTimedOut == 0",
+        server_establishment_saturation_test,
+    )
+    require(
+        server_establishment_saturation_text,
+        "healthyConnectCount == 2",
+        server_establishment_saturation_test,
+    )
 
     server_contract_text = server_contract_test.read_text(encoding="utf-8")
     require(server_contract_text, "observer failure must be contained", server_contract_test)
@@ -1969,6 +2104,7 @@ def main() -> None:
     require(tests_cmake_text, "test_tcp_server_repeated_stop.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_repeated_stop.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_saturation_shutdown.cpp threading lifecycle", tests_cmake)
+    require(tests_cmake_text, "test_tcp_server_establishment_saturation.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_server_release_handshake.cpp threading lifecycle", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_retry_stop_race.cpp", tests_cmake)
     require(tests_cmake_text, "test_tcp_client_retry_stop_soak.cpp", tests_cmake)

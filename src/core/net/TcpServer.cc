@@ -9,6 +9,7 @@
 
 #include "gamenet/core/base/Logger.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -98,6 +99,17 @@ struct TcpServer::WorkerStopParticipant {
         Force,
     };
 
+    struct EstablishmentRollback {
+        enum class Resolution {
+            Arming,
+            Disarmed,
+            DestroyOnOwner,
+        };
+
+        Resolution resolution{Resolution::Arming};
+        TcpConnectionPtr connection;
+    };
+
     explicit WorkerStopParticipant(
         EventLoop* loopValue,
         EventLoopLifecycleSource baseSourceValue)
@@ -119,6 +131,8 @@ struct TcpServer::WorkerStopParticipant {
     std::vector<TcpConnectionPtr> connections;
     std::vector<std::string> connectionNames;
     std::unordered_set<std::string> pendingConnectionNames;
+    std::vector<std::shared_ptr<EstablishmentRollback>>
+        establishmentRollbacks;
 };
 
 struct TcpServer::AggregateStopState {
@@ -481,6 +495,83 @@ void TcpServer::registerWorkerStopParticipant(EventLoop* workerLoop) {
     workerStopParticipants_.push_back(std::move(participant));
 }
 
+namespace {
+
+template <typename Participant, typename Rollback>
+void resolveEstablishmentRollback(
+    const std::shared_ptr<Participant>& participant,
+    const std::shared_ptr<Rollback>& rollback,
+    bool destroyOnOwner) {
+    if (!participant || !rollback) {
+        return;
+    }
+
+    {
+        std::lock_guard lock(participant->mutex);
+        using Resolution = decltype(rollback->resolution);
+        if (rollback->resolution !=
+            Resolution::Arming) {
+            return;
+        }
+        rollback->resolution = destroyOnOwner
+            ? Resolution::DestroyOnOwner
+            : Resolution::Disarmed;
+        if (!destroyOnOwner) {
+            rollback->connection.reset();
+        }
+    }
+
+    // The original Accepted signal remains a final-drain obligation. This
+    // notification only shortens the resolution latency when it can merge.
+    (void)participant->source.signal();
+}
+
+template <typename Participant>
+bool drainEstablishmentRollbacks(
+    const std::shared_ptr<Participant>& participant) {
+    participant->loop->assertInLoopThread();
+    bool hasArmingRecord = false;
+
+    for (;;) {
+        using Rollback = typename Participant::EstablishmentRollback;
+        std::shared_ptr<Rollback> resolved;
+        TcpConnectionPtr rejectedConnection;
+        {
+            std::lock_guard lock(participant->mutex);
+            const auto found = std::find_if(
+                participant->establishmentRollbacks.begin(),
+                participant->establishmentRollbacks.end(),
+                [](const auto& candidate) {
+                    using Resolution = decltype(candidate->resolution);
+                    return candidate->resolution !=
+                        Resolution::Arming;
+                });
+            if (found == participant->establishmentRollbacks.end()) {
+                hasArmingRecord = !participant->establishmentRollbacks.empty();
+                break;
+            }
+            resolved = std::move(*found);
+            participant->establishmentRollbacks.erase(found);
+            using Resolution = decltype(resolved->resolution);
+            if (resolved->resolution ==
+                Resolution::DestroyOnOwner) {
+                rejectedConnection = std::move(resolved->connection);
+            }
+        }
+
+        if (rejectedConnection) {
+            rejectedConnection->connectDestroyed();
+            // Enforce that the final rollback owner is released here on the
+            // selected EventLoop, before the local record is destroyed.
+            rejectedConnection.reset();
+        }
+    }
+
+    return hasArmingRecord;
+}
+
+}  // namespace
+
 void TcpServer::driveStopLifecycleInLoop() {
     loop_->assertInLoopThread();
 
@@ -672,6 +763,9 @@ void TcpServer::driveWorkerStopParticipant(
     const std::shared_ptr<WorkerStopParticipant>& participant) {
     participant->loop->assertInLoopThread();
 
+    const bool establishmentStillArming =
+        drainEstablishmentRollbacks(participant);
+
     std::uint64_t generation = 0;
     WorkerStopParticipant::Command initialCommand =
         WorkerStopParticipant::Command::None;
@@ -685,6 +779,9 @@ void TcpServer::driveWorkerStopParticipant(
         std::lock_guard lock(participant->mutex);
         generation = participant->generation;
         if (generation == 0) {
+            if (establishmentStillArming) {
+                (void)participant->source.signal();
+            }
             return;
         }
 
@@ -714,6 +811,7 @@ void TcpServer::driveWorkerStopParticipant(
 
         if (participant->baseReleased &&
             participant->locallyQuiet &&
+            participant->establishmentRollbacks.empty() &&
             !participant->ackReported) {
             participant->ackReported = true;
             participant->connections.clear();
@@ -776,6 +874,9 @@ void TcpServer::driveWorkerStopParticipant(
 
     if (notifyBaseQuiet || notifyBaseAck) {
         (void)participant->baseSource.signal();
+    }
+    if (establishmentStillArming) {
+        (void)participant->source.signal();
     }
     if (detach) {
         detail::EventLoopLifecycleRegistry::detach(
@@ -1120,12 +1221,7 @@ void TcpServer::trackAcceptedConnection(
         throw;
     }
 
-    acceptedConnections_.fetch_add(1, std::memory_order_relaxed);
     activeAdmissionConnections_.fetch_add(1, std::memory_order_relaxed);
-    emitAdmissionMetric(
-        TcpServerAdmissionEvent::Accepted,
-        peerAddress,
-        connectionName);
 }
 
 void TcpServer::ensureAuthenticationDeadlineDriver() {
@@ -1365,91 +1461,186 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
         return;
     }
     const InetAddress localAddr(localStorage);
-    auto connection = std::make_shared<TcpConnection>(
-        ioLoop,
-        connName,
-        pendingSocket.fd(),
-        localAddr,
-        peerAddr);
-    (void)pendingSocket.releaseFd();
-    connections_[connName] = connection;
-    threadPool_->recordConnectionOpened(ioLoop);
+    std::shared_ptr<WorkerStopParticipant> participant;
+    for (const auto& candidate : workerStopParticipants_) {
+        if (candidate && candidate->loop == ioLoop) {
+            participant = candidate;
+            break;
+        }
+    }
+    auto armEstablishmentRollback = [&] {
+        std::shared_ptr<WorkerStopParticipant::EstablishmentRollback>
+            rollback;
+        if (!participant) {
+            return rollback;
+        }
+        rollback = std::make_shared<
+            WorkerStopParticipant::EstablishmentRollback>();
+        {
+            std::lock_guard lock(participant->mutex);
+            const auto maxEstablishmentRollbacks =
+                detail::EventLoopLifecycleRegistry::
+                    normalPendingFunctorCapacity(*participant->loop);
+            if (participant->establishmentRollbacks.size() >=
+                maxEstablishmentRollbacks) {
+                rollback.reset();
+                return rollback;
+            }
+            participant->establishmentRollbacks.push_back(rollback);
+        }
+        if (participant->source.signal() == PostResult::Accepted) {
+            return rollback;
+        }
+
+        // No TcpConnection exists yet, so a rejected lifecycle obligation
+        // leaves the local Socket guard as the sole fd owner.
+        std::lock_guard lock(participant->mutex);
+        const auto found = std::find(
+            participant->establishmentRollbacks.begin(),
+            participant->establishmentRollbacks.end(),
+            rollback);
+        if (found != participant->establishmentRollbacks.end()) {
+            participant->establishmentRollbacks.erase(found);
+        }
+        rollback.reset();
+        return rollback;
+    };
+    const auto establishmentRollback =
+        armEstablishmentRollback();
+    if (!establishmentRollback) {
+        LOG_ERROR
+            << "TcpServer rejected connection before construction because "
+               "the selected owner lifecycle is unavailable";
+        return;
+    }
+
+    TcpConnectionPtr connection;
+    bool mapInserted = false;
+    bool loadRecorded = false;
+    bool admissionTracked = false;
+
+    auto rollbackProvisionalState = [&] {
+        if (mapInserted) {
+            connections_.erase(connName);
+            mapInserted = false;
+        }
+        if (loadRecorded) {
+            threadPool_->recordConnectionClosed(ioLoop);
+            loadRecorded = false;
+        }
+        if (admissionTracked) {
+            releaseConnectionAdmission(connName);
+            admissionTracked = false;
+        }
+        connection.reset();
+        resolveEstablishmentRollback(
+            participant,
+            establishmentRollback,
+            true);
+    };
+
     try {
+        connection = std::make_shared<TcpConnection>(
+            ioLoop,
+            connName,
+            pendingSocket.fd(),
+            localAddr,
+            peerAddr);
+        {
+            std::lock_guard lock(participant->mutex);
+            establishmentRollback->connection = connection;
+        }
+        (void)pendingSocket.releaseFd();
+
+        const auto [connectionEntry, inserted] =
+            connections_.emplace(connName, connection);
+        (void)connectionEntry;
+        if (!inserted) {
+            throw std::logic_error(
+                "TcpServer connection identity already exists");
+        }
+        mapInserted = true;
+        threadPool_->recordConnectionOpened(ioLoop);
+        loadRecorded = true;
         trackAcceptedConnection(
             connection,
             peerAddress,
             connectionDeadlineKey);
-    } catch (const std::exception& error) {
-        LOG_ERROR << "TcpServer failed to track accepted connection: "
-                  << error.what();
-        connections_.erase(connName);
-        threadPool_->recordConnectionClosed(ioLoop);
-        return;
-    } catch (...) {
-        LOG_ERROR << "TcpServer failed to track accepted connection with a non-standard exception";
-        connections_.erase(connName);
-        threadPool_->recordConnectionClosed(ioLoop);
-        return;
-    }
+        admissionTracked = true;
 
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    CloseCallback closeCallback = [this, lifetime](const TcpConnectionPtr& conn) {
-        if (lifetime.lock()) {
-            removeConnection(conn);
-        }
-    };
+        std::weak_ptr<void> lifetime = lifetimeToken_;
+        CloseCallback closeCallback =
+            [this, lifetime](const TcpConnectionPtr& conn) {
+                if (lifetime.lock()) {
+                    removeConnection(conn);
+                }
+            };
 
-    EventLoop::Functor establish =
-        [connection,
-         connectionCallback = connectionCallback_,
-         messageCallback = messageCallback_,
-         highWaterMarkCallback = highWaterMarkCallback_,
-         writeCompleteCallback = writeCompleteCallback_,
-         closeInfoCallback = closeInfoCallback_,
-         callbackExceptionHandler = callbackExceptionHandler_,
-         closeCallback = std::move(closeCallback),
-         backpressureOptions = backpressureOptions_,
-         loopOutputBudget = std::move(loopOutputBudget),
-         serverOutputBudget = serverOutputBudget_,
-         globalOutputBudget = outputMemoryOptions_.global,
-         highWaterMark = highWaterMark_]() mutable {
-            connection->setBackpressureOptions(backpressureOptions);
-            connection->setOutputMemoryBudgets(
-                std::move(loopOutputBudget),
-                std::move(serverOutputBudget),
-                std::move(globalOutputBudget));
-            connection->setConnectionCallback(std::move(connectionCallback));
-            connection->setMessageCallback(std::move(messageCallback));
-            if (highWaterMarkCallback && highWaterMark > 0) {
-                connection->setHighWaterMarkCallback(std::move(highWaterMarkCallback), highWaterMark);
-            }
-            connection->setWriteCompleteCallback(std::move(writeCompleteCallback));
-            connection->setCloseInfoCallback(std::move(closeInfoCallback));
-            connection->setCallbackExceptionHandler(std::move(callbackExceptionHandler));
-            connection->setCloseCallback(std::move(closeCallback));
-            connection->connectEstablished();
-        };
-    try {
-        ioLoop->runInLoop(std::move(establish));
+        EventLoop::Functor establish =
+            [connection,
+             connectionCallback = connectionCallback_,
+             messageCallback = messageCallback_,
+             highWaterMarkCallback = highWaterMarkCallback_,
+             writeCompleteCallback = writeCompleteCallback_,
+             closeInfoCallback = closeInfoCallback_,
+             callbackExceptionHandler = callbackExceptionHandler_,
+             closeCallback = std::move(closeCallback),
+             backpressureOptions = backpressureOptions_,
+             loopOutputBudget = std::move(loopOutputBudget),
+             serverOutputBudget = serverOutputBudget_,
+             globalOutputBudget = outputMemoryOptions_.global,
+             highWaterMark = highWaterMark_]() mutable {
+                connection->setBackpressureOptions(backpressureOptions);
+                connection->setOutputMemoryBudgets(
+                    std::move(loopOutputBudget),
+                    std::move(serverOutputBudget),
+                    std::move(globalOutputBudget));
+                connection->setConnectionCallback(
+                    std::move(connectionCallback));
+                connection->setMessageCallback(std::move(messageCallback));
+                if (highWaterMarkCallback && highWaterMark > 0) {
+                    connection->setHighWaterMarkCallback(
+                        std::move(highWaterMarkCallback),
+                        highWaterMark);
+                }
+                connection->setWriteCompleteCallback(
+                    std::move(writeCompleteCallback));
+                connection->setCloseInfoCallback(
+                    std::move(closeInfoCallback));
+                connection->setCallbackExceptionHandler(
+                    std::move(callbackExceptionHandler));
+                connection->setCloseCallback(std::move(closeCallback));
+                connection->connectEstablished();
+            };
+
+        const PostResult establishmentResult =
+            ioLoop->executor().post(std::move(establish));
+        if (establishmentResult != PostResult::Accepted) {
+            LOG_ERROR
+                << "TcpServer rejected connection establishment with result "
+                << static_cast<int>(establishmentResult);
+            rollbackProvisionalState();
+            return;
+        }
+
+        resolveEstablishmentRollback(
+            participant,
+            establishmentRollback,
+            false);
+        acceptedConnections_.fetch_add(1, std::memory_order_relaxed);
+        emitAdmissionMetric(
+            TcpServerAdmissionEvent::Accepted,
+            peerAddress,
+            connName);
     } catch (const std::exception& error) {
-        LOG_ERROR << "TcpServer failed to schedule connection establishment: "
+        LOG_ERROR << "TcpServer failed connection establishment setup: "
                   << error.what();
-        if (ioLoop == loop_ && !connection->disconnected()) {
-            connection->connectDestroyed();
-        }
-        if (connections_.erase(connName) != 0) {
-            threadPool_->recordConnectionClosed(ioLoop);
-            releaseConnectionAdmission(connName);
-        }
+        rollbackProvisionalState();
     } catch (...) {
-        LOG_ERROR << "TcpServer failed to schedule connection establishment with a non-standard exception";
-        if (ioLoop == loop_ && !connection->disconnected()) {
-            connection->connectDestroyed();
-        }
-        if (connections_.erase(connName) != 0) {
-            threadPool_->recordConnectionClosed(ioLoop);
-            releaseConnectionAdmission(connName);
-        }
+        LOG_ERROR
+            << "TcpServer failed connection establishment setup with a "
+               "non-standard exception";
+        rollbackProvisionalState();
     }
 }
 

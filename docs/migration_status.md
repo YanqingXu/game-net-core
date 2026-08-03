@@ -126,7 +126,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 137 |
+| 61 | 30 | 20 | 11 | 138 |
 
 ## Production-Hardening Worktree State
 
@@ -294,7 +294,7 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 119 configured CTest tests: 8 unit tests, 98 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The current worktree has 120 configured CTest tests: 8 unit tests, 99 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -420,8 +420,8 @@ after teardown. The real Broadcast integration recovery path passed 50
 consecutive Release repetitions. RSS remains an observational capacity
 measurement rather than a correctness threshold; larger 100/1k slow-reader
 and 1k/10k+ Broadcast runs remain M3-P1 candidate work.
-The current inventory is unit=8, contract=98, integration=13, threading=92,
-lifecycle=97, game_pipeline=7, and broadcast=5. All 31 Python repository/API
+The current inventory is unit=8, contract=99, integration=13, threading=93,
+lifecycle=98, game_pipeline=7, and broadcast=5. All 31 Python repository/API
 contracts passed before M3-Q1-A. After Q1-A, all 119 MSVC Debug tests and all
 33 repository guards passed; the public API manifest and deterministic
 compatibility diff also passed. The focused 12-test Pipeline/Broadcast slice

@@ -24,8 +24,8 @@ EXPECTED_JOBS = (
     "windows-msvc-release",
 )
 CONSUMER_JOBS = frozenset({"linux-cmake", "windows-msvc", "windows-msvc-release"})
-EXPECTED_MAIN_INVENTORY = 119
-EXPECTED_THREADING_EXECUTION = 92
+EXPECTED_MAIN_INVENTORY = 120
+EXPECTED_THREADING_EXECUTION = 93
 EXPECTED_LIBFUZZER_EXECUTIONS = 1000
 
 
@@ -218,11 +218,11 @@ def validate_producer(artifact_dir: Path, manifest_path: Path) -> tuple[str, dic
     if job == "linux-tsan":
         require(
             inventory_document.get("label_counts", {}).get("threading") == EXPECTED_THREADING_EXECUTION,
-            "TSan inventory does not contain exactly 90 threading tests",
+            "TSan inventory does not contain exactly 93 threading tests",
         )
         require(
             inventory_document.get("expected_label_counts", {}).get("threading") == EXPECTED_THREADING_EXECUTION,
-            "TSan inventory did not enforce threading=92",
+            "TSan inventory did not enforce threading=93",
         )
         expected_main_names = {name for name, labels in main_inventory.items() if "threading" in labels}
         expected_main_total = EXPECTED_THREADING_EXECUTION

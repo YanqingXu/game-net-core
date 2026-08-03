@@ -226,6 +226,22 @@ No other direct mutation path is allowed for core loop state.
   accepting connections. Low-frequency snapshot aggregation may lock only the
   budget-container metadata; no send acquires that lock or a process-global
   mutex
+- TcpServer establishment is admitted through the selected worker's bounded
+  normal functor queue. Before base-thread construction of the worker-owned
+  TcpConnection, one worker lifecycle rollback obligation must already be
+  Accepted; this obligation carries cleanup only and is not an establishment
+  priority lane
+- QueueFull, Shutdown, OwnerUnavailable, or a later setup exception rolls back
+  base-map/load/admission state on the base loop, then calls connectDestroyed
+  and releases the last unestablished TcpConnection reference on its selected
+  owner loop. TcpConnection construction, establishment, destruction, and
+  final shared-owner release may not escape this transaction
+- A worker lifecycle callback that observes an establishment transaction still
+  being resolved re-arms only itself. This accepted obligation participates in
+  final drain, so worker quit/join cannot overtake the base decision
+- the worker rollback registry is capped at its normal pending-functor
+  capacity. Reaching that cap rejects the raw accepted fd before
+  TcpConnection construction and does not expand lifecycle-lane storage
 
 ## 10. Listener Error Policy
 - Acceptor and TcpServer accept-error policy callbacks execute on the base /
@@ -315,6 +331,9 @@ No other direct mutation path is allowed for core loop state.
 - User callback execution in ambiguous thread context
 - An unbounded emergency/control queue
 - Treating the public `queueInLoop()` reserve as guaranteed lifecycle capacity
+- Using the lifecycle lane to run successful connection establishment or user
+  callbacks; its establishment role is limited to rollback of a transaction
+  whose normal queue admission failed
 - Executing Connector, TcpConnection, or user callback code while holding the
   TcpClient admission mutex
 - Waiting for an IOCP completion after a synchronous submit failure that

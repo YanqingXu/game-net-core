@@ -110,6 +110,7 @@ add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_se
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_repeated_stop.cpp threading lifecycle)
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_stop_soak.cpp threading lifecycle)
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_saturation_shutdown.cpp threading lifecycle)
+add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_establishment_saturation.cpp threading lifecycle)
 add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_server/test_tcp_server_release_handshake.cpp threading lifecycle)
 add_gamenet_test(contract timer_queue ${CMAKE_CURRENT_SOURCE_DIR}/contract/timer_queue/test_timer_queue.cpp threading lifecycle)
 add_gamenet_test(contract timer_queue ${CMAKE_CURRENT_SOURCE_DIR}/contract/timer_queue/test_deadline_queue.cpp threading lifecycle)

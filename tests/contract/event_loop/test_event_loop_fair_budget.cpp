@@ -19,6 +19,10 @@
 #include <utility>
 #include <vector>
 
+#ifndef _WIN32
+#include <sys/socket.h>
+#endif
+
 using namespace std::chrono_literals;
 
 namespace {
@@ -45,7 +49,16 @@ struct SocketPair {
             gamenet::net::kInvalidSocket,
             gamenet::net::kInvalidSocket,
         };
+#ifdef _WIN32
         gamenet::net::sockets::createSocketPairOrDie(fds);
+#else
+        GAMENET_TEST_ASSERT(
+            ::socketpair(
+                AF_UNIX,
+                SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
+                0,
+                fds) == 0);
+#endif
         first = fds[0];
         second = fds[1];
     }

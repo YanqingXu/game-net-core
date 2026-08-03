@@ -167,6 +167,11 @@ For lifecycle-sensitive modules, tests should include:
 - TcpServer base and all worker queues saturated while one aggregate stop
   signal per worker converges through BaseReleased, worker ack, join, and
   future completion
+- TcpServer selected-worker establishment with normal and reserved functor
+  capacity saturated: no Accepted metric or connection callback, base
+  map/load/admission and authentication deadline rollback to zero, accepted fd
+  closes once, connectDestroyed plus final TcpConnection release occur on the
+  worker, and a later healthy connection plus stop still converge
 - TcpClientControl admitted while the normal and reserved queues are full,
   latest-generation coalescing on the lifecycle lane, owner-loop execution,
   detach on destruction, and OwnerUnavailable from surviving handles

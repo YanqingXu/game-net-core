@@ -76,6 +76,27 @@ public:
             loop.options_.maxFunctorsPerIteration);
     }
 
+    static void configurePendingFunctorCapacity(
+        EventLoop& loop,
+        std::size_t normalCapacity,
+        std::size_t reserveCapacity,
+        std::size_t perIterationCapacity) {
+        loop.assertInLoopThread();
+        if (loop.looping_ ||
+            loop.callingPendingFunctors_.load(std::memory_order_relaxed) ||
+            !loop.pendingFunctors_.empty()) {
+            throw std::logic_error(
+                "pending-functor capacity harness requires an idle EventLoop");
+        }
+
+        EventLoopOptions options = loop.options_;
+        options.maxPendingFunctors = normalCapacity;
+        options.reservedPendingFunctors = reserveCapacity;
+        options.maxFunctorsPerIteration = perIterationCapacity;
+        options.validate();
+        loop.options_ = options;
+    }
+
     static void retireCurrentChannel(
         EventLoop& loop,
         std::unique_ptr<Channel> channel) noexcept {
