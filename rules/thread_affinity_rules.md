@@ -216,10 +216,16 @@ No other direct mutation path is allowed for core loop state.
   follows final Channel/callback cleanup
 - Thread-pool quit/join is forbidden before every current worker generation
   has acked
-- EventLoopThreadPool policy changes, loop selection, and connection-load
-  accounting are base-loop-only. Queue-lag selection may lock each worker's
-  pending-functor queue for a snapshot but never reads worker-owned Channel,
-  timer, connection, or completion state
+- EventLoopThreadPool thread-count/policy configuration, start, stop, loop-list
+  observation, loop selection, and connection-load accounting are base-loop-
+  only. Off-owner control fails before pool state is read or mutated. Queue-lag
+  selection may lock each worker's pending-functor queue for a snapshot but
+  never reads worker-owned Channel, timer, connection, or completion state
+- EventLoopThreadPool has one explicit `Idle -> Started -> Idle` state machine.
+  A negative thread count, repeated start, or configuration mutation while
+  Started is rejected before worker publication, selector state, or load
+  accounting changes. Failed partial startup joins published workers and
+  returns to Idle; stop in Idle remains an idempotent cleanup boundary
 - selector decisions never migrate an established connection; the selected
   loop owns it for its full TcpConnection lifetime
 - TcpServer constructs and associates per-loop/server output budgets before

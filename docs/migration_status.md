@@ -10,6 +10,8 @@ Current local M3 implementation checkpoint: 2026-07-29
 
 Current M3-R1 independent-review checkpoint: 2026-08-03
 
+Current M3-R2 local contract checkpoint: 2026-08-05
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -97,6 +99,19 @@ passed focused 50/50 and full 120/120. Same-SHA GitHub run `30813037693`, attemp
 aggregate artifact remained unavailable (0 retained artifacts), so P1-02
 release-evidence work remains open even though M3-R1/P1-01 is closed.
 
+M3-R2 closes the EventLoopThreadPool configuration-state contract in the
+current worktree. The explicit lifecycle is `Idle -> Started -> Idle`:
+negative thread counts, non-base-loop configuration, configuration after
+start, and repeated start all fail before mutation; idle stop remains
+idempotent, and stop followed by reconfiguration/restart remains legal.
+Zero-thread startup still invokes the base-loop initializer exactly once,
+partial-start rollback remains covered, and TcpServer forwards negative and
+late thread-count rejection. The new negative contracts failed against the
+old implementation. After the fix, Windows/IOCP Release passed 120/120 CTests,
+36/36 repository/API/CI guards, and 150/150 focused repetitions across the
+pool contract, restart soak, and TcpServer contract. This is local worktree
+evidence, not a frozen-SHA or remote release claim.
+
 Phase 6 production-candidate infrastructure is now integrated on the roadmap
 branch for audit. The compatibility boundary is a v2 installed-header/target
 manifest with a retained `v0.2.0-phase4-preview` snapshot and deterministic
@@ -146,6 +161,12 @@ the source of truth.
 
 ## Production-Hardening Worktree State
 
+- The EventLoopThreadPool configuration-state contract now enforces
+  non-negative thread counts, base-loop ownership, immutable started
+  configuration, repeated-start rejection, idempotent idle stop, and legal
+  stop/reconfigure/restart. Its negative and TcpServer forwarding contracts
+  pass the current Windows/IOCP Release local gate; candidate freeze and
+  same-SHA remote requalification remain pending.
 - M3 PR-G has completed its first local IOCP batching slice: fixed-size
   GQCSEx collection, bounded per-round publication, same-Channel deferral,
   wakeup coexistence, and exact outstanding-operation retention.

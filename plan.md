@@ -37,10 +37,10 @@
 - [x] M3-R1 remediation 已冻结为 clean candidate `95a6ab5`；
 - [x] 独立 Codex reviewer 从 clean checkout 完成 11 行矩阵并给出 `approve`；
 - [x] 同 SHA CI run `30813037693` attempt 2 的六个 producer 全部成功；aggregate artifact 仍为 0，继续由 P1-02 跟踪。
+- [x] M3-R2 已完成 EventLoopThreadPool 状态机合同、负向测试和 Windows/IOCP Release 本地验证：全量 120/120、守卫 36/36、聚焦重复 150/150。
 
 ### 2.2 未完成
 
-- [ ] P2-01 EventLoopThreadPool 非法状态合同；
 - [ ] 0.3 stable Core 独立审查；
 - [ ] 同 SHA paired benchmark/capacity；
 - [ ] 同 SHA 24/72 小时 endurance；
@@ -155,33 +155,39 @@ candidate SHA。
 
 ### 6.1 合同
 
-- [ ] `numThreads >= 0`；
-- [ ] `setThreadNum()` 只允许 base-loop thread；
-- [ ] thread count 和 selection policy 在 start 后不可修改；
-- [ ] `start()` 在 already-started 时显式失败；
-- [ ] `stop()` 后 restart 继续受现有 restart-soak 支持；
-- [ ] zero-thread 模式必须执行 base-loop init callback；
-- [ ] partial start failure 仍停止并 join 已发布 workers。
+- [x] `numThreads >= 0`；
+- [x] `setThreadNum()` 只允许 base-loop thread；
+- [x] thread count 和 selection policy 在 start 后不可修改；
+- [x] `start()` 在 already-started 时显式失败；
+- [x] `stop()` 后 restart 继续受现有 restart-soak 支持；
+- [x] zero-thread 模式必须执行 base-loop init callback；
+- [x] partial start failure 仍停止并 join 已发布 workers。
 
 ### 6.2 测试
 
 在 EventLoopThreadPool contract 中增加：
 
-- [ ] negative thread count；
-- [ ] wrong-thread `setThreadNum()`；
-- [ ] late thread-count mutation；
-- [ ] late policy mutation；
-- [ ] repeated start without stop；
-- [ ] stop 后合法 restart；
-- [ ] zero-thread callback 和 base fallback；
-- [ ] TcpServer 对非法 thread count 的一致转发/拒绝。
+- [x] negative thread count；
+- [x] wrong-thread `setThreadNum()`；
+- [x] late thread-count mutation；
+- [x] late policy mutation；
+- [x] repeated start without stop；
+- [x] stop 后合法 restart；
+- [x] zero-thread callback 和 base fallback；
+- [x] TcpServer 对非法 thread count 的一致转发/拒绝。
 
 ### 6.3 关闭门
 
-- [ ] 非法调用在状态改变前失败；
-- [ ] 不留下半启动 worker；
-- [ ] connection load accounting 不被重置或泄漏；
-- [ ] 原有 round-robin/least/queue-lag/hash 与 restart tests 全部通过。
+- [x] 非法调用在状态改变前失败；
+- [x] 不留下半启动 worker；
+- [x] connection load accounting 不被重置或泄漏；
+- [x] 原有 round-robin/least/queue-lag/hash 与 restart tests 全部通过。
+
+本地关闭证据（2026-08-05）：新增合同先在旧实现上确定性失败；实现修复后，
+Windows/IOCP Release 全量 120/120、36/36 repository/API/CI guards 通过，
+EventLoopThreadPool 主合同、restart soak 与 TcpServer 合同各重复 50 次，
+共 150/150 通过。当前工作树尚未冻结为新候选 SHA；该结果不能替代后续
+REL-C1/REL-V2 的 clean checkout 与同 SHA 远端发布证据。
 
 ## 7. GOV-R2：当前事实与文档同步
 
@@ -463,8 +469,9 @@ M4 必须重新执行 intent → rules → contracts → tests → implementatio
 
 下一项任务是：
 
-> **M3-R2：补齐 EventLoopThreadPool 非法配置和状态转换合同。**
+> **GOV-R2：同步 migration status、assessment、plan 与当前候选事实。**
 
-M3-R1 已由新候选 `95a6ab5` 的 clean 独立审查关闭；首次候选
-`446f86d` 的 `request changes` 保留为历史记录。M3-R2 仍须遵循
-intent → rules → contracts → tests → implementation 的顺序。
+M3-R2 已在当前工作树完成 intent → rules → contracts → tests →
+implementation，并通过本地关闭门。M3-R1 已由候选 `95a6ab5` 的 clean
+独立审查关闭；M3-R2 尚未冻结为新候选 SHA，其本地证据不得冒充 REL-V2
+远端发布证据。

@@ -66,6 +66,10 @@ Contract tests verify:
 - EventLoopThreadPool contracts cover round-robin, exact least-connection load
   commit/release, pending-functor queue-lag preference with rotating ties, and
   deterministic non-empty-key consistent hashing
+- EventLoopThreadPool negative contracts cover non-negative thread counts,
+  base-loop-only configuration, immutable Started configuration, repeated-start
+  rejection without duplicate workers, zero-thread initialization, partial-
+  start rollback, and legal stop/restart with unchanged load accounting
 - one deterministic sustained-source contract keeps active I/O, timer,
   control, lifecycle, and functor work pending together for multiple rounds;
   every source advances once per round in documented order with callback depth

@@ -94,6 +94,23 @@ constexpr unsigned admissionEventBit(gamenet::net::TcpServerAdmissionEvent event
 
 int main() {
     {
+        gamenet::net::EventLoop loop;
+        gamenet::net::TcpServer server(
+            &loop,
+            gamenet::net::InetAddress(0, true),
+            "server-thread-count-contract");
+        bool negativeThreadCountRejected = false;
+        try {
+            server.setThreadNum(-1);
+        } catch (const std::invalid_argument&) {
+            negativeThreadCountRejected = true;
+        }
+        // tcp-server-thread-count-contract: TcpServer forwards the pool's
+        // validation without changing its default zero-thread configuration.
+        GAMENET_TEST_ASSERT(negativeThreadCountRejected);
+    }
+
+    {
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "server-contract");
     server.setIocpAcceptDepth(6);
@@ -128,6 +145,13 @@ int main() {
     });
 
     server.start();
+    bool rejectedStartedThreadCountChange = false;
+    try {
+        server.setThreadNum(1);
+    } catch (const std::logic_error&) {
+        rejectedStartedThreadCountChange = true;
+    }
+    GAMENET_TEST_ASSERT(rejectedStartedThreadCountChange);
     bool rejectedStartedAcceptDepthChange = false;
     try {
         server.setIocpAcceptDepth(4);

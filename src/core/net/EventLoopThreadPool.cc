@@ -59,6 +59,15 @@ EventLoopThreadPool::EventLoopThreadPool(EventLoop* baseLoop, std::string name)
 EventLoopThreadPool::~EventLoopThreadPool() = default;
 
 void EventLoopThreadPool::setThreadNum(int numThreads) {
+    baseLoop_->assertInLoopThread();
+    if (numThreads < 0) {
+        throw std::invalid_argument(
+            "EventLoopThreadPool thread count must be non-negative");
+    }
+    if (started_) {
+        throw std::logic_error(
+            "EventLoopThreadPool thread count must be configured before start");
+    }
     numThreads_ = numThreads;
 }
 
@@ -75,6 +84,9 @@ void EventLoopThreadPool::setLoopSelectionPolicy(
 
 void EventLoopThreadPool::start(const ThreadInitCallback& callback) {
     baseLoop_->assertInLoopThread();
+    if (started_) {
+        throw std::logic_error("EventLoopThreadPool is already started");
+    }
     started_ = true;
 
     try {
@@ -150,6 +162,7 @@ EventLoop* EventLoopThreadPool::selectLoop(std::string_view affinityKey) {
 }
 
 std::vector<EventLoop*> EventLoopThreadPool::getAllLoops() const {
+    baseLoop_->assertInLoopThread();
     if (loops_.empty()) {
         return {baseLoop_};
     }

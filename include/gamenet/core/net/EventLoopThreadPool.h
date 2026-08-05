@@ -33,6 +33,9 @@ public:
     EventLoopThreadPool(EventLoop* baseLoop, std::string name);
     ~EventLoopThreadPool();
 
+    // Configuration and lifecycle control are base-loop-thread-only.
+    // Thread count must be non-negative; configuration is immutable while
+    // started, and repeated start without an intervening stop is rejected.
     void setThreadNum(int numThreads);
     void setLoopSelectionPolicy(EventLoopSelectionPolicy policy);
     void start(const ThreadInitCallback& callback = ThreadInitCallback());

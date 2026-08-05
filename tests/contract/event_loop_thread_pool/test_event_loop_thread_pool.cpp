@@ -41,6 +41,87 @@ public:
 int main() {
     {
         gamenet::net::EventLoop baseLoop;
+        gamenet::net::EventLoopThreadPool pool(&baseLoop, "invalid-thread-count");
+
+        bool negativeCountRejected = false;
+        try {
+            pool.setThreadNum(-1);
+        } catch (const std::invalid_argument&) {
+            negativeCountRejected = true;
+        }
+        GAMENET_TEST_ASSERT(negativeCountRejected);
+
+        bool zeroThreadCallbackRan = false;
+        pool.start([&](gamenet::net::EventLoop* loop) {
+            zeroThreadCallbackRan = true;
+            GAMENET_TEST_ASSERT(loop == &baseLoop);
+        });
+        // event-loop-thread-pool-negative-count-contract: rejection preserves
+        // the default zero-thread configuration and its base-loop callback.
+        GAMENET_TEST_ASSERT(zeroThreadCallbackRan);
+        GAMENET_TEST_ASSERT(pool.getAllLoops().size() == 1);
+        pool.stop();
+    }
+
+    {
+        gamenet::net::EventLoop baseLoop;
+        gamenet::net::EventLoopThreadPool pool(&baseLoop, "wrong-thread-config");
+        std::promise<void> observed;
+        auto observedFuture = observed.get_future();
+        std::thread worker([&] {
+            try {
+                pool.setThreadNum(1);
+                GAMENET_TEST_ASSERT(false);
+            } catch (const std::runtime_error&) {
+                observed.set_value();
+            }
+        });
+        gamenet::test::waitUntilReady(
+            observedFuture,
+            std::chrono::seconds(1),
+            "wrong-thread setThreadNum did not report runtime_error");
+        worker.join();
+    }
+
+    {
+        gamenet::net::EventLoop baseLoop;
+        gamenet::net::EventLoopThreadPool pool(&baseLoop, "state-machine");
+        pool.setThreadNum(1);
+        pool.start();
+        const auto firstGeneration = pool.getAllLoops();
+        GAMENET_TEST_ASSERT(firstGeneration.size() == 1);
+
+        bool lateCountRejected = false;
+        try {
+            pool.setThreadNum(2);
+        } catch (const std::logic_error&) {
+            lateCountRejected = true;
+        }
+        GAMENET_TEST_ASSERT(lateCountRejected);
+
+        bool repeatedStartRejected = false;
+        try {
+            pool.start();
+        } catch (const std::logic_error&) {
+            repeatedStartRejected = true;
+        }
+        // event-loop-thread-pool-state-machine-contract: invalid Started-state
+        // calls preserve the one published worker and its identity.
+        GAMENET_TEST_ASSERT(repeatedStartRejected);
+        const auto afterRejections = pool.getAllLoops();
+        GAMENET_TEST_ASSERT(afterRejections.size() == 1);
+        GAMENET_TEST_ASSERT(afterRejections.front() == firstGeneration.front());
+
+        pool.stop();
+        pool.setThreadNum(2);
+        pool.start();
+        GAMENET_TEST_ASSERT(pool.getAllLoops().size() == 2);
+        pool.stop();
+        pool.stop();
+    }
+
+    {
+        gamenet::net::EventLoop baseLoop;
         gamenet::net::EventLoopThreadPool pool(&baseLoop, "zero");
         bool callbackRan = false;
         pool.start([&](gamenet::net::EventLoop* loop) {
@@ -303,21 +384,33 @@ int main() {
         pool.setThreadNum(1);
         pool.start();
 
-        std::promise<void> observed;
-        auto observedFuture = observed.get_future();
+        std::promise<void> nextObserved;
+        auto nextObservedFuture = nextObserved.get_future();
+        std::promise<void> listObserved;
+        auto listObservedFuture = listObserved.get_future();
         std::thread worker([&] {
             try {
                 (void)pool.getNextLoop();
                 GAMENET_TEST_ASSERT(false);
             } catch (const std::runtime_error&) {
-                observed.set_value();
+                nextObserved.set_value();
+            }
+            try {
+                (void)pool.getAllLoops();
+                GAMENET_TEST_ASSERT(false);
+            } catch (const std::runtime_error&) {
+                listObserved.set_value();
             }
         });
 
         gamenet::test::waitUntilReady(
-            observedFuture,
+            nextObservedFuture,
             std::chrono::seconds(1),
             "wrong-thread getNextLoop did not report runtime_error");
+        gamenet::test::waitUntilReady(
+            listObservedFuture,
+            std::chrono::seconds(1),
+            "wrong-thread getAllLoops did not report runtime_error");
         worker.join();
         pool.stop();
     }

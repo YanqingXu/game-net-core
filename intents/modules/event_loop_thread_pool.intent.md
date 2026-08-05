@@ -38,6 +38,13 @@ EventLoopThread workers and returning loops for connection assignment.
 
 ## 4. Core Invariants
 - base loop remains the fallback loop when thread count is zero
+- configured thread count is non-negative and remains immutable from a
+  successful start until stop completes
+- the control state machine is `Idle -> Started -> Idle`; repeated start while
+  Started is rejected without publishing another worker or resetting load
+  accounting, while stop in Idle is an idempotent no-op
+- startup failure returns the pool to Idle with no published workers, selection
+  metadata, or connection-load observations, so a later start may retry
 - loop selection is deterministic and bounded by started workers
 - thread-pool control remains on the base loop thread
 - selection policy is immutable after start
@@ -50,23 +57,32 @@ EventLoopThread workers and returning loops for connection assignment.
 ---
 
 ## 5. Threading Rules
-- start(), stop(), selection, policy configuration, and connection-load
-  accounting are base-loop-thread operations
+- thread-count and policy configuration, start(), stop(), selection, loop-list
+  observation, and connection-load accounting are base-loop-thread operations
+- an off-owner control call fails before reading or mutating pool state
 - worker loops are only used through EventLoop scheduling APIs after publication
 
 ---
 
 ## 6. Failure Semantics
+- a negative thread count fails with `std::invalid_argument` before changing the
+  configured count
+- thread-count or policy mutation while Started and repeated start fail with
+  `std::logic_error` before changing worker, selector, or load state
 - repeated selection must not step outside the worker loop array
 - unknown policies, empty consistent-hash keys, foreign loop accounting,
   connection-count underflow, and policy mutation after start fail explicitly
-- startup should remain explicit about zero-thread and multi-thread behavior
+- zero-thread start invokes the initialization callback exactly once on the
+  base loop and keeps selection on that loop
 - partial worker startup failure stops and joins already-published workers,
-  clears loop selection state, and rethrows the initialization exception
+  clears loop selection state, returns to Idle, and rethrows the initialization
+  exception
 
 ---
 
 ## 7. Test Contracts
+- negative thread counts, wrong-thread configuration, late configuration, and
+  repeated start are rejected before observable state changes
 - zero-thread start keeps work on base loop
 - multi-thread start publishes the configured worker loops
 - getNextLoop rotates through workers predictably
@@ -76,6 +92,9 @@ EventLoopThread workers and returning loops for connection assignment.
 - consistent-hash keeps repeated keys on one worker and distributes a key set
   without depending on pointer values or implementation-defined `std::hash`
 - stop() quits all worker loops and clears thread/loop containers
+- stop followed by start republishes exactly the configured worker count;
+  configuration may change only while the pool is Idle
+- TcpServer forwards the same negative and post-start thread-count rejection
 - cross-thread queued work reaches each published worker loop under a light
   soak and does not run on the base loop when workers are configured
 - `tests/contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp`

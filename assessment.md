@@ -10,8 +10,8 @@
 
 > 已具备较强契约与测试基础的 production-hardening preview，尚不是可宣布稳定或可对外采用的 production release。
 
-本轮没有发现 P0。发现 4 项 P1 和 2 项 P2；截至 2026-08-03，P1-01 已关闭，
-其余 finding 仍保持开放：
+本轮没有发现 P0。发现 4 项 P1 和 2 项 P2；截至 2026-08-05，P1-01 已关闭，
+P2-01 已在当前工作树完成合同、实现和本地验证，其余 finding 仍保持开放：
 
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@
 | P1-02 | P1 | `95a6ab5` 的六个同 SHA CI producer 已通过，但 retained aggregate artifact、性能、容量与 endurance 证据仍不完整 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1 | 0.3 stable Core 表面变化尚未完成独立审查 | API 发布阻塞 |
-| P2-01 | P2 | `EventLoopThreadPool` 非法配置和状态转换没有完整拒绝 | 公共契约 |
+| P2-01 | P2（本地关闭） | `EventLoopThreadPool` 非法配置和状态转换已在状态改变前显式拒绝 | 公共契约 |
 | P2-02 | P2 | 路线图文档与实际 HEAD 存在时间和完成状态漂移 | 治理一致性 |
 
 因此：
@@ -56,6 +56,21 @@ P1-01 已关闭。批准范围只覆盖 M3-R1 生命周期/所有权问题，不
 Linux 命令、逐项审阅矩阵和签字字段已冻结在
 `docs/reviews/m3-r1-closure-review.md`；该文件保留首次拒绝历史、remediation
 证据、新候选 clean review 和最终签核。
+
+### 1.2 M3-R2 本地关闭检查点（2026-08-05）
+
+当前工作树已把 `EventLoopThreadPool` 配置生命周期明确为
+`Idle -> Started -> Idle`，并在任何状态改变前拒绝负线程数、非 base-loop
+线程配置、started 状态配置以及重复 `start()`。`stop()` 在 Idle 保持幂等，
+合法 stop 后仍可重新配置并重启；zero-thread 模式仍执行一次 base-loop init
+callback，partial-start rollback 合同保持不变。`TcpServer::setThreadNum()` 同步
+转发上述失败结果。
+
+新增负向合同在修复前确定性失败；修复后 Windows/IOCP Release 全量
+120/120、36/36 repository/API/CI guards 通过，EventLoopThreadPool 主合同、
+restart soak 与 TcpServer 合同各重复 50 次，共 150/150 通过。该结论关闭
+P2-01 的本地实现与合同范围；当前改动尚未冻结为新候选 SHA，最终候选仍须
+执行 clean checkout 与同 SHA 远端复验。
 
 ## 2. 审计范围与方法
 
@@ -382,7 +397,7 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 ### P2-01：EventLoopThreadPool 非法状态转换没有完整拒绝
 
-当前实现：
+原审计实现：
 
 - `setThreadNum(int)` 仅赋值；
 - 不拒绝负数；
@@ -396,11 +411,25 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 关闭条件：
 
-- 明确 `numThreads >= 0`；
-- 配置操作断言 base owner；
-- started 状态下的 thread count/policy 修改显式失败；
-- start-after-start 显式失败，stop 后 restart 仍按现有 contract 允许；
-- 增加 negative、wrong-thread、late-config、repeated-start contract。
+- [x] 明确 `numThreads >= 0`；
+- [x] 配置操作断言 base owner；
+- [x] started 状态下的 thread count/policy 修改显式失败；
+- [x] start-after-start 显式失败，stop 后 restart 仍按现有 contract 允许；
+- [x] 增加 negative、wrong-thread、late-config、repeated-start contract。
+
+关闭结果（2026-08-05）：
+
+- `setThreadNum()` 以 `std::invalid_argument` 拒绝负数，以现有 owner-loop
+  断言拒绝跨线程调用，并以 `std::logic_error` 拒绝 started 状态修改；
+- `start()` 在 already-started 时以 `std::logic_error` 失败，且不会追加
+  worker、重置 load accounting 或重复发布 init callback；
+- `getAllLoops()` 与选择/load-accounting 操作一致要求 base-loop thread；
+- `tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp` 覆盖
+  negative、wrong-thread、late-config、repeated-start、zero-thread 和合法 restart；
+- `tests/contract/tcp_server/test_tcp_server_contract.cpp` 覆盖 TcpServer 的
+  negative 与 late thread-count 转发；
+- 修复前新增合同失败，修复后 Release 全量 120/120、守卫 36/36，聚焦
+  重复 150/150。
 
 ### P2-02：路线图文档存在当前性漂移
 
@@ -476,7 +505,7 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 补齐 P2-01 的公共状态机合同；
+1. 完成 GOV-R2 当前事实与文档同步；
 2. 完成 0.3 stable surface 独立审查；
 3. 修复 retained artifact 并跑通同 SHA 性能、容量和 endurance；
 4. 由项目所有者完成许可证决定。
