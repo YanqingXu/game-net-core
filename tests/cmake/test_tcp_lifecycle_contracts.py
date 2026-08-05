@@ -973,7 +973,10 @@ def main() -> None:
         client_cross_thread_retry_config_test,
     )
     require(client_cross_thread_retry_config_text, "client.enableRetry();", client_cross_thread_retry_config_test)
-    require(client_cross_thread_retry_config_text, "client.disableRetry();", client_cross_thread_retry_config_test)
+    require(client_cross_thread_retry_config_text, "client.tryDisableRetry();", client_cross_thread_retry_config_test)
+    require(client_cross_thread_retry_config_text, "gamenet::net::PostResult::Accepted", client_cross_thread_retry_config_test)
+    require(client_cross_thread_retry_config_text, "gamenet::net::PostResult::QueueFull", client_cross_thread_retry_config_test)
+    require(client_cross_thread_retry_config_text, "gamenet::net::PostResult::Shutdown", client_cross_thread_retry_config_test)
     require(client_cross_thread_retry_config_text, "serverConnection->forceClose();", client_cross_thread_retry_config_test)
     require(
         client_cross_thread_retry_config_text,
@@ -1580,7 +1583,7 @@ def main() -> None:
     tcp_client_intent_text = tcp_client_intent.read_text(encoding="utf-8")
     require(
         tcp_client_intent_text,
-        "enableRetry() and disableRetry() may be called cross-thread",
+        "tryEnableRetry()` / `tryDisableRetry()` may be called cross-thread",
         tcp_client_intent,
     )
     require(tcp_client_intent_text, "stop() cancels pending retry", tcp_client_intent)

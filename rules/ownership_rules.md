@@ -141,6 +141,10 @@ It must not blur these roles.
 - Timer containers own timer metadata
 - Scheduled callbacks do not imply ownership of arbitrary target objects
 - Cancellation semantics must be explicit
+- `TimerScheduleResult::Accepted` transfers timer metadata into current or
+  already-accepted owner work. A rejected result carries no valid TimerId;
+  EventLoop shutdown discards future timer metadata rather than extending loop
+  lifetime until deadlines fire
 - Repeating cadence mode and consecutive catch-up count are TimerQueue-owned
   metadata; neither creates ownership of the callback's captured targets
 - DeadlineQueue owns only key/generation/deadline bucket metadata. Returned

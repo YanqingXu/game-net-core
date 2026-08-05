@@ -67,6 +67,12 @@ public:
 #endif
     }
 
+    static void preserveSocketAssociation(
+        EventLoop& loop,
+        SocketFd socket) {
+        loop.preserveSocketAssociation(socket);
+    }
+
     static std::size_t completionBatchSize() noexcept {
 #ifdef _WIN32
         return IocpPoller::kCompletionBatchSize;
@@ -159,7 +165,7 @@ public:
     static bool hasPendingCompletionOperations(
         EventLoop& loop) noexcept {
 #ifdef _WIN32
-        return loop.poller_->hasPendingCompletionOperations();
+        return loop.hasPendingCompletionOperations();
 #else
         (void)loop;
         return false;

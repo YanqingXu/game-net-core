@@ -19,6 +19,8 @@ struct TcpOutputMemoryBudgetOptions {
     std::size_t hardLimitBytes{64U * 1024U * 1024U};
     std::size_t recoveryThresholdBytes{48U * 1024U * 1024U};
 
+    // hardLimitBytes must be positive and recoveryThresholdBytes strictly
+    // below it; invalid values throw std::invalid_argument.
     void validate() const;
 };
 

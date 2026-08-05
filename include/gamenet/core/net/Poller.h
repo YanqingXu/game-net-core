@@ -20,21 +20,16 @@ class Poller : private gamenet::base::noncopyable {
 public:
     using ChannelList = std::vector<Channel*>;
 
+    // loop must be non-null and outlive this Poller, including instances
+    // returned by newDefaultPoller().
     explicit Poller(EventLoop* loop);
+    // Poller does not own Channels or EventLoop. Mutation and destruction are
+    // owner-loop-only; concrete backend obligation hooks are private.
     virtual ~Poller();
 
     virtual gamenet::base::Timestamp poll(int timeoutMs, ChannelList* activeChannels) = 0;
     virtual void updateChannel(Channel* channel) = 0;
     virtual void removeChannel(Channel* channel) = 0;
-    // Preserve backend socket-handle association across fd ownership transfer.
-    virtual void preserveSocketAssociation(SocketFd sockfd);
-    // Keep backend operation storage alive until its completion is observed.
-    virtual void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime);
-    // Track one kernel-owned completion obligation from successful submission
-    // until the backend dequeues its terminal packet.
-    virtual void trackCompletionOperation(void* operation);
-    virtual bool hasPendingCompletionOperations() const noexcept;
-    virtual bool wakeup();
 
     bool hasChannel(Channel* channel) const;
     static std::unique_ptr<Poller> newDefaultPoller(EventLoop* loop);
@@ -44,7 +39,19 @@ protected:
     ChannelMap channels_;
 
 private:
+    // Backend lifecycle hooks are available only to EventLoop. In particular,
+    // raw completion identities are not part of the stable application API.
+    virtual void preserveSocketAssociation(SocketFd sockfd);
+    virtual void retainCompletionOperation(
+        void* operation,
+        std::shared_ptr<void> lifetime);
+    virtual void trackCompletionOperation(void* operation);
+    virtual bool hasPendingCompletionOperations() const noexcept;
+    virtual bool wakeup();
+
     EventLoop* ownerLoop_;
+
+    friend class EventLoop;
 };
 
 }  // namespace gamenet::net

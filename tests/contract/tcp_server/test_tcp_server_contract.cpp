@@ -8,6 +8,8 @@
 
 #include "support/ClientSocket.h"
 #include "support/LoopTest.h"
+#include "support/SocketPair.h"
+#include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
 #include <atomic>
 #include <chrono>
@@ -108,6 +110,69 @@ int main() {
         // tcp-server-thread-count-contract: TcpServer forwards the pool's
         // validation without changing its default zero-thread configuration.
         GAMENET_TEST_ASSERT(negativeThreadCountRejected);
+
+        std::atomic<bool> wrongThreadCallbackRejected{false};
+        std::thread wrongThread([&] {
+            try {
+                server.setMessageCallback({});
+            } catch (const std::runtime_error&) {
+                wrongThreadCallbackRejected = true;
+            }
+        });
+        wrongThread.join();
+        GAMENET_TEST_ASSERT(wrongThreadCallbackRejected.load());
+    }
+
+    {
+        gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
+            .maxPendingFunctors = 1,
+            .reservedPendingFunctors = 0,
+            .maxFunctorsPerIteration = 1,
+        });
+        gamenet::net::TcpServer server(
+            &loop,
+            gamenet::net::InetAddress(0, true),
+            "server-authentication-result-contract");
+        gamenet::test::ConnectedSocketPair pair;
+        auto connection = gamenet::test::makeTcpConnection(
+            loop,
+            pair,
+            "server-authentication-result-connection");
+        int closeCallbacks = 0;
+        connection->setCloseCallback(
+            [&](const gamenet::net::TcpConnectionPtr& conn) {
+                ++closeCallbacks;
+                conn->connectDestroyed();
+            });
+        connection->connectEstablished();
+
+        GAMENET_TEST_ASSERT(
+            server.tryMarkConnectionAuthenticated({}) ==
+            gamenet::net::PostResult::OwnerUnavailable);
+        GAMENET_TEST_ASSERT(loop.tryQueueInLoop([] {}));
+
+        gamenet::net::PostResult saturatedResult{};
+        std::thread saturatedCaller([&] {
+            saturatedResult =
+                server.tryMarkConnectionAuthenticated(connection);
+        });
+        saturatedCaller.join();
+        GAMENET_TEST_ASSERT(
+            saturatedResult == gamenet::net::PostResult::QueueFull);
+
+        loop.quit();
+        gamenet::net::PostResult shutdownResult{};
+        std::thread shutdownCaller([&] {
+            shutdownResult =
+                server.tryMarkConnectionAuthenticated(connection);
+        });
+        shutdownCaller.join();
+        GAMENET_TEST_ASSERT(
+            shutdownResult == gamenet::net::PostResult::Shutdown);
+
+        connection->forceClose();
+        loop.loop();
+        GAMENET_TEST_ASSERT(closeCallbacks == 1);
     }
 
     {
@@ -159,6 +224,13 @@ int main() {
         rejectedStartedAcceptDepthChange = true;
     }
     GAMENET_TEST_ASSERT(rejectedStartedAcceptDepthChange);
+    bool rejectedStartedCallbackChange = false;
+    try {
+        server.setMessageCallback({});
+    } catch (const std::logic_error&) {
+        rejectedStartedCallbackChange = true;
+    }
+    GAMENET_TEST_ASSERT(rejectedStartedCallbackChange);
     gamenet::net::SocketFd clientFd = gamenet::test::connectTestClient(server.listenAddress());
 
     gamenet::test::runLoopWithTimeout(
@@ -353,7 +425,8 @@ int main() {
                 const std::string payload = input->retrieveAllAsString();
                 if (payload == "AUTH") {
                     GAMENET_TEST_ASSERT(
-                        admissionServer.tryMarkConnectionAuthenticated(connection));
+                        admissionServer.tryMarkConnectionAuthenticated(connection) ==
+                        gamenet::net::PostResult::Accepted);
                     connection->send("AUTH_OK");
                     return;
                 }

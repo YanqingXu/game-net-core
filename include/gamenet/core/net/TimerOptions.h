@@ -21,6 +21,8 @@ struct RepeatingTimerOptions {
     // permits at most this many consecutive catch-up callbacks.
     std::size_t maxCatchUpCallbacks{0};
 
+    // FixedDelay requires maxCatchUpCallbacks == 0; unknown mode values throw
+    // std::invalid_argument. FixedRate accepts any finite size_t budget.
     void validate() const;
 };
 

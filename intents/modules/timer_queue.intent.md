@@ -28,7 +28,8 @@ one owner-loop timer or an explicit owner-loop sweep.
 - reschedule repeating timers with explicit fixed-delay or fixed-rate cadence
 - bound fixed-rate replay with a per-timer maximum consecutive catch-up count;
   once exhausted, skip missed cadence points and schedule the next future point
-- support cross-thread add/cancel through EventLoop scheduling APIs
+- support cross-thread add/cancel through typed EventLoop scheduling admission;
+  legacy TimerId/void APIs map or deliberately discard the typed result
 - quantize large logical deadline populations into configured-resolution
   buckets instead of allocating one TimerQueue callback per target
 - schedule/reschedule one active deadline per numeric key with generation-safe
@@ -87,6 +88,10 @@ one owner-loop timer or an explicit owner-loop sweep.
 ## 6. Threading Rules
 - addTimerInLoop / cancelInLoop are owner-thread-only operations
 - public timer APIs on EventLoop may be called cross-thread, but must marshal into the owner loop
+- typed add/cancel returns `PostResult::QueueFull`, `Shutdown`, or
+  `OwnerUnavailable` without reporting a valid TimerId; `Accepted` commits the
+  timer metadata operation but does not promise that a later shutdown waits for
+  a future deadline to fire
 - timer callbacks execute in the owner loop thread only
 - timeout calculation and expired timer dispatch happen in the owner loop thread only
 - DeadlineQueue schedule/cancel/advance/inspection are owner-loop-only
@@ -103,7 +108,12 @@ one owner-loop timer or an explicit owner-loop sweep.
 
 ## 8. Failure Semantics
 - invalid timer intervals fail explicitly rather than silently corrupt scheduling
+- every TimerQueue add path validates repeating options; a negative interval,
+  empty callback, or non-default repeating policy on a one-shot timer is invalid
 - cancel of an already-fired or unknown timer is a safe no-op
+- admission and shutdown races have one typed result. Legacy add maps QueueFull
+  to overflow_error and unavailable/shutdown to logic_error; legacy cancel
+  intentionally discards its typed result
 - quit during timer callback processing must not abandon already-accepted owner-loop work
 - TimerQueue destruction must tolerate an empty or partially canceled timer set
 - invalid DeadlineQueue resolution/budget fail explicitly; stale-token cancel
@@ -118,11 +128,16 @@ Exposed through EventLoop:
 - runEvery(Duration, Functor)
 - runEvery(Duration, Functor, RepeatingTimerOptions)
 - cancel(TimerId)
+- tryRunAt/tryRunAfter/tryRunEvery -> TimerScheduleResult
+- tryCancel(TimerId) -> PostResult
 - DeadlineQueue::schedule/cancel/advance/clear/size/nextBucketDeadline
 
 `TimerId` exists to make cancellation explicit and avoid exposing internal timer pointers.
 `RepeatingTimerOptions` defaults to fixed-delay with zero catch-up so the
 existing overload keeps its historical behavior.
+`TimerQueue` remains an installed implementation type because EventLoop owns
+it, but its construction/add/cancel entry points are private. Applications use
+only EventLoop so no standalone queue can claim Accepted without being polled.
 
 ---
 
@@ -134,6 +149,10 @@ existing overload keeps its historical behavior.
   maximum catch-up callbacks, and then skips missed points
 - fixed-delay rejects a non-zero catch-up setting instead of ignoring it
 - cross-thread runAfter marshals back and fires on the owner loop thread
+- typed add/cancel distinguish saturation, shutdown, and owner loss; shutdown
+  never returns a valid TimerId
+- EventLoop timer entry points reject non-positive repeating intervals and
+  invalid options; private TimerQueue paths repeat validation defensively
 - cancel before expiration prevents callback execution
 - canceling a ready timer from an earlier ready callback prevents the canceled
   callback from firing

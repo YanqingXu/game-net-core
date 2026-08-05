@@ -94,6 +94,11 @@ No other direct mutation path is allowed for core loop state.
   reinserted through TimerQueue, consumes a later timer budget slot, and never
   invokes the callback recursively. Once its configured consecutive catch-up
   count is exhausted, TimerQueue advances directly to a future cadence point
+- Cross-thread timer add/cancel uses typed EventLoop admission. Accepted commits
+  the metadata operation to the owner loop; QueueFull, Shutdown, and
+  OwnerUnavailable are distinct, and rejected add returns no valid TimerId.
+  Legacy timer creation maps those results to exceptions while legacy cancel
+  intentionally discards them
 - DeadlineQueue is owner-loop-only. A driver may be one TimerQueue timer, but
   logical targets never receive one timer callback each; expiration policy runs
   after a budgeted advance returns generation-tagged values to the owner

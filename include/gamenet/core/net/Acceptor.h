@@ -34,23 +34,39 @@ enum class AcceptorErrorAction {
     Stop,
 };
 
+// Invoked synchronously on the owning Acceptor/TcpServer base loop and may
+// re-enter owner-safe lifecycle APIs. No callback means Retry; an exception is
+// contained/logged and converted to Stop.
 using AcceptorErrorCallback = std::function<AcceptorErrorAction(const AcceptorError&)>;
 
 class Acceptor : private gamenet::base::noncopyable {
 public:
+    // Runs synchronously on the owner loop and may re-enter stop(). fd
+    // ownership transfers at callback entry, so the receiver must establish
+    // RAII before fallible work. Escaping exceptions enter EventLoop's
+    // ChannelEvent policy; Acceptor never reclaims the transferred fd.
     using NewConnectionCallback = std::function<void(SocketFd sockfd, const InetAddress&)>;
 
+    // loop must be non-null and outlive this Acceptor. Construction and
+    // destruction are owner-loop-only.
     Acceptor(EventLoop* loop, const InetAddress& listenAddr, bool reusePort);
     ~Acceptor();
 
+    // Owner-loop-only. Configuration is rejected while listening.
     void setNewConnectionCallback(NewConnectionCallback cb);
+    // Runs synchronously on the owner loop and may re-enter stop(). No callback
+    // means Retry; an exception is contained, logged, and converted to Stop.
     void setErrorCallback(AcceptorErrorCallback cb);
     // Controls the fixed Windows AcceptEx pre-post pool. Configure before
-    // listen(); other backends retain the value but use readiness draining.
+    // listen(); values outside [1, 64] throw std::invalid_argument. Other
+    // backends retain the value but use readiness draining.
     void setIocpAcceptDepth(std::size_t depth);
     std::size_t iocpAcceptDepth() const noexcept;
     bool listening() const noexcept;
     const InetAddress& listenAddress() const noexcept;
+    // Lifecycle and destruction are owner-loop-only. New-connection callbacks
+    // run synchronously on that loop, may re-enter stop(), and receive fd
+    // ownership at callback entry. If no callback exists Acceptor closes it.
     void listen();
     void stop();
 

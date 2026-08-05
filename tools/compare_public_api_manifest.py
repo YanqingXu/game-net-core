@@ -166,25 +166,29 @@ def build_diff(
     *,
     baseline_path: str,
     candidate_path: str,
+    verify_historical_reference: bool = True,
 ) -> dict[str, Any]:
     if baseline.get("schema") != SNAPSHOT_SCHEMA:
         raise ValueError(f"baseline schema must be {SNAPSHOT_SCHEMA}")
     if candidate.get("schema") != MANIFEST_SCHEMA:
         raise ValueError(f"candidate schema must be {MANIFEST_SCHEMA}")
 
-    reference = candidate.get("historical_baseline")
     source = baseline.get("source")
-    if not isinstance(reference, dict) or not isinstance(source, dict):
-        raise ValueError("candidate reference and baseline source metadata are required")
-    if reference.get("tag") != source.get("tag") or reference.get("commit") != source.get(
-        "commit"
-    ):
-        raise ValueError("candidate historical baseline reference does not match baseline source")
-    if reference.get("path") != baseline_path:
-        raise ValueError(
-            f"candidate historical baseline path is {reference.get('path')!r}, "
-            f"not {baseline_path!r}"
-        )
+    if not isinstance(source, dict):
+        raise ValueError("baseline source metadata is required")
+    if verify_historical_reference:
+        reference = candidate.get("historical_baseline")
+        if not isinstance(reference, dict):
+            raise ValueError("candidate historical baseline reference is required")
+        if reference.get("tag") != source.get("tag") or reference.get("commit") != source.get(
+            "commit"
+        ):
+            raise ValueError("candidate historical baseline reference does not match baseline source")
+        if reference.get("path") != baseline_path:
+            raise ValueError(
+                f"candidate historical baseline path is {reference.get('path')!r}, "
+                f"not {baseline_path!r}"
+            )
 
     baseline_targets = _inventory(baseline, "targets")
     candidate_targets = _inventory(candidate, "targets")
@@ -236,8 +240,19 @@ def main() -> int:
     )
     parser.add_argument("--candidate", type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument(
+        "--compatibility-baseline",
+        type=Path,
+        help="same-line reviewed snapshot used only by the blocking compatibility gate",
+    )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--compatibility-output",
+        type=Path,
+        help="write the same-line compatibility-baseline diff separately",
+    )
     parser.add_argument("--fail-on-compatibility-decision", action="store_true")
+    parser.add_argument("--fail-on-stable-surface-review", action="store_true")
     args = parser.parse_args()
 
     repo_root = args.repo_root.resolve()
@@ -274,9 +289,56 @@ def main() -> int:
         args.output.write_text(rendered, encoding="utf-8")
         print(f"public API diff written: {args.output}")
 
+    gate_difference = difference
+    if args.compatibility_output is not None and args.compatibility_baseline is None:
+        print(
+            "public API compatibility output requires --compatibility-baseline",
+            file=sys.stderr,
+        )
+        return 1
+    if args.compatibility_baseline is not None:
+        compatibility_path = args.compatibility_baseline
+        if not compatibility_path.is_absolute():
+            compatibility_path = repo_root / compatibility_path
+        try:
+            compatibility_relative = compatibility_path.resolve().relative_to(
+                repo_root
+            ).as_posix()
+            compatibility_baseline = load_document(compatibility_path)
+            gate_difference = build_diff(
+                compatibility_baseline,
+                candidate,
+                baseline_path=compatibility_relative,
+                candidate_path=candidate_relative,
+                verify_historical_reference=False,
+            )
+            if not gate_difference["summary"]["same_compatibility_line"]:
+                raise ValueError(
+                    "compatibility baseline must use the candidate compatibility line"
+                )
+        except (OSError, ValueError) as error:
+            print(f"public API compatibility gate error: {error}", file=sys.stderr)
+            return 1
+
+    if args.compatibility_output is not None:
+        compatibility_rendered = render_diff(gate_difference)
+        args.compatibility_output.parent.mkdir(parents=True, exist_ok=True)
+        args.compatibility_output.write_text(
+            compatibility_rendered,
+            encoding="utf-8",
+        )
+        print(f"public API compatibility diff written: {args.compatibility_output}")
+
+    if (
+        args.fail_on_stable_surface_review
+        and gate_difference["summary"]["stable_surface_review_required"]
+    ):
+        print("public API comparison requires stable-surface review", file=sys.stderr)
+        return 3
+
     if (
         args.fail_on_compatibility_decision
-        and difference["summary"]["compatibility_decision_required"]
+        and gate_difference["summary"]["compatibility_decision_required"]
     ):
         print("public API comparison requires a compatibility decision", file=sys.stderr)
         return 2

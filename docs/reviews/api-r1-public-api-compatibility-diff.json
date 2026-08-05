@@ -1,0 +1,38 @@
+{
+  "baseline": {
+    "commit": "UNBOUND-REL-C1",
+    "compatibility_line": "0.3",
+    "package_version": "0.3.0",
+    "path": "api/baselines/v0.3.0-api-r1-reviewed.json",
+    "schema": "gamenet.public_api_snapshot.v1",
+    "tag": "api-r1-approved-surface"
+  },
+  "candidate": {
+    "compatibility_line": "0.3",
+    "package_version": "0.3.0",
+    "path": "api/public_api_manifest.json",
+    "release_label": "v0.3.0-production-candidate",
+    "schema": "gamenet.public_api_manifest.v2"
+  },
+  "changes": {
+    "headers": {
+      "added": [],
+      "category_moves": [],
+      "removed": []
+    },
+    "stable_header_fingerprint_changes": [],
+    "targets": {
+      "added": [],
+      "category_moves": [],
+      "removed": []
+    }
+  },
+  "schema": "gamenet.public_api_diff.v1",
+  "summary": {
+    "compatibility_decision_reasons": [],
+    "compatibility_decision_required": false,
+    "has_changes": false,
+    "same_compatibility_line": true,
+    "stable_surface_review_required": false
+  }
+}

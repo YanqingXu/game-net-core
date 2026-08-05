@@ -30,6 +30,9 @@ enum class EventLoopSelectionPolicy {
 
 class EventLoopThreadPool : private gamenet::base::noncopyable {
 public:
+    // baseLoop must be non-null and outlive this pool. Construction,
+    // destruction, configuration, selection, start, and stop are base-owner
+    // operations.
     EventLoopThreadPool(EventLoop* baseLoop, std::string name);
     ~EventLoopThreadPool();
 
@@ -38,9 +41,14 @@ public:
     // started, and repeated start without an intervening stop is rejected.
     void setThreadNum(int numThreads);
     void setLoopSelectionPolicy(EventLoopSelectionPolicy policy);
+    // ThreadInitCallback follows Callbacks.h. In zero-worker mode it executes
+    // synchronously on the base loop; any exception rolls start back to Idle
+    // and propagates from start().
     void start(const ThreadInitCallback& callback = ThreadInitCallback());
     void stop();
 
+    // Returned loop pointers are non-owning and are invalid once stop() begins.
+    // Selection and enumeration are base-loop-thread-only.
     EventLoop* getNextLoop();
     EventLoop* selectLoop(std::string_view affinityKey = {});
     std::vector<EventLoop*> getAllLoops() const;

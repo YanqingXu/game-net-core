@@ -635,7 +635,7 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
     if contract.package_step is not None:
         package = step_block(job, contract.package_step)
         require(package, f"{contract.interpreter} tools/verify_ctest_inventory.py")
-        require(package, "--expected-total 1")
+        require(package, "--expected-total 2")
         require(package, "--output ci-evidence/install-consumer-inventory.json")
         if contract.config is not None:
             require(package, f"--config {contract.config}")
@@ -699,7 +699,17 @@ def main() -> None:
     require(self_hosted_job, "--expected-total 120")
     require(self_hosted_job, "--timeout 30")
     require(self_hosted_job, "- name: Install and verify package consumer")
-    require(self_hosted_job, "--expected-total 1")
+    require(self_hosted_job, "--expected-total 2")
+    require(
+        self_hosted_job,
+        "--compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json",
+    )
+    require(self_hosted_job, "--fail-on-compatibility-decision")
+    require(self_hosted_job, "--fail-on-stable-surface-review")
+    require(
+        self_hosted_job,
+        "--compatibility-output ci-evidence/public-api-compatibility-diff.json",
+    )
     evidence_summary = step_block(self_hosted_job, "Publish CI evidence summary")
     require(evidence_summary, 'Get-Content -LiteralPath $manifestPath -Raw')
     require(evidence_summary, "$env:GITHUB_STEP_SUMMARY")
@@ -756,9 +766,18 @@ def main() -> None:
         "all six CI producers must fetch the tagged API baseline for provenance verification"
     )
     require(workflow, "python3 tools/compare_public_api_manifest.py")
+    assert workflow.count(
+        "--compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json"
+    ) == 2
+    assert workflow.count("--fail-on-compatibility-decision") == 2
+    assert workflow.count("--fail-on-stable-surface-review") == 2
+    assert workflow.count(
+        "--compatibility-output ci-evidence/public-api-compatibility-diff.json"
+    ) == 2
     require(workflow, "--output ci-evidence/public-api-diff.json")
     assert workflow.count("python3 tools/compare_public_api_manifest.py") == 2
     assert workflow.count("ci-evidence/public-api-diff.json") == 2
+    assert workflow.count("ci-evidence/public-api-compatibility-diff.json") == 2
     require(workflow, "python3 tests/ci/test_performance_regression.py")
     require(workflow, "python tests/ci/test_performance_regression.py")
     assert workflow.count("python3 tests/ci/test_performance_regression.py") == 4
@@ -944,7 +963,7 @@ def main() -> None:
     assert workflow.count(f"name: {ARTIFACT_NAME}") == len(JOB_CONTRACTS)
     assert workflow.count("retention-days: 90") == len(JOB_CONTRACTS) + 1
     assert workflow.count(f"--expected-total {EXPECTED_CTEST_TOTAL}") == 2 * len(JOB_CONTRACTS)
-    assert len(re.findall(r"--expected-total 1(?=\s|['\"])", workflow)) == 6
+    assert len(re.findall(r"--expected-total 2(?=\s|['\"])", workflow)) == 6
     assert workflow.count(f"--expect-label threading={EXPECTED_THREADING_TOTAL}") == 2
     assert workflow.count("path: ci-evidence/") == len(JOB_CONTRACTS)
     assert workflow.count("if-no-files-found: error") == len(JOB_CONTRACTS) + 1

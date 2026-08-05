@@ -85,11 +85,24 @@ TimerQueue::~TimerQueue() {
     loop_->assertInLoopThread();
 }
 
-TimerId TimerQueue::addTimer(
+TimerScheduleResult TimerQueue::tryAddTimer(
     TimerCallback cb,
     gamenet::base::Timestamp when,
     Duration interval,
     RepeatingTimerOptions options) {
+    if (!cb) {
+        throw std::invalid_argument("TimerQueue requires a non-empty callback");
+    }
+    if (interval < Duration::zero()) {
+        throw std::invalid_argument("TimerQueue interval cannot be negative");
+    }
+    options.validate();
+    if (interval == Duration::zero() &&
+        (options.mode != RepeatingTimerMode::FixedDelay ||
+         options.maxCatchUpCallbacks != 0)) {
+        throw std::invalid_argument(
+            "one-shot timers do not accept repeating timer policy");
+    }
     auto timer = std::make_shared<Timer>(
         std::move(cb),
         when,
@@ -99,24 +112,59 @@ TimerId TimerQueue::addTimer(
     const TimerId timerId(timer->sequence);
 
     if (loop_->isInLoopThread()) {
+        if (loop_->phase() != EventLoopPhase::Running) {
+            return {PostResult::Shutdown, {}};
+        }
         addTimerInLoop(std::move(timer));
-    } else {
-        loop_->runInLoop([this, timer] { addTimerInLoop(timer); });
+        return {PostResult::Accepted, timerId};
     }
 
-    return timerId;
+    const PostResult result = loop_->executor().post(
+        [this, timer] { addTimerInLoop(timer); });
+    return {result, result == PostResult::Accepted ? timerId : TimerId{}};
 }
 
-void TimerQueue::cancel(TimerId timerId) {
+TimerId TimerQueue::addTimer(
+    TimerCallback cb,
+    gamenet::base::Timestamp when,
+    Duration interval,
+    RepeatingTimerOptions options) {
+    const TimerScheduleResult scheduled = tryAddTimer(
+        std::move(cb), when, interval, options);
+    switch (scheduled.result) {
+        case PostResult::Accepted:
+            return scheduled.timerId;
+        case PostResult::QueueFull:
+            throw std::overflow_error(
+                "EventLoop pending functor queue is full for timer admission");
+        case PostResult::Shutdown:
+            throw std::logic_error(
+                "TimerQueue cannot add a timer after EventLoop admission closes");
+        case PostResult::OwnerUnavailable:
+            throw std::logic_error("TimerQueue owner EventLoop is unavailable");
+    }
+    throw std::logic_error("unknown timer admission result");
+}
+
+PostResult TimerQueue::tryCancel(TimerId timerId) noexcept {
     if (!timerId.valid()) {
-        return;
+        return PostResult::Accepted;
     }
 
     if (loop_->isInLoopThread()) {
+        if (loop_->phase() != EventLoopPhase::Running) {
+            return PostResult::Shutdown;
+        }
         cancelInLoop(timerId);
-    } else {
-        loop_->runInLoop([this, timerId] { cancelInLoop(timerId); });
+        return PostResult::Accepted;
     }
+
+    return loop_->executor().post(
+        [this, timerId] { cancelInLoop(timerId); });
+}
+
+void TimerQueue::cancel(TimerId timerId) {
+    (void)tryCancel(timerId);
 }
 
 void TimerQueue::addTimerInLoop(TimerPtr timer) {

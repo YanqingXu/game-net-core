@@ -2,6 +2,9 @@
 
 // Exception records for callbacks dispatched by the Reactor/TCP core.
 // Policies observe captured exceptions synchronously on the owning EventLoop.
+// They may re-enter owner-safe lifecycle APIs. If an EventLoop handler throws,
+// the loop logs and quits; a TcpConnection observer throw is contained and the
+// fixed close/cleanup policy continues.
 
 #include <exception>
 #include <functional>

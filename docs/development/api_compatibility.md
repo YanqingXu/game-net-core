@@ -44,7 +44,12 @@ Run the verifier and emit the deterministic historical diff:
 
 ```text
 python tests/api/test_public_api_manifest.py
-python tools/compare_public_api_manifest.py --output public-api-diff.json
+python tools/compare_public_api_manifest.py \
+  --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json \
+  --fail-on-compatibility-decision \
+  --fail-on-stable-surface-review \
+  --compatibility-output public-api-compatibility-diff.json \
+  --output public-api-diff.json
 ```
 
 The guard rejects missing, newly unclassified, or multiply classified public
@@ -65,7 +70,17 @@ questions:
 Cross-line changes such as the current 0.2 preview to 0.3 candidate comparison
 still require review, but they do not claim to violate the 0.3-within-line
 promise. The raw changes remain present in the evidence even when the decision
-flag is false.
+flag is false. The blocking gate separately compares the manifest with the
+API-R1 reviewed 0.3 snapshot. That comparison must remain a zero diff; stable
+header/target additions, removals, moves, and fingerprint changes all fail the
+stable-surface gate. The separate compatibility output archives this same-line
+result instead of conflating it with the historical 0.2-to-0.3 diff.
+
+The installed `GameNetCoreConfigVersion.cmake` uses CMake
+`SameMinorVersion`: 0.3 consumers cannot silently resolve 0.2 or 0.4 packages.
+The install fixture compiles one consumer against all stable Core headers and
+`GameNet::core` only, plus a separate provisional consumer. It also executes
+positive 0.3 and negative 0.2/0.4 version probes.
 
 A deliberate stable API change must update the public contract, direct tests,
 manifest fingerprint, and release notes in one reviewed change. Updating a
@@ -82,8 +97,9 @@ and install-consumer contracts cover the new surface.
 
 The deterministic comparison against the 0.2 Preview reports a stable-surface
 review requirement and no within-line compatibility-decision requirement.
-That result records an additive 0.3-candidate surface; it does not replace the
-independent maintainer review required before freezing or tagging a release.
+That flag is a compatibility-line classification, not a claim that every
+0.2-to-0.3 declaration change is additive. The cross-line decisions are
+recorded by API-R1 below.
 
 The primary Linux CI producer writes
 `ci-evidence/public-api-diff.json` before its evidence manifest is built. The
@@ -228,13 +244,51 @@ are explicitly zero in the active design. AcceptEx bytes follow the final
 shared pool-state lifetime, so an Acceptor stop cannot hide storage still
 retained by completion leases.
 
-The new header is additive within the 0.3 line and does not change an existing
-stable declaration. IOCP platform-private storage moves two per-poll arrays
-into the existing Poller-lifetime fixed workspace; no public Poller contract is
-changed. Direct contracts live in
+The new header is additive within the 0.3 line and does not itself change an
+existing stable declaration. IOCP platform-private storage moves two per-poll
+arrays into the existing Poller-lifetime fixed workspace. API-R1 later removes
+backend-only hooks from Poller's public section, so the final 0.3 Poller
+fingerprint does change. Direct contracts live in
 `tests/contract/acceptor/test_acceptor_iocp_pool.cpp`,
 `tests/contract/poller/test_poller_contract.cpp`, and
 `tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`.
+
+## API-R1 Stable Core Review
+
+API-R1 independently reviewed the complete proposed 0.3 stable Core surface on
+2026-08-05. The historical diff against `v0.2.0-phase4-preview` contains 10
+stable-header additions, four provisional-header additions, 19 stable-header
+fingerprint changes, no removed headers, no category moves, and no target
+changes. The exact decision record is
+[`api-r1-stable-core-review.md`](../reviews/api-r1-stable-core-review.md), and
+the historical diff is archived beside it.
+
+The review initially rejected the surface. Remediation made backend socket
+types a real stable wrapper, moved Poller/EventLoop IOCP hooks out of the public
+contract, made queue/shutdown failure outcomes observable, froze owner-only
+configuration at defined lifecycle boundaries, documented callback, ownership,
+destruction, and raw-memory contracts, and added negative tests. The stable
+install consumer now includes every manifest-classified stable header without
+linking provisional targets.
+
+The following 0.2-preview to 0.3 source breaks are deliberately accepted. They
+do not weaken the within-0.3 promise:
+
+- `Connector::start()` changes from implicit cross-thread marshaling to an
+  owner-loop-only operation, and `setRetryEnabled()` is no longer `noexcept`;
+- explicit options constructors can reject copy-list forms such as
+  `T value = {}` even where direct/default construction remains supported;
+- `Buffer::readFd` has changed exact member-function type, so code storing that
+  member pointer must migrate;
+- direct application construction/add/cancel of `TimerQueue` is withdrawn.
+  Consumers migrate to EventLoop's timer facade, preventing a standalone queue
+  from returning `Accepted` even though that loop never polls it.
+
+The reviewed surface is frozen in
+`api/baselines/v0.3.0-api-r1-reviewed.json`. Its source commit is intentionally
+`UNBOUND-REL-C1`: API-R1 approves the declarations, while REL-C1 must replace
+that marker with the final candidate SHA and prove that the surface is still a
+zero diff. No final candidate SHA or ABI guarantee is created by API-R1.
 
 ## Current M3-Q1-E Additive Review
 

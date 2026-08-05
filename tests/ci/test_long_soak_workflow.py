@@ -389,8 +389,20 @@ def main() -> None:
     require(self_hosted_ci, "inventory+=(--expect-label threading=93)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
-    require(self_hosted_ci, "--expected-total 1", workflow)
+    require(self_hosted_ci, "--expected-total 2", workflow)
     require(self_hosted_ci, "python3 tools/compare_public_api_manifest.py", workflow)
+    require(
+        self_hosted_ci,
+        "--compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json",
+        workflow,
+    )
+    require(self_hosted_ci, "--fail-on-compatibility-decision", workflow)
+    require(self_hosted_ci, "--fail-on-stable-surface-review", workflow)
+    require(
+        self_hosted_ci,
+        "--compatibility-output ci-evidence/public-api-compatibility-diff.json",
+        workflow,
+    )
     require(
         self_hosted_ci,
         "python3 tests/cmake/test_build_governance_contract.py",

@@ -18,9 +18,15 @@ class EventLoop;
 
 class EventLoopThread : private gamenet::base::noncopyable {
 public:
+    // One external control thread must serialize startLoop(), stop(), and
+    // destruction. They are not concurrently callable, and destruction/stop
+    // must not run from the managed EventLoop thread because teardown joins it.
     EventLoopThread(ThreadInitCallback callback = {}, std::string name = {});
     ~EventLoopThread();
 
+    // The returned pointer is non-owning and remains valid until stop() begins
+    // or this EventLoopThread is destroyed. ThreadInitCallback runs on that
+    // loop thread; startup exceptions are rethrown here.
     EventLoop* startLoop();
     void stop();
 

@@ -67,6 +67,10 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tools/compare_public_api_manifest.py \
+            --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json \
+            --fail-on-compatibility-decision \
+            --fail-on-stable-surface-review \
+            --compatibility-output ci-evidence/public-api-compatibility-diff.json \
             --output ci-evidence/public-api-diff.json
           python3 tests/ci/test_performance_regression.py
           python3 tests/ci/test_core_capacity_matrix.py
@@ -129,7 +133,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$PWD/build/_install"
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-install-consumer \
-            --expected-total 1 \
+            --expected-total 2 \
             --output ci-evidence/install-consumer-inventory.json
           cmake --build build-install-consumer --parallel
           ctest --test-dir build-install-consumer --output-on-failure --timeout 60 \
@@ -149,14 +153,14 @@ jobs:
             --output ci-evidence/manifest.json \
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
-            --command 'python3 tools/compare_public_api_manifest.py --output ci-evidence/public-api-diff.json' \
+            --command 'python3 tools/compare_public_api_manifest.py --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json --fail-on-compatibility-decision --fail-on-stable-surface-review --compatibility-output ci-evidence/public-api-compatibility-diff.json --output ci-evidence/public-api-diff.json' \
             --command 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 120 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build --parallel' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
             --command 'cmake -S tests/cmake/install_consumer -B build-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 1 --output ci-evidence/install-consumer-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json' \
             --command 'cmake --build build-install-consumer --parallel' \
             --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log'
 
@@ -846,7 +850,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows-install-consumer `
             --config Debug `
-            --expected-total 1 `
+            --expected-total 2 `
             --output ci-evidence/install-consumer-inventory.json
           cmake --build build-windows-install-consumer --config Debug --parallel
           ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 `
@@ -873,7 +877,7 @@ jobs:
             --command 'ctest --test-dir build-windows -C Debug --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows --config Debug --prefix $pwd/build-windows/_install' `
             --command 'cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=$pwd/build-windows/_install' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-install-consumer --config Debug --expected-total 1 --output ci-evidence/install-consumer-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-install-consumer --config Debug --expected-total 2 --output ci-evidence/install-consumer-inventory.json' `
             --command 'cmake --build build-windows-install-consumer --config Debug --parallel' `
             --command 'ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
 
@@ -1059,7 +1063,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows-release-install-consumer `
             --config Release `
-            --expected-total 1 `
+            --expected-total 2 `
             --output ci-evidence/install-consumer-inventory.json
           cmake --build build-windows-release-install-consumer --config Release --parallel
           ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 `
@@ -1086,7 +1090,7 @@ jobs:
             --command 'ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows-release --config Release --prefix $pwd/build-windows-release/_install' `
             --command 'cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=$pwd/build-windows-release/_install' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 1 --output ci-evidence/install-consumer-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 2 --output ci-evidence/install-consumer-inventory.json' `
             --command 'cmake --build build-windows-release-install-consumer --config Release --parallel' `
             --command 'ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
 

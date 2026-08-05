@@ -115,6 +115,14 @@ void Buffer::retrieve(std::size_t len) {
 }
 
 void Buffer::retrieveUntil(const char* end) {
+    const auto first = reinterpret_cast<std::uintptr_t>(peek());
+    const auto last = reinterpret_cast<std::uintptr_t>(
+        peek() + readableBytes());
+    const auto candidate = reinterpret_cast<std::uintptr_t>(end);
+    if (candidate < first || candidate > last) {
+        throw std::out_of_range(
+            "Buffer retrieveUntil endpoint is outside readable storage");
+    }
     retrieve(static_cast<std::size_t>(end - peek()));
 }
 
@@ -136,6 +144,13 @@ std::string Buffer::retrieveAsString(std::size_t len) {
 }
 
 void Buffer::append(const char* data, std::size_t len) {
+    if (len == 0) {
+        return;
+    }
+    if (data == nullptr) {
+        throw std::invalid_argument(
+            "Buffer append data must be non-null when length is nonzero");
+    }
     ensureWritableBytes(len);
     std::memcpy(beginWrite(), data, len);
     hasWritten(len);
@@ -156,10 +171,17 @@ void Buffer::ensureWritableBytes(std::size_t len) {
 }
 
 void Buffer::hasWritten(std::size_t len) {
+    if (len > writableBytes()) {
+        throw std::out_of_range(
+            "Buffer written length exceeds writable storage");
+    }
     writerIndex_ += len;
 }
 
 ssize_t Buffer::readFd(SocketFd fd, int* savedErrno, std::size_t maxReadBytes) {
+    if (savedErrno == nullptr) {
+        throw std::invalid_argument("Buffer readFd requires savedErrno storage");
+    }
     if (maxReadBytes == 0) {
         return 0;
     }
@@ -204,6 +226,9 @@ ssize_t Buffer::readFd(SocketFd fd, int* savedErrno, std::size_t maxReadBytes) {
 }
 
 ssize_t Buffer::writeFd(SocketFd fd, int* savedErrno) {
+    if (savedErrno == nullptr) {
+        throw std::invalid_argument("Buffer writeFd requires savedErrno storage");
+    }
     const ssize_t n = sockets::write(fd, peek(), readableBytes());
     if (n < 0) {
         *savedErrno = sockets::lastError();

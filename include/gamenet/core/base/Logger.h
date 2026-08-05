@@ -30,7 +30,11 @@ public:
         NUM_LOG_LEVELS,
     };
 
+    // msg denotes a readable [msg, msg + len) range only for the synchronous
+    // callback invocation; callbacks copy it if they need longer retention.
     using OutputFunc = std::function<void(const char* msg, int len)>;
+    // topic and msg are borrowed only for the synchronous callback invocation;
+    // msg spans exactly len readable bytes.
     using TopicOutputFunc = std::function<void(const char* topic, const char* msg, int len)>;
     using FlushFunc = std::function<void()>;
 

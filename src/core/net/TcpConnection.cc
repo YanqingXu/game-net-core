@@ -205,6 +205,10 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
     if (len == 0) {
         return connected() ? TcpSendResult::Accepted : TcpSendResult::Closed;
     }
+    if (data == nullptr) {
+        throw std::invalid_argument(
+            "TcpConnection send data must be non-null when length is nonzero");
+    }
 
     if (!connected()) {
         return TcpSendResult::Closed;
@@ -249,9 +253,9 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
         throw;
     }
 
-    bool queued = false;
+    PostResult queued = PostResult::OwnerUnavailable;
     try {
-        queued = loop_->executor().tryQueue(
+        queued = loop_->executor().post(
             [self, payload = std::move(payload)]() mutable {
                 const auto state =
                     self->state_.load(std::memory_order_relaxed);
@@ -271,9 +275,18 @@ TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
         releaseOutputBytes(len);
         throw;
     }
-    if (!queued) {
+    if (queued != PostResult::Accepted) {
         releaseOutputBytes(len);
-        return TcpSendResult::OwnerUnavailable;
+        switch (queued) {
+        case PostResult::QueueFull:
+            return TcpSendResult::SchedulingQueueFull;
+        case PostResult::Shutdown:
+            return TcpSendResult::OwnerShutdown;
+        case PostResult::OwnerUnavailable:
+            return TcpSendResult::OwnerUnavailable;
+        case PostResult::Accepted:
+            break;
+        }
     }
     return TcpSendResult::Accepted;
 }

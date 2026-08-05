@@ -1,93 +1,78 @@
 #include <gamenet/core/DispatchResult.h>
+#include <gamenet/core/base/Logger.h>
+#include <gamenet/core/base/Timestamp.h>
+#include <gamenet/core/base/noncopyable.h>
+#include <gamenet/core/net/Acceptor.h>
 #include <gamenet/core/net/Buffer.h>
+#include <gamenet/core/net/CallbackException.h>
+#include <gamenet/core/net/Callbacks.h>
+#include <gamenet/core/net/Channel.h>
+#include <gamenet/core/net/Connector.h>
+#include <gamenet/core/net/ConnectorOptions.h>
+#include <gamenet/core/net/DeadlineQueue.h>
+#include <gamenet/core/net/EventLoop.h>
+#include <gamenet/core/net/EventLoopExecutor.h>
+#include <gamenet/core/net/EventLoopMetrics.h>
+#include <gamenet/core/net/EventLoopThread.h>
+#include <gamenet/core/net/EventLoopThreadPool.h>
 #include <gamenet/core/net/InetAddress.h>
+#include <gamenet/core/net/NetworkMemoryRetention.h>
+#include <gamenet/core/net/Poller.h>
+#include <gamenet/core/net/PostResult.h>
+#include <gamenet/core/net/Socket.h>
+#include <gamenet/core/net/SocketTypes.h>
+#include <gamenet/core/net/SocketsOps.h>
+#include <gamenet/core/net/TcpClient.h>
 #include <gamenet/core/net/TcpClientControl.h>
+#include <gamenet/core/net/TcpConnection.h>
 #include <gamenet/core/net/TcpConnectionClose.h>
-#include <gamenet/core/metrics/MetricsHookRecorder.h>
-#include <gamenet/broadcast/BroadcastMetricsRecorder.h>
-#include <gamenet/broadcast/BroadcastTypes.h>
-#include <gamenet/game_logic/GameCommandQueue.h>
-#include <gamenet/game_logic/LogicMetricsRecorder.h>
-#include <gamenet/game_session/PlayerSession.h>
-#include <gamenet/protocol/PacketFramer.h>
-#include <gamenet/transport/TcpTransportEndpoint.h>
+#include <gamenet/core/net/TcpConnectionOptions.h>
+#include <gamenet/core/net/TcpOutputMemoryBudget.h>
+#include <gamenet/core/net/TcpServer.h>
+#include <gamenet/core/net/TimerId.h>
+#include <gamenet/core/net/TimerOptions.h>
+#include <gamenet/core/net/TimerQueue.h>
 
-#include <memory>
+#include <chrono>
 #include <stdexcept>
-#include <string_view>
-#include <utility>
-
-namespace {
-
-class InstalledEndpoint final : public gamenet::transport::TransportEndpoint {
-public:
-    gamenet::transport::TransportSessionId id() const noexcept override { return {17}; }
-    gamenet::net::EventLoopExecutor ownerExecutor() const noexcept override { return {}; }
-    gamenet::transport::EndpointResult send(std::string_view bytes) override {
-        return open_ && bytes == "installed"
-                   ? gamenet::transport::EndpointResult::Accepted
-                   : gamenet::transport::EndpointResult::Closed;
-    }
-    gamenet::transport::EndpointResult close(gamenet::transport::CloseReason) override {
-        open_ = false;
-        return gamenet::transport::EndpointResult::Accepted;
-    }
-    bool isOpen() const noexcept override { return open_; }
-
-private:
-    bool open_{true};
-};
-
-}  // namespace
 
 int main() {
     gamenet::net::Buffer buffer;
     buffer.append("ok", 2);
 
-    gamenet::net::InetAddress address(0);
-    gamenet::net::TcpClientControl detachedControl;
-    gamenet::net::TcpConnectionCloseInfo closeInfo;
-    gamenet::protocol::PacketFramer framer;
-    auto frame = framer.encode("installed");
-    gamenet::game_logic::GameCommandQueue queue;
-    gamenet::game_logic::GameCommand command;
-    command.payload = "command";
-    std::shared_ptr<const gamenet::game_session::PlayerSession> sessionView;
-    gamenet::DispatchResult dispatchResult = gamenet::DispatchResult::Accepted;
-    gamenet::broadcast::BroadcastMetric metric;
-    auto metrics = std::make_shared<gamenet::metrics::InMemoryMetricsExporter>();
-    auto connectorMetrics = gamenet::metrics::MetricsHookRecorder(metrics).makeConnectorCallback();
-    connectorMetrics(address, gamenet::net::ConnectorEvent::ConnectSuccess);
-    auto logicMetrics = gamenet::game_logic::makeLogicMetricsCallback(metrics);
-    logicMetrics({});
-    auto broadcastMetrics = gamenet::broadcast::makeBroadcastMetricsCallback(metrics);
-    broadcastMetrics(metric);
-    auto endpoint = std::make_shared<InstalledEndpoint>();
-    gamenet::broadcast::BroadcastTarget target(endpoint);
+    gamenet::net::EventLoop loop;
+    gamenet::net::DeadlineQueue deadlines(&loop);
+    const auto now = gamenet::base::now();
+    const auto token = deadlines.schedule(7, now - std::chrono::seconds(1));
+    const auto expired = deadlines.advance(now);
+    const auto timerAdmission =
+        loop.tryRunAfter(std::chrono::hours(1), [] {});
+    const auto timerCancellation = loop.tryCancel(timerAdmission.timerId);
 
-    bool rejectedNullTcpConnection = false;
-    try {
-        gamenet::transport::TcpTransportEndpoint invalidTcpEndpoint({99}, {});
-        (void)invalidTcpEndpoint;
-    } catch (const std::invalid_argument&) {
-        rejectedNullTcpConnection = true;
-    }
+    gamenet::net::TcpOutputMemoryBudget outputBudget;
+    const auto outputSnapshot = outputBudget.snapshot();
+    const auto retained =
+        gamenet::net::networkFixedStorageRetentionSnapshot();
+    const gamenet::net::RepeatingTimerOptions timerOptions{};
+    const gamenet::net::TcpConnectionBackpressureOptions connectionOptions{};
+    const gamenet::net::EventLoopCallbackException callbackFailure{};
+    const gamenet::net::TcpConnectionCloseInfo closeInfo{};
+    const gamenet::net::TcpClientControl detachedControl;
+    const auto dispatch =
+        gamenet::dispatchResult(gamenet::net::PostResult::Accepted);
 
-    if (buffer.readableBytes() != 2 || address.port() != 0 || !frame ||
-        queue.submit(std::move(command)) != gamenet::game_logic::SubmitResult::Accepted ||
-        sessionView ||
-        dispatchResult != gamenet::DispatchResult::Accepted ||
-        metric.reason != gamenet::broadcast::BroadcastReason::None ||
-        !target.eligible() ||
-        target.id().value != 17 ||
-        endpoint->send("installed") != gamenet::transport::EndpointResult::Accepted ||
+    if (buffer.retrieveAllAsString() != "ok" || !token.valid() ||
+        expired.expired.size() != 1 || outputSnapshot.pendingBytes != 0 ||
+        retained.peakTotalRetainedBytes < retained.totalRetainedBytes ||
+        timerAdmission.result != gamenet::net::PostResult::Accepted ||
+        !timerAdmission.timerId.valid() ||
+        timerCancellation != gamenet::net::PostResult::Accepted ||
+        timerOptions.mode != gamenet::net::RepeatingTimerMode::FixedDelay ||
+        connectionOptions.hardLimitBytes == 0 || callbackFailure.exception ||
+        closeInfo.reason != gamenet::net::TcpConnectionCloseReason::InternalError ||
         detachedControl.available() ||
         detachedControl.tryStop() != gamenet::net::PostResult::OwnerUnavailable ||
-        closeInfo.reason != gamenet::net::TcpConnectionCloseReason::InternalError ||
-        metrics->counterValue("gamenet.net.connector.connect_success") != 1 ||
-        metrics->counterValue("gamenet.game_logic.tick_completed") != 1 ||
-        metrics->counterValue("gamenet.broadcast.event.routed") != 1 ||
-        !rejectedNullTcpConnection) {
+        dispatch != gamenet::DispatchResult::Accepted) {
         return 1;
     }
 

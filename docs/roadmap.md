@@ -5,6 +5,25 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
+## Current Roadmap Checkpoint — 2026-08-05
+
+- The reviewed local implementation checkpoint is
+  `main@12adb00f6934e50994e755125542a1f6f2682116`; at audit time the local
+  `origin/main` reference was `d31f7538dc8fb984696008ed93b10c3c47afc604`.
+- M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
+  and its EventLoopThreadPool negative contracts are committed at `12adb00`.
+- The current inventory is 120 CTest tests: 8 unit, 99 contract, and 13
+  integration, with 93 threading and 98 lifecycle labels. The `12adb00` tree
+  passed the local Windows/IOCP Release 120/120 gate, all 36 repository/API/CI
+  guards, and 150/150 focused M3-R2 repetitions.
+- No final `v0.3.0-production-candidate` is frozen. Earlier benchmark,
+  capacity, endurance, and candidate runs remain historical infrastructure or
+  superseded-candidate evidence and do not qualify the eventual candidate.
+- API-R1 is complete: the independent reviewer closed all initial blockers and
+  returned `APPROVE`; historical and strict same-line zero-diff artifacts are
+  archived. REL-C1 candidate freeze is the next task, followed by same-SHA
+  evidence.
+
 ## Phase 1: Project Skeleton
 
 - Initialize CMake, README, repository rules, and documentation structure.
@@ -25,7 +44,7 @@ See `migration_status.md` for the current checked state of these phases.
 
 ## Phase 3.5: Core Preview Hardening
 
-Completed in the current worktree:
+Historical closure recorded for `v0.1.0-core-preview`:
 
 - make `TcpConnection::connected()` / `disconnected()` atomic snapshot observers;
 - make TcpConnection callback, context, and socket-option mutation owner-loop-only;
@@ -74,7 +93,8 @@ The tag-only release record and limitations are preserved in
 
 ## Phase 4: Higher-level Modules
 
-The Phase 4 foundation and the audit remediation are implemented locally with
+The Phase 4 foundation and audit remediation were published in
+`v0.2.0-phase4-preview`, with
 each module behind its own intent, invariant, contract, and test gate:
 
 - [x] Add bounded length-delimited PacketFramer parsing, continuation budgets,
@@ -169,7 +189,7 @@ separate intent promotion.
 
 ## Phase 5: Production Hardening
 
-In progress after the Phase 4 Preview:
+Implementation hardening after the Phase 4 Preview:
 
 - [x] Suppress Linux per-write `SIGPIPE` without changing process-global signal
   disposition; peer-close write failure remains an explicit connection error.
@@ -185,8 +205,15 @@ In progress after the Phase 4 Preview:
 - [x] Define callback exception containment and connection/server failure policy.
 - [x] Add connection admission limits, unauthenticated timeout, and basic abuse
   controls.
-- [x] Re-run the full Linux/Windows sanitizer, long-soak, benchmark, package,
-  and evidence gates for one frozen production-hardening candidate.
+- [x] Validate the earlier frozen production-hardening candidate `be749ad`
+  through Linux/Windows sanitizer, long-soak, benchmark, package, and evidence
+  gates. This is historical evidence superseded by later runtime changes.
+- [x] Close M3-R1 accepted-fd/TcpConnection construction ownership at
+  independently reviewed checkpoint `95a6ab5`.
+- [x] Close M3-R2 EventLoopThreadPool configuration/state rejection locally at
+  committed implementation checkpoint `12adb00`.
+- [ ] Freeze the post-M3-R2 candidate and regenerate clean, same-SHA platform,
+  sanitizer, package, performance, capacity, and endurance evidence.
 
 ## Phase 6: Production Candidate
 
@@ -201,7 +228,11 @@ In progress after production hardening:
   evidence for the fixed Core and Phase 4 Release scenarios.
 - [x] Add structured fault-injection coverage and validate the real 24-hour
   candidate plus 72-hour paired Linux endurance infrastructure at `b344318`.
-- [ ] Complete independent maintainer review of the API diff, performance
-  validator/budgets, and release/endurance tooling on the frozen candidate.
+- [x] Synchronize roadmap, assessment, plan, README, and migration status at
+  GOV-R2 without promoting historical evidence to the current checkpoint.
+- [x] Complete independent stable Core API review, archive the historical and
+  same-line diffs, and enforce zero stable-surface drift (API-R1).
+- [ ] Requalify performance validators/budgets and release/endurance tooling on
+  the single frozen candidate SHA.
 - [ ] Freeze one v0.3.0 production candidate, complete Linux/Windows evidence,
   publish the release, and merge the validated candidate to `main`.

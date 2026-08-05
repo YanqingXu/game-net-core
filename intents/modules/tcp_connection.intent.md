@@ -180,6 +180,8 @@ inline inside TcpConnection.
 - cross-thread send copies the admitted bytes into one immutable payload before
   returning Accepted; the executor moves that same allocation into the owner-
   loop Windows segment queue without another complete-payload copy
+- cross-thread `trySend()` preserves scheduler rejection identity: normal
+  functor saturation, sealed admission, and expired owner are distinct results
 - hierarchical output admission is cross-thread-safe atomic value accounting;
   it does not mutate Channel, Buffer, segment, server-map, or EventLoop state
   and does not invoke callbacks
@@ -261,6 +263,8 @@ inline inside TcpConnection.
   loop/server/global overload results for the first rejecting shared scope,
   before queue/buffer growth; the legacy `send()` API uses the same bounded
   admission path
+- pointer send requires a readable `[data, data + len)` range when `len > 0`;
+  zero length copies no memory and permits null
 - reaching the configured input hard limit after message dispatch is treated
   as connection overload and converges on the existing close path
 - helper-component failure must still converge on TcpConnection's existing error/close model

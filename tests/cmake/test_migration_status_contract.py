@@ -90,10 +90,19 @@ def verify_inventory_tamper_detection(
 def main() -> None:
     repo_root = REPO_ROOT
     migration_status = repo_root / "docs" / "migration_status.md"
+    roadmap = repo_root / "docs" / "roadmap.md"
+    assessment = repo_root / "assessment.md"
+    plan = repo_root / "plan.md"
+    readme = repo_root / "README.md"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
+    api_review = repo_root / "docs" / "reviews" / "api-r1-stable-core-review.md"
+    historical_api_diff = repo_root / "docs" / "reviews" / "api-r1-public-api-diff.json"
+    compatibility_api_diff = (
+        repo_root / "docs" / "reviews" / "api-r1-public-api-compatibility-diff.json"
+    )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     configured_tests = re.findall(
@@ -108,12 +117,84 @@ def main() -> None:
     assert configured_test_count > 0, "tests/CMakeLists.txt should configure CTest tests"
 
     status_text = migration_status.read_text(encoding="utf-8")
+    roadmap_text = roadmap.read_text(encoding="utf-8")
+    assessment_text = assessment.read_text(encoding="utf-8")
+    plan_text = plan.read_text(encoding="utf-8")
+    readme_text = readme.read_text(encoding="utf-8")
+    api_review_text = api_review.read_text(encoding="utf-8")
+    normalized_roadmap_text = " ".join(roadmap_text.split())
+    normalized_plan_text = " ".join(plan_text.split())
     intent_inventory = build_inventory(repo_root)
     verify_current_intent_inventory(status_text, intent_inventory, migration_status)
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-07-27", migration_status)
+    require(status_text, "Current production-roadmap audit: 2026-08-05", migration_status)
+    implementation_checkpoint = "12adb00f6934e50994e755125542a1f6f2682116"
+    upstream_checkpoint = "d31f7538dc8fb984696008ed93b10c3c47afc604"
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+    ):
+        require(text, implementation_checkpoint, source)
+        require(text, upstream_checkpoint, source)
+        require(text, "API-R1", source)
+        require(text, "REL-C1", source)
+    require(readme_text, "12adb00", readme)
+    require(readme_text, "API-R1", readme)
+    require(readme_text, "REL-C1", readme)
+    require(
+        status_text,
+        "Current final v0.3 production candidate: none",
+        migration_status,
+    )
+    require(
+        normalized_roadmap_text,
+        "No final `v0.3.0-production-candidate` is frozen",
+        roadmap,
+    )
+    require(
+        assessment_text,
+        "当前冻结的 v0.3 最终候选：无",
+        assessment,
+    )
+    require(
+        normalized_plan_text,
+        "当前无冻结的 v0.3 最终候选",
+        plan,
+    )
+    require(readme_text, "No final v0.3 candidate is frozen", readme)
+    require(assessment_text, "P2-02 | P2（已关闭）", assessment)
+    require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
+    require(plan_text, "**REL-C1：冻结唯一 v0.3 候选 SHA。**", plan)
+    require(assessment_text, "P1-04 | P1（已关闭）", assessment)
+    require(plan_text, "P1-04 | API-R1（已关闭）", plan)
+    require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)
+    require(api_review_text, "Status: `approved-for-candidate-freeze`", api_review)
+    require(api_review_text, "/root/api_r1_independent_review", api_review)
+    require(api_review_text, "Changed stable-header fingerprints | 19", api_review)
+    assert historical_api_diff.exists(), historical_api_diff
+    assert compatibility_api_diff.exists(), compatibility_api_diff
+    assert "API-R1 stable-surface review is the next" not in readme_text
+    assert "API-R1 is next" not in status_text
+    require(
+        normalized_roadmap_text,
+        f"{configured_test_count} CTest tests: {unit_count} unit, "
+        f"{contract_count} contract, and {integration_count} integration",
+        roadmap,
+    )
+    require(
+        assessment_text,
+        f"| CTest tests | {configured_test_count} |",
+        assessment,
+    )
+    require(
+        normalized_plan_text,
+        f"测试清单统一为 {configured_test_count}（{unit_count}/{contract_count}/{integration_count}",
+        plan,
+    )
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(
@@ -130,7 +211,7 @@ def main() -> None:
     assert "real Linux/epoll duration evidence awaits" not in status_text
     require(status_text, f"{configured_test_count} configured CTest tests", migration_status)
     require(
-        status_text,
+        normalized_status_text,
         f"{unit_count} unit tests, {contract_count} contract tests, and {integration_count} integration test",
         migration_status,
     )

@@ -4,6 +4,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 
 #include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
+#include "../../../src/core/net/detail/EventLoopIocpAssociationHarness.h"
 #include "support/TestAssert.h"
 
 #include <array>
@@ -153,7 +154,8 @@ void testStaleRepeatedRemoveCannotEraseSameFdReplacement() {
     // A Windows socket remains associated with its original IOCP after Channel
     // removal. Preserve that known association when the same live socket is
     // transferred to the replacement Channel.
-    loop.preserveSocketAssociation(sockets.first);
+    gamenet::net::detail::EventLoopIocpAssociationHarness::
+        preserveSocketAssociation(loop, sockets.first);
 #endif
     replacement.enableReading();
     GAMENET_TEST_ASSERT(loop.hasChannel(&replacement));
@@ -194,7 +196,8 @@ void testRemoveReregisterStopsRemainingOldReadinessCallbacks() {
         channel.disableAll();
         channel.remove();
 #ifdef _WIN32
-        loop.preserveSocketAssociation(sockets.first);
+        gamenet::net::detail::EventLoopIocpAssociationHarness::
+            preserveSocketAssociation(loop, sockets.first);
 #endif
         channel.enableReading();
     });

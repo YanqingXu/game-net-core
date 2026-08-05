@@ -178,10 +178,10 @@ TcpServer::~TcpServer() {
         });
     }
     lifetimeToken_.reset();
-    acceptor_->setNewConnectionCallback({});
     if (acceptor_->listening()) {
         acceptor_->stop();
     }
+    acceptor_->setNewConnectionCallback({});
     if (!forceCloseAllConnections()) {
         threadPool_->stop();
     }
@@ -202,56 +202,67 @@ TcpServer::~TcpServer() {
     }
 }
 
+void TcpServer::assertConfigurable(const char* operation) const {
+    loop_->assertInLoopThread();
+    if (started_.load(std::memory_order_relaxed)) {
+        throw std::logic_error(
+            std::string("TcpServer ") + operation +
+            " must be configured before start");
+    }
+}
+
 void TcpServer::setThreadNum(int numThreads) {
+    assertConfigurable("thread count");
     threadPool_->setThreadNum(numThreads);
 }
 
 void TcpServer::setLoopSelectionPolicy(EventLoopSelectionPolicy policy) {
+    assertConfigurable("loop selection policy");
     threadPool_->setLoopSelectionPolicy(policy);
 }
 
 void TcpServer::setThreadInitCallback(ThreadInitCallback cb) {
+    assertConfigurable("thread-init callback");
     threadInitCallback_ = std::move(cb);
 }
 
 void TcpServer::setConnectionCallback(ConnectionCallback cb) {
+    assertConfigurable("connection callback");
     connectionCallback_ = std::move(cb);
 }
 
 void TcpServer::setMessageCallback(MessageCallback cb) {
+    assertConfigurable("message callback");
     messageCallback_ = std::move(cb);
 }
 
 void TcpServer::setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t highWaterMark) {
+    assertConfigurable("high-water callback");
     highWaterMarkCallback_ = std::move(cb);
     highWaterMark_ = highWaterMark;
 }
 
 void TcpServer::setWriteCompleteCallback(WriteCompleteCallback cb) {
+    assertConfigurable("write-complete callback");
     writeCompleteCallback_ = std::move(cb);
 }
 
 void TcpServer::setCloseInfoCallback(CloseInfoCallback cb) {
+    assertConfigurable("close-info callback");
     closeInfoCallback_ = std::move(cb);
 }
 
 void TcpServer::setConnectionBackpressureOptions(
     TcpConnectionBackpressureOptions options) {
+    assertConfigurable("backpressure options");
     options.validate();
-    if (started_.load(std::memory_order_relaxed)) {
-        throw std::logic_error(
-            "TcpServer backpressure options must be configured before start");
-    }
     backpressureOptions_ = options;
 }
 
 void TcpServer::setOutputMemoryOptions(
     TcpServerOutputMemoryOptions options) {
+    assertConfigurable("output-memory options");
     options.validate();
-    if (started_.load(std::memory_order_relaxed)) {
-        throw std::logic_error(
-            "TcpServer output-memory options must be configured before start");
-    }
     auto serverBudget =
         std::make_shared<TcpOutputMemoryBudget>(options.server);
     outputMemoryOptions_ = std::move(options);
@@ -259,45 +270,38 @@ void TcpServer::setOutputMemoryOptions(
 }
 
 void TcpServer::setAcceptErrorCallback(AcceptorErrorCallback cb) {
+    assertConfigurable("accept-error callback");
     acceptErrorCallback_ = std::move(cb);
     acceptor_->setErrorCallback(acceptErrorCallback_);
 }
 
 void TcpServer::setIocpAcceptDepth(std::size_t depth) {
-    if (started_.load(std::memory_order_relaxed)) {
-        throw std::logic_error(
-            "TcpServer IOCP accept depth must be configured before start");
-    }
+    assertConfigurable("IOCP accept depth");
     acceptor_->setIocpAcceptDepth(depth);
 }
 
 void TcpServer::setCallbackExceptionHandler(
     TcpConnectionCallbackExceptionHandler cb) {
+    assertConfigurable("callback exception handler");
     callbackExceptionHandler_ = std::move(cb);
 }
 
 void TcpServer::setAdmissionOptions(TcpServerAdmissionOptions options) {
+    assertConfigurable("admission options");
     options.validate();
-    if (started_.load(std::memory_order_relaxed)) {
-        throw std::logic_error(
-            "TcpServer admission options must be configured before start");
-    }
     admissionOptions_ = options;
 }
 
 void TcpServer::setAdmissionMetricCallback(
     TcpServerAdmissionMetricCallback cb) {
-    if (started_.load(std::memory_order_relaxed)) {
-        throw std::logic_error(
-            "TcpServer admission metric callback must be configured before start");
-    }
+    assertConfigurable("admission metric callback");
     admissionMetricCallback_ = std::move(cb);
 }
 
-bool TcpServer::tryMarkConnectionAuthenticated(
-    const TcpConnectionPtr& connection) {
+PostResult TcpServer::tryMarkConnectionAuthenticated(
+    const TcpConnectionPtr& connection) noexcept {
     if (!connection) {
-        return false;
+        return PostResult::OwnerUnavailable;
     }
 
     std::weak_ptr<void> lifetime = lifetimeToken_;
@@ -308,9 +312,9 @@ bool TcpServer::tryMarkConnectionAuthenticated(
     };
     if (loop_->isInLoopThread()) {
         mark();
-        return true;
+        return PostResult::Accepted;
     }
-    return loop_->executor().tryQueue(std::move(mark));
+    return loop_->executor().post(std::move(mark));
 }
 
 TcpServerAdmissionStats TcpServer::admissionStats() const noexcept {
@@ -365,6 +369,7 @@ std::size_t TcpServer::connectionCount() const {
 }
 
 void TcpServer::start() {
+    loop_->assertInLoopThread();
     bool expected = false;
     if (!started_.compare_exchange_strong(expected, true)) {
         return;
@@ -607,10 +612,10 @@ void TcpServer::beginAggregateStopInLoop(
     }
 
     stopped_ = true;
-    acceptor_->setNewConnectionCallback({});
     if (acceptor_->listening()) {
         acceptor_->stop();
     }
+    acceptor_->setNewConnectionCallback({});
 
     if (nextStopGeneration_ == 0) {
         throw std::overflow_error(

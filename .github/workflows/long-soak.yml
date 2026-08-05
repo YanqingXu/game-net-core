@@ -361,6 +361,10 @@ jobs:
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tools/compare_public_api_manifest.py \
+            --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json \
+            --fail-on-compatibility-decision \
+            --fail-on-stable-surface-review \
+            --compatibility-output ci-evidence/public-api-compatibility-diff.json \
             --output ci-evidence/public-api-diff.json
           python3 tests/ci/test_performance_regression.py
           python3 tests/ci/test_core_capacity_matrix.py
@@ -450,7 +454,7 @@ jobs:
             "-DCMAKE_PREFIX_PATH=${PWD}/${GAMENET_BUILD_DIR}/_install"
           python3 tools/verify_ctest_inventory.py \
             --test-dir "${GAMENET_CONSUMER_DIR}" \
-            --expected-total 1 \
+            --expected-total 2 \
             --output ci-evidence/install-consumer-inventory.json
           cmake --build "${GAMENET_CONSUMER_DIR}" --parallel 1
           ctest --test-dir "${GAMENET_CONSUMER_DIR}" \

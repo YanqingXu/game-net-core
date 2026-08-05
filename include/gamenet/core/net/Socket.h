@@ -25,6 +25,10 @@ public:
     bool tryBindAddress(const InetAddress& localAddr, int* error = nullptr);
     void listen();
     bool tryListen(int* error = nullptr);
+    // On success, returns a new descriptor uniquely owned by the caller, who
+    // must close it or transfer it into Socket/TcpConnection RAII ownership.
+    // peerAddr is borrowed writable output storage for this call and may be
+    // null. Failure returns kInvalidSocket and transfers no ownership.
     SocketFd accept(InetAddress* peerAddr);
     void shutdownWrite();
 

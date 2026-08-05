@@ -26,6 +26,8 @@ struct EventLoopMetricSample {
     using Duration = std::chrono::steady_clock::duration;
 
     EventLoopMetricEvent event{EventLoopMetricEvent::PendingFunctorsDrained};
+    // Borrowed only for the synchronous metric callback. It must not be
+    // retained or dereferenced after callback return.
     EventLoop* loop{nullptr};
     std::size_t pendingFunctors{0};
     std::size_t pendingFunctorPeak{0};

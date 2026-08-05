@@ -252,6 +252,8 @@ Typical API direction:
 - runEvery(Duration, Functor)
 - runEvery(Duration, Functor, RepeatingTimerOptions)
 - cancel(TimerId)
+- tryRunAt/tryRunAfter/tryRunEvery -> TimerScheduleResult
+- tryCancel(TimerId) -> PostResult
 - updateChannel(Channel*)
 - removeChannel(Channel*)
 - assertInLoopThread()
@@ -268,7 +270,14 @@ Additional APIs can be added later for richer timer and coroutine features.
 - cross-thread runInLoop behaves like queued scheduling
 - queueInLoop enqueues within the normal-plus-reserved hard capacity and throws
   explicitly at saturation
-- tryQueueInLoop and EventLoopExecutor return false at normal-capacity saturation
+- tryQueueInLoop returns false for an empty callback, normal-capacity
+  saturation, or sealed loop admission. EventLoopExecutor::post is the typed
+  cross-thread surface that distinguishes QueueFull, Shutdown, and
+  OwnerUnavailable
+- typed timer admission uses the same executor close linearization. Accepted
+  commits registration/cancellation work to the owner; QueueFull, Shutdown,
+  and OwnerUnavailable return no valid newly scheduled TimerId. Outstanding
+  future timers are canceled rather than awaited when EventLoop shuts down
 - control-source registration and unregistration are owner-thread-only;
   `notify()` is thread-safe and non-throwing
 - lifecycle attach/detach are owner-thread-only; `signal()` is thread-safe,
@@ -307,6 +316,8 @@ EventLoop should explicitly handle:
   loop quit rather than recursing through the same handler
 - quit request while processing current iteration
 - queued functors that were already accepted before loop exit
+- direct `tryQueueInLoop()` after quit has sealed admission returns false and
+  cannot create work that will never execute
 - executor `tryQueue` after admission close or destruction returns false and
   never dereferences the expired EventLoop
 - typed executor `post` after quit returns `PostResult::Shutdown`; a post that
@@ -314,7 +325,11 @@ EventLoop should explicitly handle:
 - a `quit()` arriving after final drain observes Shutdown, leaves
   `drainingAccepted` false, and cannot make `isInOwnerThread()` true again
 - pending-functor saturation is explicit: capacity-aware APIs return false,
-  while the legacy API throws `std::overflow_error`
+  while legacy queueInLoop throws `std::overflow_error` for capacity and
+  `std::logic_error` after admission closes
+- typed timer admission distinguishes QueueFull, Shutdown, and
+  OwnerUnavailable; legacy timer creation maps those results to deterministic
+  exceptions, while legacy cancellation intentionally discards the result
 - control-source registration capacity exhaustion fails before the loop starts;
   an already registered source never reports QueueFull at runtime
 - `PostResult::Accepted` means the source bit is either newly pending or safely
@@ -380,6 +395,9 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   operations during the final drain, while new submissions are rejected
 - repeated `quit()` after loop exit does not resurrect executor availability or
   final-drain owner identity
+- timer creation/cancellation racing quit returns one typed admission result;
+  rejected creation has an invalid TimerId and direct TimerQueue paths cannot
+  bypass option/interval validation
 - normal-plus-reserved saturation does not reject a registered control source
 - 10,000 notifications for one source coalesce into one pending source
 - registration cannot exceed `maxControlSources`

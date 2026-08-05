@@ -4,13 +4,22 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-07-27
+Current production-roadmap audit: 2026-08-05
 
-Current local M3 implementation checkpoint: 2026-07-29
+Current local implementation checkpoint:
+`main@12adb00f6934e50994e755125542a1f6f2682116` (2026-08-05)
 
-Current M3-R1 independent-review checkpoint: 2026-08-03
+Upstream reference at audit time:
+`origin/main@d31f7538dc8fb984696008ed93b10c3c47afc604`
 
-Current M3-R2 local contract checkpoint: 2026-08-05
+Current final v0.3 production candidate: none; candidate freeze is pending
+
+Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
+
+Current M3-R2 committed contract checkpoint: `12adb00` (2026-08-05)
+
+Current API-R1 surface decision: `APPROVE` (2026-08-05); reviewed snapshot is
+`UNBOUND-REL-C1` until a final candidate SHA is frozen
 
 ## Current Task Goal
 
@@ -21,6 +30,27 @@ The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
+
+The authoritative current implementation checkpoint is `12adb00`. M3-R1 is
+closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
+`12adb00`. The current inventory is 120 configured CTest tests: 8 unit tests,
+99 contract tests, and 13 integration tests, with 93 threading and 98 lifecycle
+labels. Local Windows/IOCP Release passed 120/120, the three focused M3-R2
+contracts passed 150/150 combined repetitions, and all 36 repository/API/CI
+guards passed. API-R1 independently approved the remediated stable Core surface:
+focused contracts passed 8/8, fresh install consumers passed 2/2, and the 0.3
+reviewed-baseline diff is strictly empty. No final v0.3 candidate is frozen;
+REL-C1 candidate freeze is the next roadmap task.
+
+Direct closure contracts are
+[`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
+[`test_event_loop_thread_pool.cpp`](../tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp),
+and [`test_tcp_server_contract.cpp`](../tests/contract/tcp_server/test_tcp_server_contract.cpp).
+
+All candidate, benchmark, capacity, and endurance records below that name
+`be749ad`, `5f926f3`, or `b344318` are historical evidence. They validate the
+tooling or an earlier code checkpoint, not `12adb00`; final promotion requires
+a newly frozen SHA and complete same-SHA evidence.
 
 The post-Preview production-hardening line is now active. Its first completed
 contracts suppress Linux per-write `SIGPIPE`, bound per-connection admitted
@@ -37,7 +67,7 @@ TcpServer now optionally enforces global/per-peer connection limits, a bounded
 per-peer fixed-window attempt rate, and base-loop unauthenticated deadlines;
 all are disabled by default and expose distinct cumulative metrics.
 
-The current M1 worktree closes the remaining local runtime lifecycle slices in
+The historical M1 worktree closed the local runtime lifecycle slices in
 dependency order. Each EventLoop owns a dynamic lifecycle hub with allocation-
 free cross-thread signals and generation-safe detach; loop shutdown now moves
 through quiescing and final draining and, on IOCP, waits for lifecycle and
@@ -48,7 +78,7 @@ and join handshake. TcpClient exposes a detached-lifetime-safe
 TcpClientControl mailbox. These are local implementation and contract results,
 not final frozen-SHA release evidence.
 
-The current M2 worktree aligns the provisional Phase 4/5 upper layers with
+The historical M2 worktree aligned the provisional Phase 4/5 upper layers with
 those Core contracts. Session and Pipeline handoffs now return typed terminal
 results, exact session-binding generations suppress superseded commands and
 outputs, the Pipeline applies Core admission/backpressure/authentication and
@@ -60,7 +90,7 @@ full-expiry cleanup at 10k/100k/1M scales before any deadline-index redesign.
 These remain worktree results until final Linux ASan/UBSan, TSan,
 cross-platform, and frozen-SHA evidence is attached.
 
-The current M3 worktree starts PR-G with one bounded Windows IOCP slice.
+The historical initial M3 worktree started PR-G with one bounded Windows IOCP slice.
 `IocpPoller` now drains `GetQueuedCompletionStatusEx` in fixed batches of at
 most 64 packets. Wakeup packets do not truncate real I/O already present in
 the batch, different Channels may be published together, and extra
@@ -99,8 +129,8 @@ passed focused 50/50 and full 120/120. Same-SHA GitHub run `30813037693`, attemp
 aggregate artifact remained unavailable (0 retained artifacts), so P1-02
 release-evidence work remains open even though M3-R1/P1-01 is closed.
 
-M3-R2 closes the EventLoopThreadPool configuration-state contract in the
-current worktree. The explicit lifecycle is `Idle -> Started -> Idle`:
+M3-R2 closes the EventLoopThreadPool configuration-state contract at
+checkpoint `12adb00`. The explicit lifecycle is `Idle -> Started -> Idle`:
 negative thread counts, non-base-loop configuration, configuration after
 start, and repeated start all fail before mutation; idle stop remains
 idempotent, and stop followed by reconfiguration/restart remains legal.
@@ -145,8 +175,8 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
-| 5 | Production hardening | Implementation complete and frozen candidate `be749adc4bce7e1771b84c77c42bf080625805e9` validated: Linux peer-close writes no longer inherit process-terminating `SIGPIPE`; connection input/output admission has finite hard limits plus high/low-water read throttling; EventLoop admission and per-iteration drain are bounded; graceful server drain is completion-aware with timeout force-close; recoverable listener/connection setup errors use explicit results and accept Retry/Stop policy; asynchronous callback exceptions are contained and connection-local business failures preserve server availability; TcpServer has optional global/per-peer connection caps, bounded fixed-window attempt limiting, and unauthenticated deadlines |
-| 6 | Production candidate | Infrastructure validated: API manifest/diff, provisional metrics, same-runner regression tooling, fault injection, and real 24/72-hour Linux endurance all exist; current M0/M1 runtime and contract work means no final candidate SHA is frozen, independent maintainer API/performance/release-tool review remains required, and release evidence must be regenerated after code freeze |
+| 5 | Production hardening | Current planned runtime scope is implemented through M3-R1/M3-R2 at `12adb00`; the earlier frozen candidate `be749ad` is historical because later runtime changes superseded its evidence. A post-M3-R2 candidate and full same-SHA requalification remain open |
+| 6 | Production candidate | Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance. GOV-R2 and API-R1 are closed; REL-C1 is next. No final candidate SHA is frozen, and release evidence must be regenerated after freeze |
 
 ## Current Intent Inventory
 
@@ -159,7 +189,11 @@ the source of truth.
 | ---: | ---: | ---: | ---: | ---: |
 | 61 | 30 | 20 | 11 | 138 |
 
-## Production-Hardening Worktree State
+## Historical Production-Hardening Evidence
+
+The entries in this section are chronological implementation and validation
+records. They are not current-candidate claims unless the record explicitly
+names the same SHA as the authoritative checkpoint above.
 
 - The EventLoopThreadPool configuration-state contract now enforces
   non-negative thread counts, base-loop ownership, immutable started
@@ -310,7 +344,7 @@ the source of truth.
   labels, repeat count, timeout, command, and result logs.
 - All seven fixed Windows Release IOCP core/Phase-4 benchmark scenarios return
   their expected schema, platform/backend/build identity, and `status: ok`.
-- Frozen production-hardening candidate
+- Historical frozen production-hardening candidate
   `be749adc4bce7e1771b84c77c42bf080625805e9` is pushed on
   `codex/production-hardening`. Workflow-dispatch `ci` run `29791363106`
   passed all six producers and the aggregate evidence gate: Linux CMake,
@@ -331,7 +365,16 @@ the source of truth.
 
 ## Verification State
 
-The current worktree has 120 configured CTest tests: 8 unit tests, 99 contract tests, and 13 integration tests. Phase 4 coverage includes bounded
+The `12adb00` implementation checkpoint has 120 configured CTest tests: 8 unit
+tests, 99 contract tests, and 13 integration tests. Its labels include 93
+threading, 98 lifecycle, 7 game-pipeline, and 5 broadcast tests. Windows/IOCP
+Release passed 120/120 in 52.88 seconds, the EventLoopThreadPool contract,
+restart soak, and TcpServer contract each passed 50 repetitions, and all 36
+repository/API/CI guards passed. This was an incremental local Release gate;
+it does not substitute for clean Debug, Linux/epoll, sanitizer, package, or
+remote same-SHA qualification.
+
+Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race
 contracts, seven Pipeline integrations, and five Broadcast
 contracts/integrations. The current-roadmap additions cover the EventLoop
@@ -342,6 +385,10 @@ also includes EventLoop
 control-lane saturation, optional TcpConnection notification saturation,
 Connector/TcpClient typed admission and generation races, and IOCP synchronous
 submission errors.
+
+The remaining entries in this section are dated historical verification
+records. Their counts and SHAs describe the named checkpoint, not the current
+inventory or a final v0.3 candidate.
 
 On 2026-07-29, the current Windows MSVC worktree passed a full Debug build and
 114/114 CTests; the IOCP segmented/partial-write contracts passed 20/20 focused

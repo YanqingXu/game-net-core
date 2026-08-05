@@ -47,6 +47,8 @@ enum class TcpServerStopOutcome {
 struct TcpServerStopOptions {
     std::chrono::milliseconds drainTimeout{5000};
 
+    // drainTimeout must be non-negative; invalid values throw
+    // std::invalid_argument.
     void validate() const;
 };
 
@@ -71,6 +73,9 @@ struct TcpServerAdmissionOptions {
     std::chrono::milliseconds authenticationDeadlineResolution{10};
     std::size_t maxAuthenticationTimeoutsPerAdvance{1024};
 
+    // Enabled rate limiting requires a positive window and peer-table
+    // capacity. Authentication timeout is non-negative; deadline resolution
+    // and per-advance budget are positive. Violations throw invalid_argument.
     void validate() const;
 };
 
@@ -118,6 +123,7 @@ struct TcpServerOutputMemoryOptions {
     // Optional process/global scope shared by one or more TcpServer objects.
     std::shared_ptr<TcpOutputMemoryBudget> global;
 
+    // Validates both finite loop/server budgets; configure before start.
     void validate() const;
 };
 
@@ -129,11 +135,21 @@ struct TcpServerOutputMemoryStats {
 
 class TcpServer : private gamenet::base::noncopyable {
 public:
+    // loop must be non-null and must outlive the server. Construction and
+    // destruction are base-loop-only.
     TcpServer(EventLoop* loop, const InetAddress& listenAddr, std::string name, bool reusePort = true);
+    // Destruction is base-loop-only. Connection, message, water-mark, write,
+    // close-info and admission callbacks run on their documented owner loops,
+    // may re-enter lifecycle APIs, and follow the installed exception policy.
     ~TcpServer();
 
+    // All setters are base-loop-only setup operations and throw
+    // std::logic_error after start. Option validation throws
+    // std::invalid_argument before state mutation.
     void setThreadNum(int numThreads);
     void setLoopSelectionPolicy(EventLoopSelectionPolicy policy);
+    // Uses ThreadInitCallback's worker-handshake/zero-worker synchronous
+    // contract; an exception propagates from start() after pool rollback.
     void setThreadInitCallback(ThreadInitCallback cb);
     void setConnectionCallback(ConnectionCallback cb);
     void setMessageCallback(MessageCallback cb);
@@ -142,23 +158,33 @@ public:
     void setCloseInfoCallback(CloseInfoCallback cb);
     void setConnectionBackpressureOptions(TcpConnectionBackpressureOptions options);
     void setOutputMemoryOptions(TcpServerOutputMemoryOptions options);
+    // Uses AcceptorErrorCallback's base-loop, re-entry, default Retry, and
+    // throw-to-Stop contract.
     void setAcceptErrorCallback(AcceptorErrorCallback cb);
     void setIocpAcceptDepth(std::size_t depth);
     void setCallbackExceptionHandler(TcpConnectionCallbackExceptionHandler cb);
     void setAdmissionOptions(TcpServerAdmissionOptions options);
+    // Runs synchronously on the base loop after the corresponding admission
+    // state mutation, may re-enter base-loop-safe APIs, and contains/logs all
+    // callback exceptions without rolling back the state change.
     void setAdmissionMetricCallback(TcpServerAdmissionMetricCallback cb);
 
-    // May be called from any thread. True means the base-loop request was
-    // accepted; authentication and deadline races resolve in base-loop order.
-    bool tryMarkConnectionAuthenticated(const TcpConnectionPtr& connection);
+    // May be called from any thread. Accepted means the base-loop request was
+    // committed; authentication and deadline races resolve in base-loop order.
+    // A null connection returns OwnerUnavailable.
+    PostResult tryMarkConnectionAuthenticated(
+        const TcpConnectionPtr& connection) noexcept;
     TcpServerAdmissionStats admissionStats() const noexcept;
     TcpServerOutputMemoryStats outputMemoryStats() const;
 
     const InetAddress& listenAddress() const noexcept;
     std::size_t connectionCount() const;
 
+    // start() and destruction are base-loop-only. start() is idempotent.
     void start();
-    // Compatibility stop: immediately force-close active connections.
+    // Compatibility stop: immediately force-close active connections and
+    // intentionally discard the internal typed lifecycle-signal result. Use
+    // stopGracefully() when a terminal outcome must be observed.
     void stop();
     // Completion becomes ready only after connection teardown and worker-loop
     // join have converged. Repeated calls share the first operation/result.
@@ -168,6 +194,8 @@ private:
     struct GracefulStopState;
     struct AggregateStopState;
     struct WorkerStopParticipant;
+
+    void assertConfigurable(const char* operation) const;
 
     void stopInLoop();
     void driveStopLifecycleInLoop();

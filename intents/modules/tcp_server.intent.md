@@ -74,6 +74,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
   teardown and worker-loop join; timeout escalation remains single-shot
 - admission options are immutable after start and default to disabled so
   existing servers preserve unlimited/admitted behavior
+- every callback, policy, thread-pool, admission, backpressure, output-memory,
+  and AcceptEx-depth setter is base-loop-only and immutable after start; wrong-
+  thread and late calls fail before mutation
 - AcceptEx pre-post depth is immutable after start; increasing transport-level
   accept concurrency does not bypass base-loop admission or transfer accepted-
   fd ownership before the existing admission decision
@@ -160,7 +163,9 @@ It is the lifecycle boundary between listening infrastructure and per-connection
 - cross-thread stop admission uses the base loop lifecycle hub; per-worker
   aggregation uses each worker's lifecycle hub
 - authentication completion may originate on a connection worker loop; the
-  request is marshaled to the base loop before deadline state is mutated
+  request is marshaled to the base loop before deadline state is mutated and
+  returns typed `PostResult` admission so QueueFull, Shutdown, and
+  OwnerUnavailable remain distinguishable
 - admission metric callbacks run on the base loop and their exceptions are
   logged and contained
 

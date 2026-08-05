@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <stdexcept>
 #include <string>
 #include <thread>
 
@@ -241,6 +242,60 @@ void verifyWriteCompleteDropPreservesDisconnectingHalfClose() {
     GAMENET_TEST_ASSERT(connection->disconnected());
 }
 
+void verifyCrossThreadSendPreservesSchedulingResult() {
+    gamenet::net::EventLoop loop(saturatedLoopOptions());
+    gamenet::test::ConnectedSocketPair pair;
+    auto connection = gamenet::test::makeTcpConnection(
+        loop,
+        pair,
+        "queue-saturation-typed-send-result");
+
+    int closeCallbacks = 0;
+    connection->setCloseCallback(
+        [&](const gamenet::net::TcpConnectionPtr& conn) {
+            ++closeCallbacks;
+            conn->connectDestroyed();
+        });
+    connection->connectEstablished();
+
+    bool rejectedNullRange = false;
+    try {
+        (void)connection->trySend(nullptr, 1);
+    } catch (const std::invalid_argument&) {
+        rejectedNullRange = true;
+    }
+    GAMENET_TEST_ASSERT(rejectedNullRange);
+    GAMENET_TEST_ASSERT(
+        connection->trySend(nullptr, 0) ==
+        gamenet::net::TcpSendResult::Accepted);
+
+    GAMENET_TEST_ASSERT(loop.tryQueueInLoop([] {}));
+    gamenet::net::TcpSendResult saturatedResult{};
+    std::thread saturatedSender([&] {
+        saturatedResult = connection->trySend("full");
+    });
+    saturatedSender.join();
+    GAMENET_TEST_ASSERT(
+        saturatedResult ==
+        gamenet::net::TcpSendResult::SchedulingQueueFull);
+    GAMENET_TEST_ASSERT(connection->pendingOutputBytes() == 0);
+
+    loop.quit();
+    gamenet::net::TcpSendResult shutdownResult{};
+    std::thread shutdownSender([&] {
+        shutdownResult = connection->trySend("closed-admission");
+    });
+    shutdownSender.join();
+    GAMENET_TEST_ASSERT(
+        shutdownResult == gamenet::net::TcpSendResult::OwnerShutdown);
+    GAMENET_TEST_ASSERT(connection->pendingOutputBytes() == 0);
+
+    connection->forceClose();
+    loop.loop();
+    GAMENET_TEST_ASSERT(closeCallbacks == 1);
+    GAMENET_TEST_ASSERT(connection->disconnected());
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -249,6 +304,9 @@ int main(int argc, char* argv[]) {
     }
     if (argc == 1 || std::string(argv[1]) == "write-complete") {
         verifyWriteCompleteDropPreservesDisconnectingHalfClose();
+    }
+    if (argc == 1 || std::string(argv[1]) == "typed-send-result") {
+        verifyCrossThreadSendPreservesSchedulingResult();
     }
     return 0;
 }

@@ -7,6 +7,7 @@
 #include "support/TestAssert.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <stdexcept>
@@ -42,6 +43,17 @@ int main() {
             rejectedUnbounded = true;
         }
         GAMENET_TEST_ASSERT(rejectedUnbounded);
+
+        std::atomic<bool> wrongThreadRejected{false};
+        std::thread wrongThread([&] {
+            try {
+                acceptor.setErrorCallback({});
+            } catch (const std::runtime_error&) {
+                wrongThreadRejected = true;
+            }
+        });
+        wrongThread.join();
+        GAMENET_TEST_ASSERT(wrongThreadRejected.load());
     }
 
     {
@@ -96,6 +108,20 @@ int main() {
             rejectedLiveReconfiguration = true;
         }
         GAMENET_TEST_ASSERT(rejectedLiveReconfiguration);
+        bool rejectedLiveCallbackChange = false;
+        try {
+            acceptor.setNewConnectionCallback({});
+        } catch (const std::logic_error&) {
+            rejectedLiveCallbackChange = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedLiveCallbackChange);
+        bool rejectedLiveErrorPolicyChange = false;
+        try {
+            acceptor.setErrorCallback({});
+        } catch (const std::logic_error&) {
+            rejectedLiveErrorPolicyChange = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedLiveErrorPolicyChange);
 
         const gamenet::net::InetAddress listenAddr = acceptor.listenAddress();
         std::thread clients([listenAddr] {

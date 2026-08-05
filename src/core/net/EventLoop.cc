@@ -246,7 +246,7 @@ PostResult EventLoopExecutor::postFunctor(Functor callback) const noexcept {
         std::lock_guard lock(state->mutex);
         if (state->loop == nullptr) return PostResult::OwnerUnavailable;
         if (!state->accepting) return PostResult::Shutdown;
-        return state->loop->tryQueueInLoop(std::move(callback))
+        return state->loop->tryQueueInLoopImpl(std::move(callback), false)
             ? PostResult::Accepted
             : PostResult::QueueFull;
     } catch (...) {
@@ -336,7 +336,7 @@ EventLoop::EventLoop(EventLoopOptions options)
               options_.maxLifecycleNodes)),
       controlDrainWords_(controlState_->pendingWords.size(), 0),
       poller_(Poller::newDefaultPoller(this)),
-      timerQueue_(std::make_unique<TimerQueue>(this)),
+      timerQueue_(std::unique_ptr<TimerQueue>(new TimerQueue(this))),
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
       activeChannelCursor_(0),
@@ -536,12 +536,31 @@ void EventLoop::runInLoop(Functor cb) {
 }
 
 void EventLoop::queueInLoop(Functor cb) {
-    if (!tryQueueInLoopImpl(std::move(cb), true)) {
-        throw std::overflow_error("EventLoop pending functor queue is full");
+    PostResult result = PostResult::QueueFull;
+    {
+        std::lock_guard admissionLock(executorState_->mutex);
+        if (!executorState_->accepting) {
+            rejectedFunctorCount_.fetch_add(1, std::memory_order_relaxed);
+            result = PostResult::Shutdown;
+        } else if (tryQueueInLoopImpl(std::move(cb), true)) {
+            result = PostResult::Accepted;
+        }
     }
+    if (result == PostResult::Accepted) {
+        return;
+    }
+    if (result == PostResult::Shutdown) {
+        throw std::logic_error("EventLoop pending functor admission is closed");
+    }
+    throw std::overflow_error("EventLoop pending functor queue is full");
 }
 
 bool EventLoop::tryQueueInLoop(Functor cb) {
+    std::lock_guard admissionLock(executorState_->mutex);
+    if (!executorState_->accepting) {
+        rejectedFunctorCount_.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
     return tryQueueInLoopImpl(std::move(cb), false);
 }
 
@@ -834,8 +853,45 @@ TimerId EventLoop::runEvery(
         options);
 }
 
+TimerScheduleResult EventLoop::tryRunAt(
+    gamenet::base::Timestamp time,
+    Functor cb) {
+    return timerQueue_->tryAddTimer(std::move(cb), time);
+}
+
+TimerScheduleResult EventLoop::tryRunAfter(TimerDuration delay, Functor cb) {
+    return timerQueue_->tryAddTimer(
+        std::move(cb),
+        gamenet::base::now() + delay,
+        TimerDuration::zero());
+}
+
+TimerScheduleResult EventLoop::tryRunEvery(
+    TimerDuration interval,
+    Functor cb) {
+    return tryRunEvery(interval, std::move(cb), RepeatingTimerOptions{});
+}
+
+TimerScheduleResult EventLoop::tryRunEvery(
+    TimerDuration interval,
+    Functor cb,
+    RepeatingTimerOptions options) {
+    if (interval <= TimerDuration::zero()) {
+        throw std::invalid_argument("tryRunEvery interval must be positive");
+    }
+    return timerQueue_->tryAddTimer(
+        std::move(cb),
+        gamenet::base::now() + interval,
+        interval,
+        options);
+}
+
+PostResult EventLoop::tryCancel(TimerId timerId) noexcept {
+    return timerQueue_->tryCancel(timerId);
+}
+
 void EventLoop::cancel(TimerId timerId) {
-    timerQueue_->cancel(timerId);
+    (void)tryCancel(timerId);
 }
 
 void EventLoop::wakeup() {
@@ -924,6 +980,10 @@ void EventLoop::retainCompletionOperation(void* operation, std::shared_ptr<void>
 void EventLoop::trackCompletionOperation(void* operation) {
     assertInLoopThread();
     poller_->trackCompletionOperation(operation);
+}
+
+bool EventLoop::hasPendingCompletionOperations() const noexcept {
+    return poller_->hasPendingCompletionOperations();
 }
 
 bool EventLoop::hasChannel(Channel* channel) {

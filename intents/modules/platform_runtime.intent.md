@@ -25,7 +25,12 @@ This module is not business logic.
 
 ## Responsibilities
 
-- Define platform socket handle aliases through `gamenet/core/net/platform/SocketTypes.h`.
+- Define the public cross-platform socket aliases and invalid-handle constant in
+  stable `gamenet/core/net/SocketTypes.h`. The platform compatibility header may
+  include that stable surface, but must not hide public declarations from the
+  stable fingerprint.
+- Keep `gamenet/core/net/platform/SocketTypes.h` as an unsupported compatibility
+  include that forwards to the stable socket-type surface without redefining it.
 - Implement `SocketsOps` behind the stable public `gamenet/core/net/SocketsOps.h` entry.
 - Create, write, drain, and close EventLoop wakeup descriptors per platform.
 - Host concrete poller backends under `gamenet/core/net/poller/`.
@@ -60,6 +65,8 @@ This module is not business logic.
   pipes, while the eventfd wakeup hot path uses `write(2)` directly; socket
   writes still use per-call `MSG_NOSIGNAL`.
 - Platform-specific code must not leak backend event constants into user-facing APIs.
+- Backend completion-obligation and wakeup hooks are EventLoop/Poller
+  implementation details. They are not callable stable application APIs.
 - Compatibility headers may forward old include paths, but implementation belongs in
   `platform/` or `poller/`.
 - A Windows overlapped submission that fails synchronously with an error other

@@ -139,6 +139,10 @@ jobs:
             }
           }
           & py -3 tools/compare_public_api_manifest.py `
+            --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json `
+            --fail-on-compatibility-decision `
+            --fail-on-stable-surface-review `
+            --compatibility-output ci-evidence/public-api-compatibility-diff.json `
             --output ci-evidence/public-api-diff.json
           if ($LASTEXITCODE -ne 0) {
             throw "Public API comparison failed"
@@ -196,7 +200,7 @@ jobs:
           py -3 tools/verify_ctest_inventory.py `
             --test-dir "$env:GAMENET_CONSUMER_DIR" `
             --config "$env:GAMENET_CONFIGURATION" `
-            --expected-total 1 `
+            --expected-total 2 `
             --output ci-evidence/install-consumer-inventory.json
           cmake --build "$env:GAMENET_CONSUMER_DIR" `
             --config "$env:GAMENET_CONFIGURATION" `

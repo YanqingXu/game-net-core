@@ -28,9 +28,14 @@ The published integration/contract preview is
 it does not declare production readiness or API/ABI stability.
 The active Phase 6 line installs as `GameNetCore 0.3.0`. Its infrastructure
 snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
-72-hour Linux endurance runs, but it is not a stable release: the current M0/M1
-roadmap work changes contracts and runtime code, so the eventual frozen
-candidate must receive its own same-SHA CI, performance, and endurance evidence.
+72-hour Linux endurance runs, but those runs predate the current implementation
+checkpoint. M3-R1 is independently closed at `95a6ab5`, and M3-R2 is committed
+locally at `12adb00` with 120/120 Windows/IOCP Release tests, 36/36 guards, and
+150/150 focused repetitions. API-R1 independently approved the remediated 0.3
+stable Core surface after closing its initial blockers; the API-focused suite
+passed 8/8 and fresh stable/provisional install consumers passed 2/2.
+No final v0.3 candidate is frozen, so REL-C1 is next and the eventual candidate must
+receive its own clean same-SHA CI, performance, capacity, and endurance evidence.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

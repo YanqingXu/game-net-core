@@ -36,6 +36,10 @@ def main() -> None:
     baseline_reference = manifest["historical_baseline"]
     baseline_path = repo_root / baseline_reference["path"]
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    reviewed_snapshot_path = (
+        repo_root / "api" / "baselines" / "v0.3.0-api-r1-reviewed.json"
+    )
+    reviewed_snapshot = json.loads(reviewed_snapshot_path.read_text(encoding="utf-8"))
 
     errors = verifier.verify_manifest(
         repo_root,
@@ -66,6 +70,34 @@ def main() -> None:
         "tag": "v0.2.0-phase4-preview",
         "commit": "7668d6b82a0d815ccd79f83c572bc0a36bcceea0",
     }
+    assert reviewed_snapshot["schema"] == "gamenet.public_api_snapshot.v1"
+    assert reviewed_snapshot["package_version"] == "0.3.0"
+    assert reviewed_snapshot["compatibility_line"] == "0.3"
+    assert reviewed_snapshot["source"] == {
+        "tag": "api-r1-approved-surface",
+        "commit": "UNBOUND-REL-C1",
+    }
+    reviewed_difference = comparer.build_diff(
+        reviewed_snapshot,
+        manifest,
+        baseline_path="api/baselines/v0.3.0-api-r1-reviewed.json",
+        candidate_path="api/public_api_manifest.json",
+        verify_historical_reference=False,
+    )
+    assert reviewed_difference["summary"]["same_compatibility_line"] is True
+    assert reviewed_difference["summary"]["has_changes"] is False
+    assert reviewed_difference["summary"]["compatibility_decision_required"] is False
+    changed_candidate = copy.deepcopy(manifest)
+    changed_reviewed_header = reviewed_snapshot["headers"]["stable_core"][0]
+    changed_candidate["stable_header_fingerprints"][changed_reviewed_header] = "0" * 64
+    changed_reviewed_difference = comparer.build_diff(
+        reviewed_snapshot,
+        changed_candidate,
+        baseline_path="api/baselines/v0.3.0-api-r1-reviewed.json",
+        candidate_path="api/public_api_manifest.json",
+        verify_historical_reference=False,
+    )
+    assert changed_reviewed_difference["summary"]["compatibility_decision_required"] is True
     baseline_text = baseline_path.read_text(encoding="utf-8")
     assert (
         verifier.snapshot_content_sha256(baseline_text)
@@ -109,6 +141,16 @@ def main() -> None:
         item["name"]: item["category"]
         for item in difference["changes"]["headers"]["added"]
     }
+    assert sum(category == "stable_core" for category in added_headers.values()) == 10
+    assert sum(category == "provisional" for category in added_headers.values()) == 4
+    assert len(difference["changes"]["stable_header_fingerprint_changes"]) == 19
+    assert difference["changes"]["headers"]["removed"] == []
+    assert difference["changes"]["headers"]["category_moves"] == []
+    assert difference["changes"]["targets"] == {
+        "added": [],
+        "removed": [],
+        "category_moves": [],
+    }
     assert added_headers["include/gamenet/core/net/CallbackException.h"] == "stable_core"
     assert added_headers["include/gamenet/core/net/TcpConnectionOptions.h"] == "stable_core"
     assert (
@@ -117,6 +159,27 @@ def main() -> None:
     )
     assert added_headers["include/gamenet/core/metrics/MetricsExporter.h"] == "provisional"
     assert difference["changes"]["stable_header_fingerprint_changes"]
+    archived_difference = json.loads(
+        (repo_root / "docs" / "reviews" / "api-r1-public-api-diff.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert archived_difference == difference
+    archived_compatibility_difference = json.loads(
+        (
+            repo_root
+            / "docs"
+            / "reviews"
+            / "api-r1-public-api-compatibility-diff.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert archived_compatibility_difference == reviewed_difference
+    review_packet = (
+        repo_root / "docs" / "reviews" / "api-r1-stable-core-review.md"
+    ).read_text(encoding="utf-8")
+    assert "/root/api_r1_independent_review" in review_packet
+    assert "UNBOUND-REL-C1" in review_packet
+    assert "Changed stable-header fingerprints | 19" in review_packet
     assert comparer.render_diff(difference) == comparer.render_diff(
         comparer.build_diff(
             baseline,
@@ -186,12 +249,19 @@ def main() -> None:
         assert any("snapshot hash mismatch" in error for error in errors)
 
         cli_output = Path(directory) / "public-api-diff.json"
+        cli_compatibility_output = Path(directory) / "public-api-compatibility-diff.json"
         completed = subprocess.run(
             [
                 sys.executable,
                 str(repo_root / "tools" / "compare_public_api_manifest.py"),
                 "--repo-root",
                 str(repo_root),
+                "--compatibility-baseline",
+                "api/baselines/v0.3.0-api-r1-reviewed.json",
+                "--fail-on-compatibility-decision",
+                "--fail-on-stable-surface-review",
+                "--compatibility-output",
+                str(cli_compatibility_output),
                 "--output",
                 str(cli_output),
             ],
@@ -201,6 +271,70 @@ def main() -> None:
         )
         assert completed.returncode == 0, completed.stderr
         assert json.loads(cli_output.read_text(encoding="utf-8")) == difference
+        assert (
+            json.loads(cli_compatibility_output.read_text(encoding="utf-8"))
+            == reviewed_difference
+        )
+
+        for addition_kind in ("header", "target"):
+            addition_root = Path(directory) / f"same-line-{addition_kind}-addition"
+            addition_historical = addition_root / baseline_reference["path"]
+            addition_historical.parent.mkdir(parents=True)
+            addition_historical.write_text(json.dumps(baseline), encoding="utf-8")
+            addition_reviewed = (
+                addition_root
+                / "api"
+                / "baselines"
+                / "v0.3.0-api-r1-reviewed.json"
+            )
+            addition_reviewed.parent.mkdir(parents=True, exist_ok=True)
+            addition_reviewed.write_text(
+                json.dumps(reviewed_snapshot), encoding="utf-8"
+            )
+            addition_candidate = copy.deepcopy(manifest)
+            if addition_kind == "header":
+                added_header = "include/gamenet/core/net/ReviewedDrift.h"
+                addition_candidate["headers"]["stable_core"].append(added_header)
+                addition_candidate["headers"]["stable_core"].sort()
+                addition_candidate["stable_header_fingerprints"][added_header] = "0" * 64
+                addition_candidate["stable_header_fingerprints"] = dict(
+                    sorted(addition_candidate["stable_header_fingerprints"].items())
+                )
+            else:
+                addition_candidate["targets"]["stable_core"].append(
+                    "GameNet::reviewed_drift"
+                )
+                addition_candidate["targets"]["stable_core"].sort()
+            addition_manifest = addition_root / "api" / "public_api_manifest.json"
+            addition_manifest.write_text(
+                json.dumps(addition_candidate), encoding="utf-8"
+            )
+            addition_output = addition_root / "compatibility-diff.json"
+            addition_rejected = subprocess.run(
+                [
+                    sys.executable,
+                    str(repo_root / "tools" / "compare_public_api_manifest.py"),
+                    "--repo-root",
+                    str(addition_root),
+                    "--compatibility-baseline",
+                    "api/baselines/v0.3.0-api-r1-reviewed.json",
+                    "--fail-on-stable-surface-review",
+                    "--compatibility-output",
+                    str(addition_output),
+                    "--output",
+                    str(addition_root / "historical-diff.json"),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            assert addition_rejected.returncode == 3
+            assert "requires stable-surface review" in addition_rejected.stderr
+            addition_difference = json.loads(
+                addition_output.read_text(encoding="utf-8")
+            )
+            assert addition_difference["summary"]["same_compatibility_line"] is True
+            assert addition_difference["summary"]["stable_surface_review_required"] is True
 
         synthetic_root = Path(directory) / "same-line"
         synthetic_baseline = synthetic_root / baseline_reference["path"]

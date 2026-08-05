@@ -245,6 +245,64 @@ int main() {
     }
 
     {
+        gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
+            .maxPendingFunctors = 1,
+            .reservedPendingFunctors = 0,
+            .maxFunctorsPerIteration = 1,
+        });
+        const auto retained = loop.tryRunAfter(1s, [] {});
+        GAMENET_TEST_ASSERT(
+            retained.result == gamenet::net::PostResult::Accepted);
+        GAMENET_TEST_ASSERT(retained.timerId.valid());
+
+        GAMENET_TEST_ASSERT(loop.tryQueueInLoop([] {}));
+        gamenet::net::TimerScheduleResult saturated;
+        std::thread scheduler([&] {
+            saturated = loop.tryRunAfter(1s, [] {});
+        });
+        scheduler.join();
+        GAMENET_TEST_ASSERT(
+            saturated.result == gamenet::net::PostResult::QueueFull);
+        GAMENET_TEST_ASSERT(!saturated.timerId.valid());
+
+        loop.quit();
+        const auto stopped = loop.tryRunAfter(1s, [] {});
+        GAMENET_TEST_ASSERT(
+            stopped.result == gamenet::net::PostResult::Shutdown);
+        GAMENET_TEST_ASSERT(!stopped.timerId.valid());
+        GAMENET_TEST_ASSERT(
+            loop.tryCancel(retained.timerId) ==
+            gamenet::net::PostResult::Shutdown);
+
+        bool legacyShutdownWasExplicit = false;
+        try {
+            (void)loop.runAfter(1s, [] {});
+        } catch (const std::logic_error&) {
+            legacyShutdownWasExplicit = true;
+        }
+        GAMENET_TEST_ASSERT(legacyShutdownWasExplicit);
+    }
+
+    {
+        gamenet::net::EventLoop loop;
+        bool rejected = false;
+        try {
+            (void)loop.tryRunEvery(-1ms, [] {});
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        GAMENET_TEST_ASSERT(rejected);
+
+        rejected = false;
+        try {
+            (void)loop.tryRunEvery(0ms, [] {});
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        GAMENET_TEST_ASSERT(rejected);
+    }
+
+    {
         gamenet::net::EventLoopThread loopThread;
         gamenet::net::EventLoop* loop = loopThread.startLoop();
         const auto callerThread = std::this_thread::get_id();

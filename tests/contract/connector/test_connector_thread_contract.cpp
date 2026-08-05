@@ -157,6 +157,13 @@ void testConnectSuccessObserverMayStopReentrantly() {
 
     acceptor.listen();
     connector->start();
+    bool lateRetryDelayRejected = false;
+    try {
+        connector->setRetryDelay(20ms, 100ms);
+    } catch (const std::logic_error&) {
+        lateRetryDelayRejected = true;
+    }
+    GAMENET_TEST_ASSERT(lateRetryDelayRejected);
     gamenet::test::runLoopWithTimeout(
         loop,
         1s,

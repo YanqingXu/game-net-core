@@ -4,6 +4,10 @@
 起始基线：`main@7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
 依据：同基线的 `assessment.md`
 
+当前治理检查点（2026-08-05）：
+`main@12adb00f6934e50994e755125542a1f6f2682116`；审计时
+`origin/main@d31f7538dc8fb984696008ed93b10c3c47afc604`；当前无冻结的 v0.3 最终候选。
+
 ## 1. 本轮目标
 
 本轮只做 production-hardening remediation、候选冻结和发布证据收口：
@@ -24,8 +28,8 @@
 - [x] 重新审计 `7a56132d`；
 - [x] 清空并重写 `assessment.md`；
 - [x] 以 open findings 重建本计划；
-- [x] 当前 Windows Release 增量构建成功；
-- [x] 119/119 CTests 通过；
+- [x] 起始基线 Windows Release 增量构建成功；
+- [x] 起始基线 119/119 CTests 通过；
 - [x] 36/36 repository/API/CI guards 通过；
 - [x] 当前 API diff 已确认需要 stable-surface review。
 - [x] M3-R1 已实现并完成 Windows Debug/Release 120/120 与 focused 50/50 本地验证；
@@ -38,10 +42,11 @@
 - [x] 独立 Codex reviewer 从 clean checkout 完成 11 行矩阵并给出 `approve`；
 - [x] 同 SHA CI run `30813037693` attempt 2 的六个 producer 全部成功；aggregate artifact 仍为 0，继续由 P1-02 跟踪。
 - [x] M3-R2 已完成 EventLoopThreadPool 状态机合同、负向测试和 Windows/IOCP Release 本地验证：全量 120/120、守卫 36/36、聚焦重复 150/150。
+- [x] GOV-R2 已统一 roadmap、assessment、plan、README 与 migration status 的实现检查点、历史证据边界、测试清单和下一执行任务。
+- [x] API-R1 已完成独立 stable Core 审查；首次拒绝的八组 blocker 全部关闭，终审 `APPROVE`，历史 diff 与同线 zero-diff 均已归档。
 
 ### 2.2 未完成
 
-- [ ] 0.3 stable Core 独立审查；
 - [ ] 同 SHA paired benchmark/capacity；
 - [ ] 同 SHA 24/72 小时 endurance；
 - [ ] 许可证决定；
@@ -54,9 +59,9 @@
 | P1-01 | M3-R1 | 新 saturation contract、owner-thread 证明、exact rollback |
 | P1-02 | INF-R1、REL-V2、PERF-R1、END-R1 | 同候选 SHA 的成功 manifests/artifacts |
 | P1-03 | LIC-R1 | 显式许可证及 package/SBOM metadata |
-| P1-04 | API-R1 | 独立审查记录与批准后的 manifest |
+| P1-04 | API-R1（已关闭） | 独立审查记录、批准 manifest、同线 zero-diff gate |
 | P2-01 | M3-R2 | negative/wrong-thread/late-config/repeated-start contracts |
-| P2-02 | GOV-R2 | migration status、assessment、plan 与候选事实一致 |
+| P2-02 | GOV-R2（已关闭） | roadmap、migration status、assessment、plan、README 与候选事实一致，静态守卫交叉验证 |
 
 规则：finding 只有在对应关闭证据存在时才能标记完成；代码合并本身不等于关闭。
 
@@ -186,7 +191,7 @@ candidate SHA。
 本地关闭证据（2026-08-05）：新增合同先在旧实现上确定性失败；实现修复后，
 Windows/IOCP Release 全量 120/120、36/36 repository/API/CI guards 通过，
 EventLoopThreadPool 主合同、restart soak 与 TcpServer 合同各重复 50 次，
-共 150/150 通过。当前工作树尚未冻结为新候选 SHA；该结果不能替代后续
+共 150/150 通过。`12adb00` 尚未冻结为新候选 SHA；该结果不能替代后续
 REL-C1/REL-V2 的 clean checkout 与同 SHA 远端发布证据。
 
 ## 7. GOV-R2：当前事实与文档同步
@@ -195,14 +200,25 @@ REL-C1/REL-V2 的 clean checkout 与同 SHA 远端发布证据。
 对应：P2-02
 依赖：M3-R1、M3-R2
 
-- [ ] 更新 `docs/migration_status.md` 的 current audit 日期和候选 SHA；
-- [ ] 把历史 benchmark/endurance 证据放入 historical evidence，不描述为当前候选；
-- [ ] 更新测试总数和 label 数；
-- [ ] 把 P1-01/P2-01 的关闭证据链接到具体 test；
-- [ ] 保持 intent inventory 由仓库事实推导；
-- [ ] 更新 README 的 candidate 状态，但不提前声明 stable；
-- [ ] 检查 `assessment.md`、`plan.md`、README、migration status 无互相矛盾的“current”结论；
-- [ ] 运行 `git diff --check` 和全部文档/治理守卫。
+- [x] 更新 `docs/migration_status.md` 的 current audit 日期和实现检查点；明确当前没有冻结的最终候选；
+- [x] 把历史 benchmark/endurance 证据放入 historical evidence，不描述为当前候选；
+- [x] 更新测试总数和 label 数；
+- [x] 把 P1-01/P2-01 的关闭证据链接到具体 test；
+- [x] 保持 intent inventory 由仓库事实推导；
+- [x] 更新 roadmap 与 README 的 candidate 状态，但不提前声明 stable；
+- [x] 检查 `assessment.md`、`plan.md`、README、roadmap、migration status 无互相矛盾的“current”结论；
+- [x] 运行 `git diff --check` 和全部文档/治理守卫。
+
+关闭证据（2026-08-05）：五份当前入口统一以 `12adb00` 为已提交实现检查点，
+以 `95a6ab5` 为 M3-R1 已审查历史检查点，并明确当前没有冻结的 v0.3 最终
+候选。测试清单统一为 120（8/99/13；threading 93、lifecycle 98），intent
+清单仍由仓库事实推导。migration-status contract 已补充跨文档一致性断言；
+`git diff --check` 和完整 36 项 repository/API/CI guards 通过。
+
+代码关闭证据：
+[`test_tcp_server_establishment_saturation.cpp`](tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp)、
+[`test_event_loop_thread_pool.cpp`](tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp)
+和 [`test_tcp_server_contract.cpp`](tests/contract/tcp_server/test_tcp_server_contract.cpp)。
 
 维护原则：
 
@@ -219,32 +235,40 @@ REL-C1/REL-V2 的 clean checkout 与同 SHA 远端发布证据。
 
 ### 8.1 审查输入
 
-- [ ] `api/public_api_manifest.json`；
-- [ ] 相对 `v0.2.0-phase4-preview` 的结构化 diff；
-- [ ] 10 个新增 stable headers；
-- [ ] 17 个变化的 stable header fingerprints；
-- [ ] 所有 provisional headers；
-- [ ] install consumer；
-- [ ] intent、thread/ownership rules 和 examples。
+- [x] `api/public_api_manifest.json`；
+- [x] 相对 `v0.2.0-phase4-preview` 的结构化 diff；
+- [x] 10 个新增 stable headers；
+- [x] 19 个变化的 stable header fingerprints；
+- [x] 所有 provisional headers；
+- [x] install consumer；
+- [x] intent、thread/ownership rules 和 examples。
 
 ### 8.2 必查问题
 
-- [ ] stable/provisional 分类是否正确；
-- [ ] 每个跨线程操作是否返回可区分结果；
-- [ ] callbacks 的线程、re-entry 和异常语义是否公开；
-- [ ] options 的默认值、非法值、配置时机是否明确；
-- [ ] pointer/length API 是否写明有效内存区间前置条件；
-- [ ] shutdown/destruction 是否有唯一 owner；
-- [ ] 0.3 source compatibility 承诺是否可执行；
-- [ ] ABI 非承诺是否明确；
-- [ ] 没有把 deferred Gateway/transport API 误列为 stable。
+- [x] stable/provisional 分类是否正确；
+- [x] 每个跨线程操作是否返回可区分结果；
+- [x] callbacks 的线程、re-entry 和异常语义是否公开；
+- [x] options 的默认值、非法值、配置时机是否明确；
+- [x] pointer/length API 是否写明有效内存区间前置条件；
+- [x] shutdown/destruction 是否有唯一 owner；
+- [x] 0.3 source compatibility 承诺是否可执行；
+- [x] ABI 非承诺是否明确；
+- [x] 没有把 deferred Gateway/transport API 误列为 stable。
 
 ### 8.3 关闭门
 
-- [ ] 至少一名非原实现 reviewer 完成审查；
-- [ ] 所有 blocking comments 关闭；
-- [ ] 审查导致任何代码/API 变化时，重新运行 GOV-R2 和全部验证；
-- [ ] 最终 API diff 归档并绑定最终候选 SHA。
+- [x] 至少一名非原实现 reviewer 完成审查；
+- [x] 所有 blocking comments 关闭；
+- [x] 审查导致的代码/API 变化已重新运行完整本地验证；
+- [x] 历史 diff、同线 zero-diff 和 reviewed surface snapshot 已归档；
+- [x] snapshot 以 `UNBOUND-REL-C1` 明示当前无最终候选，并把最终 SHA
+  绑定及 zero-diff 复验交给 REL-C1。
+
+关闭结果（2026-08-05）：独立 reviewer `/root/api_r1_independent_review`
+首次 `REJECT` 后逐项复审八组 blocker，最终给出 `APPROVE`。Windows/IOCP
+Release 120/120、focused 8/8、fresh install consumers 2/2 通过；0.3 同线
+diff 为严格零变化，并以 stable header/target additive drift 负向注入证明门禁
+会失败。审查记录见 `docs/reviews/api-r1-stable-core-review.md`。
 
 ## 9. INF-R1：恢复证据基础设施
 
@@ -469,9 +493,9 @@ M4 必须重新执行 intent → rules → contracts → tests → implementatio
 
 下一项任务是：
 
-> **GOV-R2：同步 migration status、assessment、plan 与当前候选事实。**
+> **REL-C1：冻结唯一 v0.3 候选 SHA。**
 
-M3-R2 已在当前工作树完成 intent → rules → contracts → tests →
-implementation，并通过本地关闭门。M3-R1 已由候选 `95a6ab5` 的 clean
-独立审查关闭；M3-R2 尚未冻结为新候选 SHA，其本地证据不得冒充 REL-V2
-远端发布证据。
+API-R1 已批准基于 `12adb00` 实现检查点的 remediation worktree stable
+surface，并关闭 P1-04。当前仍无最终候选；REL-C1 必须提交/推送唯一候选
+SHA，把 `UNBOUND-REL-C1` 绑定为该 SHA，并再次证明 manifest 与 reviewed
+surface 零差异，之后才能生成同 SHA 远端、性能、容量与 endurance 证据。

@@ -36,18 +36,27 @@ using ConnectorEventCallback = std::function<void(const InetAddress&, ConnectorE
 
 class Connector : public std::enable_shared_from_this<Connector>, private gamenet::base::noncopyable {
 public:
+    // Runs synchronously on the owner loop and may re-enter lifecycle methods.
+    // fd ownership transfers at callback entry; receiver RAII remains
+    // responsible if it throws. Connector logs/contains the exception and
+    // settles the completed attempt to disconnected without reclaiming fd.
     using NewConnectionCallback = std::function<void(SocketFd sockfd)>;
     using Duration = std::chrono::steady_clock::duration;
 
     enum StateE { kDisconnected, kConnecting, kConnected };
 
+    // loop must be non-null and outlive this Connector. Construction and
+    // destruction are owner-loop-only.
     Connector(EventLoop* loop, const InetAddress& serverAddr);
     Connector(EventLoop* loop, const InetAddress& serverAddr, ConnectorOptions options);
     ~Connector();
 
+    // Owner-loop-only. The fd becomes callback-owned at callback entry; the
+    // receiver must install RAII ownership before any fallible work.
     void setNewConnectionCallback(NewConnectionCallback cb);
 
-    /// 设置 ConnectorEvent hook。必须在 start() 前调用。
+    // Owner-loop-only diagnostic observer. It executes synchronously, may
+    // re-enter lifecycle methods, and thrown exceptions are contained.
     void setConnectorEventCallback(ConnectorEventCallback cb);
 
     const InetAddress& serverAddress() const noexcept;
@@ -62,7 +71,7 @@ public:
     /// Restart connecting (reset backoff). Owner-loop-thread only.
     void restart();
 
-    /// Configure retry backoff parameters. Must be set before start().
+    /// Configure retry backoff parameters. Owner-loop-only and before first start().
     void setRetryDelay(Duration initial, Duration max);
     void setRetryEnabled(bool enabled);
     bool retryEnabled() const noexcept;
@@ -103,6 +112,7 @@ private:
     TimerId retryTimerId_;
     TimerId connectTimeoutTimerId_;
     std::uint64_t requestGeneration_{0};
+    bool startedOnce_{false};
 };
 
 }  // namespace gamenet::net

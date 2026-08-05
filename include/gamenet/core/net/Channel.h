@@ -26,9 +26,15 @@ public:
     using EventCallback = std::function<void()>;
     using ReadEventCallback = std::function<void(gamenet::base::Timestamp)>;
 
+    // loop must be non-null and outlive this Channel. Channel borrows fd and
+    // never closes it. Construction, callback replacement, event mutation,
+    // removal, and destruction are owner-loop-only.
     Channel(EventLoop* loop, SocketFd fd);
     ~Channel();
 
+    // Event callbacks run synchronously on the owner loop and may re-enter
+    // owner-safe APIs. Escaping exceptions are contained and reported by the
+    // EventLoop ChannelEvent exception policy; remaining ready work continues.
     void handleEvent(gamenet::base::Timestamp receiveTime);
     void setReadCallback(ReadEventCallback cb);
     void setWriteCallback(EventCallback cb);

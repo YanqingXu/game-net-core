@@ -597,7 +597,8 @@ void GameServerPipeline::completeAuthentication(
     state.sessionId = result.session->sessionId();
     state.binding = result.session->binding();
     if (auto connection = state.connection.lock();
-        connection && !server_.tryMarkConnectionAuthenticated(connection)) {
+        connection && server_.tryMarkConnectionAuthenticated(connection) !=
+            gamenet::net::PostResult::Accepted) {
         (void)sessions_.offline(endpoint->id());
         closeConnection(state, gamenet::transport::CloseReason::GoingAway);
         return;

@@ -1,8 +1,9 @@
 # game-net-core 当前项目审计报告
 
-审计日期：2026-07-30
-审计基线：`main@7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
-报告性质：重新审计；本文件已完全替换旧审计内容
+审计日期：2026-08-05
+受审实现检查点：`main@12adb00f6934e50994e755125542a1f6f2682116`
+审计时上游参考：`origin/main@d31f7538dc8fb984696008ed93b10c3c47afc604`
+报告性质：API-R1 当前事实同步；历史证据与当前候选状态分区记录
 
 ## 1. 执行结论
 
@@ -10,17 +11,18 @@
 
 > 已具备较强契约与测试基础的 production-hardening preview，尚不是可宣布稳定或可对外采用的 production release。
 
-本轮没有发现 P0。发现 4 项 P1 和 2 项 P2；截至 2026-08-05，P1-01 已关闭，
-P2-01 已在当前工作树完成合同、实现和本地验证，其余 finding 仍保持开放：
+本轮没有发现 P0。发现 4 项 P1 和 2 项 P2；截至 2026-08-05，P1-01、
+P1-04 与 P2-02 已关闭，P2-01 已在提交检查点完成本地关闭；仍开放的是
+P1-02 发布证据与 P1-03 许可证：
 
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
-| P1-01 | P1（已关闭） | 新候选 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `95a6ab5` 的六个同 SHA CI producer 已通过，但 retained aggregate artifact、性能、容量与 endurance 证据仍不完整 | 发布证据 |
+| P1-01 | P1（已关闭） | M3-R1 检查点 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
+| P1-02 | P1 | `95a6ab5` 的六个 producer 是历史检查点证据；`12adb00` 尚无完整 retained artifact、性能、容量与 endurance 证据 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
-| P1-04 | P1 | 0.3 stable Core 表面变化尚未完成独立审查 | API 发布阻塞 |
-| P2-01 | P2（本地关闭） | `EventLoopThreadPool` 非法配置和状态转换已在状态改变前显式拒绝 | 公共契约 |
-| P2-02 | P2 | 路线图文档与实际 HEAD 存在时间和完成状态漂移 | 治理一致性 |
+| P1-04 | P1（已关闭） | API-R1 首次拒绝后的八组 blocker 已关闭，独立终审 `APPROVE`，0.3 reviewed surface 有严格 zero-diff gate | API 发布阻塞已解除 |
+| P2-01 | P2（本地关闭） | `12adb00` 的 `EventLoopThreadPool` 非法配置和状态转换已在状态改变前显式拒绝 | 公共契约 |
+| P2-02 | P2（已关闭） | roadmap、assessment、plan、README 与 migration status 已统一当前检查点、历史证据和下一任务 | 治理一致性 |
 
 因此：
 
@@ -29,6 +31,9 @@ P2-01 已在当前工作树完成合同、实现和本地验证，其余 finding
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
 - P1-01 已在 `95a6ab5` 关闭；`446f86d` 的拒绝结论保留为历史证据。
+- 当前没有冻结的 v0.3 最终候选；`12adb00` 是已提交的本地实现检查点。
+- API-R1 只批准 stable surface 进入 REL-C1；它不创建候选 SHA，也不替代
+  同 SHA 远端、性能、容量或 endurance 证据。
 
 ### 1.1 M3-R1 收口检查点（2026-08-03）
 
@@ -50,6 +55,10 @@ P2-01 已在当前工作树完成合同、实现和本地验证，其余 finding
 - 同 SHA GitHub Actions run `30813037693` attempt 2 的 Linux Debug/Release/TSan/ASan-UBSan 与 Windows Debug/Release 六个 producer 全部成功；
 - aggregate job 为 success，但 artifact API 仍是 0，校验与聚合上传步骤被跳过，因此该缺口继续归入 P1-02。
 
+直接关闭合同见
+[`test_tcp_server_establishment_saturation.cpp`](tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp)
+与其中的 deterministic construction-failure hook 覆盖。
+
 P1-01 已关闭。批准范围只覆盖 M3-R1 生命周期/所有权问题，不扩展到
 0.3 stable API、retained artifact、性能、容量、endurance 或最终发布决定。
 
@@ -59,7 +68,7 @@ Linux 命令、逐项审阅矩阵和签字字段已冻结在
 
 ### 1.2 M3-R2 本地关闭检查点（2026-08-05）
 
-当前工作树已把 `EventLoopThreadPool` 配置生命周期明确为
+提交 `12adb00` 已把 `EventLoopThreadPool` 配置生命周期明确为
 `Idle -> Started -> Idle`，并在任何状态改变前拒绝负线程数、非 base-loop
 线程配置、started 状态配置以及重复 `start()`。`stop()` 在 Idle 保持幂等，
 合法 stop 后仍可重新配置并重启；zero-thread 模式仍执行一次 base-loop init
@@ -69,8 +78,35 @@ callback，partial-start rollback 合同保持不变。`TcpServer::setThreadNum(
 新增负向合同在修复前确定性失败；修复后 Windows/IOCP Release 全量
 120/120、36/36 repository/API/CI guards 通过，EventLoopThreadPool 主合同、
 restart soak 与 TcpServer 合同各重复 50 次，共 150/150 通过。该结论关闭
-P2-01 的本地实现与合同范围；当前改动尚未冻结为新候选 SHA，最终候选仍须
+P2-01 的本地实现与合同范围；该检查点尚未冻结为新候选 SHA，最终候选仍须
 执行 clean checkout 与同 SHA 远端复验。
+
+### 1.3 API-R1 stable Core 关闭（2026-08-05）
+
+独立 reviewer `/root/api_r1_independent_review` 以只读方式审查完整 stable
+surface。首次结论为 `REJECT`，覆盖 typed shutdown/admission、stable 与
+platform-internal 分类、配置阶段、callback/destruction/ownership、raw range、
+options、source compatibility 和 install consumer 八组 blocker。全部修复后，
+reviewer 多轮复核并最终给出 `APPROVE`，允许进入 REL-C1。
+
+确定性证据：
+
+- 历史 diff 相对 `v0.2.0-phase4-preview` 为 10 个 stable additions、4 个
+  provisional additions、19 个 stable fingerprint changes，无删除、移动或
+  target 变化；
+- 0.3 reviewed-baseline diff 的 header/target/fingerprint changes 全为空，
+  `same_compatibility_line=true`、`has_changes=false`；
+- stable header 与 stable target additive drift 的负向注入均以 exit 3 被
+  blocking gate 拒绝；
+- Windows/IOCP Release 120/120、focused 8/8、fresh stable/provisional
+  install consumers 2/2 通过；
+- ABI 仍不承诺；direct TimerQueue application surface 等 0.2→0.3 有意 break
+  已在兼容策略和审查档案中列明。
+
+完整矩阵、首次拒绝、逐项 resolution、历史及同线 diff 见
+`docs/reviews/api-r1-stable-core-review.md`。snapshot 暂以
+`UNBOUND-REL-C1` 标记，因为当前冻结的 v0.3 最终候选仍为无；REL-C1 必须
+绑定最终 SHA 并复验零差异。
 
 ## 2. 审计范围与方法
 
@@ -93,44 +129,42 @@ P2-01 的本地实现与合同范围；当前改动尚未冻结为新候选 SHA�
 - TcpConnection、TcpServer、TcpClient；
 - PacketFramer、Transport、Session、Logic、Broadcast、Metrics；
 - CMake 目标、安装/API manifest、测试清单；
-- GitHub Actions 当前 SHA 的 CI、benchmark、capacity 与 runner 状态。
+- 已版本化的 GitHub Actions CI、benchmark、capacity 与 endurance 证据记录。
 
-本轮只重写 `assessment.md` 和 `plan.md`，没有修改运行时代码、测试或构建配置。
+GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码、C++ 合同测试或
+构建配置。
 
 ## 3. 冻结证据快照
 
 ### 3.1 Git 与版本
 
-- 当前分支：`main`
-- `HEAD`：`7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
-- 本地 `origin/main`：同一 SHA
-- 提交时间：`2026-07-30T14:03:20+08:00`
-- 提交标题：`ci: bind capacity and endurance promotion evidence`
+- 受审实现分支：`main`
+- 受审实现检查点：`12adb00f6934e50994e755125542a1f6f2682116`
+- 审计时本地 `origin/main`：`d31f7538dc8fb984696008ed93b10c3c47afc604`
+- 实现检查点提交时间：`2026-08-05T11:01:52+08:00`
+- 实现检查点标题：`fix: enforce non-negative thread count and state machine contracts in EventLoopThreadPool and TcpServer`
 - 最新已发布标签：`v0.2.0-phase4-preview`
-- 当前 HEAD 位于该标签之后 62 个提交
+- 实现检查点位于该标签之后 66 个提交
 - CMake package version：`0.3.0`
 - 语言标准：C++23，关闭 compiler extensions
+- 当前冻结的 v0.3 最终候选：无
 
-旧审计基线 `e24c8476a62838cea3ca18185964d68d792885fa` 到当前 HEAD：
+本报告原始审计基线 `7a56132d6ea60346ec06c108cd627b7b4cd5a04f` 到
+受审实现检查点：
 
-- 26 个提交；
-- 146 个文件变化；
-- 20,455 行新增，780 行删除。
+- 4 个提交；
+- 35 个文件变化；
+- 2,657 行新增，1,369 行删除。
 
-这 26 个提交已经完成或显著推进：
+这 4 个提交完成：
 
-- IOCP Accept/Connect cancellation final drain；
-- IOCP wakeup coalescing；
-- stable segmented writes、partial write 与按需 read storage；
-- bounded AcceptEx pre-post pool；
-- EventLoop/IOCP 公平预算；
-- repeating timer cadence、bucketed deadlines 和 loop selectors；
-- Buffer/PacketFramer retention 回收；
-- connection/loop/server/global TCP output memory hierarchy；
-- Broadcast owner/global outstanding 原子记账；
-- core/capacity/endurance 证据工作流。
+- M3-R1 建连投递失败的 owner-loop rollback 合同与实现；
+- TcpConnection partial-construction fd exact-once remediation；
+- M3-R1 独立审查和同 SHA 六 producer 记录；
+- M3-R2 EventLoopThreadPool 状态机与 TcpServer 转发负向合同。
 
-旧审计中关于上述项目“尚未实现”的结论已经失效，不再沿用。
+`95a6ab5` 是 M3-R1 已独立审查的历史检查点；`12adb00` 在其上增加 M3-R2，
+因此前者的 CI、性能、容量或 endurance 结果不能自动提升为后者的发布证据。
 
 ### 3.2 项目清单
 
@@ -140,39 +174,41 @@ P2-01 的本地实现与合同范围；当前改动尚未冻结为新候选 SHA�
 | active intent | 30 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 137 |
+| intent 显式 verification paths | 138 |
 | public headers | 55 |
 | `.cc` sources | 40 |
-| CTest tests | 119 |
+| CTest tests | 120 |
 
 测试分区：
 
 - unit：8；
-- contract：98；
+- contract：99；
 - integration：13。
 
 交叉标签中包括：
 
-- threading：92；
-- lifecycle：97；
+- threading：93；
+- lifecycle：98；
 - game pipeline：7；
 - broadcast：5。
 
 ### 3.3 本地验证
 
-在当前 HEAD 上执行：
+在受审实现检查点对应源码树上执行：
 
 ```text
-cmake --build build-q1e-tests --config Release --parallel 8
-ctest --test-dir build-q1e-tests -C Release --output-on-failure --timeout 60
+cmake --build build-m3-r1-remediation-release --config Release --parallel
+ctest --test-dir build-m3-r1-remediation-release -C Release --output-on-failure
 ```
 
 结果：
 
 - Release 增量构建成功；
-- 119/119 CTests 通过；
+- 120/120 CTests 通过；
 - 0 failed；
-- 总耗时约 56.72 秒。
+- 总耗时约 52.88 秒；
+- EventLoopThreadPool 主合同、restart soak 与 TcpServer 合同各重复 50 次，
+  共 150/150 通过。
 
 随后执行 `.github/workflows/ci.yml` 当前主 gate 对应的仓库/API/CI Python 守卫：
 
@@ -182,9 +218,10 @@ ctest --test-dir build-q1e-tests -C Release --output-on-failure --timeout 60
 
 证据边界：
 
-- 这是现有完整构建树上的当前 HEAD 增量 Release 验证，不是全新目录的 clean configure；
-- 本轮没有本地重跑 Debug、安装 consumer、ASan/UBSan、TSan 或 libFuzzer；
-- 这些不能被 119/119 Release 结果替代。
+- 这是现有完整构建树上的实现检查点增量 Release 验证，不是全新目录的 clean configure；
+- M3-R2 没有在本轮重跑 Debug、Linux/epoll、安装 consumer、ASan/UBSan、
+  TSan 或 libFuzzer；
+- 这些不能被 120/120 Release 结果替代。
 
 ### 3.4 本机 Windows 工具链
 
@@ -200,24 +237,22 @@ ctest --test-dir build-q1e-tests -C Release --output-on-failure --timeout 60
 
 ### 3.5 当前远端证据状态
 
-当前 SHA 的主要 Actions 状态：
+当前证据边界按不可变提交区分：
 
-- [`ci` run 30518726195](https://github.com/YanqingXu/game-net-core/actions/runs/30518726195) 仍处于 queued：
-  - Windows Release job 在旧工具链状态下止于 bootstrap；
-  - Windows Debug job 止于 GitHub checkout 网络失败；
-  - Linux CMake、Release、ASan/UBSan、TSan jobs 仍未形成成功结果。
-- [`windows-self-hosted-ci` run 30521379378](https://github.com/YanqingXu/game-net-core/actions/runs/30521379378) attempt 3 失败：
-  - 当次执行无法发现 VS C++ tools；
-  - artifact upload 又命中 storage quota。
-- [`core-benchmark` run 30518766777](https://github.com/YanqingXu/game-net-core/actions/runs/30518766777) 在 job 启动前因账户 billing lock 失败。
-- [`capacity-gate` run 30518769101](https://github.com/YanqingXu/game-net-core/actions/runs/30518769101) 同样在 job 启动前因 billing lock 失败。
+- `95a6ab5` 的 M3-R1 独立 clean review 已批准；GitHub Actions run
+  `30813037693` attempt 2 的 Linux Debug/Release/TSan/ASan-UBSan 与 Windows
+  Debug/Release 六个 producer 均成功；
+- 同一 run 的 aggregate job 虽为 success，但 retained artifact API 返回 0，
+  聚合上传/校验步骤未形成可下载证据，因此 P1-02 仍开放；
+- `12adb00` 增加 M3-R2 运行时代码和合同，尚无同 SHA 远端 CI、paired
+  benchmark/capacity 或 24/72 小时 endurance；
+- `be749ad`、`5f926f3` 与 `b344318` 的性能/容量/endurance 结果仅是历史
+  基础设施证据，不是 `12adb00` 的当前候选证据；
+- 审计时 `origin/main` 仍为 `d31f753`，且没有冻结的 v0.3 最终候选。
 
-当前 runner：
-
-- `gamenet-windows`：online、idle；
-- `gamenet-endurance`：offline。
-
-这些失败不能被描述为代码测试失败，但它们同样不能产生发布证据。
+远端基础设施状态可能独立变化；本报告不把未重新查询的 runner 在线状态或
+旧 queued/failed run 描述为当前事实。发布门只接受最终候选 SHA 上可下载、
+可校验且 identity/hash 完整的 evidence set。
 
 ## 4. 成熟度判断
 
@@ -226,12 +261,12 @@ ctest --test-dir build-q1e-tests -C Release --output-on-failure --timeout 60
 | Intent/规则治理 | 强；清单、语义、依赖与 provenance 已有自动守卫 |
 | Reactor/TCP 核心 | 强 preview；状态机、owner-loop 和 shutdown 合同密度高 |
 | Windows IOCP | 已完成关键正确性和性能底座切片，本地 Release 合同通过 |
-| Linux epoll | 当前工作树已完成 WSL2 本地 Debug/Release 120/120；已提交候选的远端结果仍未完成 |
+| Linux epoll | M3-R1 检查点已完成本地 Debug/Release 120/120；M3-R2 检查点尚未重跑 Linux/epoll |
 | 公平性/容量 | 已有显式批次、队列、deadline、内存预算和 retention 边界 |
 | 上层 foundation | Protocol/Transport/Session/Logic/Broadcast 可测试，但仍是 foundation |
 | Metrics | 有结构化接口和测试，明确为 provisional、非生产热路径实现 |
 | API/安装 | 0.3 manifest 和 diff 完整；stable surface review 未完成 |
-| 发布可采用性 | 被当前 SHA 证据、许可证和 API 审查共同阻塞 |
+| 发布可采用性 | 无冻结 v0.3 最终候选；被同 SHA 证据、许可证和 API 审查共同阻塞 |
 
 ## 5. 已确认的强项
 
@@ -306,7 +341,11 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 
 ### P1-01：worker 建连投递失败会破坏 owner-loop 析构规则
 
-状态更新（2026-08-03）：下述内容保留为原始问题证据。首次候选 `446f86d` 修复了 queue-rejection 的 off-owner release，但独立审查又发现 construction-failure fd 双重所有权，因此拒绝关闭。后续 remediation 已在工作树通过确定性故障注入与双平台验证；新的 clean candidate SHA 绑定和独立复审仍是关闭条件。
+关闭状态（2026-08-03）：下述内容保留为原始问题证据。首次候选
+`446f86d` 修复了 queue-rejection 的 off-owner release，但独立审查发现
+construction-failure fd 双重所有权并拒绝关闭。remediation `95a6ab5` 把 fd
+claim 移到全部可抛构造步骤之后，新增确定性故障注入，并通过 clean 独立
+全矩阵复审；P1-01 已关闭。后续 `12adb00` 没有改变该所有权路径。
 
 证据：
 
@@ -335,9 +374,10 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 
 ### P1-02：当前 SHA 没有发布级同 SHA 证据
 
-被拒候选 `446f86d` 的同 SHA remote CI 已提供 Linux/Windows
-Debug/Release、Linux ASan/UBSan、Linux TSan 和 install consumer 的成功
-producer 结果。但这些结果不能替代新 remediation 候选的以下发布证据：
+已批准的 M3-R1 检查点 `95a6ab5` 已取得 Linux/Windows Debug/Release、
+Linux ASan/UBSan、Linux TSan 和 install consumer 的六个成功 producer，
+但 aggregate retained artifact 缺失。后续 `12adb00` 又改变运行时代码，因此
+最终 v0.3 候选仍缺少以下同 SHA 发布证据：
 
 - Linux CMake Debug/Release；
 - Linux ASan/UBSan；
@@ -351,9 +391,9 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 当前证据缺口包括：
 
-- `446f86d` 已被独立审查拒绝，所有 candidate-bound 结果都必须在新 SHA 重建；
-- attempt 3 的六个 producer 均成功，但 artifact 下载为 0/6，聚合验证明确跳过；
-- 新 remediation 尚无 remote CI、paired benchmark/capacity 或 24/72 小时 endurance；
+- `95a6ab5` 的 run `30813037693` attempt 2 六个 producer 均成功，但 retained
+  artifact 下载为 0，聚合上传/校验没有形成可复核资产；
+- `12adb00` 尚无 remote CI、paired benchmark/capacity 或 24/72 小时 endurance；
 - retained manifest、run identity、参数和 artifact hash 尚未形成完整证据链。
 
 关闭条件是新候选 SHA 的必需 jobs 全绿，并且 manifest、candidate SHA、run identity、参数和 artifact hash 完整一致。
@@ -372,19 +412,20 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 - README、package metadata、SBOM/third-party notices 与许可证保持一致；
 - 发布审查确认源码、二进制包和依赖许可链。
 
-### P1-04：0.3 stable Core 表面需要独立审查
+### P1-04：0.3 stable Core 表面独立审查（已关闭）
 
 当前 public API diff 相对 `v0.2.0-phase4-preview`：
 
 - 新增 10 个 `stable_core` headers；
 - 新增 4 个 provisional headers；
-- 17 个既有 stable headers 指纹变化；
+- 19 个既有 stable headers 指纹变化；
 - 无 header 删除；
 - 无 target 增删；
 - compatibility line 从 0.2 变为 0.3，因此不要求同线兼容决定；
 - `stable_surface_review_required=true`。
 
-这不是自动判定的兼容性失败，但变化面积足够大，不能只依赖 manifest guard 自行批准。
+跨线 diff 本身不是自动判定的同线兼容失败，但变化面积足够大，因此已由独立
+reviewer 审查，而不是由 manifest guard 自行批准。
 
 独立审查至少要覆盖：
 
@@ -394,6 +435,17 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 - stable/provisional 分类；
 - 0.3 源兼容承诺与 ABI 非承诺；
 - install consumer 和公开示例。
+
+关闭结果（2026-08-05）：
+
+- 独立首次审查 `REJECT`，八组 blocker 均有对应 intent/合同/测试/实现修复；
+- 最终独立结论 `APPROVE`，无剩余实现/合同 blocker；
+- core-only consumer 覆盖全部 stable headers，provisional consumer 独立；
+- CMake `SameMinorVersion` 与 0.3 正向、0.2/0.4 负向版本 probe 可执行；
+- reviewed snapshot 与当前 manifest 严格 zero diff；stable additions 和
+  fingerprint drift 都会被 blocking gate 拒绝；
+- P1-04 关闭，但最终 SHA 绑定、远端证据和发布决定仍分别属于
+  REL-C1、REL-V/PERF/END 与 REL-D1。
 
 ### P2-01：EventLoopThreadPool 非法状态转换没有完整拒绝
 
@@ -424,29 +476,39 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 - `start()` 在 already-started 时以 `std::logic_error` 失败，且不会追加
   worker、重置 load accounting 或重复发布 init callback；
 - `getAllLoops()` 与选择/load-accounting 操作一致要求 base-loop thread；
-- `tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp` 覆盖
+- [`test_event_loop_thread_pool.cpp`](tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp) 覆盖
   negative、wrong-thread、late-config、repeated-start、zero-thread 和合法 restart；
-- `tests/contract/tcp_server/test_tcp_server_contract.cpp` 覆盖 TcpServer 的
+- [`test_tcp_server_contract.cpp`](tests/contract/tcp_server/test_tcp_server_contract.cpp) 覆盖 TcpServer 的
   negative 与 late thread-count 转发；
 - 修复前新增合同失败，修复后 Release 全量 120/120、守卫 36/36，聚焦
   重复 150/150。
 
 ### P2-02：路线图文档存在当前性漂移
 
-`docs/migration_status.md` 顶部仍写着 `Current production-roadmap audit: 2026-07-27`，而当前 HEAD 为 2026-07-30。旧 `assessment.md` 也仍以 `e24c8476` 为基线，旧 `plan.md` 同时存在：
+原始问题是 `docs/migration_status.md` 的 current audit 日期、assessment 基线、
+plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b344318` 等
+历史证据一度与当前检查点混写。
 
-- 顶部把内存治理列为未完成；
-- 详细 M3-Q1 又已全部完成；
-- 总 milestone checklist 仍未同步关闭。
+关闭结果（2026-08-05）：
 
-本轮已通过完全重写 `assessment.md` 和 `plan.md` 消除后两项漂移；`docs/migration_status.md` 仍需在下一轮 remediation 后同步，而不是继续叠加历史“current”段落。
+- roadmap、assessment、plan、README 和 migration status 统一使用已提交实现
+  检查点 `12adb00`；
+- 审计时上游参考 `d31f753`、M3-R1 已审查检查点 `95a6ab5` 与“当前无冻结
+  v0.3 最终候选”被明确区分；
+- 当前测试清单统一为 120（8 unit、99 contract、13 integration；93
+  threading、98 lifecycle），intent 清单继续由守卫推导为 61/30/20/11/138；
+- `be749ad`、`5f926f3`、`b344318` 的 benchmark/capacity/endurance 结果只在
+  historical evidence 范围出现；
+- P1-01/P2-01 的关闭证据链接到具体合同；GOV-R2 当时将 API-R1 设为下一
+  任务，本次 API-R1 关闭后唯一下一任务已推进为 REL-C1；
+- migration-status guard 同时检查四份治理文档与 README 的检查点和候选边界。
 
-关闭条件：
+关闭门：
 
-- migration status 更新到新候选 SHA；
-- 当前结论与历史证据分区；
-- finding ID、plan task 和关闭证据一一对应；
-- 守卫继续从仓库事实推导数字，不复制易漂移的手工清单。
+- [x] migration status 更新到已提交实现检查点，并明确当前无最终候选；
+- [x] 当前结论与历史证据分区；
+- [x] finding ID、plan task 和关闭证据一一对应；
+- [x] 守卫继续从仓库事实推导 intent/test 数字并交叉检查治理文档。
 
 ## 7. 已知边界，不作为本轮缺陷
 
@@ -464,7 +526,7 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 ### 8.1 可以确认
 
 - admission、per-turn drain、timer/deadline、TCP output、Broadcast outstanding 和 retention 都有显式有限边界；
-- Windows Release 119 tests 没有暴露当前实现回归；
+- Windows/IOCP Release 120/120 没有暴露 `12adb00` 实现回归；
 - benchmark/capacity 工具及其 schema/negative fixtures 通过仓库守卫；
 - 旧 SHA 已有历史 benchmark/endurance 资产，可用于方法校验。
 
@@ -505,9 +567,8 @@ producer 结果。但这些结果不能替代新 remediation 候选的以下发�
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 完成 GOV-R2 当前事实与文档同步；
-2. 完成 0.3 stable surface 独立审查；
-3. 修复 retained artifact 并跑通同 SHA 性能、容量和 endurance；
-4. 由项目所有者完成许可证决定。
+1. 完成 REL-C1：冻结包含 M3-R2、GOV-R2 和 API-R1 remediation 的唯一候选 SHA；
+2. 修复 retained artifact 并跑通同 SHA 性能、容量和 endurance；
+3. 由项目所有者完成许可证决定。
 
 具体执行拆分、依赖和关闭门记录在新的 `plan.md`。

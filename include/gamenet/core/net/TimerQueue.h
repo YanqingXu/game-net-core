@@ -27,20 +27,34 @@ class EventLoop;
 
 class TimerQueue : private gamenet::base::noncopyable {
 public:
+    // Callbacks execute asynchronously on the EventLoop owner, may re-enter
+    // owner-safe APIs, and follow the EventLoop callback-exception policy.
     using TimerCallback = std::function<void()>;
     using Duration = std::chrono::steady_clock::duration;
 
-    explicit TimerQueue(EventLoop* loop);
+    // TimerQueue is an installed implementation type, not an application
+    // scheduler. EventLoop is the only supported construction/admission API.
     ~TimerQueue();
 
+private:
+    // loop must be non-null and must outlive this queue.
+    explicit TimerQueue(EventLoop* loop);
+
+    // Valid input errors throw std::invalid_argument. Admission itself is
+    // typed: rejected scheduling returns an invalid TimerId.
+    TimerScheduleResult tryAddTimer(
+        TimerCallback cb,
+        gamenet::base::Timestamp when,
+        Duration interval = Duration::zero(),
+        RepeatingTimerOptions options = {});
     TimerId addTimer(
         TimerCallback cb,
         gamenet::base::Timestamp when,
         Duration interval = Duration::zero(),
         RepeatingTimerOptions options = {});
+    PostResult tryCancel(TimerId timerId) noexcept;
+    // Internal compatibility wrapper. Unknown/invalid TimerId is a safe no-op.
     void cancel(TimerId timerId);
-
-private:
     struct ExpiredResult {
         std::vector<std::exception_ptr> exceptions;
         std::size_t drained{0};

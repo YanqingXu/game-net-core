@@ -38,6 +38,10 @@ without owning protocol semantics.
 ## 4. Core Invariants
 - readableBytes, writableBytes, and prependableBytes stay internally consistent
 - append never invalidates existing readable data semantics
+- pointer/range APIs require `data` to denote a readable `[data, data + len)`
+  range when `len > 0`; zero-length append is a no-op and permits null
+- `retrieveUntil(end)` requires `end` inside the current inclusive readable
+  range, and `hasWritten(len)` requires `len <= writableBytes()`
 - retrieve moves reader state forward or resets cleanly
 - fd read/write helpers report explicit errno on failure
 - a bounded fd read never appends more than the caller-provided byte ceiling

@@ -95,8 +95,13 @@ all while preserving the same owner-loop discipline as the server side.
 - an accepting owner-thread call preserves runInLoop-style inline semantics:
   admission state is published under the facade mutex, the mutex is released,
   and only then may Connector, TcpConnection, or a user callback execute
-- enableRetry() and disableRetry() may be called cross-thread;
-  they must update Connector retry state on the owner loop via runInLoop
+- enableRetry() and disableRetry() remain compatibility wrappers. Typed
+  `tryEnableRetry()` / `tryDisableRetry()` may be called cross-thread, return
+  QueueFull/Shutdown/OwnerUnavailable distinctly, and update Connector retry
+  state only on the owner loop
+- callback setters are owner-loop-only. They configure future callback
+  publication; connection backpressure options must additionally be set before
+  an accepted connect lifecycle
 - newConnection / removeConnection run on the owner loop thread
 - user callbacks (connection / message / close) fire on the owner loop thread
 - Connector state machine transitions happen on the owner loop thread only
@@ -237,7 +242,7 @@ runtime retry enable/disable remains marshaled through the facade.
   verifies non-owner connect() marshals Connector startup to the owner loop and
   publishes connection callbacks on that loop
 - `tests/contract/tcp_client/test_tcp_client_cross_thread_retry_config.cpp`
-  verifies non-owner disableRetry() marshals retry-state mutation to the owner
+  verifies non-owner `tryDisableRetry()` marshals retry-state mutation to the owner
   loop and prevents peer close from resurrecting a disabled-retry client
 - cross-thread connect marshals to owner loop before Connector starts
 - cross-thread disconnect marshals to owner loop before teardown begins

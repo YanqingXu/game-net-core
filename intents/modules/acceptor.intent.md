@@ -60,12 +60,15 @@ hands them upward through a narrow callback boundary.
   slot vector is allocated and ends only when the shared pool state is
   destroyed after every Poller lease is released; `stop()` cannot publish zero
   merely because Acceptor dropped its own shared pointer
+- callback/error-policy and IOCP-depth configuration is owner-loop-only and is
+  rejected while listening before any configured state is mutated
 
 ---
 
 ## 5. Threading Rules
 - listen() is owner-thread only
 - stop() is owner-thread only
+- callback and option setters are owner-thread-only setup operations
 - handleRead() runs on owner loop thread
 - IOCP slot creation, submission, completion consumption, generation advance,
   cancellation, and reuse are owner-thread only

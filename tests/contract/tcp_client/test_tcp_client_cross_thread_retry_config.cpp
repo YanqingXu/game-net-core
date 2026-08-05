@@ -10,10 +10,57 @@
 
 #include <atomic>
 #include <chrono>
+#include <stdexcept>
+#include <thread>
 
 using namespace std::chrono_literals;
 
 int main() {
+    {
+        gamenet::net::EventLoop saturatedLoop(gamenet::net::EventLoopOptions{
+            .maxPendingFunctors = 1,
+            .reservedPendingFunctors = 0,
+            .maxFunctorsPerIteration = 1,
+        });
+        gamenet::net::TcpClient saturatedClient(
+            &saturatedLoop,
+            gamenet::net::InetAddress(9, true),
+            "client-retry-config-saturated");
+        std::atomic<bool> wrongThreadSetterRejected{false};
+        std::thread wrongThreadSetter([&] {
+            try {
+                saturatedClient.setMessageCallback({});
+            } catch (const std::runtime_error&) {
+                wrongThreadSetterRejected = true;
+            }
+        });
+        wrongThreadSetter.join();
+        GAMENET_TEST_ASSERT(wrongThreadSetterRejected.load());
+        GAMENET_TEST_ASSERT(saturatedLoop.tryQueueInLoop([] {}));
+        gamenet::net::PostResult result{};
+        std::thread caller([&] {
+            result = saturatedClient.tryEnableRetry();
+        });
+        caller.join();
+        GAMENET_TEST_ASSERT(result == gamenet::net::PostResult::QueueFull);
+        GAMENET_TEST_ASSERT(!saturatedClient.retry());
+    }
+
+    {
+        gamenet::net::EventLoop shutdownLoop;
+        gamenet::net::TcpClient shutdownClient(
+            &shutdownLoop,
+            gamenet::net::InetAddress(9, true),
+            "client-retry-config-shutdown");
+        shutdownLoop.quit();
+        gamenet::net::PostResult result{};
+        std::thread caller([&] {
+            result = shutdownClient.tryDisableRetry();
+        });
+        caller.join();
+        GAMENET_TEST_ASSERT(result == gamenet::net::PostResult::Shutdown);
+    }
+
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "client-retry-config-server");
     gamenet::net::TcpClient client(&loop, server.listenAddress(), "client-retry-config-client");
@@ -21,6 +68,8 @@ int main() {
     client.enableRetry();
 
     std::atomic<bool> nonOwnerDisableIssued{false};
+    std::atomic<gamenet::net::PostResult> nonOwnerDisableResult{
+        gamenet::net::PostResult::OwnerUnavailable};
     bool peerCloseQueued = false;
     bool finishQueued = false;
     int clientConnectedCount = 0;
@@ -74,6 +123,10 @@ int main() {
             ++clientConnectedCount;
             GAMENET_TEST_ASSERT(clientConnectedCount == 1);
             GAMENET_TEST_ASSERT(client.connection() == conn);
+            // The late valid one-byte hard-limit proposal below was rejected;
+            // this two-byte send proves the original setup options remained.
+            GAMENET_TEST_ASSERT(
+                conn->trySend("ok") == gamenet::net::TcpSendResult::Accepted);
 
             // client-cross-thread-retry-config: non-owner disableRetry()
             // must marshal retry state mutation to the owner loop so a later
@@ -81,13 +134,16 @@ int main() {
             gamenet::test::runFromNonOwnerThread([&] {
                 GAMENET_TEST_ASSERT(!loop.isInLoopThread());
                 nonOwnerDisableIssued = true;
-                client.disableRetry();
+                nonOwnerDisableResult = client.tryDisableRetry();
             });
 
             peerCloseQueued = true;
             loop.runAfter(50ms, [&] {
                 GAMENET_TEST_ASSERT(loop.isInLoopThread());
-                GAMENET_TEST_ASSERT(nonOwnerDisableIssued.load());
+            GAMENET_TEST_ASSERT(nonOwnerDisableIssued.load());
+            GAMENET_TEST_ASSERT(
+                nonOwnerDisableResult.load() ==
+                gamenet::net::PostResult::Accepted);
                 GAMENET_TEST_ASSERT(!client.retry());
                 GAMENET_TEST_ASSERT(serverConnection);
                 serverConnection->forceClose();
@@ -101,7 +157,21 @@ int main() {
     });
 
     server.start();
-    client.connect();
+    GAMENET_TEST_ASSERT(
+        client.tryConnect() == gamenet::net::PostResult::Accepted);
+    bool lateBackpressureRejected = false;
+    try {
+        client.setConnectionBackpressureOptions(
+            gamenet::net::TcpConnectionBackpressureOptions{
+                .lowWaterMarkBytes = 0,
+                .highWaterMarkBytes = 1,
+                .hardLimitBytes = 1,
+                .maxInputBufferBytes = 1,
+            });
+    } catch (const std::logic_error&) {
+        lateBackpressureRejected = true;
+    }
+    GAMENET_TEST_ASSERT(lateBackpressureRejected);
 
     gamenet::test::runLoopWithTimeout(
         loop,

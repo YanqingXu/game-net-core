@@ -113,6 +113,45 @@ int main() {
     GAMENET_TEST_ASSERT(!expiredExecutor.tryQueue([] {}));
 
     {
+        gamenet::net::EventLoop loop;
+        const auto executor = loop.executor();
+        bool strandedCallbackRan = false;
+        loop.quit();
+
+        GAMENET_TEST_ASSERT(!loop.tryQueueInLoop(
+            [&] { strandedCallbackRan = true; }));
+        GAMENET_TEST_ASSERT(
+            executor.post([&] { strandedCallbackRan = true; }) ==
+            gamenet::net::PostResult::Shutdown);
+        const auto typedTimer = loop.tryRunAfter(
+            0ms, [&] { strandedCallbackRan = true; });
+        GAMENET_TEST_ASSERT(
+            typedTimer.result == gamenet::net::PostResult::Shutdown);
+        GAMENET_TEST_ASSERT(!typedTimer.timerId.valid());
+        GAMENET_TEST_ASSERT(
+            loop.tryCancel({}) == gamenet::net::PostResult::Accepted);
+
+        bool closedQueueWasExplicit = false;
+        try {
+            loop.queueInLoop([] {});
+        } catch (const std::logic_error&) {
+            closedQueueWasExplicit = true;
+        }
+        GAMENET_TEST_ASSERT(closedQueueWasExplicit);
+
+        bool rejectedTimer = false;
+        try {
+            (void)loop.runAfter(0ms, [&] { strandedCallbackRan = true; });
+        } catch (const std::logic_error&) {
+            rejectedTimer = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedTimer);
+
+        loop.loop();
+        GAMENET_TEST_ASSERT(!strandedCallbackRan);
+    }
+
+    {
         gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
             .maxPendingFunctors = 3,
             .reservedPendingFunctors = 0,

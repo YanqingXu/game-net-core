@@ -249,10 +249,20 @@ Acceptor::~Acceptor() {
 }
 
 void Acceptor::setNewConnectionCallback(NewConnectionCallback cb) {
+    loop_->assertInLoopThread();
+    if (listening_) {
+        throw std::logic_error(
+            "Acceptor callback must be configured while stopped");
+    }
     newConnectionCallback_ = std::move(cb);
 }
 
 void Acceptor::setErrorCallback(AcceptorErrorCallback cb) {
+    loop_->assertInLoopThread();
+    if (listening_) {
+        throw std::logic_error(
+            "Acceptor error callback must be configured while stopped");
+    }
     errorCallback_ = std::move(cb);
 }
 

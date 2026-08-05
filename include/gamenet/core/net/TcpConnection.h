@@ -51,12 +51,15 @@ class TcpConnection : public std::enable_shared_from_this<TcpConnection>, privat
 public:
     enum StateE { kConnecting, kConnected, kDisconnecting, kDisconnected };
 
+    // loop must be non-null and outlive this connection.
     TcpConnection(
         EventLoop* loop,
         std::string name,
         SocketFd sockfd,
         const InetAddress& localAddr,
         const InetAddress& peerAddr);
+    // Construction claims sockfd only after all fallible setup succeeds; on a
+    // thrown constructor the caller retains it. Destruction is owner-loop-only.
     ~TcpConnection();
 
     EventLoop* getLoop() const noexcept;
@@ -69,12 +72,18 @@ public:
     bool connected() const noexcept;
     bool disconnected() const noexcept;
 
+    // Compatibility sends intentionally discard the TcpSendResult returned by
+    // trySend().
     void send(std::string_view message);
+    // For len > 0, data must denote a readable [data, data + len) range. The
+    // call copies cross-thread input before return. Zero length permits null.
     void send(const void* data, std::size_t len);
     // Admission is bounded across both owner-thread buffered bytes and
     // cross-thread payloads accepted but not yet executed by the owner loop.
     TcpSendResult trySend(std::string_view message);
     TcpSendResult trySend(const void* data, std::size_t len);
+    // Compatibility terminal requests intentionally discard the PostResult
+    // returned by their try* counterparts.
     void shutdown();
     void forceClose();
     PostResult tryShutdown();

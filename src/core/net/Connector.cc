@@ -17,6 +17,7 @@
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 namespace gamenet::net {
@@ -104,6 +105,7 @@ Connector::StateE Connector::state() const noexcept {
 
 void Connector::start() {
     loop_->assertInLoopThread();
+    startedOnce_ = true;
     connect_ = true;
 
     if (state() == kConnected) {
@@ -158,6 +160,10 @@ void Connector::restart() {
 
 void Connector::setRetryDelay(Duration initial, Duration max) {
     loop_->assertInLoopThread();
+    if (startedOnce_) {
+        throw std::logic_error(
+            "Connector retry delay must be configured before first start");
+    }
     ConnectorOptions options;
     options.initRetryDelay = initial;
     options.maxRetryDelay = max;

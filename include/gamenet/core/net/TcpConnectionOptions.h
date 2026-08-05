@@ -16,6 +16,10 @@ enum class TcpSendResult {
     LoopOverloaded,
     ServerOverloaded,
     GlobalOverloaded,
+    // The owner loop's bounded scheduling queue rejected cross-thread work.
+    SchedulingQueueFull,
+    // The owner loop sealed admission before the send could be scheduled.
+    OwnerShutdown,
 };
 
 struct TcpConnectionBackpressureOptions {
@@ -24,6 +28,8 @@ struct TcpConnectionBackpressureOptions {
     std::size_t hardLimitBytes{16U * 1024U * 1024U};
     std::size_t maxInputBufferBytes{2U * 1024U * 1024U};
 
+    // Requires 0 <= low < high <= hard and maxInputBufferBytes > 0; invalid
+    // values throw std::invalid_argument. Configure before establishment.
     void validate() const;
 };
 

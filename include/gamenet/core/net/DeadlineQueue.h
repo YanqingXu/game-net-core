@@ -37,6 +37,8 @@ struct DeadlineQueueOptions {
         std::chrono::milliseconds(10)};
     std::size_t maxExpiredPerAdvance{1024};
 
+    // resolution and maxExpiredPerAdvance must both be positive; invalid
+    // values throw std::invalid_argument.
     void validate() const;
 };
 
@@ -57,6 +59,8 @@ public:
     explicit DeadlineQueue(
         EventLoop* ownerLoop,
         DeadlineQueueOptions options = {});
+    // Construction, every operation, and destruction are owner-loop-only.
+    // The owner pointer must be non-null and outlive this queue.
     ~DeadlineQueue();
 
     DeadlineToken schedule(

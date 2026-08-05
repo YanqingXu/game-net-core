@@ -123,6 +123,11 @@ struct EventLoopOptions {
     // storage. Other backends validate and retain the value without using it.
     std::size_t maxIocpCompletionsPerPoll{64};
 
+    // Throws std::invalid_argument unless maxPendingFunctors and each drain
+    // budget are positive, maxFunctorsPerIteration fits the normal queue,
+    // control capacities stay within 65,536, total functor capacity does not
+    // overflow, and IOCP width is [1,64]. Zero control/lifecycle capacity is
+    // allowed, but components requiring those facilities then fail to attach.
     void validate() const;
 };
 
@@ -132,6 +137,8 @@ public:
     using TimerDuration = std::chrono::steady_clock::duration;
 
     explicit EventLoop(EventLoopOptions options = {});
+    // Construction, loop(), Channel mutation, and destruction are owner-thread
+    // operations. Destruction while loop() is active is fatal.
     ~EventLoop();
 
     void loop();
@@ -139,10 +146,17 @@ public:
 
     gamenet::base::Timestamp pollReturnTime() const noexcept;
 
+    // On the owner thread, runInLoop invokes cb synchronously and propagates
+    // its exception to the caller. Cross-thread runInLoop, queueInLoop,
+    // executor posts, and timer callbacks execute asynchronously on the owner;
+    // their exceptions are contained by CallbackException.h. Async callbacks
+    // may re-enter owner-safe APIs.
     void runInLoop(Functor cb);
+    // Legacy wrapper: QueueFull throws overflow_error; closed admission throws
+    // logic_error. Use executor().post() when a typed result is required.
     void queueInLoop(Functor cb);
-    // Non-throwing capacity-aware admission. False means empty callback or
-    // saturation; executor admission closure is handled by EventLoopExecutor.
+    // Non-throwing capacity-aware admission. False means empty callback,
+    // saturation, or sealed admission; executor().post() distinguishes them.
     bool tryQueueInLoop(Functor cb);
     std::size_t pendingFunctorCount() const;
     std::uint64_t rejectedFunctorCount() const noexcept;
@@ -157,9 +171,23 @@ public:
     std::uint64_t rejectedLifecycleSignalCount() const noexcept;
     EventLoopPhase phase() const noexcept;
     EventLoopExecutor executor() const noexcept;
+    // Owner-thread callback configuration. Asynchronous callbacks and these
+    // observers execute on this loop, may re-enter owner-safe APIs, and are
+    // contained according to CallbackException.h.
     void setEventLoopMetricCallback(EventLoopMetricCallback cb);
     void setCallbackExceptionHandler(EventLoopCallbackExceptionHandler cb);
     std::uint64_t callbackExceptionCount() const noexcept;
+    // Timer callbacks execute asynchronously on the owner, may re-enter
+    // owner-safe APIs, and follow the EventLoop callback-exception policy.
+    // Every timer requires a non-empty callback. Repeating intervals must be
+    // positive and RepeatingTimerOptions must validate; invalid input throws
+    // std::invalid_argument. A past runAt/negative runAfter deadline is simply
+    // eligible on the next timer phase.
+    //
+    // The legacy run* methods return TimerId and map QueueFull to
+    // std::overflow_error and Shutdown/OwnerUnavailable to std::logic_error.
+    // The tryRun* methods instead return the exact PostResult and carry a valid
+    // TimerId only for Accepted.
     TimerId runAt(gamenet::base::Timestamp time, Functor cb);
     TimerId runAfter(TimerDuration delay, Functor cb);
     // Compatibility overload: fixed-delay cadence with no catch-up.
@@ -168,14 +196,21 @@ public:
         TimerDuration interval,
         Functor cb,
         RepeatingTimerOptions options);
+    TimerScheduleResult tryRunAt(gamenet::base::Timestamp time, Functor cb);
+    TimerScheduleResult tryRunAfter(TimerDuration delay, Functor cb);
+    TimerScheduleResult tryRunEvery(TimerDuration interval, Functor cb);
+    TimerScheduleResult tryRunEvery(
+        TimerDuration interval,
+        Functor cb,
+        RepeatingTimerOptions options);
+    PostResult tryCancel(TimerId timerId) noexcept;
+    // Compatibility wrapper that intentionally discards typed cancellation
+    // admission. Unknown/invalid TimerId remains a safe no-op.
     void cancel(TimerId timerId);
 
     void wakeup();
     void updateChannel(Channel* channel);
     void removeChannel(Channel* channel);
-    // Used when a connected socket fd moves from Connector to TcpConnection.
-    void preserveSocketAssociation(SocketFd sockfd);
-    void retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime);
     bool hasChannel(Channel* channel);
 
     bool isInLoopThread() const noexcept;
@@ -204,8 +239,13 @@ private:
     void unregisterControlSource(const EventLoopControlSource& source);
     EventLoopLifecycleSource attachLifecycleNode(Functor cb);
     void detachLifecycleNode(const EventLoopLifecycleSource& source);
+    void preserveSocketAssociation(SocketFd sockfd);
+    void retainCompletionOperation(
+        void* operation,
+        std::shared_ptr<void> lifetime);
     void forgetSocketAssociation(SocketFd sockfd) noexcept;
     void trackCompletionOperation(void* operation);
+    bool hasPendingCompletionOperations() const noexcept;
     void handleRead(gamenet::base::Timestamp receiveTime);
     void dispatchActiveChannels();
     bool hasPendingActiveChannels() const noexcept;
@@ -257,6 +297,8 @@ private:
     std::atomic<std::uint64_t> callbackExceptionCount_;
     mutable std::mutex mutex_;
     std::deque<PendingFunctor> pendingFunctors_;
+
+    friend class EventLoopExecutor;
 };
 
 }  // namespace gamenet::net

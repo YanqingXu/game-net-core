@@ -54,6 +54,9 @@ and delivers the connected fd upward through a narrow callback boundary.
   current event callback returns
 - connected fd is either delivered upward or closed explicitly (no leak)
 - retry backoff parameters are explicitly configurable
+- retry-delay configuration is immutable after the first `start()` and rejects
+  late mutation before state changes. Callback and retry-enable replacement may
+  remain runtime owner-loop operations because their reads share that owner
 - destruction removes Channel from Poller before releasing the socket
 
 ---

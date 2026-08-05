@@ -20,6 +20,8 @@ struct BufferRetentionOptions {
     // Readable-byte low watermark that permits an armed trim.
     std::size_t trimThresholdBytes{16U * 1024U};
 
+    // Throws std::invalid_argument unless retained capacity can hold the
+    // initial storage and trimThresholdBytes fits below it.
     void validate() const;
 };
 
@@ -47,23 +49,31 @@ public:
     // replaced; allocation failure leaves readable bytes and arm state intact.
     bool trimRetainedCapacity() noexcept;
 
+    // Borrowed pointers are invalidated by any operation that may resize or
+    // trim this Buffer and by Buffer destruction.
     const char* peek() const noexcept;
     char* beginWrite() noexcept;
     const char* beginWrite() const noexcept;
 
     void retrieve(std::size_t len);
+    // end must be in [peek(), peek() + readableBytes()] and is not retained.
     void retrieveUntil(const char* end);
     void retrieveAll();
     std::string retrieveAllAsString();
     std::string retrieveAsString(std::size_t len);
 
+    // For len > 0, data must denote a readable [data, data + len) range. A
+    // zero length is a no-op and permits data == nullptr. Input must not
+    // overlap this Buffer's storage.
     void append(const char* data, std::size_t len);
     void append(std::string_view data);
     void append(const std::string& data);
 
     void ensureWritableBytes(std::size_t len);
+    // Requires len <= writableBytes().
     void hasWritten(std::size_t len);
 
+    // savedErrno must point to writable int storage for the duration of call.
     // Reads at most maxReadBytes so connection-level admission can bound
     // memory growth without teaching Buffer about connection policy.
     ssize_t readFd(

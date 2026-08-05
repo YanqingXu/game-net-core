@@ -136,5 +136,52 @@ int main() {
         GAMENET_TEST_ASSERT(rejectedHighThreshold);
     }
 
+    {
+        gamenet::net::Buffer buffer;
+        buffer.append(nullptr, 0);
+        GAMENET_TEST_ASSERT(buffer.readableBytes() == 0);
+
+        bool rejectedNullRange = false;
+        try {
+            buffer.append(nullptr, 1);
+        } catch (const std::invalid_argument&) {
+            rejectedNullRange = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedNullRange);
+
+        const char foreign = 'x';
+        bool rejectedForeignEnd = false;
+        try {
+            buffer.retrieveUntil(&foreign);
+        } catch (const std::out_of_range&) {
+            rejectedForeignEnd = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedForeignEnd);
+
+        bool rejectedWrittenOverflow = false;
+        try {
+            buffer.hasWritten(buffer.writableBytes() + 1);
+        } catch (const std::out_of_range&) {
+            rejectedWrittenOverflow = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedWrittenOverflow);
+
+        bool rejectedMissingReadError = false;
+        try {
+            (void)buffer.readFd(gamenet::net::kInvalidSocket, nullptr);
+        } catch (const std::invalid_argument&) {
+            rejectedMissingReadError = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedMissingReadError);
+
+        bool rejectedMissingWriteError = false;
+        try {
+            (void)buffer.writeFd(gamenet::net::kInvalidSocket, nullptr);
+        } catch (const std::invalid_argument&) {
+            rejectedMissingWriteError = true;
+        }
+        GAMENET_TEST_ASSERT(rejectedMissingWriteError);
+    }
+
     return 0;
 }

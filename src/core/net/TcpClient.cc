@@ -381,14 +381,22 @@ TcpClientControl TcpClient::control() const noexcept {
 }
 
 void TcpClient::enableRetry() {
-    setRetry(true);
+    (void)tryEnableRetry();
 }
 
 void TcpClient::disableRetry() {
-    setRetry(false);
+    (void)tryDisableRetry();
 }
 
-void TcpClient::setRetry(bool enabled) {
+PostResult TcpClient::tryEnableRetry() noexcept {
+    return trySetRetry(true);
+}
+
+PostResult TcpClient::tryDisableRetry() noexcept {
+    return trySetRetry(false);
+}
+
+PostResult TcpClient::trySetRetry(bool enabled) noexcept {
     std::weak_ptr<void> lifetime;
     bool runInline = false;
     try {
@@ -399,7 +407,7 @@ void TcpClient::setRetry(bool enabled) {
                 ownerExecutor_.available() &&
                 ownerExecutor_.isInOwnerThread();
             if (!runInline) {
-                (void)ownerExecutor_.post(
+                return ownerExecutor_.post(
                     [this, lifetime, enabled] {
                         if (lifetime.lock()) {
                             setRetryInLoop(enabled);
@@ -409,10 +417,11 @@ void TcpClient::setRetry(bool enabled) {
         }
         if (runInline && lifetime.lock()) {
             setRetryInLoop(enabled);
+            return PostResult::Accepted;
         }
+        return PostResult::OwnerUnavailable;
     } catch (...) {
-        // Compatibility API: typed admission is available for lifecycle
-        // requests; retry configuration simply remains unchanged on failure.
+        return PostResult::QueueFull;
     }
 }
 
@@ -434,23 +443,28 @@ TcpConnectionPtr TcpClient::connection() const {
 }
 
 void TcpClient::setConnectionCallback(ConnectionCallback cb) {
+    loop_->assertInLoopThread();
     connectionCallback_ = std::move(cb);
 }
 
 void TcpClient::setMessageCallback(MessageCallback cb) {
+    loop_->assertInLoopThread();
     messageCallback_ = std::move(cb);
 }
 
 void TcpClient::setWriteCompleteCallback(WriteCompleteCallback cb) {
+    loop_->assertInLoopThread();
     writeCompleteCallback_ = std::move(cb);
 }
 
 void TcpClient::setCloseInfoCallback(CloseInfoCallback cb) {
+    loop_->assertInLoopThread();
     closeInfoCallback_ = std::move(cb);
 }
 
 void TcpClient::setConnectionBackpressureOptions(
     TcpConnectionBackpressureOptions options) {
+    loop_->assertInLoopThread();
     options.validate();
     if (activeConnectRequestId_.load(std::memory_order_relaxed) != 0) {
         throw std::logic_error(
@@ -461,6 +475,7 @@ void TcpClient::setConnectionBackpressureOptions(
 
 void TcpClient::setCallbackExceptionHandler(
     TcpConnectionCallbackExceptionHandler cb) {
+    loop_->assertInLoopThread();
     callbackExceptionHandler_ = std::move(cb);
 }
 

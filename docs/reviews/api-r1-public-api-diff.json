@@ -1,0 +1,191 @@
+{
+  "baseline": {
+    "commit": "7668d6b82a0d815ccd79f83c572bc0a36bcceea0",
+    "compatibility_line": "0.2",
+    "package_version": "0.2.0",
+    "path": "api/baselines/v0.2.0-phase4-preview.json",
+    "schema": "gamenet.public_api_snapshot.v1",
+    "tag": "v0.2.0-phase4-preview"
+  },
+  "candidate": {
+    "compatibility_line": "0.3",
+    "package_version": "0.3.0",
+    "path": "api/public_api_manifest.json",
+    "release_label": "v0.3.0-production-candidate",
+    "schema": "gamenet.public_api_manifest.v2"
+  },
+  "changes": {
+    "headers": {
+      "added": [
+        {
+          "category": "provisional",
+          "name": "include/gamenet/broadcast/BroadcastMetricsRecorder.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/DispatchResult.h"
+        },
+        {
+          "category": "provisional",
+          "name": "include/gamenet/core/metrics/MetricsExporter.h"
+        },
+        {
+          "category": "provisional",
+          "name": "include/gamenet/core/metrics/MetricsHookRecorder.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/CallbackException.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/DeadlineQueue.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/NetworkMemoryRetention.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/PostResult.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/TcpClientControl.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/TcpConnectionClose.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/TcpConnectionOptions.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/TcpOutputMemoryBudget.h"
+        },
+        {
+          "category": "stable_core",
+          "name": "include/gamenet/core/net/TimerOptions.h"
+        },
+        {
+          "category": "provisional",
+          "name": "include/gamenet/game_logic/LogicMetricsRecorder.h"
+        }
+      ],
+      "category_moves": [],
+      "removed": []
+    },
+    "stable_header_fingerprint_changes": [
+      {
+        "after": "37c8c5d5c0b929a461419bed8e9c52b817a363669c847463fb6b256bf1700943",
+        "before": "0f06ee3a1a3734fdb8b6991934f26e24ddf71c59659d5b0ec5db316ccc9389d7",
+        "header": "include/gamenet/core/net/Acceptor.h"
+      },
+      {
+        "after": "6f5b9127b90f56373bdfe5497e25b411143489bce65ac26908f6c49deff79b81",
+        "before": "41f789f77121c5efbbdf3190ea344430bf94f2d88c3d0f77d7a3913b0c7eb106",
+        "header": "include/gamenet/core/net/Buffer.h"
+      },
+      {
+        "after": "7cbd8d58eee4e2723319498016ce4768d350069a7277b104029abad42c5f68eb",
+        "before": "42b2c4e308271457b0ffd83d08652819a791d9d6fd14ee7c9d08b0578501da63",
+        "header": "include/gamenet/core/net/Callbacks.h"
+      },
+      {
+        "after": "f3f3255b325aa578fcd8ebe64c534f9ed166c05831177f7054e020d7ac2200be",
+        "before": "974d5dda8b45d20861075f1e5a4b9592a5382ff5af688f2e57154edbd8b7d59d",
+        "header": "include/gamenet/core/net/Channel.h"
+      },
+      {
+        "after": "3aecb05cb8e1a0c0cc8546c56494df7b8dc6711edc790cd888001d032ed47f6f",
+        "before": "ac12b2c673857a043be49f29e581885224fe1229fa4615a369e64755f8f5d73c",
+        "header": "include/gamenet/core/net/Connector.h"
+      },
+      {
+        "after": "369712b9d37b72eed16f67c90d0b445a18d40384ab2af6e6982697c3f26e8f1f",
+        "before": "c0c1787a68cf1eecfcc7b3deb329818927b5c117ff17e7a8f30f9684629670f4",
+        "header": "include/gamenet/core/net/EventLoop.h"
+      },
+      {
+        "after": "740f5e1d6af5837831e8cba102ea41271866066156bd3c83835fbfab3f1acc2b",
+        "before": "fde71c81478a04715756c1b48de668f4a4ee11612703867be1015404cd5ea141",
+        "header": "include/gamenet/core/net/EventLoopExecutor.h"
+      },
+      {
+        "after": "e3dcf4aab122dfb041388adcc9df5b7c86040cb07748c76a3416d370ab5231cf",
+        "before": "aaf7868673947225594dd54270baf8d91fa9833d080ab0c413dda2340d96fa95",
+        "header": "include/gamenet/core/net/EventLoopMetrics.h"
+      },
+      {
+        "after": "be9c8c16d172f2ecebb0fe7132f663792b8c1904bd9d538bdf408bff16890fff",
+        "before": "32f163e47ec7325c6ba30881527925d62feb11ef26aab4fd2b75f433bdc3ec4b",
+        "header": "include/gamenet/core/net/EventLoopThread.h"
+      },
+      {
+        "after": "78516bbd12e827ff40afaa2e0cf7a57da90deff8f8adfcc8baf6d7be927c9d94",
+        "before": "19d312377277e0d9dc96e2da10904c0c5b86d8da169045d12853bdf167c5e24c",
+        "header": "include/gamenet/core/net/EventLoopThreadPool.h"
+      },
+      {
+        "after": "693921dd632289d0fd8f1daa84a0e630b7f01b8be6dac29911ccc5a7eded3ee9",
+        "before": "8609de9931977426a24e0aa53c0ba6db0fd1451fdb606f1f227e2cd16c799f0a",
+        "header": "include/gamenet/core/net/Poller.h"
+      },
+      {
+        "after": "9425265576f8fef3b9ababfdce0203d9e9482dfbf110d3bf8927b528fbf347c5",
+        "before": "c88194025b8c288f99d1756b970844bac8da57a5b18b0b7c14b0a319fe477cc1",
+        "header": "include/gamenet/core/net/Socket.h"
+      },
+      {
+        "after": "59e8ba954e29be49a9ed8610d0520776ebd9ee0177d3012ea29e61d26ca65dad",
+        "before": "537c47c5a80e0bc756d94239b07cb35faef0ade9fbf578f0baf2faccf714b6a1",
+        "header": "include/gamenet/core/net/SocketTypes.h"
+      },
+      {
+        "after": "01f41163df8a3b356808c0a6a9ecbb75aaa6174a63ab81305ce1d8693aa8e53d",
+        "before": "3b8cfd719b471e6c2f18bbed27496a979a4b681b6cc3db400393884784c944d2",
+        "header": "include/gamenet/core/net/SocketsOps.h"
+      },
+      {
+        "after": "f69080c0a61572251ca8c90b6aa6ca4804b90c66868dc33ea33196a92d45ae9f",
+        "before": "23e5ab4e2486f434412b52a84619c9c3b280cb3504bb2c48e97bddf997732985",
+        "header": "include/gamenet/core/net/TcpClient.h"
+      },
+      {
+        "after": "3569bb5482922df1419843c549b36786d424691de9296afbbe36e5689cf5b381",
+        "before": "2d59e6d2f97187b85cd8701e590cca9f5589e7a67d33916067afb99fdae4d9d4",
+        "header": "include/gamenet/core/net/TcpConnection.h"
+      },
+      {
+        "after": "bcbec650c0cdbdc229ddc8217884e2f976781e4f9b39e1a1afecd3f6bf4f5b60",
+        "before": "240b5e15d0cedf74ed27ca634ce91cab81deacc6fce551a2331f81d772115c69",
+        "header": "include/gamenet/core/net/TcpServer.h"
+      },
+      {
+        "after": "fae430a027e854081bc498551e5fdec8dfbc767c60092758a675043a0aee4315",
+        "before": "3f4ffe32ab0985427de257aae3fa80ff894ff65f6b4e636571ee84e20293032a",
+        "header": "include/gamenet/core/net/TimerId.h"
+      },
+      {
+        "after": "9074a693720f979f062dd1069aed04de19e0cb9e7c41d7aeee109a057081b00d",
+        "before": "21dad279f0a05f38186d4cbe4de55ae65091f54465e545f9196149620e37c72e",
+        "header": "include/gamenet/core/net/TimerQueue.h"
+      }
+    ],
+    "targets": {
+      "added": [],
+      "category_moves": [],
+      "removed": []
+    }
+  },
+  "schema": "gamenet.public_api_diff.v1",
+  "summary": {
+    "compatibility_decision_reasons": [],
+    "compatibility_decision_required": false,
+    "has_changes": true,
+    "same_compatibility_line": false,
+    "stable_surface_review_required": true
+  }
+}
