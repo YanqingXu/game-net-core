@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -12,6 +13,22 @@ from intent_inventory import IntentInventory, build_inventory
 
 def require(text: str, needle: str, source: Path) -> None:
     assert needle in text, f"missing migration status fragment in {source}: {needle}"
+
+
+def git(repo_root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"git {' '.join(args)} failed with {result.returncode}:\n{result.stderr}"
+    )
+    return result.stdout.strip()
 
 
 def verify_current_intent_inventory(
@@ -129,9 +146,44 @@ def main() -> None:
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-08-05", migration_status)
-    implementation_checkpoint = "12adb00f6934e50994e755125542a1f6f2682116"
-    upstream_checkpoint = "d31f7538dc8fb984696008ed93b10c3c47afc604"
+    require(status_text, "Current production-roadmap audit: 2026-08-11", migration_status)
+    implementation_checkpoint = "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0"
+    upstream_checkpoint = "7fa6922725304fe0d1c80a806b19a0173cdf9c3e"
+    git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
+    git(repo_root, "cat-file", "-e", f"{upstream_checkpoint}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", upstream_checkpoint, implementation_checkpoint)
+    git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, "HEAD")
+
+    # A documentation commit may follow an immutable implementation checkpoint,
+    # but runtime/API/build/test drift must force the checkpoint to be advanced.
+    # Compare the complete index/worktree against the named commit as well as
+    # committed history so this contract catches local pre-commit drift too.
+    allowed_post_checkpoint_paths = {
+        "README.md",
+        "assessment.md",
+        "docs/migration_status.md",
+        "docs/roadmap.md",
+        "plan.md",
+        "tests/cmake/test_migration_status_contract.py",
+    }
+    changed_since_checkpoint = {
+        path
+        for path in git(
+            repo_root,
+            "diff",
+            "--name-only",
+            implementation_checkpoint,
+            "--",
+        ).splitlines()
+        if path
+    }
+    unexpected_checkpoint_drift = (
+        changed_since_checkpoint - allowed_post_checkpoint_paths
+    )
+    assert not unexpected_checkpoint_drift, (
+        "current implementation checkpoint is stale; non-governance paths "
+        "changed after it: " + ", ".join(sorted(unexpected_checkpoint_drift))
+    )
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
@@ -142,7 +194,7 @@ def main() -> None:
         require(text, upstream_checkpoint, source)
         require(text, "API-R1", source)
         require(text, "REL-C1", source)
-    require(readme_text, "12adb00", readme)
+    require(readme_text, "9d2a5be", readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
     require(
@@ -172,6 +224,25 @@ def main() -> None:
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
     require(plan_text, "P1-04 | API-R1（已关闭）", plan)
     require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)
+    require(
+        status_text,
+        "The authoritative current implementation checkpoint is `9d2a5be`",
+        migration_status,
+    )
+    require(plan_text, "M3-R3（本地关闭）", plan)
+    require(assessment_text, "P1-05 | P1（本地关闭）", assessment)
+    require(assessment_text, "P1-06 | P1（本地关闭）", assessment)
+    require(
+        assessment_text,
+        "API-R1 已批准，`9d2a5be` 同线 diff 严格为空",
+        assessment,
+    )
+    assert "stable surface review 未完成" not in assessment_text, (
+        "assessment must not contradict the recorded API-R1 APPROVE decision"
+    )
+    assert "许可证和 API 审查共同阻塞" not in assessment_text, (
+        "assessment must not list completed API review as a current blocker"
+    )
     require(api_review_text, "Status: `approved-for-candidate-freeze`", api_review)
     require(api_review_text, "/root/api_r1_independent_review", api_review)
     require(api_review_text, "Changed stable-header fingerprints | 19", api_review)

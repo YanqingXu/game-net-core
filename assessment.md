@@ -1,9 +1,9 @@
 # game-net-core 当前项目审计报告
 
-审计日期：2026-08-05
-受审实现检查点：`main@12adb00f6934e50994e755125542a1f6f2682116`
-审计时上游参考：`origin/main@d31f7538dc8fb984696008ed93b10c3c47afc604`
-报告性质：API-R1 当前事实同步；历史证据与当前候选状态分区记录
+审计日期：2026-08-11
+受审实现检查点：`main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
+审计时上游参考：`origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`
+报告性质：post-review runtime remediation 当前事实同步；历史证据与当前候选状态分区记录
 
 ## 1. 执行结论
 
@@ -11,16 +11,18 @@
 
 > 已具备较强契约与测试基础的 production-hardening preview，尚不是可宣布稳定或可对外采用的 production release。
 
-本轮没有发现 P0。发现 4 项 P1 和 2 项 P2；截至 2026-08-05，P1-01、
-P1-04 与 P2-02 已关闭，P2-01 已在提交检查点完成本地关闭；仍开放的是
-P1-02 发布证据与 P1-03 许可证：
+本轮没有发现 P0。原审计的 4 项 P1 和 2 项 P2 中，P1-01、P1-04、P2-01、
+P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
+完成本地关闭。仍开放的是 P1-02 发布证据与 P1-03 许可证：
 
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
 | P1-01 | P1（已关闭） | M3-R1 检查点 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `95a6ab5` 的六个 producer 是历史检查点证据；`12adb00` 尚无完整 retained artifact、性能、容量与 endurance 证据 | 发布证据 |
+| P1-02 | P1 | `95a6ab5` 的六个 producer 是历史检查点证据；`9d2a5be` 尚无同 SHA remote、retained artifact、性能、容量与 endurance 证据 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1（已关闭） | API-R1 首次拒绝后的八组 blocker 已关闭，独立终审 `APPROVE`，0.3 reviewed surface 有严格 zero-diff gate | API 发布阻塞已解除 |
+| P1-05 | P1（本地关闭） | TcpServer owner establishment 抛出时先在 owner 关闭，再经 base lifecycle 回滚 map/load/admission，最终引用回到 owner 释放 | 核心线程/生命周期正确性 |
+| P1-06 | P1（本地关闭） | TcpClient 名称/构造/配置/注册失败纳入同一事务，fd 先关闭、请求先释放，终止回调可同步重连 | 客户端请求/所有权正确性 |
 | P2-01 | P2（本地关闭） | `12adb00` 的 `EventLoopThreadPool` 非法配置和状态转换已在状态改变前显式拒绝 | 公共契约 |
 | P2-02 | P2（已关闭） | roadmap、assessment、plan、README 与 migration status 已统一当前检查点、历史证据和下一任务 | 治理一致性 |
 
@@ -31,7 +33,7 @@ P1-02 发布证据与 P1-03 许可证：
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
 - P1-01 已在 `95a6ab5` 关闭；`446f86d` 的拒绝结论保留为历史证据。
-- 当前没有冻结的 v0.3 最终候选；`12adb00` 是已提交的本地实现检查点。
+- 当前没有冻结的 v0.3 最终候选；`9d2a5be` 是已提交的本地实现检查点。
 - API-R1 只批准 stable surface 进入 REL-C1；它不创建候选 SHA，也不替代
   同 SHA 远端、性能、容量或 endurance 证据。
 
@@ -108,6 +110,32 @@ reviewer 多轮复核并最终给出 `APPROVE`，允许进入 REL-C1。
 `UNBOUND-REL-C1` 标记，因为当前冻结的 v0.3 最终候选仍为无；REL-C1 必须
 绑定最终 SHA 并复验零差异。
 
+### 1.4 Post-review TCP establishment remediation（2026-08-11）
+
+复审在 API-R1 之后识别出两个 late failure 缺口：TcpServer 的 normal queue
+已经接纳 establishment 后，`TcpConnection::connectEstablished()` 仍可能因
+lifecycle-node 容量/分配失败抛出，旧实现会遗留 base map、selector load 与
+active admission；TcpClient 在 `TcpConnection` 构造或 callback setup 抛出时，
+旧实现不会释放 active connect request，后续 `tryConnect()` 只会被错误合并。
+
+`9d2a5be` 的关闭结果：
+
+- TcpServer rollback record 在 queue admission 后进入
+  `AwaitingOwnerEstablishment`；失败时 owner 先执行 `connectDestroyed()`，base
+  lifecycle 只回滚内部 map/load/admission，随后由 owner 回收最终引用；
+- TcpClient connected-fd receiver 的名称分配、构造、配置、publication、IOCP
+  association 与 Channel 建立共享异常边界；终止通知前关闭 sole fd owner 并
+  释放 request，回调内同步重连形成新 Connector generation；
+- `test_tcp_server_establishment_saturation.cpp` 以可释放的 lifecycle 容量占位
+  证明失败账务归零、无 connection callback、同一 server 恢复健康建连；
+- `test_tcp_client_contract.cpp` 注入 socket-claim 前构造失败，证明 terminal
+  callback 内重连被接纳且旧 Connector settlement 不覆盖新尝试；
+- 当前提交通过 Windows/IOCP Release 120/120、36/36 repository/API/CI guards、
+  install consumers 2/2，API-R1 reviewed-surface diff 严格为空。
+
+这些是本地检查点证据；`9d2a5be` 尚未获得同 SHA Linux/Windows remote、
+paired benchmark/capacity 或 24/72 小时 endurance，因此不自动成为候选。
+
 ## 2. 审计范围与方法
 
 审计顺序遵循仓库规则：
@@ -139,12 +167,12 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 ### 3.1 Git 与版本
 
 - 受审实现分支：`main`
-- 受审实现检查点：`12adb00f6934e50994e755125542a1f6f2682116`
-- 审计时本地 `origin/main`：`d31f7538dc8fb984696008ed93b10c3c47afc604`
-- 实现检查点提交时间：`2026-08-05T11:01:52+08:00`
-- 实现检查点标题：`fix: enforce non-negative thread count and state machine contracts in EventLoopThreadPool and TcpServer`
+- 受审实现检查点：`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
+- 审计时本地 `origin/main`：`7fa6922725304fe0d1c80a806b19a0173cdf9c3e`
+- 实现检查点提交时间：`2026-08-11T18:40:03+08:00`
+- 实现检查点标题：`Fix TCP establishment failure rollback`
 - 最新已发布标签：`v0.2.0-phase4-preview`
-- 实现检查点位于该标签之后 66 个提交
+- 实现检查点位于该标签之后 68 个提交
 - CMake package version：`0.3.0`
 - 语言标准：C++23，关闭 compiler extensions
 - 当前冻结的 v0.3 最终候选：无
@@ -152,19 +180,22 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 本报告原始审计基线 `7a56132d6ea60346ec06c108cd627b7b4cd5a04f` 到
 受审实现检查点：
 
-- 4 个提交；
-- 35 个文件变化；
-- 2,657 行新增，1,369 行删除。
+- 6 个提交；
+- 99 个文件变化；
+- 5,425 行新增，1,686 行删除。
 
-这 4 个提交完成：
+这 6 个提交完成：
 
 - M3-R1 建连投递失败的 owner-loop rollback 合同与实现；
 - TcpConnection partial-construction fd exact-once remediation；
 - M3-R1 独立审查和同 SHA 六 producer 记录；
 - M3-R2 EventLoopThreadPool 状态机与 TcpServer 转发负向合同。
+- API-R1 stable surface remediation、独立批准和同线 zero-diff gate；
+- post-review TcpServer/TcpClient establishment failure rollback。
 
 `95a6ab5` 是 M3-R1 已独立审查的历史检查点；`12adb00` 在其上增加 M3-R2，
-因此前者的 CI、性能、容量或 endurance 结果不能自动提升为后者的发布证据。
+`7fa6922` 提交 API-R1 remediation，`9d2a5be` 再增加 late failure 修复。因此
+任一早期检查点的 CI、性能、容量或 endurance 结果不能自动提升为当前证据。
 
 ### 3.2 项目清单
 
@@ -174,7 +205,7 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 | active intent | 30 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 138 |
+| intent 显式 verification paths | 139 |
 | public headers | 55 |
 | `.cc` sources | 40 |
 | CTest tests | 120 |
@@ -244,11 +275,12 @@ ctest --test-dir build-m3-r1-remediation-release -C Release --output-on-failure
   Debug/Release 六个 producer 均成功；
 - 同一 run 的 aggregate job 虽为 success，但 retained artifact API 返回 0，
   聚合上传/校验步骤未形成可下载证据，因此 P1-02 仍开放；
-- `12adb00` 增加 M3-R2 运行时代码和合同，尚无同 SHA 远端 CI、paired
-  benchmark/capacity 或 24/72 小时 endurance；
+- `9d2a5be` 在 M3-R2/API-R1 之后增加 late establishment failure 运行时代码
+  和合同，尚无同 SHA 远端 CI、paired benchmark/capacity 或 24/72 小时
+  endurance；
 - `be749ad`、`5f926f3` 与 `b344318` 的性能/容量/endurance 结果仅是历史
-  基础设施证据，不是 `12adb00` 的当前候选证据；
-- 审计时 `origin/main` 仍为 `d31f753`，且没有冻结的 v0.3 最终候选。
+  基础设施证据，不是 `9d2a5be` 的当前候选证据；
+- 审计时 `origin/main` 为 `7fa6922`，且没有冻结的 v0.3 最终候选。
 
 远端基础设施状态可能独立变化；本报告不把未重新查询的 runner 在线状态或
 旧 queued/failed run 描述为当前事实。发布门只接受最终候选 SHA 上可下载、
@@ -265,8 +297,8 @@ ctest --test-dir build-m3-r1-remediation-release -C Release --output-on-failure
 | 公平性/容量 | 已有显式批次、队列、deadline、内存预算和 retention 边界 |
 | 上层 foundation | Protocol/Transport/Session/Logic/Broadcast 可测试，但仍是 foundation |
 | Metrics | 有结构化接口和测试，明确为 provisional、非生产热路径实现 |
-| API/安装 | 0.3 manifest 和 diff 完整；stable surface review 未完成 |
-| 发布可采用性 | 无冻结 v0.3 最终候选；被同 SHA 证据、许可证和 API 审查共同阻塞 |
+| API/安装 | 0.3 manifest 和 diff 完整；API-R1 已批准，`9d2a5be` 同线 diff 严格为空，install consumers 2/2 |
+| 发布可采用性 | 无冻结 v0.3 最终候选；仍被同 SHA 证据和许可证阻塞 |
 
 ## 5. 已确认的强项
 
@@ -345,7 +377,8 @@ EventLoopThreadPool 已有 round-robin、least-connections、queue-lag 和 stabl
 `446f86d` 修复了 queue-rejection 的 off-owner release，但独立审查发现
 construction-failure fd 双重所有权并拒绝关闭。remediation `95a6ab5` 把 fd
 claim 移到全部可抛构造步骤之后，新增确定性故障注入，并通过 clean 独立
-全矩阵复审；P1-01 已关闭。后续 `12adb00` 没有改变该所有权路径。
+全矩阵复审；P1-01 已关闭。后续 `12adb00`、`7fa6922` 与 `9d2a5be`
+均保留该 partial-construction exact-once 所有权边界。
 
 证据：
 
@@ -376,7 +409,8 @@ claim 移到全部可抛构造步骤之后，新增确定性故障注入，并�
 
 已批准的 M3-R1 检查点 `95a6ab5` 已取得 Linux/Windows Debug/Release、
 Linux ASan/UBSan、Linux TSan 和 install consumer 的六个成功 producer，
-但 aggregate retained artifact 缺失。后续 `12adb00` 又改变运行时代码，因此
+但 aggregate retained artifact 缺失。后续 `12adb00`、`7fa6922` 与 `9d2a5be`
+又改变运行时代码，因此
 最终 v0.3 候选仍缺少以下同 SHA 发布证据：
 
 - Linux CMake Debug/Release；
@@ -393,7 +427,7 @@ Linux ASan/UBSan、Linux TSan 和 install consumer 的六个成功 producer，
 
 - `95a6ab5` 的 run `30813037693` attempt 2 六个 producer 均成功，但 retained
   artifact 下载为 0，聚合上传/校验没有形成可复核资产；
-- `12adb00` 尚无 remote CI、paired benchmark/capacity 或 24/72 小时 endurance；
+- `9d2a5be` 尚无 remote CI、paired benchmark/capacity 或 24/72 小时 endurance；
 - retained manifest、run identity、参数和 artifact hash 尚未形成完整证据链。
 
 关闭条件是新候选 SHA 的必需 jobs 全绿，并且 manifest、candidate SHA、run identity、参数和 artifact hash 完整一致。
@@ -436,7 +470,7 @@ reviewer 审查，而不是由 manifest guard 自行批准。
 - 0.3 源兼容承诺与 ABI 非承诺；
 - install consumer 和公开示例。
 
-关闭结果（2026-08-05）：
+关闭结果（2026-08-11 当前性复核）：
 
 - 独立首次审查 `REJECT`，八组 blocker 均有对应 intent/合同/测试/实现修复；
 - 最终独立结论 `APPROVE`，无剩余实现/合同 blocker；
@@ -492,11 +526,11 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 关闭结果（2026-08-05）：
 
 - roadmap、assessment、plan、README 和 migration status 统一使用已提交实现
-  检查点 `12adb00`；
-- 审计时上游参考 `d31f753`、M3-R1 已审查检查点 `95a6ab5` 与“当前无冻结
+  检查点 `9d2a5be`；
+- 审计时上游参考 `7fa6922`、M3-R1 已审查检查点 `95a6ab5` 与“当前无冻结
   v0.3 最终候选”被明确区分；
 - 当前测试清单统一为 120（8 unit、99 contract、13 integration；93
-  threading、98 lifecycle），intent 清单继续由守卫推导为 61/30/20/11/138；
+  threading、98 lifecycle），intent 清单继续由守卫推导为 61/30/20/11/139；
 - `be749ad`、`5f926f3`、`b344318` 的 benchmark/capacity/endurance 结果只在
   historical evidence 范围出现；
 - P1-01/P2-01 的关闭证据链接到具体合同；GOV-R2 当时将 API-R1 设为下一
@@ -526,7 +560,7 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 ### 8.1 可以确认
 
 - admission、per-turn drain、timer/deadline、TCP output、Broadcast outstanding 和 retention 都有显式有限边界；
-- Windows/IOCP Release 120/120 没有暴露 `12adb00` 实现回归；
+- Windows/IOCP Release 120/120 没有暴露 `9d2a5be` 实现回归；
 - benchmark/capacity 工具及其 schema/negative fixtures 通过仓库守卫；
 - 旧 SHA 已有历史 benchmark/endurance 资产，可用于方法校验。
 
@@ -567,7 +601,7 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 完成 REL-C1：冻结包含 M3-R2、GOV-R2 和 API-R1 remediation 的唯一候选 SHA；
+1. 完成 REL-C1：冻结包含 M3-R2、API-R1 和 post-review TCP remediation 的唯一候选 SHA；
 2. 修复 retained artifact 并跑通同 SHA 性能、容量和 endurance；
 3. 由项目所有者完成许可证决定。
 

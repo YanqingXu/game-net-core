@@ -4,19 +4,22 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-08-05
+Current production-roadmap audit: 2026-08-11
 
 Current local implementation checkpoint:
-`main@12adb00f6934e50994e755125542a1f6f2682116` (2026-08-05)
+`main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0` (2026-08-11)
 
 Upstream reference at audit time:
-`origin/main@d31f7538dc8fb984696008ed93b10c3c47afc604`
+`origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`
 
 Current final v0.3 production candidate: none; candidate freeze is pending
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
 
 Current M3-R2 committed contract checkpoint: `12adb00` (2026-08-05)
+
+Current post-review TCP establishment-remediation checkpoint: `9d2a5be`
+(2026-08-11)
 
 Current API-R1 surface decision: `APPROVE` (2026-08-05); reviewed snapshot is
 `UNBOUND-REL-C1` until a final candidate SHA is frozen
@@ -31,25 +34,28 @@ protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
-The authoritative current implementation checkpoint is `12adb00`. M3-R1 is
+The authoritative current implementation checkpoint is `9d2a5be`. M3-R1 is
 closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
-`12adb00`. The current inventory is 120 configured CTest tests: 8 unit tests,
-99 contract tests, and 13 integration tests, with 93 threading and 98 lifecycle
-labels. Local Windows/IOCP Release passed 120/120, the three focused M3-R2
-contracts passed 150/150 combined repetitions, and all 36 repository/API/CI
-guards passed. API-R1 independently approved the remediated stable Core surface:
-focused contracts passed 8/8, fresh install consumers passed 2/2, and the 0.3
-reviewed-baseline diff is strictly empty. No final v0.3 candidate is frozen;
-REL-C1 candidate freeze is the next roadmap task.
+`12adb00`; API-R1 remediation is committed at `7fa6922`. The current checkpoint
+adds post-review TcpServer owner-establishment rollback and TcpClient connected-
+fd construction rollback without changing the reviewed stable API surface. The
+inventory is 120 configured CTest tests: 8 unit tests, 99 contract tests, and 13
+integration tests, with 93 threading and 98 lifecycle labels. Fresh local
+Windows/IOCP Release passed 120/120, all 36 repository/API/CI guards passed,
+fresh install consumers passed 2/2, and the 0.3 reviewed-baseline diff remains
+strictly empty. This is local checkpoint evidence only: `9d2a5be` has no same-
+SHA remote Linux/Windows, benchmark, capacity, or endurance evidence. No final
+v0.3 candidate is frozen; REL-C1 candidate freeze remains the next roadmap task.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
+[`test_tcp_client_contract.cpp`](../tests/contract/tcp_client/test_tcp_client_contract.cpp),
 [`test_event_loop_thread_pool.cpp`](../tests/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp),
 and [`test_tcp_server_contract.cpp`](../tests/contract/tcp_server/test_tcp_server_contract.cpp).
 
 All candidate, benchmark, capacity, and endurance records below that name
 `be749ad`, `5f926f3`, or `b344318` are historical evidence. They validate the
-tooling or an earlier code checkpoint, not `12adb00`; final promotion requires
+tooling or an earlier code checkpoint, not `9d2a5be`; final promotion requires
 a newly frozen SHA and complete same-SHA evidence.
 
 The post-Preview production-hardening line is now active. Its first completed
@@ -175,8 +181,8 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
-| 5 | Production hardening | Current planned runtime scope is implemented through M3-R1/M3-R2 at `12adb00`; the earlier frozen candidate `be749ad` is historical because later runtime changes superseded its evidence. A post-M3-R2 candidate and full same-SHA requalification remain open |
-| 6 | Production candidate | Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance. GOV-R2 and API-R1 are closed; REL-C1 is next. No final candidate SHA is frozen, and release evidence must be regenerated after freeze |
+| 5 | Production hardening | Current planned runtime scope includes M3-R1/M3-R2, API-R1 remediation, and the post-review TCP establishment rollback at `9d2a5be`; the earlier frozen candidate `be749ad` is historical because later runtime changes superseded its evidence. Full same-SHA requalification remains open |
+| 6 | Production candidate | Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance. GOV-R3 is locally closed and REL-C1 is next. No final candidate SHA is frozen, and release evidence must be regenerated after freeze |
 
 ## Current Intent Inventory
 
@@ -187,7 +193,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 138 |
+| 61 | 30 | 20 | 11 | 139 |
 
 ## Historical Production-Hardening Evidence
 
@@ -365,14 +371,13 @@ names the same SHA as the authoritative checkpoint above.
 
 ## Verification State
 
-The `12adb00` implementation checkpoint has 120 configured CTest tests: 8 unit
+The `9d2a5be` implementation checkpoint has 120 configured CTest tests: 8 unit
 tests, 99 contract tests, and 13 integration tests. Its labels include 93
 threading, 98 lifecycle, 7 game-pipeline, and 5 broadcast tests. Windows/IOCP
-Release passed 120/120 in 52.88 seconds, the EventLoopThreadPool contract,
-restart soak, and TcpServer contract each passed 50 repetitions, and all 36
-repository/API/CI guards passed. This was an incremental local Release gate;
-it does not substitute for clean Debug, Linux/epoll, sanitizer, package, or
-remote same-SHA qualification.
+Release passed 120/120 in 59.03 seconds, all 36 repository/API/CI guards passed,
+stable/provisional install consumers passed 2/2, and the API-R1 same-line diff
+remained strictly empty. This was a local Release gate; it does not substitute
+for clean Debug, Linux/epoll, sanitizer, or remote same-SHA qualification.
 
 Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race

@@ -4,9 +4,9 @@
 起始基线：`main@7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
 依据：同基线的 `assessment.md`
 
-当前治理检查点（2026-08-05）：
-`main@12adb00f6934e50994e755125542a1f6f2682116`；审计时
-`origin/main@d31f7538dc8fb984696008ed93b10c3c47afc604`；当前无冻结的 v0.3 最终候选。
+当前治理检查点（2026-08-11）：
+`main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`；审计时
+`origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`；当前无冻结的 v0.3 最终候选。
 
 ## 1. 本轮目标
 
@@ -44,9 +44,14 @@
 - [x] M3-R2 已完成 EventLoopThreadPool 状态机合同、负向测试和 Windows/IOCP Release 本地验证：全量 120/120、守卫 36/36、聚焦重复 150/150。
 - [x] GOV-R2 已统一 roadmap、assessment、plan、README 与 migration status 的实现检查点、历史证据边界、测试清单和下一执行任务。
 - [x] API-R1 已完成独立 stable Core 审查；首次拒绝的八组 blocker 全部关闭，终审 `APPROVE`，历史 diff 与同线 zero-diff 均已归档。
+- [x] M3-R3 已在 `9d2a5be` 关闭 TcpServer owner-establishment 失败的 base
+  账务泄漏与 TcpClient construction failure 的 active-request 卡死；Windows/
+  IOCP Release 120/120、36/36 guards、install consumers 2/2、API 同线 zero
+  diff 均通过。
 
 ### 2.2 未完成
 
+- [ ] REL-C1 唯一候选冻结与推送；
 - [ ] 同 SHA paired benchmark/capacity；
 - [ ] 同 SHA 24/72 小时 endurance；
 - [ ] 许可证决定；
@@ -60,6 +65,8 @@
 | P1-02 | INF-R1、REL-V2、PERF-R1、END-R1 | 同候选 SHA 的成功 manifests/artifacts |
 | P1-03 | LIC-R1 | 显式许可证及 package/SBOM metadata |
 | P1-04 | API-R1（已关闭） | 独立审查记录、批准 manifest、同线 zero-diff gate |
+| P1-05 | M3-R3（本地关闭） | owner teardown → base lifecycle rollback → owner final release 合同 |
+| P1-06 | M3-R3（本地关闭） | connected-fd transaction、terminal-before-reconnect 请求释放合同 |
 | P2-01 | M3-R2 | negative/wrong-thread/late-config/repeated-start contracts |
 | P2-02 | GOV-R2（已关闭） | roadmap、migration status、assessment、plan、README 与候选事实一致，静态守卫交叉验证 |
 
@@ -70,10 +77,10 @@
 主依赖链：
 
 ```text
-M3-R1 → M3-R2 → GOV-R2 → API-R1 → REL-C1
-                                      ↓
+M3-R1 → M3-R2 → GOV-R2 → API-R1 → M3-R3 → GOV-R3 → REL-C1
+                                                        ↓
                          REL-V1 → REL-V2
-                                      ↓
+                                                        ↓
                          PERF-R1 → END-R1 → REL-D1
 ```
 
@@ -270,6 +277,40 @@ Release 120/120、focused 8/8、fresh install consumers 2/2 通过；0.3 同线
 diff 为严格零变化，并以 stable header/target additive drift 负向注入证明门禁
 会失败。审查记录见 `docs/reviews/api-r1-stable-core-review.md`。
 
+## M3-R3：post-review TCP establishment failure remediation
+
+优先级：运行时 P1，本地关闭
+对应：P1-05、P1-06
+提交：`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
+
+- [x] TcpServer queue admission 后不提前丢弃 rollback record；owner
+  establishment 失败先在 owner teardown，再由 base lifecycle 回滚
+  map/load/admission，最终引用回到 owner 释放；
+- [x] TcpClient 名称分配、构造、callback setup、publication、IOCP association
+  与 Channel 建立纳入一个异常事务；fd 在 terminal callback 前关闭，active
+  request 在 callback 前释放；
+- [x] 服务端容量故障合同证明同实例账务归零并在释放容量后健康恢复；
+- [x] 客户端构造故障合同证明 terminal callback 内同步重连被接纳，旧
+  Connector generation settlement 不覆盖新尝试；
+- [x] Windows/IOCP Release 全量 120/120、全部 36 项 repository/API/CI
+  guards、stable/provisional install consumers 2/2；
+- [x] API-R1 reviewed-surface diff 严格为空，公开 stable headers/targets 无漂移。
+
+本任务只达到 `locally-verified`。`9d2a5be` 没有同 SHA remote Linux/Windows、
+paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选证据。
+
+## GOV-R3：post-review checkpoint current-state sync
+
+优先级：治理一致性，本地关闭
+依赖：M3-R3
+
+- [x] 五份当前入口统一到 `9d2a5be`，上游参考统一到 `7fa6922`；
+- [x] API-R1 已完成、当前无最终候选、当前 SHA 无同 SHA 发布证据三类事实
+  不再互相矛盾；
+- [x] intent 显式 verification paths 更新为派生值 139；
+- [x] migration-status guard 校验不可变实现检查点，并拒绝该点之后的
+  runtime/API/build/test 漂移。
+
 ## 9. INF-R1：恢复证据基础设施
 
 优先级：与 remediation 并行
@@ -290,7 +331,7 @@ diff 为严格零变化，并以 stable header/target additive drift 负向注�
 ## 10. REL-C1：冻结唯一候选 SHA
 
 优先级：发布关键路径
-依赖：M3-R1、M3-R2、GOV-R2、API-R1
+依赖：M3-R1、M3-R2、GOV-R2、API-R1、M3-R3、GOV-R3
 
 - [ ] 工作树只含审查通过的变更；
 - [ ] finding table 无未处理的 runtime P1；
@@ -495,7 +536,8 @@ M4 必须重新执行 intent → rules → contracts → tests → implementatio
 
 > **REL-C1：冻结唯一 v0.3 候选 SHA。**
 
-API-R1 已批准基于 `12adb00` 实现检查点的 remediation worktree stable
-surface，并关闭 P1-04。当前仍无最终候选；REL-C1 必须提交/推送唯一候选
-SHA，把 `UNBOUND-REL-C1` 绑定为该 SHA，并再次证明 manifest 与 reviewed
-surface 零差异，之后才能生成同 SHA 远端、性能、容量与 endurance 证据。
+API-R1 已批准 stable surface，`9d2a5be` 的 post-review runtime remediation
+保持同线 zero diff，并在本地关闭 P1-05/P1-06。当前仍无最终候选；REL-C1
+必须提交治理同步、推送唯一候选 SHA，把 `UNBOUND-REL-C1` 绑定为该 SHA，
+并再次证明 manifest 与 reviewed surface 零差异，之后才能生成同 SHA 远端、
+性能、容量与 endurance 证据。

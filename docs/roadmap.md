@@ -5,17 +5,22 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-05
+## Current Roadmap Checkpoint — 2026-08-11
 
 - The reviewed local implementation checkpoint is
-  `main@12adb00f6934e50994e755125542a1f6f2682116`; at audit time the local
-  `origin/main` reference was `d31f7538dc8fb984696008ed93b10c3c47afc604`.
+  `main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`; at audit time the local
+  `origin/main` reference was `7fa6922725304fe0d1c80a806b19a0173cdf9c3e`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 120 CTest tests: 8 unit, 99 contract, and 13
-  integration, with 93 threading and 98 lifecycle labels. The `12adb00` tree
-  passed the local Windows/IOCP Release 120/120 gate, all 36 repository/API/CI
-  guards, and 150/150 focused M3-R2 repetitions.
+  integration, with 93 threading and 98 lifecycle labels. The `9d2a5be` tree
+  passed a fresh local Windows/IOCP Release 120/120 gate, all 36 repository/
+  API/CI guards, and stable/provisional install consumers 2/2; its API-R1
+  reviewed-surface diff is strictly empty.
+- `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
+  leak and TcpClient construction-failure request wedge with deterministic
+  recovery contracts. It has no same-SHA remote or Linux evidence and is not a
+  frozen production candidate.
 - No final `v0.3.0-production-candidate` is frozen. Earlier benchmark,
   capacity, endurance, and candidate runs remain historical infrastructure or
   superseded-candidate evidence and do not qualify the eventual candidate.
