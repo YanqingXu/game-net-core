@@ -9,6 +9,7 @@
 #include "support/TestAssert.h"
 
 #include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
+#include "../../../src/core/net/detail/EventLoopLifecycleRegistry.h"
 #include "../../../src/core/net/detail/TcpConnectionConstructionHarness.h"
 
 #include <atomic>
@@ -119,10 +120,130 @@ void verifyConstructionFailureKeepsBaseFdOwnership() {
         stopResult.outcome == gamenet::net::TcpServerStopOutcome::Drained);
 }
 
+void verifyOwnerEstablishmentFailureRollsBackAndRecovers() {
+    gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
+        .maxLifecycleNodes = 3,
+    });
+    gamenet::net::TcpServer server(
+        &loop,
+        gamenet::net::InetAddress(0, true),
+        "server-owner-establishment-failure-contract");
+
+    int connectedCallbacks = 0;
+    int disconnectedCallbacks = 0;
+    int acceptedMetrics = 0;
+    server.setConnectionCallback(
+        [&](const gamenet::net::TcpConnectionPtr& connection) {
+            GAMENET_TEST_ASSERT(loop.isInLoopThread());
+            if (connection->connected()) {
+                ++connectedCallbacks;
+                GAMENET_TEST_ASSERT(
+                    connection->tryForceClose() ==
+                    gamenet::net::PostResult::Accepted);
+            } else {
+                ++disconnectedCallbacks;
+            }
+        });
+    server.setAdmissionMetricCallback(
+        [&](const gamenet::net::TcpServerAdmissionMetric& metric) {
+            GAMENET_TEST_ASSERT(loop.isInLoopThread());
+            if (metric.event ==
+                gamenet::net::TcpServerAdmissionEvent::Accepted) {
+                ++acceptedMetrics;
+            }
+        });
+
+    server.start();
+    auto capacityOccupant =
+        gamenet::net::detail::EventLoopLifecycleRegistry::attach(
+            loop,
+            [] {});
+    GAMENET_TEST_ASSERT(loop.attachedLifecycleNodeCount() == 3);
+
+    const auto failedClient =
+        gamenet::test::connectTestClient(server.listenAddress());
+    gamenet::net::SocketFd healthyClient = gamenet::net::kInvalidSocket;
+    bool failedPeerClosed = false;
+    bool failureRolledBack = false;
+    bool stopStarted = false;
+    gamenet::net::TcpServerStopFuture stopFuture;
+    gamenet::net::TcpServerStopResult stopResult;
+
+    const auto progress = loop.runEvery(1ms, [&] {
+        if (!failedPeerClosed) {
+            failedPeerClosed = peerClosed(failedClient);
+            if (!failedPeerClosed) {
+                return;
+            }
+        }
+
+        if (!failureRolledBack) {
+            if (server.connectionCount() != 0 ||
+                server.admissionStats().activeConnections != 0) {
+                return;
+            }
+            GAMENET_TEST_ASSERT(server.admissionStats().accepted == 1);
+            GAMENET_TEST_ASSERT(acceptedMetrics == 1);
+            GAMENET_TEST_ASSERT(connectedCallbacks == 0);
+            GAMENET_TEST_ASSERT(disconnectedCallbacks == 0);
+            GAMENET_TEST_ASSERT(loop.callbackExceptionCount() == 0);
+
+            gamenet::net::detail::EventLoopLifecycleRegistry::detach(
+                loop,
+                capacityOccupant);
+            healthyClient =
+                gamenet::test::connectTestClient(server.listenAddress());
+            failureRolledBack = true;
+            return;
+        }
+
+        if (!stopStarted) {
+            if (connectedCallbacks != 1 ||
+                disconnectedCallbacks != 1 ||
+                server.connectionCount() != 0 ||
+                server.admissionStats().activeConnections != 0) {
+                return;
+            }
+            GAMENET_TEST_ASSERT(server.admissionStats().accepted == 2);
+            GAMENET_TEST_ASSERT(acceptedMetrics == 2);
+            stopFuture = server.stopGracefully(
+                gamenet::net::TcpServerStopOptions{
+                    .drainTimeout = 500ms,
+                });
+            stopStarted = true;
+            return;
+        }
+
+        if (stopFuture.wait_for(0ms) != std::future_status::ready) {
+            return;
+        }
+        stopResult = stopFuture.get();
+        loop.quit();
+    });
+
+    gamenet::test::runLoopWithTimeout(
+        loop,
+        5s,
+        "owner establishment failure did not roll back and recover");
+    loop.cancel(progress);
+    gamenet::test::closeTestSocket(failedClient);
+    if (healthyClient != gamenet::net::kInvalidSocket) {
+        gamenet::test::closeTestSocket(healthyClient);
+    }
+
+    GAMENET_TEST_ASSERT(failedPeerClosed);
+    GAMENET_TEST_ASSERT(failureRolledBack);
+    GAMENET_TEST_ASSERT(connectedCallbacks == 1);
+    GAMENET_TEST_ASSERT(disconnectedCallbacks == 1);
+    GAMENET_TEST_ASSERT(
+        stopResult.outcome == gamenet::net::TcpServerStopOutcome::Drained);
+}
+
 }  // namespace
 
 int main() {
     verifyConstructionFailureKeepsBaseFdOwnership();
+    verifyOwnerEstablishmentFailureRollsBackAndRecovers();
 
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(

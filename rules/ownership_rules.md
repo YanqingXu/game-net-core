@@ -207,9 +207,12 @@ It must not blur these roles.
   selector load, peer/admission deadline, and functor owners, then the worker
   lifecycle callback performs connectDestroyed and releases the final record
   reference on the owner thread
-- Successful normal-queue admission disarms the rollback record while the base
-  map and accepted functor retain the connection. A disarmed record owns no
-  connection when it is reclaimed by the worker
+- Successful normal-queue admission changes the rollback record to awaiting
+  owner establishment while the base map and accepted functor retain the
+  connection. Successful owner establishment disarms and reclaims the record
+  on that owner. Owner-establishment failure closes there, retains the record's
+  final reference across base map/load/admission rollback, and releases that
+  reference only after the base acknowledgement returns to the owner
 - Connector transfers a connected fd exactly once at new-connection callback
   entry. The receiver owns cleanup from that point and must establish RAII
   before fallible work; Connector does not retain a second fd owner

@@ -349,7 +349,7 @@ No other direct mutation path is allowed for core loop state.
 - Treating the public `queueInLoop()` reserve as guaranteed lifecycle capacity
 - Using the lifecycle lane to run successful connection establishment or user
   callbacks; its establishment role is limited to rollback of a transaction
-  whose normal queue admission failed
+  whose normal queue admission failed or whose owner establishment threw
 - Executing Connector, TcpConnection, or user callback code while holding the
   TcpClient admission mutex
 - Waiting for an IOCP completion after a synchronous submit failure that

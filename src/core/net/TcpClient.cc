@@ -688,6 +688,7 @@ void TcpClient::newConnection(SocketFd sockfd) {
     if (!sockets::tryGetPeerAddr(pendingSocket.fd(), &peerStorage)) {
         LOG_ERROR << "TcpClient::newConnection getpeername error: "
                   << sockets::errorMessage(sockets::lastError());
+        pendingSocket.close();
         if (retry_.load(std::memory_order_relaxed) && connect_) {
             connectorRequestId_ = requestId;
             connector_->restart();
@@ -704,6 +705,7 @@ void TcpClient::newConnection(SocketFd sockfd) {
     if (!sockets::tryGetLocalAddr(pendingSocket.fd(), &localStorage)) {
         LOG_ERROR << "TcpClient::newConnection getsockname error: "
                   << sockets::errorMessage(sockets::lastError());
+        pendingSocket.close();
         if (retry_.load(std::memory_order_relaxed) && connect_) {
             connectorRequestId_ = requestId;
             connector_->restart();
@@ -716,31 +718,40 @@ void TcpClient::newConnection(SocketFd sockfd) {
         return;
     }
     const InetAddress localAddr(localStorage);
-    const std::string connName = name_ + "#" + std::to_string(nextConnId_++);
     const SocketFd connectedFd = pendingSocket.fd();
-
-    auto conn = std::make_shared<TcpConnection>(
-        loop_,
-        connName,
-        connectedFd,
-        localAddr,
-        peerAddr);
-    (void)pendingSocket.releaseFd();
-    conn->setBackpressureOptions(backpressureOptions_);
-    conn->setConnectionCallback(connectionCallback_);
-    conn->setMessageCallback(messageCallback_);
-    conn->setWriteCompleteCallback(writeCompleteCallback_);
-    conn->setCloseInfoCallback(closeInfoCallback_);
-    conn->setCallbackExceptionHandler(callbackExceptionHandler_);
-
-    std::weak_ptr<void> lifetime = lifetimeToken_;
-    conn->setCloseCallback([this, lifetime](const TcpConnectionPtr& connection) {
-        if (lifetime.lock()) {
-            removeConnection(connection);
-        }
-    });
+    TcpConnectionPtr conn;
+#ifdef _WIN32
+    bool associationPreserved = false;
+#endif
 
     try {
+        const std::string connName =
+            name_ + "#" + std::to_string(nextConnId_++);
+        conn = std::make_shared<TcpConnection>(
+            loop_,
+            connName,
+            connectedFd,
+            localAddr,
+            peerAddr);
+        // TcpConnection's constructor claims the fd only as its final,
+        // non-throwing step. Release the local guard immediately afterward so
+        // all later setup failures have exactly one socket owner.
+        (void)pendingSocket.releaseFd();
+        conn->setBackpressureOptions(backpressureOptions_);
+        conn->setConnectionCallback(connectionCallback_);
+        conn->setMessageCallback(messageCallback_);
+        conn->setWriteCompleteCallback(writeCompleteCallback_);
+        conn->setCloseInfoCallback(closeInfoCallback_);
+        conn->setCallbackExceptionHandler(callbackExceptionHandler_);
+
+        std::weak_ptr<void> lifetime = lifetimeToken_;
+        conn->setCloseCallback(
+            [this, lifetime](const TcpConnectionPtr& connection) {
+                if (lifetime.lock()) {
+                    removeConnection(connection);
+                }
+            });
+
         {
             std::lock_guard lock(mutex_);
             connection_ = conn;
@@ -753,6 +764,7 @@ void TcpClient::newConnection(SocketFd sockfd) {
         // The ledger entry and replacement Channel publication are one
         // rollback-capable transaction.
         loop_->preserveSocketAssociation(connectedFd);
+        associationPreserved = true;
 #endif
         conn->connectEstablished();
     } catch (...) {
@@ -769,9 +781,18 @@ void TcpClient::newConnection(SocketFd sockfd) {
         // A registration failure occurs before kConnected publication, so
         // this cleanup cannot report a disconnected callback for an
         // unpublished connection.
-        conn->connectDestroyed();
+        if (conn) {
+            conn->connectDestroyed();
+        } else {
+            // Constructor/name allocation failed before TcpConnection could
+            // claim the socket. Close the sole local owner before publishing
+            // terminal failure or permitting callback-driven reconnect.
+            pendingSocket.close();
+        }
 #ifdef _WIN32
-        loop_->forgetSocketAssociation(connectedFd);
+        if (associationPreserved) {
+            loop_->forgetSocketAssociation(connectedFd);
+        }
 #endif
         pendingTerminalConnectRequestId_ = requestId;
         pendingTerminalConnectEvent_ = ConnectorEvent::ConnectFailed;

@@ -150,6 +150,12 @@ all while preserving the same owner-loop discipline as the server side.
 - Connector transfers a connected fd at new-connection callback entry. The
   receiver immediately places it under RAII before fallible work; Connector
   never retains a second fd owner across that handoff
+- connection-name allocation, TcpConnection construction, callback setup,
+  provisional publication, IOCP association preservation, and owner Channel
+  establishment share one exception boundary. Failure before construction
+  closes the local Socket guard; failure after construction runs owner teardown.
+  Both release the active request before terminal notification so that callback
+  may synchronously admit a fresh connect generation
 - on Windows, address inspection and TcpConnection construction complete
   before IOCP association handoff begins; association preservation,
   replacement Channel registration, client publication, and request
@@ -197,6 +203,11 @@ runtime retry enable/disable remains marshaled through the facade.
 
 ## 10. Test Contracts
 - connect to a listening server establishes TcpConnection on owner loop thread
+- `tests/contract/tcp_client/test_tcp_client_contract.cpp` injects
+  TcpConnection construction failure before socket claim and proves sole-owner
+  fd close, terminal notification after request release, synchronous reconnect
+  admission, stale Connector settlement isolation, and a healthy replacement
+  lifecycle
 - connect to a refused port reports failure through connection callback
 - disconnect cancels pending connect and cleans up Channel registration
 - reconnect after server-initiated close uses configured backoff delay

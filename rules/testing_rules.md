@@ -176,6 +176,11 @@ For lifecycle-sensitive modules, tests should include:
   map/load/admission and authentication deadline rollback to zero, accepted fd
   closes once, connectDestroyed plus final TcpConnection release occur on the
   worker, and a later healthy connection plus stop still converge
+- TcpServer owner lifecycle-node capacity exhausted after establishment queue
+  admission: accepted-socket accounting remains cumulative, connection and
+  active-admission state roll back to zero without a connection callback, final
+  release remains on the owner, and freeing capacity permits a healthy
+  connection on the same server
 - TcpServer injects a TcpConnection construction failure after every fallible
   member/callback setup step but before the connection Socket claims the fd;
   the hook observes no connection-side fd owner, the base guard closes the
@@ -183,6 +188,10 @@ For lifecycle-sensitive modules, tests should include:
 - TcpClientControl admitted while the normal and reserved queues are full,
   latest-generation coalescing on the lifecycle lane, owner-loop execution,
   detach on destruction, and OwnerUnavailable from surviving handles
+- TcpClient connected-fd receiver construction failure before socket claim:
+  the local guard closes exactly once, active request is released before
+  terminal notification, callback-reentrant reconnect is Accepted, and old
+  Connector settlement cannot overwrite the replacement attempt
 - TcpServer and TcpClient observers receive the exact immutable
   TcpConnectionCloseInfo published before removal/reconnect decisions
 - SessionManager post admission is saturated and shutdown-raced with exact

@@ -102,6 +102,9 @@ struct TcpServer::WorkerStopParticipant {
     struct EstablishmentRollback {
         enum class Resolution {
             Arming,
+            AwaitingOwnerEstablishment,
+            OwnerDestroyedAwaitingBaseRollback,
+            BaseRollbackInProgress,
             Disarmed,
             DestroyOnOwner,
         };
@@ -514,21 +517,42 @@ void resolveEstablishmentRollback(
     {
         std::lock_guard lock(participant->mutex);
         using Resolution = decltype(rollback->resolution);
-        if (rollback->resolution !=
-            Resolution::Arming) {
+        if (rollback->resolution != Resolution::Arming &&
+            rollback->resolution !=
+                Resolution::AwaitingOwnerEstablishment) {
             return;
         }
         rollback->resolution = destroyOnOwner
             ? Resolution::DestroyOnOwner
             : Resolution::Disarmed;
-        if (!destroyOnOwner) {
-            rollback->connection.reset();
-        }
     }
 
     // The original Accepted signal remains a final-drain obligation. This
     // notification only shortens the resolution latency when it can merge.
     (void)participant->source.signal();
+}
+
+template <typename Participant, typename Rollback>
+void rollbackOwnerEstablishmentFailure(
+    const std::shared_ptr<Participant>& participant,
+    const std::shared_ptr<Rollback>& rollback,
+    const TcpConnectionPtr& connection) {
+    connection->connectDestroyed();
+
+    bool notifyBase = false;
+    {
+        std::lock_guard lock(participant->mutex);
+        using Resolution = decltype(rollback->resolution);
+        if (rollback->resolution ==
+            Resolution::AwaitingOwnerEstablishment) {
+            rollback->resolution =
+                Resolution::OwnerDestroyedAwaitingBaseRollback;
+            notifyBase = true;
+        }
+    }
+    if (notifyBase) {
+        (void)participant->baseSource.signal();
+    }
 }
 
 template <typename Participant>
@@ -548,11 +572,18 @@ bool drainEstablishmentRollbacks(
                 participant->establishmentRollbacks.end(),
                 [](const auto& candidate) {
                     using Resolution = decltype(candidate->resolution);
-                    return candidate->resolution !=
-                        Resolution::Arming;
+                    return candidate->resolution == Resolution::Disarmed ||
+                        candidate->resolution ==
+                            Resolution::DestroyOnOwner;
                 });
             if (found == participant->establishmentRollbacks.end()) {
-                hasArmingRecord = !participant->establishmentRollbacks.empty();
+                hasArmingRecord = std::any_of(
+                    participant->establishmentRollbacks.begin(),
+                    participant->establishmentRollbacks.end(),
+                    [](const auto& candidate) {
+                        using Resolution = decltype(candidate->resolution);
+                        return candidate->resolution == Resolution::Arming;
+                    });
                 break;
             }
             resolved = std::move(*found);
@@ -579,6 +610,57 @@ bool drainEstablishmentRollbacks(
 
 void TcpServer::driveStopLifecycleInLoop() {
     loop_->assertInLoopThread();
+
+    for (const auto& participant : workerStopParticipants_) {
+        for (;;) {
+            using Rollback =
+                WorkerStopParticipant::EstablishmentRollback;
+            std::shared_ptr<Rollback> rollback;
+            TcpConnectionPtr connection;
+            {
+                std::lock_guard lock(participant->mutex);
+                const auto found = std::find_if(
+                    participant->establishmentRollbacks.begin(),
+                    participant->establishmentRollbacks.end(),
+                    [](const auto& candidate) {
+                        return candidate->resolution ==
+                            Rollback::Resolution::
+                                OwnerDestroyedAwaitingBaseRollback;
+                    });
+                if (found == participant->establishmentRollbacks.end()) {
+                    break;
+                }
+                rollback = *found;
+                rollback->resolution =
+                    Rollback::Resolution::BaseRollbackInProgress;
+                connection = rollback->connection;
+            }
+
+            if (connection) {
+                const auto current = connections_.find(connection->name());
+                if (current != connections_.end() &&
+                    current->second == connection) {
+                    connections_.erase(current);
+                    threadPool_->recordConnectionClosed(
+                        connection->getLoop());
+                    releaseConnectionAdmission(connection->name());
+                }
+            }
+
+            {
+                std::lock_guard lock(participant->mutex);
+                if (rollback->resolution ==
+                    Rollback::Resolution::BaseRollbackInProgress) {
+                    rollback->resolution =
+                        Rollback::Resolution::Disarmed;
+                }
+            }
+            // Base bookkeeping no longer owns the failed connection. The
+            // participant callback now reclaims the rollback record and its
+            // final connection reference on the selected owner loop.
+            (void)participant->source.signal();
+        }
+    }
 
     const auto gracefulState = gracefulStopStateSnapshot();
     if (gracefulState &&
@@ -1588,6 +1670,8 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
 
         EventLoop::Functor establish =
             [connection,
+             participant,
+             establishmentRollback,
              connectionCallback = connectionCallback_,
              messageCallback = messageCallback_,
              highWaterMarkCallback = highWaterMarkCallback_,
@@ -1599,29 +1683,64 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
              loopOutputBudget = std::move(loopOutputBudget),
              serverOutputBudget = serverOutputBudget_,
              globalOutputBudget = outputMemoryOptions_.global,
-             highWaterMark = highWaterMark_]() mutable {
-                connection->setBackpressureOptions(backpressureOptions);
-                connection->setOutputMemoryBudgets(
-                    std::move(loopOutputBudget),
-                    std::move(serverOutputBudget),
-                    std::move(globalOutputBudget));
-                connection->setConnectionCallback(
-                    std::move(connectionCallback));
-                connection->setMessageCallback(std::move(messageCallback));
-                if (highWaterMarkCallback && highWaterMark > 0) {
-                    connection->setHighWaterMarkCallback(
-                        std::move(highWaterMarkCallback),
-                        highWaterMark);
+              highWaterMark = highWaterMark_]() mutable {
+                try {
+                    connection->setBackpressureOptions(backpressureOptions);
+                    connection->setOutputMemoryBudgets(
+                        std::move(loopOutputBudget),
+                        std::move(serverOutputBudget),
+                        std::move(globalOutputBudget));
+                    connection->setConnectionCallback(
+                        std::move(connectionCallback));
+                    connection->setMessageCallback(std::move(messageCallback));
+                    if (highWaterMarkCallback && highWaterMark > 0) {
+                        connection->setHighWaterMarkCallback(
+                            std::move(highWaterMarkCallback),
+                            highWaterMark);
+                    }
+                    connection->setWriteCompleteCallback(
+                        std::move(writeCompleteCallback));
+                    connection->setCloseInfoCallback(
+                        std::move(closeInfoCallback));
+                    connection->setCallbackExceptionHandler(
+                        std::move(callbackExceptionHandler));
+                    connection->setCloseCallback(std::move(closeCallback));
+                    connection->connectEstablished();
+                    resolveEstablishmentRollback(
+                        participant,
+                        establishmentRollback,
+                        false);
+                } catch (...) {
+                    try {
+                        throw;
+                    } catch (const std::exception& error) {
+                        LOG_ERROR
+                            << "TcpServer owner-loop establishment failed: "
+                            << error.what();
+                    } catch (...) {
+                        LOG_ERROR
+                            << "TcpServer owner-loop establishment failed "
+                               "with a non-standard exception";
+                    }
+                    rollbackOwnerEstablishmentFailure(
+                        participant,
+                        establishmentRollback,
+                        connection);
                 }
-                connection->setWriteCompleteCallback(
-                    std::move(writeCompleteCallback));
-                connection->setCloseInfoCallback(
-                    std::move(closeInfoCallback));
-                connection->setCallbackExceptionHandler(
-                    std::move(callbackExceptionHandler));
-                connection->setCloseCallback(std::move(closeCallback));
-                connection->connectEstablished();
             };
+
+        {
+            std::lock_guard lock(participant->mutex);
+            using Resolution = decltype(
+                establishmentRollback->resolution);
+            if (establishmentRollback->resolution != Resolution::Arming) {
+                throw std::logic_error(
+                    "TcpServer establishment rollback was resolved before "
+                    "queue admission");
+            }
+            establishmentRollback->resolution =
+                Resolution::AwaitingOwnerEstablishment;
+        }
 
         const PostResult establishmentResult =
             ioLoop->executor().post(std::move(establish));
@@ -1633,10 +1752,6 @@ void TcpServer::newConnection(SocketFd sockfd, const InetAddress& peerAddr) {
             return;
         }
 
-        resolveEstablishmentRollback(
-            participant,
-            establishmentRollback,
-            false);
         acceptedConnections_.fetch_add(1, std::memory_order_relaxed);
         emitAdmissionMetric(
             TcpServerAdmissionEvent::Accepted,
