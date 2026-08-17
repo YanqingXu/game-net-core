@@ -1,9 +1,9 @@
 # game-net-core 当前项目审计报告
 
 审计日期：2026-08-17
-受审实现检查点：`6b292156e3e94d3389e9f3b8513445e7eb4ab541`
-被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`
-报告性质：PERF-R1 remediation 与 REL-C1 再冻结事实同步；历史证据与当前候选状态分区记录
+受审实现检查点：`3d54c086e92c858b66df7bb80179431ec2d24867`
+被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`
+报告性质：PERF-R1 remote-evidence remediation 与 REL-C1 再冻结事实同步；历史证据与当前候选状态分区记录
 
 ## 1. 执行结论
 
@@ -18,7 +18,7 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
 | P1-01 | P1（已关闭） | M3-R1 检查点 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `refreeze-1` 的 REL-V1/REL-V2 已成功，但 PERF-R1 暴露 comparator、high-fd 与 Linux overload-profile 缺陷；`6b29215` 已本地修复并完成跨平台三重复 preflight，新候选尚无 fresh same-SHA REL-V1/REL-V2/PERF-R1 或 endurance 证据 | 发布证据 |
+| P1-02 | P1 | `refreeze-1` 的 REL-V1/REL-V2 已成功；`refreeze-2` 通过本地 REL-V1 后，远端取证继续暴露 tag checkout、采样顺序、snapshot 队列、stdout flush 与诊断解码缺陷；`3d54c08` 已本地修复并通过成对矩阵/profile preflight，新候选尚无 fresh same-SHA REL-V1/REL-V2/PERF-R1 或 endurance 证据 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1（已关闭） | API-R1 首次拒绝后的八组 blocker 已关闭，独立终审 `APPROVE`，0.3 reviewed surface 有严格 zero-diff gate | API 发布阻塞已解除 |
 | P1-05 | P1（本地关闭） | TcpServer owner establishment 抛出时先在 owner 关闭，再经 base lifecycle 回滚 map/load/admission，最终引用回到 owner 释放 | 核心线程/生命周期正确性 |
@@ -29,7 +29,7 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 因此：
 
 - 可以从新候选重新执行 REL-V1/REL-V2 以及同 SHA 性能、容量和 endurance 验证。
-- REL-C1 替代候选由 annotated tag `v0.3.0-rel-c1-refreeze-2` 唯一标识；这不是
+- REL-C1 替代候选由 annotated tag `v0.3.0-rel-c1-refreeze-3` 唯一标识；这不是
   REL-D1 发布决定。
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
@@ -172,23 +172,23 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 ### 3.1 Git 与版本
 
 - 受审实现分支：`perf-r1-deterministic-capacity`
-- 受审实现检查点：`6b292156e3e94d3389e9f3b8513445e7eb4ab541`
-- 被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`
-- 实现检查点提交时间：`2026-08-17T20:41:27+08:00`
-- 实现检查点标题：`Fix PERF-R1 capacity evidence determinism`
+- 受审实现检查点：`3d54c086e92c858b66df7bb80179431ec2d24867`
+- 被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`
+- 实现检查点提交时间：`2026-08-17T22:07:04+08:00`
+- 实现检查点标题：`Stabilize PERF-R1 evidence collection`
 - 最新已发布标签：`v0.2.0-phase4-preview`
-- 实现检查点位于该标签之后 75 个提交
+- 实现检查点位于该标签之后 78 个提交
 - CMake package version：`0.3.0`
 - 语言标准：C++23，关闭 compiler extensions
 - 当前冻结的 v0.3 最终候选：annotated tag
-  `v0.3.0-rel-c1-refreeze-2` peeled commit；完整 SHA 由 tag object 与远端 ref 记录
+  `v0.3.0-rel-c1-refreeze-3` peeled commit；完整 SHA 由 tag object 与远端 ref 记录
 
 本报告原始审计基线 `7a56132d6ea60346ec06c108cd627b7b4cd5a04f` 到
 受审实现检查点：
 
-- 13 个提交；
-- 118 个文件变化；
-- 9,769 行新增，1,734 行删除。
+- 16 个提交；
+- 129 个文件变化；
+- 11,044 行新增，1,919 行删除。
 
 这 13 个提交完成：
 
@@ -201,7 +201,10 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 - 长期架构目标与候选冻结治理同步；
 - aggregate verifier 的 two-consumer 合同修复与回归守卫；
 - PERF-R1 comparator/high-fd/profile remediation、直接 socket-option 合同与
-  跨平台 candidate-10k 三重复本地 preflight。
+  跨平台 candidate-10k 三重复本地 preflight；
+- remote-evidence remediation：annotated-tag checkout、warm paired/interleaved
+  sampling、owner-batched retention snapshot、完整 JSON flush 与 stderr byte
+  preservation。
 
 `95a6ab5` 是 M3-R1 已独立审查的历史检查点；`12adb00` 在其上增加 M3-R2，
 `7fa6922` 提交 API-R1 remediation，`9d2a5be` 再增加 late failure 修复，
@@ -289,12 +292,16 @@ ctest --test-dir build-perf-r1-fix -C Release --output-on-failure
 - `refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7` 的 REL-V1 与 REL-V2
   run `32007753147` attempt 4 成功，但 PERF-R1 runs `32027919772` /
   `32027919807` 失败，因此只能保留为被替代候选的历史证据；
-- 当前 `refreeze-2` 尚无 fresh same-SHA REL-V1、REL-V2、paired benchmark/
+- `refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647` 的本地 REL-V1 成功，但
+  REL-V2 run `32034140286`、Core run `32034143490` 和 capacity runs
+  `32034147244` / `32035475245` 暴露 evidence-tool 缺陷，不能晋级；
+- 当前 `refreeze-3` 尚无 fresh same-SHA REL-V1、REL-V2、paired benchmark/
   capacity 或 24/72 小时 endurance；
 - `be749ad`、`5f926f3` 与 `b344318` 的性能/容量/endurance 结果仅是历史
   基础设施证据，不是 REL-C1 冻结候选的当前证据；
-- REL-C1 当前候选身份只由 `v0.3.0-rel-c1-refreeze-2^{commit}` 解析；旧 tag
-  `v0.3.0-rel-c1-refreeze-1` 与 `v0.3.0-rel-c1-freeze` 只记录被替代候选。
+- REL-C1 当前候选身份只由 `v0.3.0-rel-c1-refreeze-3^{commit}` 解析；旧 tag
+  `v0.3.0-rel-c1-refreeze-2`、`v0.3.0-rel-c1-refreeze-1` 与
+  `v0.3.0-rel-c1-freeze` 只记录被替代候选。
 
 远端基础设施状态可能独立变化；本报告不把未重新查询的 runner 在线状态或
 旧 queued/failed run 描述为当前事实。发布门只接受最终候选 SHA 上可下载、
@@ -307,12 +314,12 @@ ctest --test-dir build-perf-r1-fix -C Release --output-on-failure
 | Intent/规则治理 | 强；清单、语义、依赖与 provenance 已有自动守卫 |
 | Reactor/TCP 核心 | 强 preview；状态机、owner-loop 和 shutdown 合同密度高 |
 | Windows IOCP | 已完成关键正确性和性能底座切片，本地 Release 合同通过 |
-| Linux epoll | PERF-R1 remediation 已完成 Release 构建、直接合同与 candidate-10k 三重复 preflight；fresh REL-V1/REL-V2 仍待执行 |
+| Linux epoll | PERF-R1 remediation 已完成 Release 构建、直接合同、owner-batched capacity 与 candidate-10k 三重复 preflight；fresh REL-V1/REL-V2 仍待执行 |
 | 公平性/容量 | 已有显式批次、队列、deadline、内存预算和 retention 边界 |
 | 上层 foundation | Protocol/Transport/Session/Logic/Broadcast 可测试，但仍是 foundation |
 | Metrics | 有结构化接口和测试，明确为 provisional、非生产热路径实现 |
 | API/安装 | 0.3 manifest 和 diff 完整；API-R1 已批准，`9d2a5be` 同线 diff 严格为空；PERF-R1 additive surface 已记录 source-compatible |
-| 发布可采用性 | 已冻结工程候选 `refreeze-2`；仍被 fresh same-SHA 证据和许可证阻塞 |
+| 发布可采用性 | 已冻结工程候选 `refreeze-3`；仍被 fresh same-SHA 证据和许可证阻塞 |
 
 ## 5. 已确认的强项
 
@@ -616,7 +623,7 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 完成 REL-V1：在 `refreeze-2` 冻结候选 SHA 上执行本地 clean gate；
+1. 完成 REL-V1：在 `refreeze-3` 冻结候选 SHA 上执行本地 clean gate；
 2. 重新跑通同 SHA REL-V2、PERF-R1 与 endurance；
 3. 由项目所有者完成许可证决定。
 

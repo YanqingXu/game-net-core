@@ -159,12 +159,12 @@ def main() -> None:
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
-    implementation_checkpoint = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
-    superseded_candidate = "944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7"
-    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-1"
-    candidate_tag = "v0.3.0-rel-c1-refreeze-2"
+    implementation_checkpoint = "3d54c086e92c858b66df7bb80179431ec2d24867"
+    superseded_candidate = "f528898a2d688be329cf0dce4b167ffe0fad5647"
+    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-2"
+    candidate_tag = "v0.3.0-rel-c1-refreeze-3"
     reviewed_surface_tag = "api-r1-perf-r1-reviewed-surface"
-    reviewed_surface_commit = implementation_checkpoint
+    reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -173,7 +173,7 @@ def main() -> None:
     assert freeze_record == {
         "schema": "gamenet.candidate_freeze.v1",
         "release_label": "v0.3.0-production-candidate",
-        "stage": "rel-c1-refrozen-perf-r1",
+        "stage": "rel-c1-refrozen-perf-r1-remote-evidence",
         "freeze_date": "2026-08-17",
         "candidate": {
             "branch": "perf-r1-deterministic-capacity",
@@ -186,9 +186,9 @@ def main() -> None:
         "supersedes": {
             "candidate_ref": f"refs/tags/{superseded_candidate_tag}",
             "candidate_commit": superseded_candidate,
-            "rel_v2_run_id": "32007753147",
-            "rel_v2_run_attempt": 4,
-            "reason": "perf-r1-evidence-remediation",
+            "rel_v2_run_id": "32034140286",
+            "rel_v2_run_attempt": 1,
+            "reason": "perf-r1-remote-evidence-remediation",
         },
         "reviewed_surface": {
             "tag": reviewed_surface_tag,
@@ -283,8 +283,8 @@ def main() -> None:
     ):
         require(text, superseded_candidate, source)
         require(text, superseded_candidate_tag, source)
-    require(readme_text, "6b29215", readme)
-    require(readme_text, "944f722", readme)
+    require(readme_text, "3d54c08", readme)
+    require(readme_text, "f528898", readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
     require(readme_text, "REL-V1", readme)
@@ -318,7 +318,7 @@ def main() -> None:
     require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
-        "The authoritative current implementation checkpoint is `6b29215`",
+        "The authoritative current implementation checkpoint is `3d54c08`",
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)

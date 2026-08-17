@@ -31,17 +31,21 @@ snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
 72-hour Linux endurance runs, but those runs predate the current implementation
 checkpoint. M3-R1 is independently closed at `95a6ab5`, and M3-R2 is committed
 at `12adb00`. API-R1 independently approved the remediated 0.3 stable Core
-surface after closing its initial blockers. PERF-R1 then exposed deterministic
-evidence-comparator, high-fd client, and Linux overload-profile defects in the
-otherwise validated `v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`
-candidate. The current implementation checkpoint is
-`6b292156e3e94d3389e9f3b8513445e7eb4ab541` (`6b29215`); its single additive
-stable API is source-compatible and bound to reviewed-surface tag
-`api-r1-perf-r1-reviewed-surface`. REL-C1 now refreezes the unique v0.3
-candidate through annotated tag `v0.3.0-rel-c1-refreeze-2`. The tag is an
-engineering freeze reference, not a release tag or REL-D1 decision. The new
-candidate requires fresh clean same-SHA CI, performance, capacity, and
-endurance evidence; REL-V1 is the next task.
+surface after closing its initial blockers. PERF-R1 first exposed deterministic
+comparator, high-fd client, and Linux overload-profile defects in
+`refreeze-1`; the first `refreeze-2` remote captures then exposed missing tag
+checkout, revision-wide benchmark order bias, capacity snapshot queue
+interference, incomplete stdout flushing, and hidden localized diagnostics.
+The current implementation checkpoint is
+`3d54c086e92c858b66df7bb80179431ec2d24867` (`3d54c08`). Its stable API remains
+the single source-compatible addition bound to reviewed-surface tag
+`api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`.
+REL-C1 now refreezes the unique v0.3 candidate through annotated tag
+`v0.3.0-rel-c1-refreeze-3`, superseding
+`v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`.
+The tag is an engineering freeze reference, not a release tag or REL-D1
+decision. The new candidate requires fresh clean same-SHA CI, performance,
+capacity, and endurance evidence; REL-V1 is the next task.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

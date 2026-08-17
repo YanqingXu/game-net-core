@@ -8,10 +8,10 @@ See `migration_status.md` for the current checked state of these phases.
 ## Current Roadmap Checkpoint — 2026-08-17
 
 - The current implementation checkpoint is
-  `6b292156e3e94d3389e9f3b8513445e7eb4ab541`. REL-C1 is frozen through the
-  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-2`; the tag object
+  `3d54c086e92c858b66df7bb80179431ec2d24867`. REL-C1 is frozen through the
+  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-3`; the tag object
   and remote ref are the authoritative full-SHA record. It supersedes
-  `v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`.
+  `v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
@@ -21,11 +21,13 @@ See `migration_status.md` for the current checked state of these phases.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
   leak and TcpClient construction-failure request wedge with deterministic
   recovery contracts and remains the immutable reviewed-surface checkpoint.
-- The superseded `refreeze-1` candidate passed REL-V1 and REL-V2, but PERF-R1
-  runs `32027919772` and `32027919807` exposed comparator, high-fd, and Linux
-  overload-profile defects. The remediation has passed the full fixed
-  candidate-10k profile three times per platform locally, but that synthetic
-  precommit evidence is not promoted as release evidence.
+- The superseded `refreeze-1` candidate passed REL-V1 and REL-V2 before PERF-R1
+  exposed comparator/high-fd/profile defects. `refreeze-2` passed local REL-V1,
+  but remote runs exposed tag checkout, revision-wide sample-order bias,
+  capacity snapshot interference, stdout flush, and diagnostic decoding gaps.
+  `3d54c08` closes those evidence-tool defects without changing the reviewed
+  stable API. Its local Windows paired regression/Core-capacity matrices and
+  cross-platform candidate-10k repeats pass, but are not release evidence.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
   as source-compatible at `api-r1-perf-r1-reviewed-surface`. Fresh REL-V1
