@@ -31,17 +31,17 @@ snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
 72-hour Linux endurance runs, but those runs predate the current implementation
 checkpoint. M3-R1 is independently closed at `95a6ab5`, and M3-R2 is committed
 at `12adb00`. API-R1 independently approved the remediated 0.3 stable Core
-surface after closing its initial blockers. The reviewed runtime checkpoint is
-`9d2a5be`; the current implementation checkpoint is `68b444d`, which preserves
-that API/runtime tree while fixing the aggregate evidence contract for the two
-installed-package consumers. The first frozen candidate `d3137f9` produced six
-successful CI producers in run `31992899968`, but its stale one-consumer
-aggregate verifier failed, so `v0.3.0-rel-c1-freeze` is superseded. REL-C1 now
-refreezes the unique v0.3 candidate through annotated tag
-`v0.3.0-rel-c1-refreeze-1`; its peeled commit is the authoritative
-`CANDIDATE_SHA`. The tag is an engineering freeze reference, not a release tag
-or REL-D1 decision. The replacement candidate still requires clean same-SHA
-CI, performance, capacity, and endurance evidence; REL-V1 is the next task.
+surface after closing its initial blockers. PERF-R1 then exposed deterministic
+evidence-comparator, high-fd client, and Linux overload-profile defects in the
+otherwise validated `v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`
+candidate. The current implementation checkpoint is
+`6b292156e3e94d3389e9f3b8513445e7eb4ab541` (`6b29215`); its single additive
+stable API is source-compatible and bound to reviewed-surface tag
+`api-r1-perf-r1-reviewed-surface`. REL-C1 now refreezes the unique v0.3
+candidate through annotated tag `v0.3.0-rel-c1-refreeze-2`. The tag is an
+engineering freeze reference, not a release tag or REL-D1 decision. The new
+candidate requires fresh clean same-SHA CI, performance, capacity, and
+endurance evidence; REL-V1 is the next task.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

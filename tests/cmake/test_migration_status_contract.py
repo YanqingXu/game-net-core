@@ -119,9 +119,15 @@ def main() -> None:
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
     api_review = repo_root / "docs" / "reviews" / "api-r1-stable-core-review.md"
+    perf_api_review = (
+        repo_root / "docs" / "reviews" / "perf-r1-stable-core-additive-review.md"
+    )
     historical_api_diff = repo_root / "docs" / "reviews" / "api-r1-public-api-diff.json"
     compatibility_api_diff = (
-        repo_root / "docs" / "reviews" / "api-r1-public-api-compatibility-diff.json"
+        repo_root / "docs" / "reviews" / "perf-r1-public-api-compatibility-diff.json"
+    )
+    perf_additive_api_diff = (
+        repo_root / "docs" / "reviews" / "perf-r1-public-api-additive-diff.json"
     )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
@@ -143,6 +149,7 @@ def main() -> None:
     goal_text = goal.read_text(encoding="utf-8")
     readme_text = readme.read_text(encoding="utf-8")
     api_review_text = api_review.read_text(encoding="utf-8")
+    perf_api_review_text = perf_api_review.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
@@ -152,12 +159,12 @@ def main() -> None:
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
-    implementation_checkpoint = "68b444dd109562d3d69c2b377c3bec90dcd15779"
-    superseded_candidate = "d3137f9298b47474ea96dc694d44c5c026710039"
-    superseded_candidate_tag = "v0.3.0-rel-c1-freeze"
-    candidate_tag = "v0.3.0-rel-c1-refreeze-1"
-    reviewed_surface_tag = "api-r1-approved-surface"
-    reviewed_surface_commit = "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0"
+    implementation_checkpoint = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
+    superseded_candidate = "944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7"
+    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-1"
+    candidate_tag = "v0.3.0-rel-c1-refreeze-2"
+    reviewed_surface_tag = "api-r1-perf-r1-reviewed-surface"
+    reviewed_surface_commit = implementation_checkpoint
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -166,10 +173,10 @@ def main() -> None:
     assert freeze_record == {
         "schema": "gamenet.candidate_freeze.v1",
         "release_label": "v0.3.0-production-candidate",
-        "stage": "rel-c1-refrozen",
+        "stage": "rel-c1-refrozen-perf-r1",
         "freeze_date": "2026-08-17",
         "candidate": {
-            "branch": "main",
+            "branch": "perf-r1-deterministic-capacity",
             "ref": f"refs/tags/{candidate_tag}",
             "object_type": "annotated-tag",
             "commit_resolution": f"refs/tags/{candidate_tag}^{{commit}}",
@@ -179,14 +186,14 @@ def main() -> None:
         "supersedes": {
             "candidate_ref": f"refs/tags/{superseded_candidate_tag}",
             "candidate_commit": superseded_candidate,
-            "rel_v2_run_id": "31992899968",
-            "rel_v2_run_attempt": 1,
-            "reason": "aggregate-verifier-install-consumer-count-mismatch",
+            "rel_v2_run_id": "32007753147",
+            "rel_v2_run_attempt": 4,
+            "reason": "perf-r1-evidence-remediation",
         },
         "reviewed_surface": {
             "tag": reviewed_surface_tag,
             "commit": reviewed_surface_commit,
-            "snapshot": "api/baselines/v0.3.0-api-r1-reviewed.json",
+            "snapshot": "api/baselines/v0.3.0-perf-r1-reviewed.json",
         },
         "policy": {
             "candidate_sha_is_not_duplicated_in_candidate_tree": True,
@@ -222,11 +229,21 @@ def main() -> None:
         "ideas/idea3.md",
         "plan.md",
         "api/candidate_freeze.json",
-        "api/baselines/v0.3.0-api-r1-reviewed.json",
+        "api/baselines/v0.3.0-perf-r1-reviewed.json",
+        ".github/workflows/ci.yml",
+        ".github/workflows/long-soak.yml",
+        ".github/workflows/windows-self-hosted-ci.yml",
         "docs/development/api_compatibility.md",
-        "docs/reviews/api-r1-public-api-compatibility-diff.json",
-        "docs/reviews/api-r1-stable-core-review.md",
+        "docs/development/ci.md",
+        "docs/reviews/perf-r1-public-api-additive-diff.json",
+        "docs/reviews/perf-r1-public-api-compatibility-diff.json",
+        "docs/reviews/perf-r1-stable-core-additive-review.md",
         "tests/api/test_public_api_manifest.py",
+        "tests/ci/test_long_soak_workflow.py",
+        "tests/ci/test_workflow_jobs.py",
+        "tests/ci/test_endurance_gate.py",
+        "tests/cmake/test_threading_gate_contracts.py",
+        "tools/verify_ci_evidence_set.py",
         "tests/cmake/test_migration_status_contract.py",
     }
     changed_since_checkpoint = {
@@ -266,8 +283,8 @@ def main() -> None:
     ):
         require(text, superseded_candidate, source)
         require(text, superseded_candidate_tag, source)
-    require(readme_text, "68b444d", readme)
-    require(readme_text, "d3137f9", readme)
+    require(readme_text, "6b29215", readme)
+    require(readme_text, "944f722", readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
     require(readme_text, "REL-V1", readme)
@@ -301,7 +318,7 @@ def main() -> None:
     require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
-        "The authoritative current implementation checkpoint is `68b444d`",
+        "The authoritative current implementation checkpoint is `6b29215`",
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)
@@ -327,8 +344,20 @@ def main() -> None:
     require(api_review_text, "Status: `approved-for-candidate-freeze`", api_review)
     require(api_review_text, "/root/api_r1_independent_review", api_review)
     require(api_review_text, "Changed stable-header fingerprints | 19", api_review)
+    require(
+        perf_api_review_text,
+        "Status: `approved-additive-source-compatible`",
+        perf_api_review,
+    )
+    require(perf_api_review_text, reviewed_surface_tag, perf_api_review)
+    require(
+        perf_api_review_text,
+        "TcpConnection::setSendBufferSize",
+        perf_api_review,
+    )
     assert historical_api_diff.exists(), historical_api_diff
     assert compatibility_api_diff.exists(), compatibility_api_diff
+    assert perf_additive_api_diff.exists(), perf_additive_api_diff
     assert "API-R1 stable-surface review is the next" not in readme_text
     assert "API-R1 is next" not in status_text
     require(

@@ -6,25 +6,23 @@
 依据：同基线的 `assessment.md`
 
 当前治理事实（2026-08-17）绑定不可变实现检查点
-`68b444dd109562d3d69c2b377c3bec90dcd15779`。REL-C1 替代候选由 annotated
-tag `v0.3.0-rel-c1-refreeze-1` 唯一标识，其 peeled commit 是权威
-`CANDIDATE_SHA`。它替代 `v0.3.0-rel-c1-freeze` peeled commit
-`d3137f9298b47474ea96dc694d44c5c026710039`；旧候选 run `31992899968`
-attempt 1 的六个 producer 成功，但 aggregate verifier 仍错误地期望一个
-install consumer，因此不能作为 REL-V2 成功证据。
+`6b292156e3e94d3389e9f3b8513445e7eb4ab541`。REL-C1 新候选由 annotated
+tag `v0.3.0-rel-c1-refreeze-2` 唯一标识，其 peeled commit 是权威
+`CANDIDATE_SHA`。它替代
+`v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`；
+旧候选已完成 REL-V1 与 REL-V2，但 PERF-R1 runs `32027919772` / `32027919807`
+暴露 comparator、high-fd client 与 Linux overload-profile 缺陷，因此旧证据不能
+晋级新候选。
 
-替代候选的 peeled commit 是
-`944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`。REL-V1 已从该 SHA 的 detached
-clean worktree 完成本地门；REL-V2 已由 GitHub Actions run `32007753147`
-attempt 4 完成六个 producer、required artifacts 和 aggregate verifier，全部
-结论为 `success`。当前发布关键路径已推进到 PERF-R1。
-
-PERF-R1 首次远端执行已在同一候选 SHA 上完成，但门禁结论为 `failure`：
-Core benchmark run `32027919772` 与 capacity run `32027919807` 都未产生可接受的
-paired success evidence。当前候选因此仍被冻结但不可晋级；END-R1 未获准启动。
-本地已准备 evidence-tooling/harness remediation，任何采纳后的新提交都会按本计划
-规则使候选任务退回 REL-C1，并需要新的不可变候选 tag 以及 REL-V1/REL-V2/PERF-R1
-全链重验。
+PERF-R1 remediation 已在实现检查点完成 fail-closed Core v1 → v2 parameter
+bridge、Linux `poll()` connect wait，以及 owner-loop-only
+`TcpConnection::setSendBufferSize`。稳定 API 的 additive source-compatibility
+决定绑定 `api-r1-perf-r1-reviewed-surface`；当前测试清单统一为
+121（8/100/13；threading 94、lifecycle 99），intent 显式 verification paths
+为 140。完整 candidate-10k profile 已在
+Windows/IOCP 与 Linux/epoll 各三次本地通过，但这些 synthetic precommit 结果不
+替代候选证据。发布关键路径已回到 REL-C1 后的新候选 REL-V1；之后必须重新完成
+REL-V2 与 PERF-R1。END-R1 未获准启动。
 
 长期方向见 `goal.md`。`goal.md` 只定义目标和边界，不授权实现；模块实现仍须由
 `active` intent、rules、contracts、tests 和当前阶段 gate 共同授权。
@@ -404,15 +402,17 @@ paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选�
 
 REL-C1 的机器可读记录是 `api/candidate_freeze.json`。候选 commit 不能在其
 自身 tree 中嵌入自己的 SHA，因此该文件记录 candidate ref 与解析规则；annotated
-tag `v0.3.0-rel-c1-refreeze-1` 的 object target 和远端 ref 记录完整 40 位 SHA。
-`api-r1-approved-surface` 独立指向 `9d2a5be...`，证明 reviewed snapshot 的
+tag `v0.3.0-rel-c1-refreeze-2` 的 object target 和远端 ref 记录完整 40 位 SHA。
+`api-r1-perf-r1-reviewed-surface` 独立指向
+`6b292156e3e94d3389e9f3b8513445e7eb4ab541`，证明 additive reviewed snapshot 的
 header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release tag，
 也不替代 REL-V1/REL-V2、PERF-R1、END-R1 或 REL-D1。
 
 首次 freeze tag `v0.3.0-rel-c1-freeze` 指向
 `d3137f9298b47474ea96dc694d44c5c026710039`。run `31992899968` attempt 1 的
 六个 producer 全部成功，但 aggregate 因 verifier 的 one-vs-two consumer
-合同漂移失败；修复提交 `68b444d` 因此触发本次重新冻结。
+合同漂移失败；修复提交 `68b444d` 因此触发 `refreeze-1`。该候选随后在 PERF-R1
+暴露确定性缺陷，修复提交 `6b29215` 再触发 `refreeze-2`。
 
 任何候选后的代码变化都使后续证据失效，并回到 REL-C1。
 
@@ -440,13 +440,14 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 - [x] 命令、配置、test count、SHA 和日志完整；
 - [x] 本地结果只作为 preflight，不替代 remote gate。
 
-关闭证据（2026-08-17）：历史执行声明
+关闭证据（2026-08-17，仅 `refreeze-1` 历史证据）：
 **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。** 已完成。证据目录为
 `G:\gnc-relv1-944f722-run2\rel-v1-evidence`；`summary.json` SHA-256 是
 `21061efc2ef82cf16c3fd76af44c46dfef4b4e1299b9fd370a9a2e96321cff89`，
 证据索引 `SHA256SUMS.txt` SHA-256 是
 `74c5aef414beaf7cd0afa3861fdc3cefa919ed5a1efd9050f858ec435e212c84`。
-本地门只作为 preflight；其后独立的 REL-V2 远端门已经完成。
+本地门只作为旧候选 preflight；其后独立的旧候选 REL-V2 远端门已经完成。
+`refreeze-2` 的同项检查全部恢复为 open，不能由该目录继承。
 
 ## 12. REL-V2：候选同 SHA 远端 CI
 
@@ -476,7 +477,8 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 
 queued、cancelled、billing failure、checkout failure、artifact quota failure 和 best-effort warning 都不是成功证据。
 
-关闭证据（2026-08-17）：GitHub Actions run `32007753147` attempt 4 的 head SHA
+关闭证据（2026-08-17，仅 `refreeze-1` 历史证据）：GitHub Actions run
+`32007753147` attempt 4 的 head SHA
 严格等于 `944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`。六个 producer jobs 和
 `Aggregate six-job CI evidence` 全部为 `success`；artifact policy 是 `required`，
 六个 producer artifacts 与一个 aggregate artifact 均非空、未过期且已重新下载。
@@ -612,9 +614,10 @@ REL-C1 冻结新 SHA，而不能移动现有候选 tag 或复用本次失败 att
   feasibility evidence，不是 candidate/release evidence。
 
 当前 decision：profile remediation 已获得跨平台、同参数、三重复本地可行性证据，
-但 PERF-R1 仍为 open。稳定 surface 必须先绑定新的不可变 reviewed checkpoint，随后
-REL-C1 冻结新 candidate SHA，并从该 SHA 重新完成 REL-V1、REL-V2 与 PERF-R1；旧
-tag 和失败 run 保持不可变，END-R1 继续 blocked-by-dependency。
+实现已绑定 `api-r1-perf-r1-reviewed-surface`，REL-C1 已冻结
+`v0.3.0-rel-c1-refreeze-2`。PERF-R1 仍为 open，必须从该 SHA 重新完成 REL-V1、
+REL-V2 与 PERF-R1；旧 tag 和失败 run 保持不可变，END-R1 继续
+blocked-by-dependency。
 
 ## 14. END-R1：候选 endurance
 
@@ -860,15 +863,12 @@ completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
 
 下一项任务是：
 
-> **PERF-R1 remediation：审查并落地 evidence-tooling/harness 修复，重新设计且验证
-> Linux/Windows 同参数 typed-overload capacity profile，然后返回 REL-C1 冻结新的
-> 唯一候选 SHA。**
+> **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**
 
-REL-V1 本地 clean gate 与 REL-V2 同 SHA 远端六 producer/aggregate gate 已完成。
-当前 candidate 的 PERF-R1 runs `32027919772` / `32027919807` 已失败，不能进入
-END-R1。现有失败 artifacts 继续绑定
-`v0.3.0-rel-c1-refreeze-1^{commit}`；一旦 remediation 形成新提交，候选自动退回
-REL-C1，并需以新 tag 重新完成 REL-V1、REL-V2 和 PERF-R1。新的 PERF-R1 仍必须在
+PERF-R1 remediation 已完成实现、本地跨平台三重复 profile 验证、additive API
+兼容性决定与 `v0.3.0-rel-c1-refreeze-2` 冻结。旧 REL-V1/REL-V2 证据和失败的
+PERF-R1 artifacts 继续绑定 `v0.3.0-rel-c1-refreeze-1^{commit}`，不能由新候选继承。
+新候选完成 REL-V1 后，必须重新执行 REL-V2，再执行 PERF-R1。新的 PERF-R1 仍必须在
 Linux/epoll 与 Windows/IOCP 上使用同参数、同 runner/toolchain class 的
 baseline/candidate 运行 canonical performance matrix、core-capacity matrix 和
 mixed-pressure-recovery，并由 paired identity/parameter/hash verifier 给出可审查的

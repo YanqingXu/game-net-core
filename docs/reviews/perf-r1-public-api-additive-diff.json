@@ -1,0 +1,46 @@
+{
+  "baseline": {
+    "commit": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
+    "compatibility_line": "0.3",
+    "package_version": "0.3.0",
+    "path": "api/baselines/v0.3.0-api-r1-reviewed.json",
+    "schema": "gamenet.public_api_snapshot.v1",
+    "tag": "api-r1-approved-surface"
+  },
+  "candidate": {
+    "compatibility_line": "0.3",
+    "package_version": "0.3.0",
+    "path": "api/public_api_manifest.json",
+    "release_label": "v0.3.0-production-candidate",
+    "schema": "gamenet.public_api_manifest.v2"
+  },
+  "changes": {
+    "headers": {
+      "added": [],
+      "category_moves": [],
+      "removed": []
+    },
+    "stable_header_fingerprint_changes": [
+      {
+        "after": "86430ee090250e014d47336ab2a0e5ffbdf0c9a4ba555e6c8e8d04788b5e7552",
+        "before": "3569bb5482922df1419843c549b36786d424691de9296afbbe36e5689cf5b381",
+        "header": "include/gamenet/core/net/TcpConnection.h"
+      }
+    ],
+    "targets": {
+      "added": [],
+      "category_moves": [],
+      "removed": []
+    }
+  },
+  "schema": "gamenet.public_api_diff.v1",
+  "summary": {
+    "compatibility_decision_reasons": [
+      "stable header fingerprint changed: include/gamenet/core/net/TcpConnection.h"
+    ],
+    "compatibility_decision_required": true,
+    "has_changes": true,
+    "same_compatibility_line": true,
+    "stable_surface_review_required": true
+  }
+}

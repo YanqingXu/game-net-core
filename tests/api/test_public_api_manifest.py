@@ -37,9 +37,17 @@ def main() -> None:
     baseline_path = repo_root / baseline_reference["path"]
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     reviewed_snapshot_path = (
-        repo_root / "api" / "baselines" / "v0.3.0-api-r1-reviewed.json"
+        repo_root / "api" / "baselines" / "v0.3.0-perf-r1-reviewed.json"
     )
     reviewed_snapshot = json.loads(reviewed_snapshot_path.read_text(encoding="utf-8"))
+    prior_reviewed_snapshot = json.loads(
+        (
+            repo_root
+            / "api"
+            / "baselines"
+            / "v0.3.0-api-r1-reviewed.json"
+        ).read_text(encoding="utf-8")
+    )
 
     errors = verifier.verify_manifest(
         repo_root,
@@ -74,8 +82,8 @@ def main() -> None:
     assert reviewed_snapshot["package_version"] == "0.3.0"
     assert reviewed_snapshot["compatibility_line"] == "0.3"
     assert reviewed_snapshot["source"] == {
-        "tag": "api-r1-approved-surface",
-        "commit": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
+        "tag": "api-r1-perf-r1-reviewed-surface",
+        "commit": "6b292156e3e94d3389e9f3b8513445e7eb4ab541",
     }
     reviewed_provenance_errors: list[str] = []
     verifier._verify_snapshot_against_git(
@@ -88,7 +96,7 @@ def main() -> None:
     reviewed_difference = comparer.build_diff(
         reviewed_snapshot,
         manifest,
-        baseline_path="api/baselines/v0.3.0-api-r1-reviewed.json",
+        baseline_path="api/baselines/v0.3.0-perf-r1-reviewed.json",
         candidate_path="api/public_api_manifest.json",
         verify_historical_reference=False,
     )
@@ -101,11 +109,46 @@ def main() -> None:
     changed_reviewed_difference = comparer.build_diff(
         reviewed_snapshot,
         changed_candidate,
-        baseline_path="api/baselines/v0.3.0-api-r1-reviewed.json",
+        baseline_path="api/baselines/v0.3.0-perf-r1-reviewed.json",
         candidate_path="api/public_api_manifest.json",
         verify_historical_reference=False,
     )
     assert changed_reviewed_difference["summary"]["compatibility_decision_required"] is True
+    additive_difference = comparer.build_diff(
+        prior_reviewed_snapshot,
+        manifest,
+        baseline_path="api/baselines/v0.3.0-api-r1-reviewed.json",
+        candidate_path="api/public_api_manifest.json",
+        verify_historical_reference=False,
+    )
+    assert additive_difference["summary"] == {
+        "has_changes": True,
+        "same_compatibility_line": True,
+        "stable_surface_review_required": True,
+        "compatibility_decision_required": True,
+        "compatibility_decision_reasons": [
+            "stable header fingerprint changed: "
+            "include/gamenet/core/net/TcpConnection.h"
+        ],
+    }
+    assert additive_difference["changes"][
+        "stable_header_fingerprint_changes"
+    ] == [
+        {
+            "header": "include/gamenet/core/net/TcpConnection.h",
+            "before": "3569bb5482922df1419843c549b36786d424691de9296afbbe36e5689cf5b381",
+            "after": "86430ee090250e014d47336ab2a0e5ffbdf0c9a4ba555e6c8e8d04788b5e7552",
+        }
+    ]
+    archived_additive_difference = json.loads(
+        (
+            repo_root
+            / "docs"
+            / "reviews"
+            / "perf-r1-public-api-additive-diff.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert archived_additive_difference == additive_difference
     baseline_text = baseline_path.read_text(encoding="utf-8")
     assert (
         verifier.snapshot_content_sha256(baseline_text)
@@ -129,7 +172,18 @@ def main() -> None:
         for error in provenance_errors
     )
 
+    historical_candidate = candidate_from_snapshot(
+        prior_reviewed_snapshot,
+        baseline_reference,
+    )
+    historical_candidate["release_label"] = "v0.3.0-production-candidate"
     difference = comparer.build_diff(
+        baseline,
+        historical_candidate,
+        baseline_path=baseline_reference["path"],
+        candidate_path="api/public_api_manifest.json",
+    )
+    current_difference = comparer.build_diff(
         baseline,
         manifest,
         baseline_path=baseline_reference["path"],
@@ -178,7 +232,7 @@ def main() -> None:
             repo_root
             / "docs"
             / "reviews"
-            / "api-r1-public-api-compatibility-diff.json"
+            / "perf-r1-public-api-compatibility-diff.json"
         ).read_text(encoding="utf-8")
     )
     assert archived_compatibility_difference == reviewed_difference
@@ -190,10 +244,17 @@ def main() -> None:
     assert "v0.3.0-rel-c1-refreeze-1" in review_packet
     assert "d3137f9298b47474ea96dc694d44c5c026710039" in review_packet
     assert "Changed stable-header fingerprints | 19" in review_packet
+    perf_review_packet = (
+        repo_root / "docs" / "reviews" / "perf-r1-stable-core-additive-review.md"
+    ).read_text(encoding="utf-8")
+    assert "api-r1-perf-r1-reviewed-surface" in perf_review_packet
+    assert "6b292156e3e94d3389e9f3b8513445e7eb4ab541" in perf_review_packet
+    assert "TcpConnection::setSendBufferSize" in perf_review_packet
+    assert "approved-additive-source-compatible" in perf_review_packet
     assert comparer.render_diff(difference) == comparer.render_diff(
         comparer.build_diff(
             baseline,
-            manifest,
+            historical_candidate,
             baseline_path=baseline_reference["path"],
             candidate_path="api/public_api_manifest.json",
         )
@@ -267,7 +328,7 @@ def main() -> None:
                 "--repo-root",
                 str(repo_root),
                 "--compatibility-baseline",
-                "api/baselines/v0.3.0-api-r1-reviewed.json",
+                "api/baselines/v0.3.0-perf-r1-reviewed.json",
                 "--fail-on-compatibility-decision",
                 "--fail-on-stable-surface-review",
                 "--compatibility-output",
@@ -280,7 +341,7 @@ def main() -> None:
             text=True,
         )
         assert completed.returncode == 0, completed.stderr
-        assert json.loads(cli_output.read_text(encoding="utf-8")) == difference
+        assert json.loads(cli_output.read_text(encoding="utf-8")) == current_difference
         assert (
             json.loads(cli_compatibility_output.read_text(encoding="utf-8"))
             == reviewed_difference
@@ -295,7 +356,7 @@ def main() -> None:
                 addition_root
                 / "api"
                 / "baselines"
-                / "v0.3.0-api-r1-reviewed.json"
+                / "v0.3.0-perf-r1-reviewed.json"
             )
             addition_reviewed.parent.mkdir(parents=True, exist_ok=True)
             addition_reviewed.write_text(
@@ -327,7 +388,7 @@ def main() -> None:
                     "--repo-root",
                     str(addition_root),
                     "--compatibility-baseline",
-                    "api/baselines/v0.3.0-api-r1-reviewed.json",
+                    "api/baselines/v0.3.0-perf-r1-reviewed.json",
                     "--fail-on-stable-surface-review",
                     "--compatibility-output",
                     str(addition_output),

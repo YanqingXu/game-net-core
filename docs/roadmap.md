@@ -8,30 +8,28 @@ See `migration_status.md` for the current checked state of these phases.
 ## Current Roadmap Checkpoint — 2026-08-17
 
 - The current implementation checkpoint is
-  `68b444dd109562d3d69c2b377c3bec90dcd15779`. The REL-C1 candidate is the
-  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-1`; the tag object
+  `6b292156e3e94d3389e9f3b8513445e7eb4ab541`. REL-C1 is frozen through the
+  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-2`; the tag object
   and remote ref are the authoritative full-SHA record. It supersedes
-  `v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039`.
+  `v0.3.0-rel-c1-refreeze-1@944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 120 CTest tests: 8 unit, 99 contract, and 13
-  integration, with 93 threading and 98 lifecycle labels. The `9d2a5be` runtime
-  tree passed a fresh local Windows/IOCP Release 120/120 gate, all 36 repository/
-  API/CI guards, and stable/provisional install consumers 2/2; its API-R1
-  reviewed-surface diff is strictly empty. `68b444d` changes only the aggregate
-  evidence verifier, its regression contract, and CI documentation.
+- The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
+  integration, with 94 threading and 99 lifecycle labels. The new direct
+  socket-option contract and all repository/API/CI guards pass on Windows/IOCP
+  and Linux/epoll; the PERF-R1 reviewed-surface diff is strictly empty.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
   leak and TcpClient construction-failure request wedge with deterministic
   recovery contracts and remains the immutable reviewed-surface checkpoint.
-- REL-C1 is frozen again after run `31992899968` attempt 1 proved all six
-  `d3137f9` producers, consumers 2/2/2, TSan 93, and libFuzzer 1000, but exposed
-  the old aggregate verifier's one-consumer mismatch. No same-SHA remote
-  validation, benchmark, capacity, or endurance result is promoted for the
-  replacement candidate yet.
+- The superseded `refreeze-1` candidate passed REL-V1 and REL-V2, but PERF-R1
+  runs `32027919772` and `32027919807` exposed comparator, high-fd, and Linux
+  overload-profile defects. The remediation has passed the full fixed
+  candidate-10k profile three times per platform locally, but that synthetic
+  precommit evidence is not promoted as release evidence.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
-  returned `APPROVE`; historical and strict same-line zero-diff artifacts are
-  archived. REL-V1 candidate clean validation is next, followed by same-SHA
-  remote evidence.
+  returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
+  as source-compatible at `api-r1-perf-r1-reviewed-surface`. Fresh REL-V1
+  candidate clean validation is next, followed by same-SHA remote evidence.
 
 ## Phase 1: Project Skeleton
 

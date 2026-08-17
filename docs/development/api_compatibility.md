@@ -45,7 +45,7 @@ Run the verifier and emit the deterministic historical diff:
 ```text
 python tests/api/test_public_api_manifest.py
 python tools/compare_public_api_manifest.py \
-  --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json \
+  --compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json \
   --fail-on-compatibility-decision \
   --fail-on-stable-surface-review \
   --compatibility-output public-api-compatibility-diff.json \
@@ -326,6 +326,13 @@ Direct evidence is
 `tests/contract/tcp_connection/test_tcp_connection_socket_options.cpp`; the
 thread contract also requires the owner-loop assertion. The PERF-R1 capacity
 contract freezes one 4 KiB request for Linux and Windows and separately checks
-typed overload, recovery, probe health, and teardown. The non-self-referential
-reviewed-surface checkpoint and compatibility snapshot are bound during the
-candidate refreeze after this implementation state is committed.
+typed overload, recovery, probe health, and teardown.
+
+The focused decision record is
+[`perf-r1-stable-core-additive-review.md`](../reviews/perf-r1-stable-core-additive-review.md).
+Annotated tag `api-r1-perf-r1-reviewed-surface` binds the reviewed implementation
+to `6b292156e3e94d3389e9f3b8513445e7eb4ab541`; the matching snapshot is
+`api/baselines/v0.3.0-perf-r1-reviewed.json`. The archived prior-to-new diff
+contains exactly the `TcpConnection.h` fingerprint decision, and the blocking
+comparison from the new snapshot is zero. This remains non-self-referential to
+the separate candidate tag `v0.3.0-rel-c1-refreeze-2`.

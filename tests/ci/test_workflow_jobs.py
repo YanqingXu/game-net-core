@@ -13,8 +13,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 120
-EXPECTED_THREADING_TOTAL = 93
+EXPECTED_CTEST_TOTAL = 121
+EXPECTED_THREADING_TOTAL = 94
 EXPECTED_CONSUMER_TOTAL = 2
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
@@ -708,13 +708,13 @@ def main() -> None:
     require(self_hosted_job, '"tests/ci/test_workflow_jobs.py"')
     require(self_hosted_job, "& py -3 $guard")
     require(self_hosted_job, '-G "Visual Studio 18 2026"')
-    require(self_hosted_job, "--expected-total 120")
+    require(self_hosted_job, "--expected-total 121")
     require(self_hosted_job, "--timeout 30")
     require(self_hosted_job, "- name: Install and verify package consumer")
     require(self_hosted_job, "--expected-total 2")
     require(
         self_hosted_job,
-        "--compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json",
+        "--compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json",
     )
     require(self_hosted_job, "--fail-on-compatibility-decision")
     require(self_hosted_job, "--fail-on-stable-surface-review")
@@ -779,7 +779,7 @@ def main() -> None:
     )
     require(workflow, "python3 tools/compare_public_api_manifest.py")
     assert workflow.count(
-        "--compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json"
+        "--compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json"
     ) == 2
     assert workflow.count("--fail-on-compatibility-decision") == 2
     assert workflow.count("--fail-on-stable-surface-review") == 2
@@ -991,8 +991,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 120")
-    require(ci_docs, "threading=93")
+    require(ci_docs, "exactly 121")
+    require(ci_docs, "threading=94")
     require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")
