@@ -1,12 +1,16 @@
-# game-net-core 新一轮执行计划
+# game-net-core 执行计划
 
 计划日期：2026-07-30
+更新日期：2026-08-17
 起始基线：`main@7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
 依据：同基线的 `assessment.md`
 
-当前治理检查点（2026-08-11）：
-`main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`；审计时
+当前治理事实（2026-08-17）由 `1daa649` 记录；该治理提交绑定的不可变实现检查点为
+`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`；审计时上游参考为
 `origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`；当前无冻结的 v0.3 最终候选。
+
+长期方向见 `goal.md`。`goal.md` 只定义目标和边界，不授权实现；模块实现仍须由
+`active` intent、rules、contracts、tests 和当前阶段 gate 共同授权。
 
 ## 1. 本轮目标
 
@@ -20,6 +24,10 @@
 6. 给出 `v0.3.0-production-candidate` 是否可发布的明确结论。
 
 在这些门关闭前，不启动正式 Gateway、HTTP、WebSocket、RPC、UDP、KCP、TLS 或新 game pipeline 模块。
+
+本轮也不重构已通过 API-R1 的稳定 `EventLoop/Poller/Channel` surface。长期的
+owner-loop + I/O Engine 与多运行模型目标只进入 REL-D1 之后的计划队列，不能抢占
+REL-C1 或使当前候选证据失效。
 
 ## 2. 当前检查点
 
@@ -85,6 +93,25 @@ M3-R1 → M3-R2 → GOV-R2 → API-R1 → M3-R3 → GOV-R3 → REL-C1
 ```
 
 `INF-R1` 和 `LIC-R1` 可与代码 remediation 并行，但不得改变候选证据必须绑定唯一 SHA 的规则。
+
+REL-D1 之后的架构依赖链：
+
+```text
+REL-D1
+  -> ARCH-G1（目标转 active intent/ADR + 基线证据）
+       -> IOE-R1（source-private Engine contract + Poller adapter）
+            -> IOE-R2（epoll Readiness Engine）
+                 -> IOE-C1（IOCP direct Completion notice）
+                      -> IOE-X1（实验性 io_uring）
+
+       -> RTM-R1（TCP-only Runtime Profiles）
+            -> RTM-R2（Queued / Tick / Sharding）
+                 -> TRN-X1（经 intent 提升后的 deferred transport）
+```
+
+`IOE-*` 与 `RTM-*` 是两个正交演进轨道。它们可以在 ARCH-G1 关闭后分别评估，
+但任何稳定 Core 修改都必须满足 API 兼容决策、跨平台合同和独立 review；任何
+Runtime Profile 都不得反向改变 Core 的 owner/lifecycle 语义。
 
 ## 5. M3-R1：建连投递失败生命周期闭环
 
@@ -481,19 +508,155 @@ queued、cancelled、billing failure、checkout failure、artifact quota failure
 
 禁止把 preview、internal candidate 和 externally adoptable release 混为一类。
 
-## 17. M4 入口
+## 17. REL-D1 后的目标架构计划
 
-M4 仅在 REL-D1 完成后评估。
+本节状态：`queued-not-authorized`。
 
-候选主题可以包括：
+本节把 `goal.md` 转换为可执行的后续阶段，但不改变当前唯一任务。只有 REL-D1
+完成、项目确认下一版本范围后，才能逐项创建或提升 active intent。任何 deferred
+或 legacy intent 都不能因为出现在本节而自动获得实现授权。
 
-- 正式 Packet contract；
-- Gateway/Pipeline；
-- production metrics exporter；
-- general connection idle policy；
-- deferred transports。
+### 17.1 ARCH-G1：架构契约与证据基线
 
-M4 必须重新执行 intent → rules → contracts → tests → implementation，不得因保留的 deferred intent 自动扩大当前 scope。
+目标：先把长期方向变成可审查的 intent/ADR 和可比较证据，不改运行时代码。
+
+- [ ] 新建 owner-loop + I/O Engine architecture intent，明确 EventLoop 是 owner
+  scheduler/event pump，而不只等于 Readiness Reactor；
+- [ ] 新建 Runtime Model architecture intent，明确 Profile、Connection Placement、
+  Logic Placement 和业务边界；
+- [ ] 盘点 `Poller`、`Channel`、`EventLoopOptions`、Metrics 与 IOCP transport 中的
+  readiness/completion 语义耦合；
+- [ ] 固化 epoll/IOCP 当前吞吐、延迟、内存、wakeup、shutdown 和 operation-retention
+  基线；
+- [ ] 给出稳定 API 兼容策略：source-private 迁移、adapter、alias、弃用期或明确的
+  pre-1.0 breaking-change gate；
+- [ ] 定义所有 Engine、Readiness 专属和 Completion 专属测试矩阵；
+- [ ] 独立 reviewer 按 intent → contract → ownership → lifecycle → tests 顺序批准。
+
+关闭门：术语、边界、依赖方向、测试文件和性能回归阈值全部明确；没有代码/API
+变更；后续每个实现任务都有对应 active intent 和 owner。
+
+### 17.2 IOE-R1：source-private I/O Engine 契约
+
+目标：不改变行为地建立 Engine seam，先证明抽象边界可行。
+
+- [ ] 定义 source-private `IoEngine`、`IoNoticeBatch`、capabilities、wakeup、
+  `beginQuiesce()` 和 `quiescent()` 契约；
+- [ ] 用 `PollerIoEngineAdapter` 接入现有 Poller，保持 EventLoop 阶段顺序、active
+  batch invalidation 和 shutdown fixed point 不变；
+- [ ] 公共调度预算与 backend capacity 开始分层，但不改变 stable options；
+- [ ] 新合同覆盖 owner-thread、跨线程 wakeup、admission seal、accepted-work drain、
+  generation 和 callback 内关闭；
+- [ ] Linux/epoll 与 Windows/IOCP 全量合同通过；
+- [ ] 与 ARCH-G1 基线比较，热路径无未接受的回归。
+
+禁止：本阶段不删除 Poller/Channel，不改变 TCP public surface，不引入 io_uring，也
+不以“改名”为完成标准。
+
+### 17.3 IOE-R2：epoll Readiness Engine
+
+目标：建立纯 Readiness 参考实现并保持 Linux 行为和性能基线。
+
+- [ ] 引入 `ReadinessPort`、registration identity/generation 和
+  `ReadinessNotice`；
+- [ ] 将 epoll 注册、等待、wakeup 和 ready dispatch 移入 Engine 边界；
+- [ ] 明确 `Channel` 是 Readiness registration/callback binding；
+- [ ] 保持 stale readiness、同 fd replacement、remove-before-destroy 和
+  active-batch retirement 合同；
+- [ ] 覆盖 level/edge 策略、EAGAIN、accept/read budget 和事件批处理；
+- [ ] Linux benchmark/capacity 不超过 ARCH-G1 约定的回归预算。
+
+### 17.4 IOE-C1：IOCP 直接 Completion 分发
+
+目标：让 Completion 保留 operation 真实语义，不再伪装成唯一 active Channel。
+
+- [ ] 定义 operation identity/generation、result、bytes、native error、flags、lease
+  和 terminal retirement；
+- [ ] `Accepted` submission 必须导向唯一 terminal completion；同步非 pending
+  失败不建立 future completion obligation；
+- [ ] GQCSEx 结果直接形成 `CompletionNotice`，由 owner-loop Completion sink/driver
+  消费；
+- [ ] 同一连接同批 read/write/cancel completion 保留为独立事实，不通过“每
+  Channel 一次”人为合并；
+- [ ] 移除 Channel 中的 IOCP operation 携带职责、fake read/write 映射和
+  EventLoop 对具体 IocpPoller 的类型判断；
+- [ ] shutdown 覆盖 cancel request、observer revoke、terminal dequeue、lease
+  release 和 owner retirement；
+- [ ] Windows/IOCP 全量生命周期、饱和、性能、容量和 endurance 证据通过。
+
+关闭门：没有 callback-after-destroy、kernel-reference-after-free、phantom
+completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
+
+### 17.5 IOE-X1：实验性 io_uring Completion Engine
+
+依赖：IOE-C1 的通用 Completion contract 已稳定。
+
+- [ ] 首版只完成 one-shot accept/recv/send、typed SQ-full rejection、cancel、
+  terminal completion、buffer lease 和 final drain；
+- [ ] 必须是真实 completion TCP data path，不以 `POLL_ADD` 包装另一个 epoll
+  作为阶段完成；
+- [ ] epoll 保持默认和 fallback；
+- [ ] multishot、provided buffers、fixed files、zero-copy、SQPOLL 和 linked
+  operations 全部继续 deferred；
+- [ ] 只有最小闭环通过合同、性能和 endurance 后，才单独提升 multishot
+  capability intent。
+
+本阶段始终为 experimental，不能自动成为受支持平台承诺。
+
+### 17.6 RTM-R1：TCP-only Runtime Profiles
+
+目标：在不修改稳定 Core 的前提下验证多运行模型，而不是创建任意组合框架。
+
+- [ ] 定义三个 provisional Profile：`SingleLoopInlineEvent`、
+  `MultiIoQueuedEvent`、`MultiIoDedicatedFixedTick`；
+- [ ] Profile 明确 transport、I/O topology、logic placement、dispatch cadence、
+  broadcast 和 backpressure；
+- [ ] Inline handler 必须有严格执行预算，不允许阻塞 I/O owner；
+- [ ] Queued 模型使用有界队列、合并 wakeup 和 typed overload result；
+- [ ] FixedTick 明确 FixedDelay、FixedRateSkipMissed 或
+  FixedRateBoundedCatchUp，不再把周期性 drain 默认称为权威固定帧；
+- [ ] 每个 Profile 有独立的生命周期、饱和、P99/P999 handoff、Tick jitter、
+  内存、Linux/Windows 和 shutdown 证据；
+- [ ] 只有至少两个垂直切片证明共同需要时，才提升 `ExecutionCell`、
+  `CommandSink` 或 `RuntimeProfile` 为安装接口。
+
+### 17.7 RTM-R2：逻辑分片与 Hybrid
+
+依赖：RTM-R1 至少两个 Profile 通过证据门。
+
+- [ ] 分离 `ConnectionPlacementPolicy` 与 `LogicShardPolicy`；
+- [ ] I/O connection owner 建立后不因 player/room/scene affinity 迁移；
+- [ ] 命令按 player/room/scene key 进入有界逻辑 cell；
+- [ ] 输出通过 endpoint owner executor 回到原连接 owner；
+- [ ] 支持 event-driven 事务路径与 FixedTick 模拟路径并存；
+- [ ] 明确 cell 内顺序、跨 cell 非全局顺序和 stop/drain 顺序；
+- [ ] Actor、AOI、Room、World 和业务状态继续留在 Core 之外。
+
+### 17.8 TRN-X1：后续传输实验入口
+
+依赖：Core、I/O Engine 和 TCP Runtime Profile 已有稳定证据；对应 deferred intent
+已经根据当时仓库事实重写并提升。
+
+- [ ] 先做 owner-loop UDP datagram foundation、bounded receive、typed send、MTU
+  capability 和 shutdown contract；
+- [ ] UDP 稳定后再评估可靠数据报、KCP 或 TCP + datagram 双通道 Session；
+- [ ] 不把 KCP、FEC、PMTU、拥塞控制和多传输一次性合并为一个里程碑；
+- [ ] TransportEndpoint 公共能力保持窄接口，传输专属 metadata 使用 capability
+  或扩展接口；
+- [ ] 每个实验传输独立标记 build/test/evidence status，不提前声明生产级。
+
+### 17.9 后续能力的统一提升门
+
+任何 IOE、RTM 或 TRN 能力从 experimental/provisional 提升为 supported 前，必须：
+
+- [ ] 有 active intent、rules、具体 test files 和独立 review；
+- [ ] 回答 owner、ownership、re-entry、cross-thread marshal 和 test 五个问题；
+- [ ] Linux/Windows 支持声明与实际 backend 一致；
+- [ ] 饱和、取消、关闭、fd/handle reuse 和 callback destruction 合同通过；
+- [ ] benchmark/capacity/endurance 绑定同一候选 SHA；
+- [ ] 与基线相比的吞吐、延迟、内存和复杂度回归有明确决策；
+- [ ] 官方 Profile 数量有界，未验证组合继续保持 experimental；
+- [ ] Core 没有吸收业务状态、协议研究或部署拓扑。
 
 ## 18. 每个任务的固定工作流
 
@@ -521,8 +684,10 @@ M4 必须重新执行 intent → rules → contracts → tests → implementatio
 
 ## 19. 计划维护规则
 
+- `goal.md` 记录长期目标、统一语义与非目标，不作为实现授权；
 - `assessment.md` 记录事实、风险与证据；
 - `plan.md` 记录动作、依赖和关闭门；
+- `intents/` 中的 `active` 文档才授权当前模块实现；
 - finding ID 不复用；
 - 一个任务只允许 `open → implemented → locally-verified → remotely-verified → closed`；
 - 没有证据时不得从 locally-verified 跳到 closed；

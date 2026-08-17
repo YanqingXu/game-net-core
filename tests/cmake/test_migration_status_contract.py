@@ -110,6 +110,7 @@ def main() -> None:
     roadmap = repo_root / "docs" / "roadmap.md"
     assessment = repo_root / "assessment.md"
     plan = repo_root / "plan.md"
+    goal = repo_root / "goal.md"
     readme = repo_root / "README.md"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
@@ -137,6 +138,7 @@ def main() -> None:
     roadmap_text = roadmap.read_text(encoding="utf-8")
     assessment_text = assessment.read_text(encoding="utf-8")
     plan_text = plan.read_text(encoding="utf-8")
+    goal_text = goal.read_text(encoding="utf-8")
     readme_text = readme.read_text(encoding="utf-8")
     api_review_text = api_review.read_text(encoding="utf-8")
     normalized_roadmap_text = " ".join(roadmap_text.split())
@@ -163,6 +165,7 @@ def main() -> None:
         "assessment.md",
         "docs/migration_status.md",
         "docs/roadmap.md",
+        "goal.md",
         "plan.md",
         "tests/cmake/test_migration_status_contract.py",
     }
@@ -230,6 +233,12 @@ def main() -> None:
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)
+    require(plan_text, "长期方向见 `goal.md`", plan)
+    require(goal_text, implementation_checkpoint, goal)
+    require(goal_text, "本文不是当前实现授权，也不是发布证据", goal)
+    require(goal_text, "owner-loop 并发与生命周期内核", goal)
+    require(goal_text, "Readiness 与 Completion", goal)
+    require(goal_text, "当前 v0.3 候选冻结、验证和发布决定", goal)
     require(assessment_text, "P1-05 | P1（本地关闭）", assessment)
     require(assessment_text, "P1-06 | P1（本地关闭）", assessment)
     require(
