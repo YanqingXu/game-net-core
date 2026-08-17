@@ -166,6 +166,9 @@ def main() -> None:
         "docs/migration_status.md",
         "docs/roadmap.md",
         "goal.md",
+        "ideas/idea1.md",
+        "ideas/idea2.md",
+        "ideas/idea3.md",
         "plan.md",
         "tests/cmake/test_migration_status_contract.py",
     }
