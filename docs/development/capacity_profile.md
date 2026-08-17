@@ -262,6 +262,12 @@ throughput, and RSS values remain observational; the pair gate compares
 contract identity and pass/fail evidence rather than treating unlike hosts as
 a performance contest.
 
+If the executable returns nonzero, the runner retains its structured stdout as
+`sample-N-failure.json` and reports the document's `error` plus false checks in
+the workflow log. This keeps a failed hosted-runner invariant diagnosable; the
+retained failure remains negative evidence and never produces a passing gate
+manifest.
+
 A local Windows Release orchestration preflight completed all three
 `candidate-10k` repetitions with exact 10,000 endpoint attempts, 500/500
 healthy probes, and 16 workers accounting for all 1,000 recovery sockets in

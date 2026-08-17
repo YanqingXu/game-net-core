@@ -127,6 +127,9 @@ def main() -> None:
     assert workflow.exists(), f"missing non-default long-soak workflow: {workflow}"
 
     workflow_text = workflow.read_text(encoding="utf-8")
+    assert workflow_text.count("fetch-tags: true") == 3, (
+        "every full-history soak checkout must materialize annotated tags"
+    )
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
     require(workflow_text, "          - ci", workflow)
@@ -176,6 +179,7 @@ def main() -> None:
     checkout = step_block(job, "Checkout")
     require(checkout, "uses: actions/checkout@v4", workflow)
     require(checkout, "fetch-depth: 0", workflow)
+    require(checkout, "fetch-tags: true", workflow)
 
     source_checkout = step_block(job, "Checkout migration provenance source")
     require(source_checkout, "uses: actions/checkout@v4", workflow)
@@ -484,6 +488,7 @@ def main() -> None:
     )
     require(production_checkout, "uses: actions/checkout@v4", workflow)
     require(production_checkout, "fetch-depth: 0", workflow)
+    require(production_checkout, "fetch-tags: true", workflow)
     require(production_checkout, "persist-credentials: false", workflow)
 
     production_source_checkout = step_block(

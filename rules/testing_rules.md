@@ -241,6 +241,9 @@ For lifecycle-sensitive modules, tests should include:
   requires 10k plus 24h, release mode requires dedicated 100k plus same-SHA
   24h/72h, and SHA, workflow run, rerun attempt, stage, profile, duration, hash,
   or source-inventory drift must fail closed
+- a nonzero capacity-profile sample must retain its structured stdout under the
+  run artifact and report the document error plus false checks; stderr-only or
+  toolchain-only evidence cannot support capacity remediation
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

@@ -591,6 +591,9 @@ def main() -> None:
         '"server_send_buffer_bytes": 4096',
         "validate_gate_document",
         "capacity gate requires the scale-ready v3 schema",
+        "sample-{repetition}-failure.json",
+        "reported error:",
+        "failed checks:",
     ):
         require(gate_runner_text, fragment, gate_runner)
     for fragment in (
@@ -784,6 +787,38 @@ def main() -> None:
     assert dedicated_profile.parameters["connections"] == 10_000
     assert dedicated_profile.parameters["server_send_buffer_bytes"] == 4_096
     assert dedicated_profile.parameters["reader_concurrency_limit"] == 64
+
+    with tempfile.TemporaryDirectory(
+        prefix="gamenet-capacity-failed-sample-"
+    ) as directory:
+        failure_root = Path(directory)
+        failure_document = {
+            "error": "pending output did not recover",
+            "checks": {
+                "pending_within_limit": True,
+                "recovery_stable": False,
+                "passed": False,
+            },
+        }
+        failure_stdout = json.dumps(failure_document) + "\n"
+        failure_detail = capacity_gate.retain_failed_sample(
+            failure_root,
+            2,
+            failure_stdout,
+        )
+        assert (failure_root / "sample-2-failure.json").read_text(
+            encoding="utf-8"
+        ) == failure_stdout
+        assert (
+            "reported error: pending output did not recover"
+            in failure_detail
+        )
+        assert "failed checks: passed, recovery_stable" in failure_detail
+        assert capacity_gate.retain_failed_sample(
+            failure_root,
+            3,
+            "",
+        ) == "sample emitted no stdout"
 
     with tempfile.TemporaryDirectory(
         prefix="gamenet-capacity-pair-"

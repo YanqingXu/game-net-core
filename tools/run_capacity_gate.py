@@ -162,6 +162,39 @@ def command_for(executable: Path, profile: GateProfile) -> list[str]:
     return command
 
 
+def retain_failed_sample(
+    output_root: Path,
+    repetition: int,
+    stdout: str,
+) -> str:
+    if not stdout.strip():
+        return "sample emitted no stdout"
+    path = output_root / f"sample-{repetition}-failure.json"
+    path.write_text(stdout, encoding="utf-8")
+    details = [f"stdout retained as {path.name}"]
+    try:
+        document = json.loads(stdout.lstrip("\ufeff"))
+    except json.JSONDecodeError as error:
+        details.append(f"stdout JSON parse failed: {error}")
+        return "; ".join(details)
+    if isinstance(document, dict):
+        reported_error = document.get("error")
+        if isinstance(reported_error, str) and reported_error:
+            details.append(f"reported error: {reported_error}")
+        checks = document.get("checks")
+        if isinstance(checks, dict):
+            failed_checks = sorted(
+                name
+                for name, value in checks.items()
+                if value is False
+            )
+            if failed_checks:
+                details.append(
+                    "failed checks: " + ", ".join(failed_checks)
+                )
+    return "; ".join(details)
+
+
 def validate_gate_document(
     document: Any,
     profile: GateProfile,
@@ -302,9 +335,16 @@ def run_gate(arguments: argparse.Namespace) -> dict[str, Any]:
             check=False,
         )
         if completed.returncode != 0:
+            retained_failure = retain_failed_sample(
+                output_root,
+                repetition,
+                completed.stdout,
+            )
+            stderr = completed.stderr.strip() or "<empty>"
             raise CapacityGateError(
                 f"capacity sample {repetition} failed with "
-                f"exit {completed.returncode}: {completed.stderr.strip()}"
+                f"exit {completed.returncode}; stderr: {stderr}; "
+                f"{retained_failure}"
             )
         try:
             document = json.loads(completed.stdout)

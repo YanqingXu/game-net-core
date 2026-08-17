@@ -106,6 +106,9 @@ matrix, and immutable evidence are explicit and machine checked.
    with exact source run/attempt identities and the same frozen commit
 9. all supported platform, sanitizer, package, benchmark, and evidence gates
    are green and retained
+   - a failed capacity executable must retain its structured stdout sample and
+     surface its reported error/check failures; toolchain-only failure artifacts
+     are insufficient for remediation review
 10. any release offered for external adoption has an explicit owner-approved
    license; otherwise artifacts remain engineering previews with no use grant
 

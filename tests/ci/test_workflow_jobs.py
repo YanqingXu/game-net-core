@@ -777,6 +777,9 @@ def main() -> None:
     assert workflow.count("fetch-depth: 0") == 6, (
         "all six CI producers must fetch the tagged API baseline for provenance verification"
     )
+    assert workflow.count("fetch-tags: true") == 6, (
+        "all six CI producers must materialize annotated candidate tags"
+    )
     require(workflow, "python3 tools/compare_public_api_manifest.py")
     assert workflow.count(
         "--compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json"
