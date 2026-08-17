@@ -9,15 +9,16 @@ Current production-roadmap audit: 2026-08-17
 Current implementation checkpoint carried by the candidate:
 `3d54c086e92c858b66df7bb80179431ec2d24867` (2026-08-17)
 
-Superseded PERF-R1 candidate: `v0.3.0-rel-c1-refreeze-2` peeled to
-`f528898a2d688be329cf0dce4b167ffe0fad5647`. Its local REL-V1 passed, but
-REL-V2 run `32034140286`, Core run `32034143490`, and capacity runs
-`32034147244` / `32035475245` exposed tag checkout, revision-wide benchmark
-order bias, capacity snapshot queue interference, incomplete stdout flushing,
-and hidden localized diagnostics.
+Superseded PERF-R1 candidate: `v0.3.0-rel-c1-refreeze-3` peeled to
+`0a500826844cb4f9345572909a733cc2e52ce14c`. Its local REL-V1 passed, but
+REL-V2 run `32039657783` proved that the final ref-specific
+`actions/checkout@v4` fetch flattened the local annotated tag ref to its peeled
+commit before repository guards. The run was cancelled after the deterministic
+failure was captured; its Linux Release setup also encountered an independent
+GitHub action-download 429.
 
 Current final v0.3 production candidate: the commit peeled from annotated tag
-`v0.3.0-rel-c1-refreeze-3`; the tag object and remote ref record the
+`v0.3.0-rel-c1-refreeze-4`; the tag object and remote ref record the
 authoritative full `CANDIDATE_SHA`
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
@@ -59,8 +60,9 @@ inventory is 121 configured CTest tests: 8 unit tests, 100 contract tests, and
 `candidate-10k` preflight passed three times on both platforms with identical
 profile parameters, and local Windows regression/Core-capacity paired matrices
 pass their original budgets; neither is immutable candidate evidence. REL-C1
-refreezes the remediation through `v0.3.0-rel-c1-refreeze-3`; REL-V1 candidate clean
-validation is the next roadmap task, followed by fresh REL-V2 and PERF-R1 runs.
+refreezes the checkout remediation through `v0.3.0-rel-c1-refreeze-4`; REL-V1
+candidate clean validation is the next roadmap task, followed by fresh REL-V2
+and PERF-R1 runs.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
@@ -197,7 +199,7 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Current runtime scope includes M3-R1/M3-R2, API-R1 remediation, post-review TCP establishment rollback, and the PERF-R1 remote-evidence remediation at `3d54c08`. Earlier frozen candidates remain historical because later runtime/evidence changes superseded their results. Full same-SHA requalification remains open |
-| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-3`, replacing `v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647` after remote evidence exposed tag checkout, sample-order, capacity snapshot, stdout flush, and diagnostic gaps. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all new-candidate same-SHA release evidence remain open |
+| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-4`, replacing `v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c` after REL-V2 run `32039657783` proved that checkout flattened the local annotated-tag ref. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all new-candidate same-SHA release evidence remain open |
 
 ## Current Intent Inventory
 

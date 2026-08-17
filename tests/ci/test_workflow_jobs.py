@@ -780,6 +780,14 @@ def main() -> None:
     assert workflow.count("fetch-tags: true") == 6, (
         "all six CI producers must materialize annotated candidate tags"
     )
+    assert workflow.count("- name: Restore annotated candidate tag object") == 6, (
+        "all six CI producers must restore the annotated tag object after checkout"
+    )
+    assert workflow.count("if: github.ref_type == 'tag'") == 6
+    assert workflow.count("git fetch --force --no-tags origin") == 6
+    assert workflow.count(
+        "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+    ) == 6
     require(workflow, "python3 tools/compare_public_api_manifest.py")
     assert workflow.count(
         "--compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json"
@@ -865,6 +873,13 @@ def main() -> None:
 
     for job_name, interpreter in PROVENANCE_JOBS:
         job = job_block(workflow, job_name)
+        tag_restore = step_block(job, "Restore annotated candidate tag object")
+        require(tag_restore, "if: github.ref_type == 'tag'")
+        require(tag_restore, "git fetch --force --no-tags origin")
+        require(
+            tag_restore,
+            "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}",
+        )
         source_checkout = step_block(job, "Checkout migration provenance source")
         require(source_checkout, "uses: actions/checkout@v4")
         require(source_checkout, f"repository: {SOURCE_REPOSITORY}")
@@ -883,6 +898,9 @@ def main() -> None:
         )
         assert job.index(source_checkout) < job.index(guards), (
             f"{job_name} must checkout migration provenance before repository guards"
+        )
+        assert job.index(tag_restore) < job.index(source_checkout), (
+            f"{job_name} must restore the annotated candidate tag before provenance"
         )
 
     assert workflow.count("- name: Checkout migration provenance source") == len(PROVENANCE_JOBS)

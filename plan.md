@@ -7,13 +7,13 @@
 
 当前治理事实（2026-08-17）绑定不可变实现检查点
 `3d54c086e92c858b66df7bb80179431ec2d24867`。REL-C1 新候选由 annotated
-tag `v0.3.0-rel-c1-refreeze-3` 唯一标识，其 peeled commit 是权威
+tag `v0.3.0-rel-c1-refreeze-4` 唯一标识，其 peeled commit 是权威
 `CANDIDATE_SHA`。它替代
-`v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`；
-该候选完成本地 REL-V1，但 REL-V2 run `32034140286`、Core run
-`32034143490` 与 capacity runs `32034147244` / `32035475245` 暴露 tag checkout、
-revision-wide 采样顺序偏差、owner-loop snapshot 队列干扰、stdout 刷新和本地化
-诊断缺陷，因此其证据不能晋级新候选。
+`v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c`；
+该候选完成本地 REL-V1，但 REL-V2 run `32039657783` 证明
+`actions/checkout@v4` 在完整抓取 tags 后又把本地 annotated candidate ref
+扁平化为 peeled commit，migration-status guard 因此正确拒绝。run 随后取消，
+不能晋级新候选；独立的 Linux Release setup 还遭遇 GitHub action 下载 429。
 
 PERF-R1 remediation 已在实现检查点完成此前的 parameter bridge、Linux `poll()`
 connect wait 与 owner-loop-only `TcpConnection::setSendBufferSize`，并新增 warm
@@ -405,7 +405,7 @@ paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选�
 
 REL-C1 的机器可读记录是 `api/candidate_freeze.json`。候选 commit 不能在其
 自身 tree 中嵌入自己的 SHA，因此该文件记录 candidate ref 与解析规则；annotated
-tag `v0.3.0-rel-c1-refreeze-3` 的 object target 和远端 ref 记录完整 40 位 SHA。
+tag `v0.3.0-rel-c1-refreeze-4` 的 object target 和远端 ref 记录完整 40 位 SHA。
 `api-r1-perf-r1-reviewed-surface` 独立指向
 `6b292156e3e94d3389e9f3b8513445e7eb4ab541`，证明 additive reviewed snapshot 的
 header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release tag，
@@ -416,7 +416,9 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 六个 producer 全部成功，但 aggregate 因 verifier 的 one-vs-two consumer
 合同漂移失败；修复提交 `68b444d` 因此触发 `refreeze-1`。该候选随后在 PERF-R1
 暴露确定性缺陷，修复提交 `6b29215` 再触发 `refreeze-2`。首次远端取证继续暴露
-证据工具缺陷，修复提交 `3d54c08` 因此触发不可变 `refreeze-3`；旧 tag 不移动。
+证据工具缺陷，修复提交 `3d54c08` 因此触发不可变 `refreeze-3`。该候选的
+REL-V2 又暴露 checkout 对本地 tag ref 的扁平化；显式 object restore 与静态合同
+因此触发 `refreeze-4`。所有旧 tag 均不移动。
 
 任何候选后的代码变化都使后续证据失效，并回到 REL-C1。
 
@@ -453,8 +455,11 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 本地门只作为旧候选 preflight；其后独立的旧候选 REL-V2 远端门已经完成。
 `refreeze-2@f528898` 后来完成同项本地 clean gate（121/121 Debug、121/121
 Release、install consumers 2/2/2、focused repeats 800/800、35/35 guards），但其后
-`3d54c08` 修改 benchmark/capacity evidence tooling；`refreeze-3` 的同项检查因此
-全部恢复为 open，不能继承任一旧候选目录。
+`3d54c08` 修改 benchmark/capacity evidence tooling；`refreeze-3@0a500826` 随后在
+`G:\gnc-relv1-0a50082` 完成 Windows Debug/Release 121/121、install consumers
+各 2/2、focused repeats 800/800、36/36 guards、同线 API zero diff，以及 Linux
+Release 121/121。checkout workflow 与静态合同又发生变化，因此 `refreeze-4` 的
+同项检查恢复为 open，不能把该目录声称为新 SHA 的 detached clean evidence。
 
 ## 12. REL-V2：候选同 SHA 远端 CI
 
@@ -652,6 +657,25 @@ REL-C1 冻结新 SHA，而不能移动现有候选 tag 或复用本次失败 att
 `v0.3.0-rel-c1-refreeze-3` 重冻结实现检查点 `3d54c08`。PERF-R1 仍为 open，必须
 从新 tag 重新完成 REL-V1、REL-V2 与 PERF-R1，END-R1 继续
 blocked-by-dependency。
+
+### 13.7 `refreeze-3` REL-V1 与 annotated-tag checkout remediation（2026-08-17）
+
+- `refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c` 的本地 REL-V1 已完整
+  通过：Windows Debug/Release 121/121、install consumers 2/2/2、focused
+  repeats 800/800、36/36 guards、同线 API zero diff，以及 Linux Release
+  121/121；
+- REL-V2 run `32039657783` 的 checkout 日志显示：首次 full fetch 得到 annotated
+  tag object `40218d3ca0004baec8f37b9e85b90d7dd8da2586`，随后 checkout 的
+  ref-specific fetch 把同名本地 tag 更新为 peeled commit `0a500826...`；Linux
+  CMake 与 TSan producer 因 migration-status guard 拒绝非 tag object 而失败；
+- run 已在根因确定后取消。Linux Release 的 `Set up job` 另遇 action 下载 429，
+  与仓库修复无关；取消/失败 producer 与 aggregate 均不能作为 REL-V2 证据；
+- CI 六个 producer 与 long-soak 三个 producer 现在在 tag dispatch 时于 checkout
+  后、guards 前以精确 refspec 恢复远端 annotated tag object。临时克隆已模拟
+  `commit -> tag` 恢复且 peeled commit 不变；workflow/long-soak/migration 三个
+  直接合同通过；
+- 按 post-freeze test/build policy，旧 tag 不移动，REL-C1 改用
+  `v0.3.0-rel-c1-refreeze-4`。新候选必须重新完成 REL-V1、REL-V2 与 PERF-R1。
 
 ## 14. END-R1：候选 endurance
 
@@ -900,8 +924,9 @@ completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
 > **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**
 
 PERF-R1 remediation 已完成实现、本地跨平台 profile 与 warm paired/interleaved
-矩阵验证、additive API 兼容性决定和 `v0.3.0-rel-c1-refreeze-3` 重冻结。旧
-REL-V1/REL-V2/PERF-R1 artifacts 继续绑定各自的 `refreeze-1` / `refreeze-2`
+矩阵验证、additive API 兼容性决定和 `v0.3.0-rel-c1-refreeze-4` 重冻结。旧
+REL-V1/REL-V2/PERF-R1 artifacts 继续绑定各自的 `refreeze-1` / `refreeze-2` /
+`refreeze-3`
 peeled commit，不能由新候选继承。
 新候选完成 REL-V1 后，必须重新执行 REL-V2，再执行 PERF-R1。新的 PERF-R1 仍必须在
 Linux/epoll 与 Windows/IOCP 上使用同参数、同 runner/toolchain class 的

@@ -68,6 +68,12 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Restore annotated candidate tag object
+        if: github.ref_type == 'tag'
+        run: >-
+          git fetch --force --no-tags origin
+          +refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}
+
       - name: Checkout migration provenance source
         uses: actions/checkout@v4
         with:
@@ -299,6 +305,12 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
+
+      - name: Restore annotated candidate tag object
+        if: github.ref_type == 'tag'
+        run: >-
+          git fetch --force --no-tags origin
+          +refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}
 
       - name: Checkout migration provenance source
         uses: actions/checkout@v4
@@ -541,6 +553,12 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
+
+      - name: Restore annotated candidate tag object
+        if: github.ref_type == 'tag'
+        run: >-
+          git fetch --force --no-tags origin
+          +refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}
 
       - name: Checkout migration provenance source
         uses: actions/checkout@v4

@@ -18,7 +18,7 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
 | P1-01 | P1（已关闭） | M3-R1 检查点 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `refreeze-1` 的 REL-V1/REL-V2 已成功；`refreeze-2` 通过本地 REL-V1 后，远端取证继续暴露 tag checkout、采样顺序、snapshot 队列、stdout flush 与诊断解码缺陷；`3d54c08` 已本地修复并通过成对矩阵/profile preflight，新候选尚无 fresh same-SHA REL-V1/REL-V2/PERF-R1 或 endurance 证据 | 发布证据 |
+| P1-02 | P1 | `refreeze-1` 的 REL-V1/REL-V2 已成功；`refreeze-2` 远端取证暴露 benchmark/capacity evidence 缺陷，`3d54c08` 已本地修复；`refreeze-3` 随后通过本地 REL-V1，但 REL-V2 run `32039657783` 证明 checkout 把本地 annotated tag ref 扁平化为 peeled commit。`refreeze-4` 恢复远端 tag object 后仍须生成 fresh same-SHA REL-V1/REL-V2/PERF-R1 和 endurance 证据 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1（已关闭） | API-R1 首次拒绝后的八组 blocker 已关闭，独立终审 `APPROVE`，0.3 reviewed surface 有严格 zero-diff gate | API 发布阻塞已解除 |
 | P1-05 | P1（本地关闭） | TcpServer owner establishment 抛出时先在 owner 关闭，再经 base lifecycle 回滚 map/load/admission，最终引用回到 owner 释放 | 核心线程/生命周期正确性 |
@@ -29,7 +29,7 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 因此：
 
 - 可以从新候选重新执行 REL-V1/REL-V2 以及同 SHA 性能、容量和 endurance 验证。
-- REL-C1 替代候选由 annotated tag `v0.3.0-rel-c1-refreeze-3` 唯一标识；这不是
+- REL-C1 替代候选由 annotated tag `v0.3.0-rel-c1-refreeze-4` 唯一标识；这不是
   REL-D1 发布决定。
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
@@ -173,7 +173,7 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 
 - 受审实现分支：`perf-r1-deterministic-capacity`
 - 受审实现检查点：`3d54c086e92c858b66df7bb80179431ec2d24867`
-- 被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`
+- 被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c`
 - 实现检查点提交时间：`2026-08-17T22:07:04+08:00`
 - 实现检查点标题：`Stabilize PERF-R1 evidence collection`
 - 最新已发布标签：`v0.2.0-phase4-preview`
@@ -181,7 +181,7 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 - CMake package version：`0.3.0`
 - 语言标准：C++23，关闭 compiler extensions
 - 当前冻结的 v0.3 最终候选：annotated tag
-  `v0.3.0-rel-c1-refreeze-3` peeled commit；完整 SHA 由 tag object 与远端 ref 记录
+  `v0.3.0-rel-c1-refreeze-4` peeled commit；完整 SHA 由 tag object 与远端 ref 记录
 
 本报告原始审计基线 `7a56132d6ea60346ec06c108cd627b7b4cd5a04f` 到
 受审实现检查点：
@@ -204,7 +204,7 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
   跨平台 candidate-10k 三重复本地 preflight；
 - remote-evidence remediation：annotated-tag checkout、warm paired/interleaved
   sampling、owner-batched retention snapshot、完整 JSON flush 与 stderr byte
-  preservation。
+  preservation；随后补充 checkout 后恢复远端 annotated tag object 的步骤和静态合同。
 
 `95a6ab5` 是 M3-R1 已独立审查的历史检查点；`12adb00` 在其上增加 M3-R2，
 `7fa6922` 提交 API-R1 remediation，`9d2a5be` 再增加 late failure 修复，
@@ -295,12 +295,17 @@ ctest --test-dir build-perf-r1-fix -C Release --output-on-failure
 - `refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647` 的本地 REL-V1 成功，但
   REL-V2 run `32034140286`、Core run `32034143490` 和 capacity runs
   `32034147244` / `32035475245` 暴露 evidence-tool 缺陷，不能晋级；
-- 当前 `refreeze-3` 尚无 fresh same-SHA REL-V1、REL-V2、paired benchmark/
+- `refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c` 的本地 REL-V1 完成
+  Windows Debug/Release 121/121、install consumers 2/2/2、focused repeats
+  800/800、36/36 guards、同线 API zero diff 和 Linux Release 121/121；REL-V2
+  run `32039657783` 在 repository guards 前把本地 annotated tag ref 扁平化，
+  该 run 取消且不能晋级；
+- 当前 `refreeze-4` 尚无 fresh same-SHA REL-V1、REL-V2、paired benchmark/
   capacity 或 24/72 小时 endurance；
 - `be749ad`、`5f926f3` 与 `b344318` 的性能/容量/endurance 结果仅是历史
   基础设施证据，不是 REL-C1 冻结候选的当前证据；
-- REL-C1 当前候选身份只由 `v0.3.0-rel-c1-refreeze-3^{commit}` 解析；旧 tag
-  `v0.3.0-rel-c1-refreeze-2`、`v0.3.0-rel-c1-refreeze-1` 与
+- REL-C1 当前候选身份只由 `v0.3.0-rel-c1-refreeze-4^{commit}` 解析；旧 tag
+  `v0.3.0-rel-c1-refreeze-3`、`v0.3.0-rel-c1-refreeze-2`、`v0.3.0-rel-c1-refreeze-1` 与
   `v0.3.0-rel-c1-freeze` 只记录被替代候选。
 
 远端基础设施状态可能独立变化；本报告不把未重新查询的 runner 在线状态或
@@ -319,7 +324,7 @@ ctest --test-dir build-perf-r1-fix -C Release --output-on-failure
 | 上层 foundation | Protocol/Transport/Session/Logic/Broadcast 可测试，但仍是 foundation |
 | Metrics | 有结构化接口和测试，明确为 provisional、非生产热路径实现 |
 | API/安装 | 0.3 manifest 和 diff 完整；API-R1 已批准，`9d2a5be` 同线 diff 严格为空；PERF-R1 additive surface 已记录 source-compatible |
-| 发布可采用性 | 已冻结工程候选 `refreeze-3`；仍被 fresh same-SHA 证据和许可证阻塞 |
+| 发布可采用性 | 已冻结工程候选 `refreeze-4`；仍被 fresh same-SHA 证据和许可证阻塞 |
 
 ## 5. 已确认的强项
 
@@ -623,7 +628,7 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 完成 REL-V1：在 `refreeze-3` 冻结候选 SHA 上执行本地 clean gate；
+1. 完成 REL-V1：在 `refreeze-4` 冻结候选 SHA 上执行本地 clean gate；
 2. 重新跑通同 SHA REL-V2、PERF-R1 与 endurance；
 3. 由项目所有者完成许可证决定。
 

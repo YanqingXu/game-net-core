@@ -130,6 +130,12 @@ def main() -> None:
     assert workflow_text.count("fetch-tags: true") == 3, (
         "every full-history soak checkout must materialize annotated tags"
     )
+    assert workflow_text.count("- name: Restore annotated candidate tag object") == 3
+    assert workflow_text.count("if: github.ref_type == 'tag'") == 3
+    assert workflow_text.count("git fetch --force --no-tags origin") == 3
+    assert workflow_text.count(
+        "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+    ) == 3
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
     require(workflow_text, "          - ci", workflow)
@@ -181,6 +187,15 @@ def main() -> None:
     require(checkout, "fetch-depth: 0", workflow)
     require(checkout, "fetch-tags: true", workflow)
 
+    tag_restore = step_block(job, "Restore annotated candidate tag object")
+    require(tag_restore, "if: github.ref_type == 'tag'", workflow)
+    require(tag_restore, "git fetch --force --no-tags origin", workflow)
+    require(
+        tag_restore,
+        "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}",
+        workflow,
+    )
+
     source_checkout = step_block(job, "Checkout migration provenance source")
     require(source_checkout, "uses: actions/checkout@v4", workflow)
     require(source_checkout, f"repository: {SOURCE_REPOSITORY}", workflow)
@@ -199,6 +214,9 @@ def main() -> None:
     )
     assert job.index(source_checkout) < job.index(guards), (
         "long-soak must checkout migration provenance before repository guards"
+    )
+    assert job.index(tag_restore) < job.index(source_checkout), (
+        "long-soak must restore the annotated tag before provenance checkout"
     )
 
     validation = step_block(job, "Validate long-soak inputs")
@@ -347,6 +365,13 @@ def main() -> None:
         workflow,
     )
     require(self_hosted_ci, 'test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', workflow)
+    self_hosted_tag_restore = step_block(
+        self_hosted_ci, "Restore annotated candidate tag object"
+    )
+    require(self_hosted_tag_restore, "if: github.ref_type == 'tag'", workflow)
+    require(
+        self_hosted_tag_restore, "git fetch --force --no-tags origin", workflow
+    )
     self_hosted_sanitizer_preflight = step_block(
         self_hosted_ci, "Verify ASan/UBSan runner environment"
     )
@@ -491,6 +516,14 @@ def main() -> None:
     require(production_checkout, "fetch-tags: true", workflow)
     require(production_checkout, "persist-credentials: false", workflow)
 
+    production_tag_restore = step_block(
+        production_job, "Restore annotated candidate tag object"
+    )
+    require(production_tag_restore, "if: github.ref_type == 'tag'", workflow)
+    require(
+        production_tag_restore, "git fetch --force --no-tags origin", workflow
+    )
+
     production_source_checkout = step_block(
         production_job, "Checkout migration provenance source"
     )
@@ -511,6 +544,9 @@ def main() -> None:
     assert production_job.index(production_source_checkout) < production_job.index(
         production_guards
     ), "production endurance must checkout migration provenance before repository guards"
+    assert production_job.index(production_tag_restore) < production_job.index(
+        production_source_checkout
+    ), "production endurance must restore annotated tag before provenance checkout"
 
     production_build = step_block(production_job, "Build Release endurance target")
     require(

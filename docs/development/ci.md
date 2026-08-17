@@ -33,6 +33,14 @@ limitation rather than a CI claim.
 
 ## Scope
 
+When a release workflow is dispatched from an annotated candidate tag,
+`actions/checkout@v4` can fetch the tag object and then replace the local tag
+ref with its peeled commit during the final ref-specific fetch. Every CI and
+long-soak producer that runs the migration-status guard therefore restores the
+exact remote `refs/tags/<candidate>` object after checkout and before running
+repository guards. The guard still rejects lightweight tags or a tag that does
+not peel to the checked-out commit; no workflow step rewrites a remote tag.
+
 The `ci` workflow validates:
 
 - CMake configure with C++23 and testing enabled.

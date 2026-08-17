@@ -5,18 +5,18 @@
   "freeze_date": "2026-08-17",
   "candidate": {
     "branch": "perf-r1-deterministic-capacity",
-    "ref": "refs/tags/v0.3.0-rel-c1-refreeze-3",
+    "ref": "refs/tags/v0.3.0-rel-c1-refreeze-4",
     "object_type": "annotated-tag",
-    "commit_resolution": "refs/tags/v0.3.0-rel-c1-refreeze-3^{commit}",
+    "commit_resolution": "refs/tags/v0.3.0-rel-c1-refreeze-4^{commit}",
     "sha_record": "annotated-tag-target-and-remote-ref"
   },
   "implementation_checkpoint": "3d54c086e92c858b66df7bb80179431ec2d24867",
   "supersedes": {
-    "candidate_ref": "refs/tags/v0.3.0-rel-c1-refreeze-2",
-    "candidate_commit": "f528898a2d688be329cf0dce4b167ffe0fad5647",
-    "rel_v2_run_id": "32034140286",
+    "candidate_ref": "refs/tags/v0.3.0-rel-c1-refreeze-3",
+    "candidate_commit": "0a500826844cb4f9345572909a733cc2e52ce14c",
+    "rel_v2_run_id": "32039657783",
     "rel_v2_run_attempt": 1,
-    "reason": "perf-r1-remote-evidence-remediation"
+    "reason": "annotated-tag-checkout-object-restoration"
   },
   "reviewed_surface": {
     "tag": "api-r1-perf-r1-reviewed-surface",

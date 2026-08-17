@@ -9,9 +9,9 @@ See `migration_status.md` for the current checked state of these phases.
 
 - The current implementation checkpoint is
   `3d54c086e92c858b66df7bb80179431ec2d24867`. REL-C1 is frozen through the
-  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-3`; the tag object
+  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-4`; the tag object
   and remote ref are the authoritative full-SHA record. It supersedes
-  `v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`.
+  `v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
@@ -28,6 +28,10 @@ See `migration_status.md` for the current checked state of these phases.
   `3d54c08` closes those evidence-tool defects without changing the reviewed
   stable API. Its local Windows paired regression/Core-capacity matrices and
   cross-platform candidate-10k repeats pass, but are not release evidence.
+  `refreeze-3` then passed local REL-V1, while REL-V2 run `32039657783` proved
+  that `actions/checkout@v4` flattened the local annotated tag after fetching
+  it. The refreeze-4 workflows restore the exact remote tag object before all
+  repository guards without changing any remote tag.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
   as source-compatible at `api-r1-perf-r1-reviewed-surface`. Fresh REL-V1

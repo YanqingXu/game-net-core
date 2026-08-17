@@ -41,8 +41,9 @@ The current implementation checkpoint is
 the single source-compatible addition bound to reviewed-surface tag
 `api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`.
 REL-C1 now refreezes the unique v0.3 candidate through annotated tag
-`v0.3.0-rel-c1-refreeze-3`, superseding
-`v0.3.0-rel-c1-refreeze-2@f528898a2d688be329cf0dce4b167ffe0fad5647`.
+`v0.3.0-rel-c1-refreeze-4`, superseding
+`v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c` after
+remote checkout flattened the local annotated-tag ref before repository guards.
 The tag is an engineering freeze reference, not a release tag or REL-D1
 decision. The new candidate requires fresh clean same-SHA CI, performance,
 capacity, and endurance evidence; REL-V1 is the next task.

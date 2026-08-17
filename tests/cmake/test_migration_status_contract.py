@@ -160,14 +160,14 @@ def main() -> None:
     require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
     implementation_checkpoint = "3d54c086e92c858b66df7bb80179431ec2d24867"
-    superseded_candidate = "f528898a2d688be329cf0dce4b167ffe0fad5647"
-    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-2"
-    candidate_tag = "v0.3.0-rel-c1-refreeze-3"
+    superseded_candidate = "0a500826844cb4f9345572909a733cc2e52ce14c"
+    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-3"
+    candidate_tag = "v0.3.0-rel-c1-refreeze-4"
     reviewed_surface_tag = "api-r1-perf-r1-reviewed-surface"
     reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
-    git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
+    git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, superseded_candidate)
     git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, "HEAD")
 
     assert freeze_record == {
@@ -186,9 +186,9 @@ def main() -> None:
         "supersedes": {
             "candidate_ref": f"refs/tags/{superseded_candidate_tag}",
             "candidate_commit": superseded_candidate,
-            "rel_v2_run_id": "32034140286",
+            "rel_v2_run_id": "32039657783",
             "rel_v2_run_attempt": 1,
-            "reason": "perf-r1-remote-evidence-remediation",
+            "reason": "annotated-tag-checkout-object-restoration",
         },
         "reviewed_surface": {
             "tag": reviewed_surface_tag,
