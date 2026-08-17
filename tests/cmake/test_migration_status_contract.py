@@ -167,7 +167,7 @@ def main() -> None:
     reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
-    git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, superseded_candidate)
+    git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
     git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, "HEAD")
 
     assert freeze_record == {
