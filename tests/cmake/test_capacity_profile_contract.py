@@ -467,6 +467,8 @@ def main() -> None:
         "mixed-pressure-recovery",
         "TcpTransportEndpoint",
         "SO_RCVBUF",
+        "connectBatch",
+        "exchangeAndCloseBatch",
         "aggregateRetention",
         "batchIndexes.try_emplace",
         "executor.id()",
@@ -493,6 +495,14 @@ def main() -> None:
         "failed to flush capacity profile JSON",
     ):
         require(source_text, fragment, source)
+    healthy_probe_body = source_text.split("void runHealthyProbes(", 1)[1]
+    connect_batch = healthy_probe_body.index("pool.connectBatch(batchSize)")
+    accepted_barrier = healthy_probe_body.index("state.waitForProbeAccepted(")
+    exchange_batch = healthy_probe_body.index("pool.exchangeAndCloseBatch()")
+    closed_barrier = healthy_probe_body.index("state.waitForProbeClosed(")
+    assert (
+        connect_batch < accepted_barrier < exchange_batch < closed_barrier
+    ), "healthy probe lifecycle barriers are out of order"
     for fragment in (
         "gamenet.capacity_profile.v1",
         "gamenet.capacity_profile.v2",
@@ -546,6 +556,16 @@ def main() -> None:
         rules_text,
         "one owner-affine snapshot batch per loop",
         testing_rules,
+    )
+    require(
+        rules_text,
+        "keep successfully connected sockets open",
+        testing_rules,
+    )
+    require(
+        intent_text,
+        "cumulative server-accept convergence",
+        intent,
     )
     require(
         intent_text,

@@ -970,6 +970,11 @@ struct ProbeAttempt {
     double probeUs{};
 };
 
+struct ProbeSlot {
+    ProbeAttempt attempt;
+    ClientSocket socket;
+};
+
 class HealthyProbePool {
 public:
     HealthyProbePool(
@@ -1012,14 +1017,40 @@ public:
         for (auto& worker : workers_) {
             worker.join();
         }
+        for (auto& slot : slots_) {
+            slot.socket.closeAbortively();
+        }
     }
 
-    std::vector<ProbeAttempt> runBatch(
+    std::vector<ProbeAttempt> connectBatch(
         std::size_t attemptCount) {
         {
             std::lock_guard lock(mutex_);
-            slots_.assign(attemptCount, {});
-            attemptCount_ = attemptCount;
+            for (auto& slot : slots_) {
+                slot.socket.closeAbortively();
+            }
+            slots_.clear();
+            slots_.resize(attemptCount);
+        }
+        runPhase(Phase::Connect);
+        return attempts();
+    }
+
+    std::vector<ProbeAttempt> exchangeAndCloseBatch() {
+        runPhase(Phase::Exchange);
+        return attempts();
+    }
+
+private:
+    enum class Phase {
+        Connect,
+        Exchange,
+    };
+
+    void runPhase(Phase phase) {
+        {
+            std::lock_guard lock(mutex_);
+            phase_ = phase;
             nextIndex_.store(0, std::memory_order_relaxed);
             completedWorkers_ = 0;
             ++generation_;
@@ -1031,13 +1062,21 @@ public:
                 return completedWorkers_ == workerCount_;
             });
         }
-        return slots_;
     }
 
-private:
+    std::vector<ProbeAttempt> attempts() const {
+        std::vector<ProbeAttempt> result;
+        result.reserve(slots_.size());
+        for (const auto& slot : slots_) {
+            result.push_back(slot.attempt);
+        }
+        return result;
+    }
+
     void workerMain() {
         std::uint64_t observedGeneration = 0;
         while (true) {
+            Phase phase;
             {
                 std::unique_lock lock(mutex_);
                 workAvailable_.wait(lock, [&] {
@@ -1048,6 +1087,7 @@ private:
                     return;
                 }
                 observedGeneration = generation_;
+                phase = phase_;
             }
 
             while (true) {
@@ -1055,51 +1095,59 @@ private:
                     nextIndex_.fetch_add(
                         1,
                         std::memory_order_relaxed);
-                if (index >= attemptCount_) {
+                if (index >= slots_.size()) {
                     break;
                 }
 
-                ProbeAttempt attempt;
-                ProbeFailure stage = ProbeFailure::Connect;
-                ClientSocket socket;
-                try {
+                auto& slot = slots_[index];
+                if (phase == Phase::Connect) {
                     const auto connectStarted = Clock::now();
-                    socket = ClientSocket::connectToWithDeadline(
-                        address_,
-                        connectTimeout_);
-                    const auto connectFinished = Clock::now();
-                    attempt.clientConnected = true;
-                    attempt.connectUs =
-                        std::chrono::duration<
-                            double,
-                            std::micro>(
-                                connectFinished -
-                                connectStarted)
-                            .count();
+                    try {
+                        slot.socket =
+                            ClientSocket::connectToWithDeadline(
+                                address_,
+                                connectTimeout_);
+                        const auto connectFinished = Clock::now();
+                        slot.attempt.clientConnected = true;
+                        slot.attempt.connectUs =
+                            std::chrono::duration<
+                                double,
+                                std::micro>(
+                                    connectFinished -
+                                    connectStarted)
+                                .count();
+                    } catch (const std::exception&) {
+                        slot.attempt.failure = ProbeFailure::Connect;
+                    }
+                    continue;
+                }
 
-                    stage = ProbeFailure::Send;
+                if (!slot.attempt.clientConnected) {
+                    continue;
+                }
+                ProbeFailure stage = ProbeFailure::Send;
+                try {
                     const auto probeStarted = Clock::now();
-                    socket.sendAll(payload_);
+                    slot.socket.sendAll(payload_);
                     stage = ProbeFailure::Receive;
                     std::string response(payload_.size(), '\0');
-                    socket.receiveExact(response);
-                    attempt.probeUs =
+                    slot.socket.receiveExact(response);
+                    slot.attempt.probeUs =
                         std::chrono::duration<
                             double,
                             std::micro>(
                                 Clock::now() - probeStarted)
                             .count();
                     if (response != payload_) {
-                        attempt.failure =
+                        slot.attempt.failure =
                             ProbeFailure::PayloadMismatch;
                     } else {
-                        attempt.succeeded = true;
+                        slot.attempt.succeeded = true;
                     }
                 } catch (const std::exception&) {
-                    attempt.failure = stage;
+                    slot.attempt.failure = stage;
                 }
-                socket.closeAbortively();
-                slots_[index] = attempt;
+                slot.socket.closeAbortively();
             }
 
             {
@@ -1116,15 +1164,15 @@ private:
     std::chrono::milliseconds connectTimeout_;
     std::string payload_;
     std::size_t workerCount_;
-    std::vector<ProbeAttempt> slots_;
+    std::vector<ProbeSlot> slots_;
     std::vector<std::thread> workers_;
     std::atomic<std::size_t> nextIndex_{0};
     std::mutex mutex_;
     std::condition_variable workAvailable_;
     std::condition_variable batchComplete_;
-    std::size_t attemptCount_{0};
     std::size_t completedWorkers_{0};
     std::uint64_t generation_{0};
+    Phase phase_{Phase::Connect};
     bool stopping_{false};
 };
 
@@ -1322,7 +1370,7 @@ void runHealthyProbes(
                             scheduleFraction));
             std::this_thread::sleep_until(scheduledAt);
 
-            auto attempts = pool.runBatch(batchSize);
+            auto attempts = pool.connectBatch(batchSize);
             result.healthyProbe.attempted =
                 scheduledAttempts;
             ++result.healthyProbe.batches;
@@ -1331,6 +1379,23 @@ void runHealthyProbes(
                     ++result.healthyProbe.clientConnected;
                     connectSamples.push_back(
                         attempt.connectUs);
+                } else {
+                    ++result.healthyProbe.connectFailures;
+                }
+            }
+
+            if (!state.waitForProbeAccepted(
+                    static_cast<std::size_t>(
+                        result.healthyProbe.clientConnected),
+                    config.timeout)) {
+                throw std::runtime_error(
+                    "timed out waiting for healthy probe accepts");
+            }
+
+            attempts = pool.exchangeAndCloseBatch();
+            for (const auto& attempt : attempts) {
+                if (!attempt.clientConnected) {
+                    continue;
                 }
                 if (attempt.succeeded) {
                     ++result.healthyProbe.probeSucceeded;
@@ -1354,14 +1419,6 @@ void runHealthyProbes(
                     ++result.healthyProbe.receiveFailures;
                     break;
                 }
-            }
-
-            if (!state.waitForProbeAccepted(
-                    static_cast<std::size_t>(
-                        result.healthyProbe.clientConnected),
-                    config.timeout)) {
-                throw std::runtime_error(
-                    "timed out waiting for healthy probe accepts");
             }
             if (!state.waitForProbeClosed(
                     static_cast<std::size_t>(

@@ -241,6 +241,10 @@ For lifecycle-sensitive modules, tests should include:
   exact worker/assigned/closed counts must converge before teardown; candidate
   and dedicated runs must record the same reviewed finite server send-buffer
   request so Linux and Windows typed overload is independent of OS defaults;
+  each healthy-probe batch must keep successfully connected sockets open until
+  the cumulative server-accept count converges, then run exact echo/abortive
+  close and wait for cumulative server-close convergence, so a client I/O
+  deadline cannot make exact lifecycle accounting unreachable;
   retained-memory sampling must group connections by owner and enqueue exactly
   one owner-affine snapshot batch per loop so evidence collection does not
   starve the concurrent healthy probes;

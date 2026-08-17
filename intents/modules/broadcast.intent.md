@@ -123,8 +123,12 @@ state.
 - Mixed-profile client workers own only distinct attempt slots and sockets.
   Server connection/message callbacks remain owner-loop-affine; benchmark
   coordination classifies post-publication connections as probes under one
-  benchmark mutex and waits for cumulative server accept/close convergence
-  before reusing the next batch.
+  benchmark mutex. Each live batch completes its client connects, waits for
+  cumulative server-accept convergence while those sockets remain open, then
+  performs the exact echo and abortive close, and finally waits for cumulative
+  server-close convergence before reusing the next batch. A client-side I/O
+  deadline therefore cannot close an established-but-not-yet-published probe
+  and make the exact accept accounting permanently unreachable.
 - Retained-memory sampling groups the slow connections by owner identity and
   posts exactly one batch callback per owner loop. Each callback reads all of
   its connections on that owner, so the observational pressure/recovery sample

@@ -71,10 +71,16 @@ connect deadline, sends one fixed small payload, requires its exact echo, and
 closes abortively. Post-publication probe connections are classified under the
 benchmark coordination mutex and never become Broadcast targets.
 
-At most one probe batch is live. The next batch is not released until the
-server's cumulative accepted and closed counts have converged. Loop/server
-output budgets reserve headroom for that one batch; the per-connection slow
-client limit and Broadcast routing/dispatch limits do not change.
+At most one probe batch is live. Its persistent workers first establish every
+client socket in the batch and keep successful connects open until the server's
+cumulative accepted count converges. Only then do they send the payload,
+require the exact echo, and close abortively; the next batch is not released
+until the cumulative closed count also converges. This ordering keeps the
+existing client I/O deadline strict without letting it close a TCP-established
+probe before the owner-loop connection callback can publish that accept.
+Loop/server output budgets reserve headroom for that one batch; the
+per-connection slow client limit and Broadcast routing/dispatch limits do not
+change.
 
 After the pressure sample, v3 hands each slow socket to exactly one member of a
 fixed-size recovery-reader pool. Each worker owns a stable disjoint shard,
