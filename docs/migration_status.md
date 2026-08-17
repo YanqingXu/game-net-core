@@ -4,15 +4,17 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-08-11
+Current production-roadmap audit: 2026-08-17
 
-Current local implementation checkpoint:
-`main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0` (2026-08-11)
+Current implementation checkpoint carried by the candidate:
+`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0` (2026-08-11)
 
-Upstream reference at audit time:
-`origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`
+REL-C1 pre-freeze upstream reference:
+`origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`
 
-Current final v0.3 production candidate: none; candidate freeze is pending
+Current final v0.3 production candidate: the commit peeled from annotated tag
+`v0.3.0-rel-c1-freeze`; the tag object and remote ref record the authoritative
+full `CANDIDATE_SHA`
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
 
@@ -22,7 +24,8 @@ Current post-review TCP establishment-remediation checkpoint: `9d2a5be`
 (2026-08-11)
 
 Current API-R1 surface decision: `APPROVE` (2026-08-05); reviewed snapshot is
-`UNBOUND-REL-C1` until a final candidate SHA is frozen
+bound to annotated tag `api-r1-approved-surface` and peeled commit
+`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
 
 ## Current Task Goal
 
@@ -43,9 +46,10 @@ inventory is 120 configured CTest tests: 8 unit tests, 99 contract tests, and 13
 integration tests, with 93 threading and 98 lifecycle labels. Fresh local
 Windows/IOCP Release passed 120/120, all 36 repository/API/CI guards passed,
 fresh install consumers passed 2/2, and the 0.3 reviewed-baseline diff remains
-strictly empty. This is local checkpoint evidence only: `9d2a5be` has no same-
-SHA remote Linux/Windows, benchmark, capacity, or endurance evidence. No final
-v0.3 candidate is frozen; REL-C1 candidate freeze remains the next roadmap task.
+strictly empty. REL-C1 now freezes this reviewed implementation plus governance
+state through `v0.3.0-rel-c1-freeze`. This is not remote release evidence: the
+candidate has no same-SHA Linux/Windows, benchmark, capacity, or endurance
+result yet. REL-V1 candidate clean validation is the next roadmap task.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
@@ -182,7 +186,7 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Current planned runtime scope includes M3-R1/M3-R2, API-R1 remediation, and the post-review TCP establishment rollback at `9d2a5be`; the earlier frozen candidate `be749ad` is historical because later runtime changes superseded its evidence. Full same-SHA requalification remains open |
-| 6 | Production candidate | Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance. GOV-R3 is locally closed and REL-C1 is next. No final candidate SHA is frozen, and release evidence must be regenerated after freeze |
+| 6 | Production candidate | REL-C1 is frozen through annotated tag `v0.3.0-rel-c1-freeze`. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all same-SHA release evidence remain open |
 
 ## Current Intent Inventory
 

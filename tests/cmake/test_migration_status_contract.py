@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -112,6 +113,7 @@ def main() -> None:
     plan = repo_root / "plan.md"
     goal = repo_root / "goal.md"
     readme = repo_root / "README.md"
+    candidate_freeze = repo_root / "api" / "candidate_freeze.json"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
@@ -141,6 +143,7 @@ def main() -> None:
     goal_text = goal.read_text(encoding="utf-8")
     readme_text = readme.read_text(encoding="utf-8")
     api_review_text = api_review.read_text(encoding="utf-8")
+    freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
     intent_inventory = build_inventory(repo_root)
@@ -148,18 +151,57 @@ def main() -> None:
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-08-11", migration_status)
+    require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
     implementation_checkpoint = "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0"
-    upstream_checkpoint = "7fa6922725304fe0d1c80a806b19a0173cdf9c3e"
+    pre_freeze_upstream = "355af9b1b8dbba63b749003ca49f9c1af97aac17"
+    candidate_tag = "v0.3.0-rel-c1-freeze"
+    reviewed_surface_tag = "api-r1-approved-surface"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
-    git(repo_root, "cat-file", "-e", f"{upstream_checkpoint}^{{commit}}")
-    git(repo_root, "merge-base", "--is-ancestor", upstream_checkpoint, implementation_checkpoint)
+    git(repo_root, "cat-file", "-e", f"{pre_freeze_upstream}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, pre_freeze_upstream)
     git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, "HEAD")
 
-    # A documentation commit may follow an immutable implementation checkpoint,
-    # but runtime/API/build/test drift must force the checkpoint to be advanced.
-    # Compare the complete index/worktree against the named commit as well as
-    # committed history so this contract catches local pre-commit drift too.
+    assert freeze_record == {
+        "schema": "gamenet.candidate_freeze.v1",
+        "release_label": "v0.3.0-production-candidate",
+        "stage": "rel-c1-frozen",
+        "freeze_date": "2026-08-17",
+        "candidate": {
+            "branch": "main",
+            "ref": f"refs/tags/{candidate_tag}",
+            "object_type": "annotated-tag",
+            "commit_resolution": f"refs/tags/{candidate_tag}^{{commit}}",
+            "sha_record": "annotated-tag-target-and-remote-ref",
+        },
+        "implementation_checkpoint": implementation_checkpoint,
+        "reviewed_surface": {
+            "tag": reviewed_surface_tag,
+            "commit": implementation_checkpoint,
+            "snapshot": "api/baselines/v0.3.0-api-r1-reviewed.json",
+        },
+        "policy": {
+            "candidate_sha_is_not_duplicated_in_candidate_tree": True,
+            "post_freeze_runtime_test_build_change_requires_refreeze": True,
+            "local_evidence_is_not_remote_release_evidence": True,
+            "release_decision": "pending-rel-d1",
+        },
+    }
+    assert git(repo_root, "cat-file", "-t", f"refs/tags/{candidate_tag}") == "tag"
+    candidate_sha = git(repo_root, "rev-parse", f"refs/tags/{candidate_tag}^{{commit}}")
+    assert re.fullmatch(r"[0-9a-f]{40}", candidate_sha), candidate_sha
+    assert candidate_sha == git(repo_root, "rev-parse", "HEAD"), (
+        "REL-C1 candidate tag must peel to the exact checked-out commit"
+    )
+    assert git(repo_root, "cat-file", "-t", f"refs/tags/{reviewed_surface_tag}") == "tag"
+    assert (
+        git(repo_root, "rev-parse", f"refs/tags/{reviewed_surface_tag}^{{commit}}")
+        == implementation_checkpoint
+    )
+
+    # Governance evidence may follow an immutable implementation checkpoint,
+    # but only the exact allowlist below may change without advancing that
+    # checkpoint. Compare the complete index/worktree as well as committed
+    # history so this contract catches local pre-commit drift too.
     allowed_post_checkpoint_paths = {
         "README.md",
         "assessment.md",
@@ -170,6 +212,12 @@ def main() -> None:
         "ideas/idea2.md",
         "ideas/idea3.md",
         "plan.md",
+        "api/candidate_freeze.json",
+        "api/baselines/v0.3.0-api-r1-reviewed.json",
+        "docs/development/api_compatibility.md",
+        "docs/reviews/api-r1-public-api-compatibility-diff.json",
+        "docs/reviews/api-r1-stable-core-review.md",
+        "tests/api/test_public_api_manifest.py",
         "tests/cmake/test_migration_status_contract.py",
     }
     changed_since_checkpoint = {
@@ -197,39 +245,49 @@ def main() -> None:
         (plan_text, plan),
     ):
         require(text, implementation_checkpoint, source)
-        require(text, upstream_checkpoint, source)
         require(text, "API-R1", source)
         require(text, "REL-C1", source)
+        require(text, candidate_tag, source)
+        require(text, "REL-V1", source)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+    ):
+        require(text, pre_freeze_upstream, source)
     require(readme_text, "9d2a5be", readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
+    require(readme_text, "REL-V1", readme)
+    require(readme_text, candidate_tag, readme)
     require(
         status_text,
-        "Current final v0.3 production candidate: none",
+        "Current final v0.3 production candidate: the commit peeled from annotated tag",
         migration_status,
     )
     require(
         normalized_roadmap_text,
-        "No final `v0.3.0-production-candidate` is frozen",
+        "REL-C1 is frozen",
         roadmap,
     )
     require(
         assessment_text,
-        "当前冻结的 v0.3 最终候选：无",
+        "当前冻结的 v0.3 最终候选：annotated tag",
         assessment,
     )
     require(
         normalized_plan_text,
-        "当前无冻结的 v0.3 最终候选",
+        "REL-C1 已以 annotated reviewed-surface tag",
         plan,
     )
-    require(readme_text, "No final v0.3 candidate is frozen", readme)
     require(assessment_text, "P2-02 | P2（已关闭）", assessment)
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
-    require(plan_text, "**REL-C1：冻结唯一 v0.3 候选 SHA。**", plan)
+    require(plan_text, "**REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**", plan)
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
     require(plan_text, "P1-04 | API-R1（已关闭）", plan)
     require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)
+    require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
         "The authoritative current implementation checkpoint is `9d2a5be`",

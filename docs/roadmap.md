@@ -5,11 +5,13 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-11
+## Current Roadmap Checkpoint — 2026-08-17
 
-- The reviewed local implementation checkpoint is
-  `main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`; at audit time the local
-  `origin/main` reference was `7fa6922725304fe0d1c80a806b19a0173cdf9c3e`.
+- The reviewed implementation checkpoint is
+  `9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`. The REL-C1 candidate is the
+  commit peeled from annotated tag `v0.3.0-rel-c1-freeze`; the tag object and
+  remote ref are the authoritative full-SHA record. Its pre-freeze upstream
+  reference was `origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 120 CTest tests: 8 unit, 99 contract, and 13
@@ -19,15 +21,15 @@ See `migration_status.md` for the current checked state of these phases.
   reviewed-surface diff is strictly empty.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
   leak and TcpClient construction-failure request wedge with deterministic
-  recovery contracts. It has no same-SHA remote or Linux evidence and is not a
-  frozen production candidate.
-- No final `v0.3.0-production-candidate` is frozen. Earlier benchmark,
-  capacity, endurance, and candidate runs remain historical infrastructure or
-  superseded-candidate evidence and do not qualify the eventual candidate.
+  recovery contracts. It remains the immutable implementation and reviewed-
+  surface checkpoint carried by the frozen candidate.
+- REL-C1 is frozen, but no same-SHA remote validation, benchmark, capacity, or
+  endurance result is promoted yet. Earlier runs remain historical
+  infrastructure or superseded-candidate evidence.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; historical and strict same-line zero-diff artifacts are
-  archived. REL-C1 candidate freeze is the next task, followed by same-SHA
-  evidence.
+  archived. REL-V1 candidate clean validation is next, followed by same-SHA
+  remote evidence.
 
 ## Phase 1: Project Skeleton
 

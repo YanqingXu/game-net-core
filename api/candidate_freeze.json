@@ -1,0 +1,25 @@
+{
+  "schema": "gamenet.candidate_freeze.v1",
+  "release_label": "v0.3.0-production-candidate",
+  "stage": "rel-c1-frozen",
+  "freeze_date": "2026-08-17",
+  "candidate": {
+    "branch": "main",
+    "ref": "refs/tags/v0.3.0-rel-c1-freeze",
+    "object_type": "annotated-tag",
+    "commit_resolution": "refs/tags/v0.3.0-rel-c1-freeze^{commit}",
+    "sha_record": "annotated-tag-target-and-remote-ref"
+  },
+  "implementation_checkpoint": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
+  "reviewed_surface": {
+    "tag": "api-r1-approved-surface",
+    "commit": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
+    "snapshot": "api/baselines/v0.3.0-api-r1-reviewed.json"
+  },
+  "policy": {
+    "candidate_sha_is_not_duplicated_in_candidate_tree": true,
+    "post_freeze_runtime_test_build_change_requires_refreeze": true,
+    "local_evidence_is_not_remote_release_evidence": true,
+    "release_decision": "pending-rel-d1"
+  }
+}

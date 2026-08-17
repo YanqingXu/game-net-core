@@ -285,10 +285,13 @@ do not weaken the within-0.3 promise:
   from returning `Accepted` even though that loop never polls it.
 
 The reviewed surface is frozen in
-`api/baselines/v0.3.0-api-r1-reviewed.json`. Its source commit is intentionally
-`UNBOUND-REL-C1`: API-R1 approves the declarations, while REL-C1 must replace
-that marker with the final candidate SHA and prove that the surface is still a
-zero diff. No final candidate SHA or ABI guarantee is created by API-R1.
+`api/baselines/v0.3.0-api-r1-reviewed.json`. REL-C1 binds that snapshot to
+annotated tag `api-r1-approved-surface`, peeled commit
+`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`, and proves that the surface is
+still a zero diff. The final candidate is a separate annotated tag,
+`v0.3.0-rel-c1-freeze`; its peeled commit is the authoritative `CANDIDATE_SHA`.
+This non-self-referential binding does not create an ABI guarantee or a
+REL-D1 release decision.
 
 ## Current M3-Q1-E Additive Review
 

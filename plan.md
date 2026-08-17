@@ -5,9 +5,10 @@
 起始基线：`main@7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
 依据：同基线的 `assessment.md`
 
-当前治理事实（2026-08-17）由 `1daa649` 记录；该治理提交绑定的不可变实现检查点为
-`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`；审计时上游参考为
-`origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`；当前无冻结的 v0.3 最终候选。
+当前治理事实（2026-08-17）绑定不可变实现检查点
+`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`。REL-C1 候选由 annotated tag
+`v0.3.0-rel-c1-freeze` 唯一标识，其 peeled commit 是权威 `CANDIDATE_SHA`；
+冻结前上游参考为 `origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`。
 
 长期方向见 `goal.md`。`goal.md` 只定义目标和边界，不授权实现；模块实现仍须由
 `active` intent、rules、contracts、tests 和当前阶段 gate 共同授权。
@@ -56,10 +57,12 @@ REL-C1 或使当前候选证据失效。
   账务泄漏与 TcpClient construction failure 的 active-request 卡死；Windows/
   IOCP Release 120/120、36/36 guards、install consumers 2/2、API 同线 zero
   diff 均通过。
+- [x] REL-C1 已以 annotated reviewed-surface tag 和独立 candidate freeze tag
+  消除候选 commit 自引用，冻结唯一 v0.3 候选，并把完整 SHA 的权威记录放在
+  tag object、远端 ref 与 Actions push identity 中。
 
 ### 2.2 未完成
 
-- [ ] REL-C1 唯一候选冻结与推送；
 - [ ] 同 SHA paired benchmark/capacity；
 - [ ] 同 SHA 24/72 小时 endurance；
 - [ ] 许可证决定；
@@ -295,8 +298,9 @@ REL-C1/REL-V2 的 clean checkout 与同 SHA 远端发布证据。
 - [x] 所有 blocking comments 关闭；
 - [x] 审查导致的代码/API 变化已重新运行完整本地验证；
 - [x] 历史 diff、同线 zero-diff 和 reviewed surface snapshot 已归档；
-- [x] snapshot 以 `UNBOUND-REL-C1` 明示当前无最终候选，并把最终 SHA
-  绑定及 zero-diff 复验交给 REL-C1。
+- [x] snapshot 的临时候选标记已由 REL-C1 替换为 annotated tag
+  `api-r1-approved-surface` 与 peeled implementation commit `9d2a5be...`；
+  最终候选 SHA 通过独立 freeze tag 非自引用解析。
 
 关闭结果（2026-08-05）：独立 reviewer `/root/api_r1_independent_review`
 首次 `REJECT` 后逐项复审八组 blocker，最终给出 `APPROVE`。Windows/IOCP
@@ -360,14 +364,21 @@ paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选�
 优先级：发布关键路径
 依赖：M3-R1、M3-R2、GOV-R2、API-R1、M3-R3、GOV-R3
 
-- [ ] 工作树只含审查通过的变更；
-- [ ] finding table 无未处理的 runtime P1；
-- [ ] 本地快速门通过；
-- [ ] commit 并 push；
-- [ ] 记录完整 `CANDIDATE_SHA`；
-- [ ] `main`、远端 branch、Actions checkout identity 一致；
-- [ ] 从该点起禁止未重新冻结的 runtime/test/build 修改；
-- [ ] 文档修正如果改变 evidence manifest 输入，也必须重新确认 SHA/证据范围。
+- [x] 工作树只含审查通过的变更；
+- [x] finding table 无未处理的 runtime P1；
+- [x] 本地快速门通过；
+- [x] commit 并 push；
+- [x] 记录完整 `CANDIDATE_SHA`；
+- [x] `main`、远端 branch、Actions checkout identity 一致；
+- [x] 从该点起禁止未重新冻结的 runtime/test/build 修改；
+- [x] 文档修正如果改变 evidence manifest 输入，也必须重新确认 SHA/证据范围。
+
+REL-C1 的机器可读记录是 `api/candidate_freeze.json`。候选 commit 不能在其
+自身 tree 中嵌入自己的 SHA，因此该文件记录 candidate ref 与解析规则；annotated
+tag `v0.3.0-rel-c1-freeze` 的 object target 和远端 ref 记录完整 40 位 SHA。
+`api-r1-approved-surface` 独立指向 `9d2a5be...`，证明 reviewed snapshot 的
+header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release tag，
+也不替代 REL-V1/REL-V2、PERF-R1、END-R1 或 REL-D1。
 
 任何候选后的代码变化都使后续证据失效，并回到 REL-C1。
 
@@ -699,10 +710,9 @@ completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
 
 下一项任务是：
 
-> **REL-C1：冻结唯一 v0.3 候选 SHA。**
+> **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**
 
-API-R1 已批准 stable surface，`9d2a5be` 的 post-review runtime remediation
-保持同线 zero diff，并在本地关闭 P1-05/P1-06。当前仍无最终候选；REL-C1
-必须提交治理同步、推送唯一候选 SHA，把 `UNBOUND-REL-C1` 绑定为该 SHA，
-并再次证明 manifest 与 reviewed surface 零差异，之后才能生成同 SHA 远端、
-性能、容量与 endurance 证据。
+REL-C1 已冻结包含 M3-R2、API-R1、post-review TCP remediation 与治理同步的
+唯一候选。REL-V1 必须从 `v0.3.0-rel-c1-freeze^{commit}` 的 clean checkout
+执行 Windows Debug/Release、120 项 CTest、install consumers、focused repeats、
+全部 guards、public API zero diff 与 inventory evidence；完成前不能进入 REL-V2。

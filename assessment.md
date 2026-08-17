@@ -1,9 +1,9 @@
 # game-net-core 当前项目审计报告
 
-审计日期：2026-08-11
-受审实现检查点：`main@9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
-审计时上游参考：`origin/main@7fa6922725304fe0d1c80a806b19a0173cdf9c3e`
-报告性质：post-review runtime remediation 当前事实同步；历史证据与当前候选状态分区记录
+审计日期：2026-08-17
+受审实现检查点：`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
+REL-C1 冻结前上游参考：`origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`
+报告性质：REL-C1 候选冻结事实同步；历史证据与当前候选状态分区记录
 
 ## 1. 执行结论
 
@@ -18,7 +18,7 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
 | P1-01 | P1（已关闭） | M3-R1 检查点 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `95a6ab5` 的六个 producer 是历史检查点证据；`9d2a5be` 尚无同 SHA remote、retained artifact、性能、容量与 endurance 证据 | 发布证据 |
+| P1-02 | P1 | `95a6ab5` 的六个 producer 是历史检查点证据；REL-C1 候选尚无同 SHA remote、retained artifact、性能、容量与 endurance 证据 | 发布证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1（已关闭） | API-R1 首次拒绝后的八组 blocker 已关闭，独立终审 `APPROVE`，0.3 reviewed surface 有严格 zero-diff gate | API 发布阻塞已解除 |
 | P1-05 | P1（本地关闭） | TcpServer owner establishment 抛出时先在 owner 关闭，再经 base lifecycle 回滚 map/load/admission，最终引用回到 owner 释放 | 核心线程/生命周期正确性 |
@@ -28,13 +28,15 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 
 因此：
 
-- 可以继续 M3 production-hardening 修复与本地验证。
-- 不应把当前 SHA 标记为 `v0.3.0-production-candidate` 的最终候选。
+- 可以继续 REL-V1/REL-V2 以及同 SHA 性能、容量和 endurance 验证。
+- REL-C1 候选由 annotated tag `v0.3.0-rel-c1-freeze` 唯一标识；这不是
+  REL-D1 发布决定。
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
 - P1-01 已在 `95a6ab5` 关闭；`446f86d` 的拒绝结论保留为历史证据。
-- 当前没有冻结的 v0.3 最终候选；`9d2a5be` 是已提交的本地实现检查点。
-- API-R1 只批准 stable surface 进入 REL-C1；它不创建候选 SHA，也不替代
+- `9d2a5be` 是候选承载的不可变实现与 reviewed-surface 检查点；完整
+  `CANDIDATE_SHA` 由 freeze tag object 与远端 ref 记录。
+- API-R1 只批准 stable surface；它本身不替代
   同 SHA 远端、性能、容量或 endurance 证据。
 
 ### 1.1 M3-R1 收口检查点（2026-08-03）
@@ -106,9 +108,9 @@ reviewer 多轮复核并最终给出 `APPROVE`，允许进入 REL-C1。
   已在兼容策略和审查档案中列明。
 
 完整矩阵、首次拒绝、逐项 resolution、历史及同线 diff 见
-`docs/reviews/api-r1-stable-core-review.md`。snapshot 暂以
-`UNBOUND-REL-C1` 标记，因为当前冻结的 v0.3 最终候选仍为无；REL-C1 必须
-绑定最终 SHA 并复验零差异。
+`docs/reviews/api-r1-stable-core-review.md`。REL-C1 已把 snapshot 绑定到
+annotated tag `api-r1-approved-surface` 与 peeled commit `9d2a5be...`，并以
+`v0.3.0-rel-c1-freeze` 的 peeled commit 作为非自引用的最终候选身份。
 
 ### 1.4 Post-review TCP establishment remediation（2026-08-11）
 
@@ -168,14 +170,15 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 
 - 受审实现分支：`main`
 - 受审实现检查点：`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
-- 审计时本地 `origin/main`：`7fa6922725304fe0d1c80a806b19a0173cdf9c3e`
+- REL-C1 冻结前 `origin/main`：`355af9b1b8dbba63b749003ca49f9c1af97aac17`
 - 实现检查点提交时间：`2026-08-11T18:40:03+08:00`
 - 实现检查点标题：`Fix TCP establishment failure rollback`
 - 最新已发布标签：`v0.2.0-phase4-preview`
 - 实现检查点位于该标签之后 68 个提交
 - CMake package version：`0.3.0`
 - 语言标准：C++23，关闭 compiler extensions
-- 当前冻结的 v0.3 最终候选：无
+- 当前冻结的 v0.3 最终候选：annotated tag
+  `v0.3.0-rel-c1-freeze` peeled commit；完整 SHA 由 tag object 与远端 ref 记录
 
 本报告原始审计基线 `7a56132d6ea60346ec06c108cd627b7b4cd5a04f` 到
 受审实现检查点：
@@ -275,12 +278,13 @@ ctest --test-dir build-m3-r1-remediation-release -C Release --output-on-failure
   Debug/Release 六个 producer 均成功；
 - 同一 run 的 aggregate job 虽为 success，但 retained artifact API 返回 0，
   聚合上传/校验步骤未形成可下载证据，因此 P1-02 仍开放；
-- `9d2a5be` 在 M3-R2/API-R1 之后增加 late establishment failure 运行时代码
-  和合同，尚无同 SHA 远端 CI、paired benchmark/capacity 或 24/72 小时
-  endurance；
+- REL-C1 候选承载 `9d2a5be` 在 M3-R2/API-R1 之后增加的 late establishment
+  failure 运行时代码和合同，尚无同 SHA remote CI、paired benchmark/capacity
+  或 24/72 小时 endurance；
 - `be749ad`、`5f926f3` 与 `b344318` 的性能/容量/endurance 结果仅是历史
-  基础设施证据，不是 `9d2a5be` 的当前候选证据；
-- 审计时 `origin/main` 为 `7fa6922`，且没有冻结的 v0.3 最终候选。
+  基础设施证据，不是 REL-C1 冻结候选的当前证据；
+- REL-C1 冻结前 `origin/main` 为 `355af9b`；冻结后候选身份只由
+  `v0.3.0-rel-c1-freeze^{commit}` 解析。
 
 远端基础设施状态可能独立变化；本报告不把未重新查询的 runner 在线状态或
 旧 queued/failed run 描述为当前事实。发布门只接受最终候选 SHA 上可下载、
@@ -527,7 +531,7 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 
 - roadmap、assessment、plan、README 和 migration status 统一使用已提交实现
   检查点 `9d2a5be`；
-- 审计时上游参考 `7fa6922`、M3-R1 已审查检查点 `95a6ab5` 与“当前无冻结
+- 当时的上游参考 `7fa6922`、M3-R1 已审查检查点 `95a6ab5` 与“尚未冻结
   v0.3 最终候选”被明确区分；
 - 当前测试清单统一为 120（8 unit、99 contract、13 integration；93
   threading、98 lifecycle），intent 清单继续由守卫推导为 61/30/20/11/139；
@@ -601,8 +605,8 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 
 当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
 
-1. 完成 REL-C1：冻结包含 M3-R2、API-R1 和 post-review TCP remediation 的唯一候选 SHA；
-2. 修复 retained artifact 并跑通同 SHA 性能、容量和 endurance；
+1. 完成 REL-V1：在冻结候选 SHA 上执行本地 clean gate；
+2. 修复 retained artifact 并跑通同 SHA 远端 CI、性能、容量和 endurance；
 3. 由项目所有者完成许可证决定。
 
 具体执行拆分、依赖和关闭门记录在新的 `plan.md`。

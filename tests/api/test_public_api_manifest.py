@@ -75,8 +75,16 @@ def main() -> None:
     assert reviewed_snapshot["compatibility_line"] == "0.3"
     assert reviewed_snapshot["source"] == {
         "tag": "api-r1-approved-surface",
-        "commit": "UNBOUND-REL-C1",
+        "commit": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
     }
+    reviewed_provenance_errors: list[str] = []
+    verifier._verify_snapshot_against_git(
+        repo_root,
+        reviewed_snapshot,
+        reviewed_snapshot["source"]["commit"],
+        reviewed_provenance_errors,
+    )
+    assert reviewed_provenance_errors == []
     reviewed_difference = comparer.build_diff(
         reviewed_snapshot,
         manifest,
@@ -178,7 +186,8 @@ def main() -> None:
         repo_root / "docs" / "reviews" / "api-r1-stable-core-review.md"
     ).read_text(encoding="utf-8")
     assert "/root/api_r1_independent_review" in review_packet
-    assert "UNBOUND-REL-C1" in review_packet
+    assert "api-r1-approved-surface" in review_packet
+    assert "v0.3.0-rel-c1-freeze" in review_packet
     assert "Changed stable-header fingerprints | 19" in review_packet
     assert comparer.render_diff(difference) == comparer.render_diff(
         comparer.build_diff(

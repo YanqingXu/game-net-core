@@ -35,9 +35,11 @@ surface after closing its initial blockers. The current local checkpoint is
 `9d2a5be`: it adds post-review TcpServer/TcpClient establishment-failure
 rollback contracts, passes Windows/IOCP Release 120/120 and all 36 guards, keeps
 the API-R1 same-line diff strictly empty, and passes fresh stable/provisional
-install consumers 2/2. It has no same-SHA remote or Linux release evidence.
-No final v0.3 candidate is frozen, so REL-C1 is next and the eventual candidate must
-receive its own clean same-SHA CI, performance, capacity, and endurance evidence.
+install consumers 2/2. REL-C1 freezes the unique v0.3 candidate through annotated
+tag `v0.3.0-rel-c1-freeze`; its peeled commit is the authoritative
+`CANDIDATE_SHA`. The tag is an engineering freeze reference, not a release tag
+or REL-D1 decision. The candidate still requires clean same-SHA CI, performance,
+capacity, and endurance evidence; REL-V1 is the next task.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 
