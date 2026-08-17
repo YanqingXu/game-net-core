@@ -15,6 +15,7 @@ SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
 EXPECTED_CTEST_TOTAL = 120
 EXPECTED_THREADING_TOTAL = 93
+EXPECTED_CONSUMER_TOTAL = 2
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
     "${{ github.run_id }}-${{ github.run_attempt }}"
@@ -359,8 +360,12 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
             for index, name in enumerate(names)
         ]
         if not main:
-            names = ["gamenet.install_consumer"]
-            tests = [{"name": names[0], "labels": []}]
+            assert total == EXPECTED_CONSUMER_TOTAL
+            names = [
+                "gamenet.install_consumer",
+                "gamenet.provisional_install_consumer",
+            ]
+            tests = [{"name": name, "labels": []} for name in names]
         document = {
             "schema": "gamenet.ctest_inventory.v1",
             "generated_at_utc": "2026-07-11T00:00:00Z",
@@ -413,7 +418,9 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
 
             if job in consumer_jobs and not (scenario == "missing-consumer" and job == "windows-msvc-release"):
                 consumer_names = write_inventory(
-                    artifact / "install-consumer-inventory.json", 1, main=False
+                    artifact / "install-consumer-inventory.json",
+                    EXPECTED_CONSUMER_TOTAL,
+                    main=False,
                 )
                 write_junit(artifact / "install-consumer-junit.xml", consumer_names)
                 (artifact / "install-consumer-ctest.log").write_text(
@@ -518,6 +525,11 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
     assert next(
         producer for producer in aggregate["producers"] if producer["job"] == "linux-asan-ubsan"
     )["fuzz_executed_units"] == 1000
+    assert all(
+        producer["consumer_executed_tests"] == EXPECTED_CONSUMER_TOTAL
+        for producer in aggregate["producers"]
+        if producer["job"] in consumer_jobs
+    )
 
     negative_cases = {
         "missing-job": "exactly six producer artifact directories",
@@ -981,7 +993,7 @@ def main() -> None:
     require(ci_docs, "gamenet.ci_evidence_set.v1")
     require(ci_docs, "exactly 120")
     require(ci_docs, "threading=93")
-    require(ci_docs, "exactly 1")
+    require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")
     require(ci_docs, "90 days")

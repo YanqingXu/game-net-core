@@ -26,6 +26,7 @@ EXPECTED_JOBS = (
 CONSUMER_JOBS = frozenset({"linux-cmake", "windows-msvc", "windows-msvc-release"})
 EXPECTED_MAIN_INVENTORY = 120
 EXPECTED_THREADING_EXECUTION = 93
+EXPECTED_CONSUMER_INVENTORY = 2
 EXPECTED_LIBFUZZER_EXECUTIONS = 1000
 
 
@@ -240,10 +241,14 @@ def validate_producer(artifact_dir: Path, manifest_path: Path) -> tuple[str, dic
     }
     if job in CONSUMER_JOBS:
         require(consumer_paths <= set(files), f"producer job {job} is missing install-consumer evidence")
-        consumer_inventory, _ = inventory_tests(files["install-consumer-inventory.json"], 1)
-        consumer_junit_names = junit_tests(files["install-consumer-junit.xml"], 1)
+        consumer_inventory, _ = inventory_tests(
+            files["install-consumer-inventory.json"], EXPECTED_CONSUMER_INVENTORY
+        )
+        consumer_junit_names = junit_tests(
+            files["install-consumer-junit.xml"], EXPECTED_CONSUMER_INVENTORY
+        )
         require(set(consumer_junit_names) == set(consumer_inventory), f"consumer JUnit mismatch for {job}")
-        consumer_total = 1
+        consumer_total = EXPECTED_CONSUMER_INVENTORY
     else:
         require(not (consumer_paths & set(files)), f"unexpected install-consumer evidence for {job}")
 

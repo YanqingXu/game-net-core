@@ -179,10 +179,10 @@ result.
 Every main CTest invocation writes `ci-evidence/ctest-junit.xml` with
 `--output-junit` and `ci-evidence/ctest.log` with `--output-log`. Linux jobs use a 60-second per-test timeout; Windows main
 suites use a 30-second lifecycle timeout. Linux Debug and both Windows
-jobs require exactly 1 configured install-consumer test before building it,
+jobs require exactly 2 configured install-consumer tests before building them,
 then write `install-consumer-inventory.json`, `install-consumer-junit.xml`, and
 `install-consumer-ctest.log` with a 60-second timeout for the installed-package
-executable. JUnit records suite and test durations. Total job
+executables. JUnit records suite and test durations. Total job
 elapsed time remains authoritative in GitHub Actions job metadata because a
 step running before artifact upload cannot reliably know the final upload
 duration. CTest 3.21 or newer is required for evidence capture through
@@ -364,7 +364,7 @@ cmake --build build-windows-release --config Release --parallel
 ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 30 --output-junit "$pwd/ci-evidence/ctest-junit.xml" --output-log "$pwd/ci-evidence/ctest.log"
 cmake --install build-windows-release --config Release --prefix "$pwd/build-windows-release/_install"
 cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH="$pwd/build-windows-release/_install"
-python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 1 --output ci-evidence/install-consumer-inventory.json
+python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 2 --output ci-evidence/install-consumer-inventory.json
 cmake --build build-windows-release-install-consumer --config Release --parallel
 ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
 ```
@@ -747,15 +747,16 @@ cmake --install build --prefix "$PWD/build/_install"
 cmake -S tests/cmake/install_consumer -B build-install-consumer \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_PREFIX_PATH="$PWD/build/_install"
-python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 1 --output ci-evidence/install-consumer-inventory.json
+python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json
 cmake --build build-install-consumer --parallel
 ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit "$PWD/ci-evidence/install-consumer-junit.xml" --output-log "$PWD/ci-evidence/install-consumer-ctest.log"
 ```
 
-The consumer fixture uses `find_package(GameNetCore REQUIRED)`, links the six
-installed targets (`core`, `protocol`, `transport`, `game_session`,
-`game_logic`, and `broadcast`), and registers its `main()` as a CTest test.
-Configure/build alone is not accepted as runtime package evidence.
+The consumer fixture uses `find_package(GameNetCore REQUIRED)` and registers
+two CTest executables. The stable consumer links `GameNet::core`; the
+provisional consumer links `protocol`, `transport`, `game_session`,
+`game_logic`, and `broadcast`. Configure/build alone is not accepted as runtime
+package evidence.
 
 The Windows MSVC Debug job runs the same package consumer gate after installing
 from `build-windows`, using the Visual Studio generator and `x64` platform. It
@@ -817,7 +818,7 @@ cmake --build build-windows --config Debug --parallel
 ctest --test-dir build-windows -C Debug --output-on-failure --timeout 30 --output-junit "$pwd/build-windows/ctest-junit.xml" --output-log "$pwd/build-windows/ctest.log"
 cmake --install build-windows --config Debug --prefix "$pwd/build-windows/_install"
 cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH="$pwd/build-windows/_install"
-python tools/verify_ctest_inventory.py --test-dir build-windows-install-consumer --config Debug --expected-total 1 --output build-windows-install-consumer/ctest-inventory.json
+python tools/verify_ctest_inventory.py --test-dir build-windows-install-consumer --config Debug --expected-total 2 --output build-windows-install-consumer/ctest-inventory.json
 cmake --build build-windows-install-consumer --config Debug --parallel
 ctest --test-dir build-windows-install-consumer -C Debug --output-on-failure --timeout 60 --output-junit "$pwd/build-windows-install-consumer/ctest-junit.xml" --output-log "$pwd/build-windows-install-consumer/ctest.log"
 
@@ -827,7 +828,7 @@ cmake --build build-windows-release --config Release --parallel
 ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 30 --output-junit "$pwd/build-windows-release/ctest-junit.xml" --output-log "$pwd/build-windows-release/ctest.log"
 cmake --install build-windows-release --config Release --prefix "$pwd/build-windows-release/_install"
 cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH="$pwd/build-windows-release/_install"
-python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 1 --output build-windows-release-install-consumer/ctest-inventory.json
+python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 2 --output build-windows-release-install-consumer/ctest-inventory.json
 cmake --build build-windows-release-install-consumer --config Release --parallel
 ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit "$pwd/build-windows-release-install-consumer/ctest-junit.xml" --output-log "$pwd/build-windows-release-install-consumer/ctest.log"
 ```
