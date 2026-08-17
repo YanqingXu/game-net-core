@@ -37,13 +37,16 @@ comparator, high-fd client, and Linux overload-profile defects in
 checkout, revision-wide benchmark order bias, capacity snapshot queue
 interference, incomplete stdout flushing, and hidden localized diagnostics.
 The current implementation checkpoint is
-`3d54c086e92c858b66df7bb80179431ec2d24867` (`3d54c08`). Its stable API remains
+`669ebb0a7c5c475dea74b12275c66a2ce1876804` (`669ebb0`). Its stable API remains
 the single source-compatible addition bound to reviewed-surface tag
 `api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`.
 REL-C1 now refreezes the unique v0.3 candidate through annotated tag
-`v0.3.0-rel-c1-refreeze-4`, superseding
-`v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c` after
-remote checkout flattened the local annotated-tag ref before repository guards.
+`v0.3.0-rel-c1-refreeze-5`, superseding
+`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` after
+two hosted Windows capacity attempts proved that one probe could close on its
+I/O deadline before the server published the corresponding accept. The new
+batch lifecycle keeps connected sockets open through accept convergence before
+exact echo and abortive close; it does not relax the two-second deadline.
 The tag is an engineering freeze reference, not a release tag or REL-D1
 decision. The new candidate requires fresh clean same-SHA CI, performance,
 capacity, and endurance evidence; REL-V1 is the next task.

@@ -335,7 +335,7 @@ to `6b292156e3e94d3389e9f3b8513445e7eb4ab541`; the matching snapshot is
 `api/baselines/v0.3.0-perf-r1-reviewed.json`. The archived prior-to-new diff
 contains exactly the `TcpConnection.h` fingerprint decision, and the blocking
 comparison from the new snapshot is zero. This remains non-self-referential to
-the separate current candidate tag `v0.3.0-rel-c1-refreeze-4`. Evidence-tool
+the separate current candidate tag `v0.3.0-rel-c1-refreeze-5`. Evidence-tool
 remediation after the reviewed API checkpoint changes no installed header or
 target fingerprint; the candidate implementation checkpoint is
-`3d54c086e92c858b66df7bb80179431ec2d24867`.
+`669ebb0a7c5c475dea74b12275c66a2ce1876804`.

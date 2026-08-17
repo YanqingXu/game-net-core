@@ -158,11 +158,11 @@ def main() -> None:
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
-    implementation_checkpoint = "3d54c086e92c858b66df7bb80179431ec2d24867"
-    superseded_candidate = "0a500826844cb4f9345572909a733cc2e52ce14c"
-    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-3"
-    candidate_tag = "v0.3.0-rel-c1-refreeze-4"
+    require(status_text, "Current production-roadmap audit: 2026-08-18", migration_status)
+    implementation_checkpoint = "669ebb0a7c5c475dea74b12275c66a2ce1876804"
+    superseded_candidate = "c061f9967b9481b70b2faf9a8fee24f5a3e72ffc"
+    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-4"
+    candidate_tag = "v0.3.0-rel-c1-refreeze-5"
     reviewed_surface_tag = "api-r1-perf-r1-reviewed-surface"
     reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
@@ -173,8 +173,8 @@ def main() -> None:
     assert freeze_record == {
         "schema": "gamenet.candidate_freeze.v1",
         "release_label": "v0.3.0-production-candidate",
-        "stage": "rel-c1-refrozen-perf-r1-remote-evidence",
-        "freeze_date": "2026-08-17",
+        "stage": "rel-c1-refrozen-perf-r1-probe-lifecycle-remediation",
+        "freeze_date": "2026-08-18",
         "candidate": {
             "branch": "perf-r1-deterministic-capacity",
             "ref": f"refs/tags/{candidate_tag}",
@@ -186,9 +186,9 @@ def main() -> None:
         "supersedes": {
             "candidate_ref": f"refs/tags/{superseded_candidate_tag}",
             "candidate_commit": superseded_candidate,
-            "rel_v2_run_id": "32039657783",
+            "rel_v2_run_id": "32043448820",
             "rel_v2_run_attempt": 1,
-            "reason": "annotated-tag-checkout-object-restoration",
+            "reason": "capacity-probe-lifecycle-barrier",
         },
         "reviewed_surface": {
             "tag": reviewed_surface_tag,
@@ -283,7 +283,7 @@ def main() -> None:
     ):
         require(text, superseded_candidate, source)
         require(text, superseded_candidate_tag, source)
-    require(readme_text, "3d54c08", readme)
+    require(readme_text, "669ebb0", readme)
     require(readme_text, superseded_candidate, readme)
     require(readme_text, superseded_candidate_tag, readme)
     require(readme_text, "API-R1", readme)
@@ -319,7 +319,7 @@ def main() -> None:
     require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
-        "The authoritative current implementation checkpoint is `3d54c08`",
+        "The authoritative current implementation checkpoint is `669ebb0`",
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)

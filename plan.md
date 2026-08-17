@@ -1,28 +1,29 @@
 # game-net-core 执行计划
 
 计划日期：2026-07-30
-更新日期：2026-08-17
+更新日期：2026-08-18
 起始基线：`main@7a56132d6ea60346ec06c108cd627b7b4cd5a04f`
 依据：同基线的 `assessment.md`
 
-当前治理事实（2026-08-17）绑定不可变实现检查点
-`3d54c086e92c858b66df7bb80179431ec2d24867`。REL-C1 新候选由 annotated
-tag `v0.3.0-rel-c1-refreeze-4` 唯一标识，其 peeled commit 是权威
+当前治理事实（2026-08-18）绑定不可变实现检查点
+`669ebb0a7c5c475dea74b12275c66a2ce1876804`。REL-C1 新候选由 annotated
+tag `v0.3.0-rel-c1-refreeze-5` 唯一标识，其 peeled commit 是权威
 `CANDIDATE_SHA`。它替代
-`v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c`；
-该候选完成本地 REL-V1，但 REL-V2 run `32039657783` 证明
-`actions/checkout@v4` 在完整抓取 tags 后又把本地 annotated candidate ref
-扁平化为 peeled commit，migration-status guard 因此正确拒绝。run 随后取消，
-不能晋级新候选；独立的 Linux Release setup 还遭遇 GitHub action 下载 429。
+`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`；
+该候选完成 REL-V1、REL-V2 run `32043448820` 与 paired Core run
+`32043874669`，但 capacity run `32043877128` 的两个 Windows attempts 均在
+一个探针的 client I/O deadline 后失去可达的 server-accept accounting。
+失败 JSON 均保留，不能以重跑覆盖。
 
 PERF-R1 remediation 已在实现检查点完成此前的 parameter bridge、Linux `poll()`
 connect wait 与 owner-loop-only `TcpConnection::setSendBufferSize`，并新增 warm
 paired/interleaved benchmark runner、每 owner 一次的 retention snapshot batch、
-完整 stdout flush 和 stderr 字节保真诊断。稳定 API 的 additive source-compatibility
+完整 stdout flush、stderr 字节保真诊断，以及不放宽 2 秒 deadline 的
+connect → accept → echo/abortive-close → close batch barrier。稳定 API 的 additive source-compatibility
 决定绑定 `api-r1-perf-r1-reviewed-surface`；当前测试清单统一为
 121（8/100/13；threading 94、lifecycle 99），intent 显式 verification paths
 为 140。完整 candidate-10k profile 已在
-Windows/IOCP 与 Linux/epoll 各三次本地通过；Windows 的真实 12 场景 regression
+Windows/IOCP 连续九次、Linux/epoll 三次本地通过；Windows 的真实 12 场景 regression
 和 Core-capacity 交错矩阵也均通过原预算，但这些 synthetic local 结果不
 替代候选证据。发布关键路径已回到 REL-C1 后的新候选 REL-V1；之后必须重新完成
 REL-V2 与 PERF-R1。END-R1 未获准启动。
@@ -86,6 +87,17 @@ REL-C1 或使当前候选证据失效。
   各 120/120、install consumers 2/2/2 和 PacketFramer libFuzzer 1000 units；
   六个 producer artifacts 与 aggregate artifact 均为 required、非空且可下载，
   aggregate verifier 通过。
+- [x] `refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` 的 REL-V1 已完成
+  Windows Debug/Release 121/121、install consumers 2/2/2、focused repeats
+  800/800、36/36 guards、API 同线 zero diff 与 Linux Release 121/121；它随后
+  被 probe-lifecycle remediation 替代，不能作为 refreeze-5 证据。
+- [x] 同一 `refreeze-4` 的 REL-V2 run `32043448820` 六个 producer 与 aggregate
+  全部 success，下载的 7 个 artifacts 经本地重验完整；paired Core benchmark
+  run `32043874669` 的 Linux/Windows producer 与 aggregate 也全部 success。
+- [x] capacity run `32043877128` attempts 1/2 的 Linux producer 均 success；两个
+  Windows producer 分别在 370/420 个探针时保留一次 receive failure 和 accept
+  timeout 的原始 JSON。该失败已归因并在实现检查点 `669ebb0` 修复，本地 Windows
+  9/9、Linux 3/3 candidate samples 通过，但尚不是 refreeze-5 远端证据。
 
 ### 2.2 未完成
 
@@ -405,7 +417,7 @@ paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选�
 
 REL-C1 的机器可读记录是 `api/candidate_freeze.json`。候选 commit 不能在其
 自身 tree 中嵌入自己的 SHA，因此该文件记录 candidate ref 与解析规则；annotated
-tag `v0.3.0-rel-c1-refreeze-4` 的 object target 和远端 ref 记录完整 40 位 SHA。
+tag `v0.3.0-rel-c1-refreeze-5` 的 object target 和远端 ref 记录完整 40 位 SHA。
 `api-r1-perf-r1-reviewed-surface` 独立指向
 `6b292156e3e94d3389e9f3b8513445e7eb4ab541`，证明 additive reviewed snapshot 的
 header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release tag，
@@ -418,7 +430,9 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 暴露确定性缺陷，修复提交 `6b29215` 再触发 `refreeze-2`。首次远端取证继续暴露
 证据工具缺陷，修复提交 `3d54c08` 因此触发不可变 `refreeze-3`。该候选的
 REL-V2 又暴露 checkout 对本地 tag ref 的扁平化；显式 object restore 与静态合同
-因此触发 `refreeze-4`。所有旧 tag 均不移动。
+因此触发 `refreeze-4`。该候选随后完成 REL-V1、REL-V2 和 paired Core，但
+capacity run `32043877128` 两次暴露探针生命周期 barrier 缺失；修复提交
+`669ebb0` 因此触发 `refreeze-5`。所有旧 tag 均不移动。
 
 任何候选后的代码变化都使后续证据失效，并回到 REL-C1。
 
@@ -458,8 +472,11 @@ Release、install consumers 2/2/2、focused repeats 800/800、35/35 guards），
 `3d54c08` 修改 benchmark/capacity evidence tooling；`refreeze-3@0a500826` 随后在
 `G:\gnc-relv1-0a50082` 完成 Windows Debug/Release 121/121、install consumers
 各 2/2、focused repeats 800/800、36/36 guards、同线 API zero diff，以及 Linux
-Release 121/121。checkout workflow 与静态合同又发生变化，因此 `refreeze-4` 的
-同项检查恢复为 open，不能把该目录声称为新 SHA 的 detached clean evidence。
+Release 121/121。checkout workflow 与静态合同又发生变化后，`refreeze-4` 在
+`G:\gnc-relv1-c061f99` 重新完成 Windows Debug/Release 121/121、install
+consumers 各 2/2、focused repeats 800/800、36/36 guards、同线 API zero diff，
+以及 WSL/GCC Release 121/121。该候选随后被 `669ebb0` 的 benchmark runtime/test
+变更替代，因此 refreeze-5 的同项检查恢复为 open。
 
 ## 12. REL-V2：候选同 SHA 远端 CI
 
@@ -498,6 +515,15 @@ queued、cancelled、billing failure、checkout failure、artifact quota failure
 远端 aggregate manifest 除 `generated_at_utc` 外完全一致。远端 aggregate manifest
 SHA-256 是
 `f6b8c96b4e8afac629bf0e2a1879931f7ebfb81dc966f3cb6bae032ba8bcfbdc`。
+
+后续关闭证据（2026-08-17，仅 `refreeze-4` 历史证据）：run `32043448820`
+attempt 1 的 head SHA 严格等于
+`c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`；Linux Debug/Release、
+ASan/UBSan、TSan threading、Windows Debug/Release 六个 producer 和 aggregate
+均为 success。7 个 artifacts 共 144 个文件、无空文件；下载副本的 aggregate
+manifest 与候选 SHA/run identity 一致，并记录 121/121 Debug/Release、94 TSan、
+install consumers 2/2/2 与 libFuzzer 1000 units。`669ebb0` 随后改变 benchmark
+runtime/test，因此 refreeze-5 的 REL-V2 重新 open。
 
 ## 13. PERF-R1：候选性能与容量收口
 
@@ -676,6 +702,37 @@ blocked-by-dependency。
   直接合同通过；
 - 按 post-freeze test/build policy，旧 tag 不移动，REL-C1 改用
   `v0.3.0-rel-c1-refreeze-4`。新候选必须重新完成 REL-V1、REL-V2 与 PERF-R1。
+
+### 13.8 `refreeze-4` 完成项与 probe-lifecycle remediation（2026-08-18）
+
+- `refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` 已完成本地 REL-V1；
+  REL-V2 run `32043448820` 的六 producer 与 aggregate 全部 success，7 个
+  artifacts 已下载并重验；
+- Core benchmark run `32043874669` attempt 1 的 Linux/epoll、Windows/IOCP
+  producers 与 paired aggregate 全部 success。两平台都完成 canonical performance
+  与 Core-capacity 12 scenarios × 3 repetitions、slow-client 语义验证和预算比较；
+  Linux accept-topology 结论保留 single-listener/base-loop accept；
+- capacity run `32043877128` attempts 1/2 的 Linux producers 均 success；Windows
+  两次都在 sample 1 失败，分别记录 370 connected / 369 echo 和 420 / 419，均为
+  单次 receive failure 后 `timed out waiting for healthy probe accepts`。失败 stdout
+  JSON 和 job logs 已保留，paired verifier 正确拒绝；
+- 根因不是可豁免 runner 波动：旧 pool 在每个 client connect 后立刻 send/recv，
+  并把 2 秒 connect 参数同时用作 socket I/O deadline；deadline 到达后先 abortive
+  close，但门禁随后仍要求该连接进入 server accepted count，因此 exact accounting
+  永久不可达；
+- `669ebb0a7c5c475dea74b12275c66a2ce1876804` 将每批改为
+  `connect all -> wait cumulative accept -> exact echo + abortive close -> wait cumulative close`。
+  两秒 deadline、500 probes、100/s target、10-slot batch、4-way concurrency、
+  watermarks 和 overload 阈值均未放宽；
+- 直接合同 `tests/cmake/test_capacity_profile_contract.py` 固定四阶段顺序；Windows
+  Release 全量 121/121，容量目标在 Windows/IOCP 与 WSL Linux/epoll 构建成功；
+  修复后的完整 candidate-10k 本地 Windows 9/9、Linux 3/3 样本通过，每个样本
+  都是 500 connected/accepted/echoed/closed、零 probe failure。
+
+当前 decision：旧 `refreeze-4`、REL-V2/Core/capacity runs 与失败 artifacts 全部
+保持不可变。REL-C1 通过 `v0.3.0-rel-c1-refreeze-5` 重冻结 `669ebb0`；由于 runtime/
+test 已变化，refreeze-5 必须重新完成 REL-V1、REL-V2 与完整 PERF-R1，END-R1 继续
+blocked-by-dependency。
 
 ## 14. END-R1：候选 endurance
 
@@ -924,9 +981,9 @@ completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
 > **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**
 
 PERF-R1 remediation 已完成实现、本地跨平台 profile 与 warm paired/interleaved
-矩阵验证、additive API 兼容性决定和 `v0.3.0-rel-c1-refreeze-4` 重冻结。旧
+矩阵验证、additive API 兼容性决定和 `v0.3.0-rel-c1-refreeze-5` 重冻结。旧
 REL-V1/REL-V2/PERF-R1 artifacts 继续绑定各自的 `refreeze-1` / `refreeze-2` /
-`refreeze-3`
+`refreeze-3` / `refreeze-4`
 peeled commit，不能由新候选继承。
 新候选完成 REL-V1 后，必须重新执行 REL-V2，再执行 PERF-R1。新的 PERF-R1 仍必须在
 Linux/epoll 与 Windows/IOCP 上使用同参数、同 runner/toolchain class 的

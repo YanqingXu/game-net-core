@@ -4,21 +4,21 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-08-17
+Current production-roadmap audit: 2026-08-18
 
 Current implementation checkpoint carried by the candidate:
-`3d54c086e92c858b66df7bb80179431ec2d24867` (2026-08-17)
+`669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
 
-Superseded PERF-R1 candidate: `v0.3.0-rel-c1-refreeze-3` peeled to
-`0a500826844cb4f9345572909a733cc2e52ce14c`. Its local REL-V1 passed, but
-REL-V2 run `32039657783` proved that the final ref-specific
-`actions/checkout@v4` fetch flattened the local annotated tag ref to its peeled
-commit before repository guards. The run was cancelled after the deterministic
-failure was captured; its Linux Release setup also encountered an independent
-GitHub action-download 429.
+Superseded PERF-R1 candidate: `v0.3.0-rel-c1-refreeze-4` peeled to
+`c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. Its detached REL-V1, REL-V2 run
+`32043448820`, and paired Core benchmark run `32043874669` passed. Capacity run
+`32043877128` failed twice on hosted Windows: one probe in attempts 1 and 2
+closed on its client I/O deadline before the corresponding server accept was
+published, so exact accept accounting could no longer converge. Both raw
+failure documents remain historical evidence.
 
 Current final v0.3 production candidate: the commit peeled from annotated tag
-`v0.3.0-rel-c1-refreeze-4`; the tag object and remote ref record the
+`v0.3.0-rel-c1-refreeze-5`; the tag object and remote ref record the
 authoritative full `CANDIDATE_SHA`
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
@@ -47,22 +47,23 @@ protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
-The authoritative current implementation checkpoint is `3d54c08`. M3-R1 is
+The authoritative current implementation checkpoint is `669ebb0`. M3-R1 is
 closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
 `12adb00`; API-R1 remediation is committed at `7fa6922`; post-review TCP
 establishment rollback remains at `9d2a5be`. PERF-R1 retains its reviewed
 owner-loop-only send-buffer request and fail-closed v1-to-v2 bridge, then adds
 annotated-tag checkout, warm paired/interleaved collection, one retention
-snapshot batch per owner loop, complete JSON flush, and byte-preserving stderr
-diagnostics. The
+snapshot batch per owner loop, complete JSON flush, byte-preserving stderr
+diagnostics, and a connect/accept/echo/close batch barrier that leaves the
+reviewed two-second probe deadline unchanged. The
 inventory is 121 configured CTest tests: 8 unit tests, 100 contract tests, and
 13 integration tests, with 94 threading and 99 lifecycle labels. Complete local
-`candidate-10k` preflight passed three times on both platforms with identical
-profile parameters, and local Windows regression/Core-capacity paired matrices
-pass their original budgets; neither is immutable candidate evidence. REL-C1
-refreezes the checkout remediation through `v0.3.0-rel-c1-refreeze-4`; REL-V1
-candidate clean validation is the next roadmap task, followed by fresh REL-V2
-and PERF-R1 runs.
+`candidate-10k` preflight for the barrier passed nine times on Windows and
+three times on Linux with identical profile parameters; local Windows
+regression/Core-capacity paired matrices pass their original budgets. None is
+immutable refreeze-5 evidence. REL-C1 refreezes the remediation through
+`v0.3.0-rel-c1-refreeze-5`; REL-V1 candidate clean validation is the next
+roadmap task, followed by fresh REL-V2 and PERF-R1 runs.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
@@ -198,8 +199,8 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
-| 5 | Production hardening | Current runtime scope includes M3-R1/M3-R2, API-R1 remediation, post-review TCP establishment rollback, and the PERF-R1 remote-evidence remediation at `3d54c08`. Earlier frozen candidates remain historical because later runtime/evidence changes superseded their results. Full same-SHA requalification remains open |
-| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-4`, replacing `v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c` after REL-V2 run `32039657783` proved that checkout flattened the local annotated-tag ref. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all new-candidate same-SHA release evidence remain open |
+| 5 | Production hardening | Current runtime scope includes M3-R1/M3-R2, API-R1 remediation, post-review TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0`. Earlier frozen candidates remain historical because later runtime/evidence changes superseded their results. Full same-SHA requalification remains open |
+| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-5`, replacing `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` after capacity run `32043877128` twice proved exact lifecycle accounting could become unreachable. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all new-candidate same-SHA release evidence remain open |
 
 ## Current Intent Inventory
 

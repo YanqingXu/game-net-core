@@ -5,13 +5,13 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-17
+## Current Roadmap Checkpoint — 2026-08-18
 
 - The current implementation checkpoint is
-  `3d54c086e92c858b66df7bb80179431ec2d24867`. REL-C1 is frozen through the
-  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-4`; the tag object
+  `669ebb0a7c5c475dea74b12275c66a2ce1876804`. REL-C1 is frozen through the
+  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-5`; the tag object
   and remote ref are the authoritative full-SHA record. It supersedes
-  `v0.3.0-rel-c1-refreeze-3@0a500826844cb4f9345572909a733cc2e52ce14c`.
+  `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
@@ -31,11 +31,16 @@ See `migration_status.md` for the current checked state of these phases.
   `refreeze-3` then passed local REL-V1, while REL-V2 run `32039657783` proved
   that `actions/checkout@v4` flattened the local annotated tag after fetching
   it. The refreeze-4 workflows restore the exact remote tag object before all
-  repository guards without changing any remote tag.
+  repository guards without changing any remote tag. Refreeze-4 then completed
+  REL-V1, REL-V2, and its paired Core benchmark, but capacity run
+  `32043877128` failed twice on Windows when a client I/O deadline made exact
+  accept accounting unreachable. Implementation checkpoint `669ebb0` adds the
+  missing connect/accept/echo/close phase barrier without relaxing that
+  deadline; 9 Windows and 3 Linux local candidate samples pass.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
   as source-compatible at `api-r1-perf-r1-reviewed-surface`. Fresh REL-V1
-  candidate clean validation is next, followed by same-SHA remote evidence.
+  validation of refreeze-5 is next, followed by same-SHA remote evidence.
 
 ## Phase 1: Project Skeleton
 
