@@ -21,7 +21,8 @@ review date: 2026-08-05 (Asia/Shanghai)
 reviewer is not the implementation author: yes
 reviewed-surface tag: api-r1-approved-surface
 reviewed-surface commit: 9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0
-candidate identity: refs/tags/v0.3.0-rel-c1-freeze^{commit}
+candidate identity: refs/tags/v0.3.0-rel-c1-refreeze-1^{commit}
+superseded candidate: refs/tags/v0.3.0-rel-c1-freeze^{commit} at d3137f9298b47474ea96dc694d44c5c026710039
 ```
 
 Review order followed the repository contract: intent, public contract,
@@ -114,10 +115,12 @@ REL-C1 binds the snapshot to immutable reviewed-surface tag
 `api-r1-approved-surface`, peeled commit
 `9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`, and re-proves the zero diff.
 The distinct candidate commit is resolved from annotated tag
-`v0.3.0-rel-c1-freeze`; its full SHA lives in the tag object and remote ref
-rather than being self-referential data inside the candidate tree. API-R1 does
-not claim ABI compatibility; all pre-1.0 consumers must rebuild for each
-release/toolchain combination.
+`v0.3.0-rel-c1-refreeze-1`; its full SHA lives in the tag object and remote ref
+rather than being self-referential data inside the candidate tree. It replaces
+`v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039`
+after a CI aggregate-verifier-only fix; the reviewed surface remains bound to
+`9d2a5be`. API-R1 does not claim ABI compatibility; all pre-1.0 consumers must
+rebuild for each release/toolchain combination.
 
 ## 6. Verification record
 

@@ -187,7 +187,8 @@ def main() -> None:
     ).read_text(encoding="utf-8")
     assert "/root/api_r1_independent_review" in review_packet
     assert "api-r1-approved-surface" in review_packet
-    assert "v0.3.0-rel-c1-freeze" in review_packet
+    assert "v0.3.0-rel-c1-refreeze-1" in review_packet
+    assert "d3137f9298b47474ea96dc694d44c5c026710039" in review_packet
     assert "Changed stable-header fingerprints | 19" in review_packet
     assert comparer.render_diff(difference) == comparer.render_diff(
         comparer.build_diff(

@@ -7,25 +7,27 @@ See `migration_status.md` for the current checked state of these phases.
 
 ## Current Roadmap Checkpoint — 2026-08-17
 
-- The reviewed implementation checkpoint is
-  `9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`. The REL-C1 candidate is the
-  commit peeled from annotated tag `v0.3.0-rel-c1-freeze`; the tag object and
-  remote ref are the authoritative full-SHA record. Its pre-freeze upstream
-  reference was `origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`.
+- The current implementation checkpoint is
+  `68b444dd109562d3d69c2b377c3bec90dcd15779`. The REL-C1 candidate is the
+  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-1`; the tag object
+  and remote ref are the authoritative full-SHA record. It supersedes
+  `v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 120 CTest tests: 8 unit, 99 contract, and 13
-  integration, with 93 threading and 98 lifecycle labels. The `9d2a5be` tree
-  passed a fresh local Windows/IOCP Release 120/120 gate, all 36 repository/
+  integration, with 93 threading and 98 lifecycle labels. The `9d2a5be` runtime
+  tree passed a fresh local Windows/IOCP Release 120/120 gate, all 36 repository/
   API/CI guards, and stable/provisional install consumers 2/2; its API-R1
-  reviewed-surface diff is strictly empty.
+  reviewed-surface diff is strictly empty. `68b444d` changes only the aggregate
+  evidence verifier, its regression contract, and CI documentation.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
   leak and TcpClient construction-failure request wedge with deterministic
-  recovery contracts. It remains the immutable implementation and reviewed-
-  surface checkpoint carried by the frozen candidate.
-- REL-C1 is frozen, but no same-SHA remote validation, benchmark, capacity, or
-  endurance result is promoted yet. Earlier runs remain historical
-  infrastructure or superseded-candidate evidence.
+  recovery contracts and remains the immutable reviewed-surface checkpoint.
+- REL-C1 is frozen again after run `31992899968` attempt 1 proved all six
+  `d3137f9` producers, consumers 2/2/2, TSan 93, and libFuzzer 1000, but exposed
+  the old aggregate verifier's one-consumer mismatch. No same-SHA remote
+  validation, benchmark, capacity, or endurance result is promoted for the
+  replacement candidate yet.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; historical and strict same-line zero-diff artifacts are
   archived. REL-V1 candidate clean validation is next, followed by same-SHA

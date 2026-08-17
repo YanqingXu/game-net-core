@@ -289,9 +289,12 @@ The reviewed surface is frozen in
 annotated tag `api-r1-approved-surface`, peeled commit
 `9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`, and proves that the surface is
 still a zero diff. The final candidate is a separate annotated tag,
-`v0.3.0-rel-c1-freeze`; its peeled commit is the authoritative `CANDIDATE_SHA`.
-This non-self-referential binding does not create an ABI guarantee or a
-REL-D1 release decision.
+`v0.3.0-rel-c1-refreeze-1`; its peeled commit is the authoritative
+`CANDIDATE_SHA`. It supersedes
+`v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039`
+after that candidate's aggregate verifier exposed a stale install-consumer
+count; the reviewed surface itself did not change. This non-self-referential
+binding does not create an ABI guarantee or a REL-D1 release decision.
 
 ## Current M3-Q1-E Additive Review
 

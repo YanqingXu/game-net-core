@@ -6,9 +6,12 @@
 依据：同基线的 `assessment.md`
 
 当前治理事实（2026-08-17）绑定不可变实现检查点
-`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`。REL-C1 候选由 annotated tag
-`v0.3.0-rel-c1-freeze` 唯一标识，其 peeled commit 是权威 `CANDIDATE_SHA`；
-冻结前上游参考为 `origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`。
+`68b444dd109562d3d69c2b377c3bec90dcd15779`。REL-C1 替代候选由 annotated
+tag `v0.3.0-rel-c1-refreeze-1` 唯一标识，其 peeled commit 是权威
+`CANDIDATE_SHA`。它替代 `v0.3.0-rel-c1-freeze` peeled commit
+`d3137f9298b47474ea96dc694d44c5c026710039`；旧候选 run `31992899968`
+attempt 1 的六个 producer 成功，但 aggregate verifier 仍错误地期望一个
+install consumer，因此不能作为 REL-V2 成功证据。
 
 长期方向见 `goal.md`。`goal.md` 只定义目标和边界，不授权实现；模块实现仍须由
 `active` intent、rules、contracts、tests 和当前阶段 gate 共同授权。
@@ -348,14 +351,17 @@ paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选�
 对应：P1-02
 需要项目/账户所有者处理外部状态
 
-- [ ] 解除 GitHub Actions billing lock；
-- [ ] 清理或扩容 artifact storage quota；
-- [ ] 使 `gamenet-endurance` Linux runner online、idle；
-- [ ] 在 `gamenet-windows` runner 上再次确认 VS C++ workload、CMake、Python 和 Git；
-- [ ] 验证 runner service 账户看到的 VS 安装与交互账户一致；
-- [ ] 验证 checkout 到 `game-net-core` 和 provenance `mini_trantor` 稳定；
-- [ ] 用非候选 smoke run 验证 artifact upload；
-- [ ] 记录 runner version、OS、arch、toolchain version。
+- [x] GitHub Actions 可正常调度，不存在 billing lock；
+- [x] artifact policy 为 `required`，六个 producer artifact 在 run
+  `31992899968` 成功 retained/download；
+- [x] `gamenet-endurance` Linux runner online、idle；
+- [x] `gamenet-windows` runner online、idle，并确认 VS C++ workload、CMake、
+  Python 和 Git；
+- [x] Windows runner 进程使用交互账户 `DESKTOP-8RFB597\PC`，不存在独立
+  service 账户的 VS 可见性偏差；Linux systemd runner 使用已核对的 `xyq`；
+- [x] checkout `game-net-core` 和 provenance `mini_trantor@3eba368...` 成功；
+- [x] 候选 producer 已验证 artifact upload/download 与 canonical naming；
+- [x] 已记录 runner version、OS、arch、toolchain version。
 
 基础设施 smoke 不能替代最终候选执行。
 
@@ -375,10 +381,15 @@ paired benchmark/capacity 或 24/72 小时 endurance，不能标为最终候选�
 
 REL-C1 的机器可读记录是 `api/candidate_freeze.json`。候选 commit 不能在其
 自身 tree 中嵌入自己的 SHA，因此该文件记录 candidate ref 与解析规则；annotated
-tag `v0.3.0-rel-c1-freeze` 的 object target 和远端 ref 记录完整 40 位 SHA。
+tag `v0.3.0-rel-c1-refreeze-1` 的 object target 和远端 ref 记录完整 40 位 SHA。
 `api-r1-approved-surface` 独立指向 `9d2a5be...`，证明 reviewed snapshot 的
 header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release tag，
 也不替代 REL-V1/REL-V2、PERF-R1、END-R1 或 REL-D1。
+
+首次 freeze tag `v0.3.0-rel-c1-freeze` 指向
+`d3137f9298b47474ea96dc694d44c5c026710039`。run `31992899968` attempt 1 的
+六个 producer 全部成功，但 aggregate 因 verifier 的 one-vs-two consumer
+合同漂移失败；修复提交 `68b444d` 因此触发本次重新冻结。
 
 任何候选后的代码变化都使后续证据失效，并回到 REL-C1。
 
@@ -713,6 +724,6 @@ completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
 > **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**
 
 REL-C1 已冻结包含 M3-R2、API-R1、post-review TCP remediation 与治理同步的
-唯一候选。REL-V1 必须从 `v0.3.0-rel-c1-freeze^{commit}` 的 clean checkout
+唯一替代候选。REL-V1 必须从 `v0.3.0-rel-c1-refreeze-1^{commit}` 的 clean checkout
 执行 Windows Debug/Release、120 项 CTest、install consumers、focused repeats、
 全部 guards、public API zero diff 与 inventory evidence；完成前不能进入 REL-V2。

@@ -31,15 +31,17 @@ snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
 72-hour Linux endurance runs, but those runs predate the current implementation
 checkpoint. M3-R1 is independently closed at `95a6ab5`, and M3-R2 is committed
 at `12adb00`. API-R1 independently approved the remediated 0.3 stable Core
-surface after closing its initial blockers. The current local checkpoint is
-`9d2a5be`: it adds post-review TcpServer/TcpClient establishment-failure
-rollback contracts, passes Windows/IOCP Release 120/120 and all 36 guards, keeps
-the API-R1 same-line diff strictly empty, and passes fresh stable/provisional
-install consumers 2/2. REL-C1 freezes the unique v0.3 candidate through annotated
-tag `v0.3.0-rel-c1-freeze`; its peeled commit is the authoritative
+surface after closing its initial blockers. The reviewed runtime checkpoint is
+`9d2a5be`; the current implementation checkpoint is `68b444d`, which preserves
+that API/runtime tree while fixing the aggregate evidence contract for the two
+installed-package consumers. The first frozen candidate `d3137f9` produced six
+successful CI producers in run `31992899968`, but its stale one-consumer
+aggregate verifier failed, so `v0.3.0-rel-c1-freeze` is superseded. REL-C1 now
+refreezes the unique v0.3 candidate through annotated tag
+`v0.3.0-rel-c1-refreeze-1`; its peeled commit is the authoritative
 `CANDIDATE_SHA`. The tag is an engineering freeze reference, not a release tag
-or REL-D1 decision. The candidate still requires clean same-SHA CI, performance,
-capacity, and endurance evidence; REL-V1 is the next task.
+or REL-D1 decision. The replacement candidate still requires clean same-SHA
+CI, performance, capacity, and endurance evidence; REL-V1 is the next task.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

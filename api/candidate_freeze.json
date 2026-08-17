@@ -1,16 +1,23 @@
 {
   "schema": "gamenet.candidate_freeze.v1",
   "release_label": "v0.3.0-production-candidate",
-  "stage": "rel-c1-frozen",
+  "stage": "rel-c1-refrozen",
   "freeze_date": "2026-08-17",
   "candidate": {
     "branch": "main",
-    "ref": "refs/tags/v0.3.0-rel-c1-freeze",
+    "ref": "refs/tags/v0.3.0-rel-c1-refreeze-1",
     "object_type": "annotated-tag",
-    "commit_resolution": "refs/tags/v0.3.0-rel-c1-freeze^{commit}",
+    "commit_resolution": "refs/tags/v0.3.0-rel-c1-refreeze-1^{commit}",
     "sha_record": "annotated-tag-target-and-remote-ref"
   },
-  "implementation_checkpoint": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
+  "implementation_checkpoint": "68b444dd109562d3d69c2b377c3bec90dcd15779",
+  "supersedes": {
+    "candidate_ref": "refs/tags/v0.3.0-rel-c1-freeze",
+    "candidate_commit": "d3137f9298b47474ea96dc694d44c5c026710039",
+    "rel_v2_run_id": "31992899968",
+    "rel_v2_run_attempt": 1,
+    "reason": "aggregate-verifier-install-consumer-count-mismatch"
+  },
   "reviewed_surface": {
     "tag": "api-r1-approved-surface",
     "commit": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",

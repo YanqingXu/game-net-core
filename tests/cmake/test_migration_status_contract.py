@@ -152,19 +152,21 @@ def main() -> None:
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
-    implementation_checkpoint = "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0"
-    pre_freeze_upstream = "355af9b1b8dbba63b749003ca49f9c1af97aac17"
-    candidate_tag = "v0.3.0-rel-c1-freeze"
+    implementation_checkpoint = "68b444dd109562d3d69c2b377c3bec90dcd15779"
+    superseded_candidate = "d3137f9298b47474ea96dc694d44c5c026710039"
+    superseded_candidate_tag = "v0.3.0-rel-c1-freeze"
+    candidate_tag = "v0.3.0-rel-c1-refreeze-1"
     reviewed_surface_tag = "api-r1-approved-surface"
+    reviewed_surface_commit = "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
-    git(repo_root, "cat-file", "-e", f"{pre_freeze_upstream}^{{commit}}")
-    git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, pre_freeze_upstream)
+    git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
     git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, "HEAD")
 
     assert freeze_record == {
         "schema": "gamenet.candidate_freeze.v1",
         "release_label": "v0.3.0-production-candidate",
-        "stage": "rel-c1-frozen",
+        "stage": "rel-c1-refrozen",
         "freeze_date": "2026-08-17",
         "candidate": {
             "branch": "main",
@@ -174,9 +176,16 @@ def main() -> None:
             "sha_record": "annotated-tag-target-and-remote-ref",
         },
         "implementation_checkpoint": implementation_checkpoint,
+        "supersedes": {
+            "candidate_ref": f"refs/tags/{superseded_candidate_tag}",
+            "candidate_commit": superseded_candidate,
+            "rel_v2_run_id": "31992899968",
+            "rel_v2_run_attempt": 1,
+            "reason": "aggregate-verifier-install-consumer-count-mismatch",
+        },
         "reviewed_surface": {
             "tag": reviewed_surface_tag,
-            "commit": implementation_checkpoint,
+            "commit": reviewed_surface_commit,
             "snapshot": "api/baselines/v0.3.0-api-r1-reviewed.json",
         },
         "policy": {
@@ -195,7 +204,7 @@ def main() -> None:
     assert git(repo_root, "cat-file", "-t", f"refs/tags/{reviewed_surface_tag}") == "tag"
     assert (
         git(repo_root, "rev-parse", f"refs/tags/{reviewed_surface_tag}^{{commit}}")
-        == implementation_checkpoint
+        == reviewed_surface_commit
     )
 
     # Governance evidence may follow an immutable implementation checkpoint,
@@ -255,8 +264,10 @@ def main() -> None:
         (assessment_text, assessment),
         (plan_text, plan),
     ):
-        require(text, pre_freeze_upstream, source)
-    require(readme_text, "9d2a5be", readme)
+        require(text, superseded_candidate, source)
+        require(text, superseded_candidate_tag, source)
+    require(readme_text, "68b444d", readme)
+    require(readme_text, "d3137f9", readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
     require(readme_text, "REL-V1", readme)
@@ -290,7 +301,7 @@ def main() -> None:
     require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
-        "The authoritative current implementation checkpoint is `9d2a5be`",
+        "The authoritative current implementation checkpoint is `68b444d`",
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)

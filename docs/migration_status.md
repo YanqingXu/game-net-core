@@ -7,14 +7,16 @@ Phase 4 Preview publication checked: 2026-07-12
 Current production-roadmap audit: 2026-08-17
 
 Current implementation checkpoint carried by the candidate:
-`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0` (2026-08-11)
+`68b444dd109562d3d69c2b377c3bec90dcd15779` (2026-08-17)
 
-REL-C1 pre-freeze upstream reference:
-`origin/main@355af9b1b8dbba63b749003ca49f9c1af97aac17`
+Superseded REL-C1 candidate: `v0.3.0-rel-c1-freeze` peeled to
+`d3137f9298b47474ea96dc694d44c5c026710039`. Its six producers succeeded in
+run `31992899968` attempt 1, but the aggregate verifier rejected the two
+install-consumer tests because it still expected one.
 
 Current final v0.3 production candidate: the commit peeled from annotated tag
-`v0.3.0-rel-c1-freeze`; the tag object and remote ref record the authoritative
-full `CANDIDATE_SHA`
+`v0.3.0-rel-c1-refreeze-1`; the tag object and remote ref record the
+authoritative full `CANDIDATE_SHA`
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
 
@@ -37,19 +39,20 @@ protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
-The authoritative current implementation checkpoint is `9d2a5be`. M3-R1 is
+The authoritative current implementation checkpoint is `68b444d`. M3-R1 is
 closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
-`12adb00`; API-R1 remediation is committed at `7fa6922`. The current checkpoint
-adds post-review TcpServer owner-establishment rollback and TcpClient connected-
-fd construction rollback without changing the reviewed stable API surface. The
-inventory is 120 configured CTest tests: 8 unit tests, 99 contract tests, and 13
-integration tests, with 93 threading and 98 lifecycle labels. Fresh local
-Windows/IOCP Release passed 120/120, all 36 repository/API/CI guards passed,
-fresh install consumers passed 2/2, and the 0.3 reviewed-baseline diff remains
-strictly empty. REL-C1 now freezes this reviewed implementation plus governance
-state through `v0.3.0-rel-c1-freeze`. This is not remote release evidence: the
-candidate has no same-SHA Linux/Windows, benchmark, capacity, or endurance
-result yet. REL-V1 candidate clean validation is the next roadmap task.
+`12adb00`; API-R1 remediation is committed at `7fa6922`; post-review TCP
+establishment rollback remains at `9d2a5be`. The current checkpoint fixes only
+the CI aggregate verifier's stale one-consumer expectation and does not change
+the reviewed stable API or runtime implementation. The inventory is 120
+configured CTest tests: 8 unit tests, 99 contract tests, and 13 integration
+tests, with 93 threading and 98 lifecycle labels. The previous `d3137f9`
+candidate proved all six producer jobs, install consumers 2/2/2, TSan 93, and
+libFuzzer 1000 in run `31992899968`, but its aggregate job failed and therefore
+is not REL-V2 evidence. REL-C1 refreezes the repaired candidate through
+`v0.3.0-rel-c1-refreeze-1`. This is not remote release evidence: the replacement
+candidate has no same-SHA REL-V2, benchmark, capacity, or endurance result yet.
+REL-V1 candidate clean validation is the next roadmap task.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
@@ -59,8 +62,8 @@ and [`test_tcp_server_contract.cpp`](../tests/contract/tcp_server/test_tcp_serve
 
 All candidate, benchmark, capacity, and endurance records below that name
 `be749ad`, `5f926f3`, or `b344318` are historical evidence. They validate the
-tooling or an earlier code checkpoint, not `9d2a5be`; final promotion requires
-a newly frozen SHA and complete same-SHA evidence.
+tooling or an earlier code checkpoint, not the current refrozen candidate;
+final promotion requires complete same-SHA evidence.
 
 The post-Preview production-hardening line is now active. Its first completed
 contracts suppress Linux per-write `SIGPIPE`, bound per-connection admitted
@@ -186,7 +189,7 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | Current planned runtime scope includes M3-R1/M3-R2, API-R1 remediation, and the post-review TCP establishment rollback at `9d2a5be`; the earlier frozen candidate `be749ad` is historical because later runtime changes superseded its evidence. Full same-SHA requalification remains open |
-| 6 | Production candidate | REL-C1 is frozen through annotated tag `v0.3.0-rel-c1-freeze`. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all same-SHA release evidence remain open |
+| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-1`, replacing `v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039` after run `31992899968` exposed its aggregate verifier mismatch. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all replacement-candidate same-SHA release evidence remain open |
 
 ## Current Intent Inventory
 
