@@ -125,6 +125,11 @@ state.
   coordination classifies post-publication connections as probes under one
   benchmark mutex and waits for cumulative server accept/close convergence
   before reusing the next batch.
+- Retained-memory sampling groups the slow connections by owner identity and
+  posts exactly one batch callback per owner loop. Each callback reads all of
+  its connections on that owner, so the observational pressure/recovery sample
+  cannot manufacture a thousand-item normal-queue burst that delays the
+  concurrent healthy probes.
 - The mixed profile reserves explicit loop/server output headroom for at most
   one configured probe batch without changing slow connections' per-connection
   hard limit or Broadcast admission limits. Its v2 evidence requires exact
@@ -147,6 +152,9 @@ state.
   terminal client-side close, and the actual worker count equals the smaller
   of the configured ceiling and slow-client population. Historical v1
   slow-only and v2 mixed artifacts retain their original validation contracts.
+- The capacity executable explicitly flushes and checks its complete stdout
+  JSON before a successful exit; process-teardown buffering is not accepted as
+  evidence publication.
 
 ## Migration Provenance
 

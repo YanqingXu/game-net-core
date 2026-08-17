@@ -222,6 +222,13 @@ For lifecycle-sensitive modules, tests should include:
   its final shared lease is released, one connection contributes no bytes
   before the first read and at most 4 KiB afterward, category/total peaks are
   monotonic, and every current category returns to zero after teardown
+- same-runner performance regression must validate one unrecorded warmup per
+  revision and scenario, record three adjacent baseline/candidate pairs with
+  alternating first-run order, and fail closed when pair role, peer commit,
+  warmup count, order rule, raw sample, or sample hash metadata drifts
+- performance runners decode stdout as strict UTF-8 evidence but preserve
+  localized/non-UTF-8 stderr with byte escapes; a diagnostic decoder failure
+  cannot replace the benchmark process's real nonzero result
 - the slow-broadcast-recovery capacity profile must use real TCP endpoints,
   hold reads during pressure, keep aggregate connection pending bytes within
   the configured connection hard-limit sum, keep dispatcher outstanding bytes
@@ -234,6 +241,9 @@ For lifecycle-sensitive modules, tests should include:
   exact worker/assigned/closed counts must converge before teardown; candidate
   and dedicated runs must record the same reviewed finite server send-buffer
   request so Linux and Windows typed overload is independent of OS defaults;
+  retained-memory sampling must group connections by owner and enqueue exactly
+  one owner-affine snapshot batch per loop so evidence collection does not
+  starve the concurrent healthy probes;
   and 10k candidate versus 100k dedicated endpoint-attempt parameter drift
   must be rejected by structured evidence guards
 - a production promotion artifact must revalidate retained raw capacity and
@@ -241,9 +251,13 @@ For lifecycle-sensitive modules, tests should include:
   requires 10k plus 24h, release mode requires dedicated 100k plus same-SHA
   24h/72h, and SHA, workflow run, rerun attempt, stage, profile, duration, hash,
   or source-inventory drift must fail closed
-- a nonzero capacity-profile sample must retain its structured stdout under the
-  run artifact and report the document error plus false checks; stderr-only or
-  toolchain-only evidence cannot support capacity remediation
+- a nonzero or invalid-JSON capacity-profile sample must retain its raw stdout
+  under the run artifact; structured failures report the document error plus
+  false checks, and stderr-only or toolchain-only evidence cannot support
+  capacity remediation
+- a capacity-profile success explicitly flushes and checks the complete stdout
+  document before returning zero; a single stdio-buffer prefix is invalid
+  evidence even when the child process otherwise reports success
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.

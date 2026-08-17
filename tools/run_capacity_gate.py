@@ -349,8 +349,14 @@ def run_gate(arguments: argparse.Namespace) -> dict[str, Any]:
         try:
             document = json.loads(completed.stdout)
         except json.JSONDecodeError as error:
+            retained_failure = retain_failed_sample(
+                output_root,
+                repetition,
+                completed.stdout,
+            )
             raise CapacityGateError(
-                f"capacity sample {repetition} emitted invalid JSON: {error}"
+                f"capacity sample {repetition} emitted invalid JSON: {error}; "
+                f"{retained_failure}"
             ) from error
         validate_gate_document(
             document,

@@ -247,8 +247,9 @@ candidate evidence.
 
 The manual-only `core-benchmark` workflow runs the fixed scenario set in Linux
 Release and Windows MSVC Release jobs. Each producer builds both the reviewed
-baseline and candidate on the same runner, executes three repetitions of an
-expanded 1/2/4-worker, 256/1,024-connection, and 4/16-slow-client matrix, and
+baseline and candidate on the same runner, warms each scenario for both
+revisions, then executes three adjacent alternating-order pairs of an expanded
+1/2/4-worker, 256/1,024-connection, and 4/16-slow-client matrix, and
 enforces the reviewed relative budgets. It also preserves the four original
 canonical raw JSON artifacts as one bundle. The
 canonical artifact name binds the producer job, commit SHA, workflow run id,
@@ -277,7 +278,8 @@ M3-P1 adds a separate `core-capacity` profile without changing that frozen
 release-regression set. Each Linux and Windows producer builds capacity
 baseline `bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043` and the candidate on the
 same runner, then runs three matching repetitions of 1k/10k idle,
-64/256/1,024-byte echo at 1/2/4 workers, and sustained 1k/s churn. The paired
+64/256/1,024-byte echo at 1/2/4 workers, and sustained 1k/s churn using the
+same one-warmup, adjacent alternating-order pair contract. The paired
 evidence verifier rejects cross-platform parameter drift and retains both raw
 sets plus `core-capacity-regression.json`.
 

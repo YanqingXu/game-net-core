@@ -468,6 +468,10 @@ def main() -> None:
         "TcpTransportEndpoint",
         "SO_RCVBUF",
         "aggregateRetention",
+        "batchIndexes.try_emplace",
+        "executor.id()",
+        "std::promise<AggregateRetentionSnapshot>",
+        "owner rejected retained-memory snapshot batch",
         "memoryRetentionSnapshot",
         "networkFixedStorageRetentionSnapshot",
         "EndpointOverloaded",
@@ -486,6 +490,7 @@ def main() -> None:
         "drainAvailable",
         "readerClosedSockets",
         "recoveryReaderPoolAccounted",
+        "failed to flush capacity profile JSON",
     ):
         require(source_text, fragment, source)
     for fragment in (
@@ -536,6 +541,16 @@ def main() -> None:
         rules_text,
         "reviewed finite server send-buffer",
         testing_rules,
+    )
+    require(
+        rules_text,
+        "one owner-affine snapshot batch per loop",
+        testing_rules,
+    )
+    require(
+        intent_text,
+        "exactly one batch callback per owner loop",
+        intent,
     )
     require(
         thread_rules_text,
@@ -819,6 +834,20 @@ def main() -> None:
             3,
             "",
         ) == "sample emitted no stdout"
+
+        invalid_stdout = '{"schema": invalid\n'
+        invalid_detail = capacity_gate.retain_failed_sample(
+            failure_root,
+            4,
+            invalid_stdout,
+        )
+        assert (failure_root / "sample-4-failure.json").read_text(
+            encoding="utf-8"
+        ) == invalid_stdout
+        assert invalid_detail.startswith(
+            "stdout retained as sample-4-failure.json; "
+            "stdout JSON parse failed:"
+        )
 
     with tempfile.TemporaryDirectory(
         prefix="gamenet-capacity-pair-"

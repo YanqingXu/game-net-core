@@ -630,7 +630,8 @@ authoritative exact-repeat evidence for candidate `5ebad2c1`.
 
 The current Phase 6 workflow additionally builds fixed baseline
 `2b1be4343f7c478eb40542451f30aad8ca474003` beside the candidate on each runner,
-runs 12 Core/Phase-4 scale scenarios three times per revision, and writes
+runs one validated warmup per revision/scenario followed by three adjacent,
+alternating-order sample pairs for 12 Core/Phase-4 scales, and writes
 `gamenet.performance_regression.v1`. The paired verifier requires both
 platforms to pass independently against the same reviewed budget and rehashes
 all matrix samples. Raw Linux and Windows scores are never compared directly.

@@ -26,7 +26,8 @@ matrix, and immutable evidence are explicit and machine checked.
 - expose bounded, non-owning observability through a provisional exporter
   contract without freezing the current hot-path API
 - compare fixed benchmark scenarios against same-platform baselines with
-  explicit regression budgets
+  explicit regression budgets and warm, adjacent, alternating-order sample
+  pairs so revision-wide collection order cannot manufacture a regression
 - retain paired Linux/Windows 10k mixed slow-reader/Broadcast capacity evidence
   with exact healthy-probe and bounded recovery-reader lifecycle accounting;
   freeze the same finite server send-buffer request on both platforms so typed
@@ -119,8 +120,9 @@ matrix, and immutable evidence are explicit and machine checked.
   declarations are rejected; and exercises deterministic historical API diff
   and compatibility-decision semantics
 - `tests/ci/test_performance_regression.py` verifies the fixed 12-scenario,
-  three-repetition baseline/candidate matrix, reviewed budgets, same-runner
-  workflow wiring, retained evidence, and a real failing-regression fixture
+  three-pair warm/interleaved baseline/candidate matrix, reviewed budgets,
+  same-runner workflow wiring, retained evidence, and a real failing-regression
+  fixture
 - `tests/ci/test_core_capacity_matrix.py` verifies the independent 12-scenario
   Core capacity baseline/candidate profile, matching Linux/Windows parameters,
   reviewed budgets, and the evidence-only Linux accept-topology decision

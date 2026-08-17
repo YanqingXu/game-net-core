@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 
 BASELINE_SHA = "2b1be4343f7c478eb40542451f30aad8ca474003"
@@ -103,6 +104,10 @@ def main() -> None:
     budget_path = repo_root / "benchmarks" / "performance_regression_budgets.json"
     workflow = repo_root / ".github" / "workflows" / "core-benchmark.yml"
     runner = load_module(runner_path, "gamenet_performance_matrix_runner")
+    paired_runner = load_module(
+        repo_root / "tools" / "run_paired_performance_matrix.py",
+        "gamenet_paired_performance_matrix_runner",
+    )
     budgets = json.loads(budget_path.read_text(encoding="utf-8"))
 
     assert budgets["schema"] == "gamenet.performance_regression_budget.v1"
@@ -112,6 +117,98 @@ def main() -> None:
     budget_keys = {scenario["key"] for scenario in budgets["scenarios"]}
     assert runner_keys == budget_keys
     assert len(runner_keys) == 12
+    paired_source = (
+        repo_root / "tools" / "run_paired_performance_matrix.py"
+    ).read_text(encoding="utf-8")
+    assert 'errors="backslashreplace"' in paired_source
+    assert 'decode("utf-8", errors="strict")' in paired_source
+
+    with tempfile.TemporaryDirectory(prefix="gamenet-paired-sampling-") as directory:
+        root = Path(directory)
+        candidate_executable = root / "candidate-core"
+        baseline_executable = root / "baseline-core"
+        candidate_executable.write_bytes(b"candidate")
+        baseline_executable.write_bytes(b"baseline")
+        fixture_scenario = runner.Scenario(
+            "core",
+            "fixture",
+            "echo",
+            "gamenet.core_benchmark.v2",
+            ("--scenario", "echo"),
+            True,
+        )
+        paired_runner.SCENARIO_PROFILES = {"regression": (fixture_scenario,)}
+        calls: list[str] = []
+
+        def fake_run(command, **_kwargs):
+            identity = Path(command[0]).name.split("-")[0]
+            calls.append(identity)
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "schema": "gamenet.core_benchmark.v2",
+                        "status": "ok",
+                        "error": None,
+                        "scenario": "echo",
+                        "platform": "windows",
+                        "backend": "iocp",
+                        "build_type": "Release",
+                        "parameters": {"fixture": identity},
+                        "measurements": {"fixture": 1.0},
+                    }
+                ),
+                stderr="",
+            )
+
+        real_subprocess_run = subprocess.run
+        paired_runner.subprocess.run = fake_run
+        paired_runner.validate_document = (
+            lambda document, *_args, **_kwargs: document
+        )
+        arguments = SimpleNamespace(
+            repetitions=3,
+            candidate_sha=CANDIDATE_SHA,
+            baseline_sha=BASELINE_SHA,
+            matrix_profile="regression",
+            candidate_core_executable=candidate_executable,
+            candidate_phase4_executable=None,
+            baseline_core_executable=baseline_executable,
+            baseline_phase4_executable=None,
+            candidate_output_root=root / "candidate-output",
+            baseline_output_root=root / "baseline-output",
+            candidate_canonical_core_dir=root / "canonical-core",
+            candidate_canonical_phase4_dir=None,
+            platform="windows",
+            backend="iocp",
+            build_type="Release",
+            process_timeout_seconds=10,
+        )
+        candidate_manifest, baseline_manifest = (
+            paired_runner.run_paired_matrix(arguments)
+        )
+        assert calls == [
+            "candidate",
+            "baseline",
+            "candidate",
+            "baseline",
+            "baseline",
+            "candidate",
+            "candidate",
+            "baseline",
+        ]
+        assert candidate_manifest["sampling"] == {
+            "schema": "gamenet.paired_interleaved.v1",
+            "pair_role": "candidate",
+            "peer_commit_sha": BASELINE_SHA,
+            "warmups_per_scenario": 1,
+            "order_rule": "scenario-and-repetition-parity",
+        }
+        assert baseline_manifest["sampling"]["pair_role"] == "baseline"
+        assert len(candidate_manifest["scenarios"][0]["samples"]) == 3
+        assert (root / "canonical-core" / "fixture.json").is_file()
+        paired_runner.subprocess.run = real_subprocess_run
 
     slow_scenario = next(
         scenario for scenario in runner.SCENARIOS
@@ -304,7 +401,7 @@ def main() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     assert workflow_text.count("Checkout performance baseline") == 2
     assert workflow_text.count(BASELINE_SHA) >= 2
-    assert workflow_text.count("tools/run_performance_matrix.py") >= 4
+    assert workflow_text.count("tools/run_paired_performance_matrix.py") >= 4
     assert workflow_text.count("tools/compare_performance_regression.py") >= 2
     assert workflow_text.count("performance-regression.json") >= 2
 

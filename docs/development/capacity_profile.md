@@ -48,8 +48,11 @@ baseline, pressure, recovery, and post-teardown sample. A short phase sample
 therefore cannot exceed the reported peak merely because the sampler missed it.
 
 `TcpConnection::memoryRetentionSnapshot()` is owner-loop-only. The profile
-posts each low-frequency sample through the endpoint owner executor; it never
-reads connection-owned Buffer state directly from its driver thread.
+groups connections by executor identity and posts one low-frequency batch per
+owner loop; that callback samples all of its local connections. It never reads
+connection-owned Buffer state directly from its driver thread, and the sample
+does not inject one normal-queue task per connection while healthy probes are
+running.
 `TcpConnection::setSendBufferSize()` is also owner-loop-only. A zero profile
 value preserves the operating-system default; a positive value is a requested
 native `SO_SNDBUF` size and the operating system may round the effective size.
@@ -262,11 +265,15 @@ throughput, and RSS values remain observational; the pair gate compares
 contract identity and pass/fail evidence rather than treating unlike hosts as
 a performance contest.
 
-If the executable returns nonzero, the runner retains its structured stdout as
-`sample-N-failure.json` and reports the document's `error` plus false checks in
-the workflow log. This keeps a failed hosted-runner invariant diagnosable; the
-retained failure remains negative evidence and never produces a passing gate
-manifest.
+If the executable returns nonzero or emits invalid JSON, the runner retains its
+raw stdout as `sample-N-failure.json`. Structured failures also report the
+document's `error` plus false checks in the workflow log. This keeps a failed
+hosted-runner invariant diagnosable; the retained failure remains negative
+evidence and never produces a passing gate manifest.
+
+The executable explicitly flushes and checks stdout after the closing JSON
+delimiter and before returning success. This prevents an otherwise successful
+process from publishing only the first buffered prefix of the document.
 
 A local Windows Release orchestration preflight completed all three
 `candidate-10k` repetitions with exact 10,000 endpoint attempts, 500/500

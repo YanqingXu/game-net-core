@@ -22,8 +22,10 @@ parameter-object equality.
 
 ## Matrix
 
-`tools/run_performance_matrix.py` runs 12 fixed Release scenarios three times
-per revision and keeps every raw JSON sample:
+`tools/run_paired_performance_matrix.py` warms each revision once per scenario,
+then runs 12 fixed Release scenarios as three adjacent baseline/candidate pairs
+and keeps every recorded raw JSON sample. Pair order alternates by scenario and
+repetition so neither revision is collected as one long block:
 
 - Core echo at 1, 2, and 4 workers;
 - Core idle-connection holds at 256 and 1,024 connections;
@@ -32,9 +34,14 @@ per revision and keeps every raw JSON sample:
 - Phase 4 logic queue at 20,000/4-producer and 40,000/8-producer scales;
 - Phase 4 broadcast at 1,024 and 4,096 fanout.
 
-The matrix manifest binds the commit, platform, backend, build type, executable
-SHA-256, exact parameters, sample paths, and sample hashes. Three repetitions
-allow the comparator to use medians rather than a single noisy observation.
+Each matrix manifest binds the commit, peer commit, pair role, one-warmup
+contract, interleaving rule, platform, backend, build type, executable SHA-256,
+exact parameters, sample paths, and sample hashes. Three recorded repetitions
+allow the comparator to use medians rather than a single noisy observation;
+warmups are validated but are deliberately not included in those medians.
+Benchmark stdout is decoded as strict UTF-8 JSON. Platform-localized stderr is
+retained with non-UTF-8 bytes escaped, so an error-message codec mismatch does
+not conceal the child process exit and diagnostic.
 
 The `core-capacity` matrix profile is a separate 12-scenario contract. It does
 not alter the frozen release-regression inventory above. It compares the v2
@@ -77,8 +84,9 @@ Each platform artifact retains 72 raw sample documents (12 scenarios × 3
 repetitions × 2 revisions), two matrix manifests, the semantic benchmark
 manifest, the job manifest, and `gamenet.performance_regression.v1`. The paired
 evidence job rehashes the samples, requires both platform regression results to
-pass against the same baseline and budget contract, and still avoids comparing
-Linux values directly with Windows values.
+pass against the same baseline and budget contract, verifies the paired warmup/
+order metadata, and still avoids comparing Linux values directly with Windows
+values.
 
 Cross-platform workflow run `29808395220` passed all 12 comparisons at
 candidate SHA `5f926f3` with 36 candidate and 36 baseline samples per platform.

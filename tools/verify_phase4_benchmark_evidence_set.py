@@ -17,6 +17,7 @@ JOB_SCHEMA = "gamenet.ci_evidence.v1"
 BENCHMARK_SCHEMA = "gamenet.phase4_benchmark_evidence.v1"
 PERFORMANCE_SCHEMA = "gamenet.performance_regression.v1"
 MATRIX_SCHEMA = "gamenet.performance_matrix.v1"
+PAIRED_SAMPLING_SCHEMA = "gamenet.paired_interleaved.v1"
 ACCEPT_TOPOLOGY_SCHEMA = "gamenet.core_accept_topology_decision.v1"
 PERFORMANCE_BASELINE_SHA = "2b1be4343f7c478eb40542451f30aad8ca474003"
 CORE_CAPACITY_BASELINE_SHA = "bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043"
@@ -128,6 +129,8 @@ def verify_matrix_manifest(
     evidence_paths: set[str],
     expected_profile: str,
     expected_scenarios: set[str],
+    expected_pair_role: str,
+    expected_peer_sha: str,
 ) -> str:
     manifest_relative = f"{relative_root}/matrix-manifest.json"
     require(manifest_relative in evidence_paths, f"performance matrix manifest is not hashed: {manifest_relative}")
@@ -144,6 +147,22 @@ def verify_matrix_manifest(
     require(matrix.get("backend") == backend, "performance matrix backend mismatch")
     require(matrix.get("build_type") == "Release", "performance matrix build type mismatch")
     require(matrix.get("repetitions") == PERFORMANCE_REPETITIONS, "performance matrix repetition mismatch")
+    sampling = matrix.get("sampling")
+    require(isinstance(sampling, dict), "paired sampling metadata is missing")
+    require(
+        sampling.get("schema") == PAIRED_SAMPLING_SCHEMA,
+        "paired sampling schema mismatch",
+    )
+    require(sampling.get("pair_role") == expected_pair_role, "paired sampling role mismatch")
+    require(
+        sampling.get("peer_commit_sha") == expected_peer_sha,
+        "paired sampling peer commit mismatch",
+    )
+    require(sampling.get("warmups_per_scenario") == 1, "paired sampling warmup count mismatch")
+    require(
+        sampling.get("order_rule") == "scenario-and-repetition-parity",
+        "paired sampling order rule mismatch",
+    )
     scenarios = matrix.get("scenarios")
     require(isinstance(scenarios, list), "performance matrix scenarios must be an array")
     require(
@@ -496,6 +515,8 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             evidence_paths,
             "regression",
             EXPECTED_PERFORMANCE_SCENARIOS,
+            "baseline",
+            job_manifest["checkout_sha"],
         )
         candidate_matrix_sha = verify_matrix_manifest(
             job_root,
@@ -506,6 +527,8 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             evidence_paths,
             "regression",
             EXPECTED_PERFORMANCE_SCENARIOS,
+            "candidate",
+            PERFORMANCE_BASELINE_SHA,
         )
 
         capacity_relative = "core-capacity-regression.json"
@@ -629,6 +652,8 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             evidence_paths,
             "core-capacity",
             EXPECTED_CORE_CAPACITY_SCENARIOS,
+            "baseline",
+            job_manifest["checkout_sha"],
         )
         capacity_candidate_matrix_sha = verify_matrix_manifest(
             job_root,
@@ -639,6 +664,8 @@ def verify_set(input_root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             evidence_paths,
             "core-capacity",
             EXPECTED_CORE_CAPACITY_SCENARIOS,
+            "candidate",
+            CORE_CAPACITY_BASELINE_SHA,
         )
 
         topology_sha = None

@@ -154,6 +154,17 @@ def write_performance_fixture(
             "backend": backend,
             "build_type": "Release",
             "repetitions": budget["repetitions"],
+            "sampling": {
+                "schema": "gamenet.paired_interleaved.v1",
+                "pair_role": identity,
+                "peer_commit_sha": (
+                    candidate_sha
+                    if identity == "baseline"
+                    else budget["baseline_sha"]
+                ),
+                "warmups_per_scenario": 1,
+                "order_rule": "scenario-and-repetition-parity",
+            },
             "scenarios": scenarios,
         }
         (matrix_root / "matrix-manifest.json").write_text(
@@ -265,6 +276,17 @@ def write_capacity_fixture(
             "backend": backend,
             "build_type": "Release",
             "repetitions": budget["repetitions"],
+            "sampling": {
+                "schema": "gamenet.paired_interleaved.v1",
+                "pair_role": identity,
+                "peer_commit_sha": (
+                    candidate_sha
+                    if identity == "baseline"
+                    else budget["baseline_sha"]
+                ),
+                "warmups_per_scenario": 1,
+                "order_rule": "scenario-and-repetition-parity",
+            },
             "scenarios": scenarios,
         }
         manifest_path = matrix_root / "matrix-manifest.json"
@@ -564,50 +586,47 @@ def main() -> None:
     require(windows, "gamenet_phase4_benchmark", workflow)
     require(pair_job, "Verify paired Phase 4 benchmark evidence", workflow)
 
-    linux_candidate = step_block(linux, "Run candidate performance matrix")
-    windows_candidate = step_block(windows, "Run candidate performance matrix")
-    linux_baseline = step_block(linux, "Run baseline performance matrix")
-    windows_baseline = step_block(windows, "Run baseline performance matrix")
+    linux_paired = step_block(linux, "Run paired interleaved performance matrix")
+    windows_paired = step_block(windows, "Run paired interleaved performance matrix")
     for step, interpreter, platform, backend in (
-        (linux_candidate, "python3", "linux", "epoll"),
-        (windows_candidate, "python", "windows", "iocp"),
-        (linux_baseline, "python3", "linux", "epoll"),
-        (windows_baseline, "python", "windows", "iocp"),
+        (linux_paired, "python3", "linux", "epoll"),
+        (windows_paired, "python", "windows", "iocp"),
     ):
-        require(step, f"{interpreter} tools/run_performance_matrix.py", workflow)
+        require(step, f"{interpreter} tools/run_paired_performance_matrix.py", workflow)
         require(step, f"--platform {platform} --backend {backend}", workflow)
         require(step, "--repetitions 3", workflow)
-    require(linux_candidate, "--canonical-phase4-dir phase4-benchmark-results", workflow)
-    require(windows_candidate, "--canonical-phase4-dir phase4-benchmark-results", workflow)
-    require(linux_baseline, "performance-samples/baseline", workflow)
-    require(windows_baseline, "performance-samples/baseline", workflow)
+        require(step, "performance-samples/candidate", workflow)
+        require(step, "performance-samples/baseline", workflow)
+        require(step, "--candidate-sha", workflow)
+        require(step, "--baseline-sha", workflow)
+    require(
+        linux_paired,
+        "--candidate-canonical-phase4-dir phase4-benchmark-results",
+        workflow,
+    )
+    require(
+        windows_paired,
+        "--candidate-canonical-phase4-dir phase4-benchmark-results",
+        workflow,
+    )
 
-    linux_capacity_candidate = step_block(
+    linux_capacity_paired = step_block(
         linux,
-        "Run candidate Core capacity matrix",
+        "Run paired interleaved Core capacity matrix",
     )
-    windows_capacity_candidate = step_block(
+    windows_capacity_paired = step_block(
         windows,
-        "Run candidate Core capacity matrix",
+        "Run paired interleaved Core capacity matrix",
     )
-    linux_capacity_baseline = step_block(
-        linux,
-        "Run baseline Core capacity matrix",
-    )
-    windows_capacity_baseline = step_block(
-        windows,
-        "Run baseline Core capacity matrix",
-    )
-    for step, interpreter, platform, backend, identity in (
-        (linux_capacity_candidate, "python3", "linux", "epoll", "candidate"),
-        (windows_capacity_candidate, "python", "windows", "iocp", "candidate"),
-        (linux_capacity_baseline, "python3", "linux", "epoll", "baseline"),
-        (windows_capacity_baseline, "python", "windows", "iocp", "baseline"),
+    for step, interpreter, platform, backend in (
+        (linux_capacity_paired, "python3", "linux", "epoll"),
+        (windows_capacity_paired, "python", "windows", "iocp"),
     ):
-        require(step, f"{interpreter} tools/run_performance_matrix.py", workflow)
+        require(step, f"{interpreter} tools/run_paired_performance_matrix.py", workflow)
         require(step, "--matrix-profile core-capacity", workflow)
         require(step, f"--platform {platform} --backend {backend}", workflow)
-        require(step, f"core-capacity-samples/{identity}", workflow)
+        require(step, "core-capacity-samples/candidate", workflow)
+        require(step, "core-capacity-samples/baseline", workflow)
         require(step, "--repetitions 3", workflow)
 
     runner = repo_root / "tools" / "run_performance_matrix.py"

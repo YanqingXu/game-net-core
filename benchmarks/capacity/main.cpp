@@ -31,6 +31,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -1424,29 +1425,66 @@ AggregateOutputSnapshot aggregateOutput(
 AggregateRetentionSnapshot aggregateRetention(
     const std::vector<ConnectionHandle>& handles,
     std::chrono::milliseconds timeout) {
-    std::vector<std::future<
-        gamenet::net::TcpConnectionMemoryRetentionSnapshot>>
-        futures;
-    futures.reserve(handles.size());
+    struct OwnerBatch {
+        gamenet::net::EventLoopExecutor executor;
+        std::vector<gamenet::net::TcpConnectionPtr> connections;
+    };
+
+    std::unordered_map<std::uint64_t, std::size_t> batchIndexes;
+    std::vector<OwnerBatch> batches;
     for (const auto& handle : handles) {
-        auto promise = std::make_shared<std::promise<
-            gamenet::net::TcpConnectionMemoryRetentionSnapshot>>();
+        const auto executor = handle.endpoint->ownerExecutor();
+        const auto [found, inserted] = batchIndexes.try_emplace(
+            executor.id(),
+            batches.size());
+        if (inserted) {
+            batches.push_back({.executor = executor});
+        }
+        batches[found->second].connections.push_back(
+            handle.connection);
+    }
+
+    std::vector<std::future<AggregateRetentionSnapshot>> futures;
+    futures.reserve(batches.size());
+    for (auto& batch : batches) {
+        auto promise = std::make_shared<
+            std::promise<AggregateRetentionSnapshot>>();
         futures.push_back(promise->get_future());
-        const auto connection = handle.connection;
-        const auto posted =
-            handle.endpoint->ownerExecutor().post(
-                [connection, promise] {
-                    try {
-                        promise->set_value(
-                            connection->memoryRetentionSnapshot());
-                    } catch (...) {
-                        promise->set_exception(
-                            std::current_exception());
+        const auto posted = batch.executor.post(
+            [connections = std::move(batch.connections), promise] {
+                AggregateRetentionSnapshot aggregate;
+                try {
+                    for (const auto& connection : connections) {
+                        const auto snapshot =
+                            connection->memoryRetentionSnapshot();
+                        aggregate.inputBufferBytes +=
+                            snapshot.inputBuffer.retainedCapacityBytes;
+                        aggregate.outputBufferBytes +=
+                            snapshot.outputBuffer.retainedCapacityBytes;
+                        aggregate.transportReadStorageBytes +=
+                            snapshot.transportReadStorageBytes;
+                        aggregate.totalConnectionBytes +=
+                            snapshot.totalRetainedBytes;
+                        aggregate.peakInputBufferBytes +=
+                            snapshot.inputBuffer.peakRetainedCapacityBytes;
+                        aggregate.peakOutputBufferBytes +=
+                            snapshot.outputBuffer.peakRetainedCapacityBytes;
+                        aggregate.peakTransportReadStorageBytes +=
+                            snapshot.peakTransportReadStorageBytes;
+                        aggregate.inputTrimCount +=
+                            snapshot.inputBuffer.trimCount;
+                        aggregate.outputTrimCount +=
+                            snapshot.outputBuffer.trimCount;
                     }
-                });
+                    promise->set_value(aggregate);
+                } catch (...) {
+                    promise->set_exception(
+                        std::current_exception());
+                }
+            });
         if (posted != gamenet::net::PostResult::Accepted) {
             throw std::runtime_error(
-                "owner rejected retained-memory snapshot");
+                "owner rejected retained-memory snapshot batch");
         }
     }
 
@@ -1458,24 +1496,20 @@ AggregateRetentionSnapshot aggregateRetention(
                 "timed out waiting for retained-memory snapshot");
         }
         const auto snapshot = future.get();
-        aggregate.inputBufferBytes +=
-            snapshot.inputBuffer.retainedCapacityBytes;
-        aggregate.outputBufferBytes +=
-            snapshot.outputBuffer.retainedCapacityBytes;
+        aggregate.inputBufferBytes += snapshot.inputBufferBytes;
+        aggregate.outputBufferBytes += snapshot.outputBufferBytes;
         aggregate.transportReadStorageBytes +=
             snapshot.transportReadStorageBytes;
         aggregate.totalConnectionBytes +=
-            snapshot.totalRetainedBytes;
+            snapshot.totalConnectionBytes;
         aggregate.peakInputBufferBytes +=
-            snapshot.inputBuffer.peakRetainedCapacityBytes;
+            snapshot.peakInputBufferBytes;
         aggregate.peakOutputBufferBytes +=
-            snapshot.outputBuffer.peakRetainedCapacityBytes;
+            snapshot.peakOutputBufferBytes;
         aggregate.peakTransportReadStorageBytes +=
             snapshot.peakTransportReadStorageBytes;
-        aggregate.inputTrimCount +=
-            snapshot.inputBuffer.trimCount;
-        aggregate.outputTrimCount +=
-            snapshot.outputBuffer.trimCount;
+        aggregate.inputTrimCount += snapshot.inputTrimCount;
+        aggregate.outputTrimCount += snapshot.outputTrimCount;
     }
     return aggregate;
 }
@@ -2156,6 +2190,11 @@ void printDocument(
         << (result.passed() ? "true" : "false") << "\n"
         << "  }\n"
         << "}\n";
+    std::cout.flush();
+    if (!std::cout) {
+        throw std::runtime_error(
+            "failed to flush capacity profile JSON");
+    }
 }
 
 int run(const Config& config) {
