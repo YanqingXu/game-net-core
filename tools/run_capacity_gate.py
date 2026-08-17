@@ -61,6 +61,7 @@ def profile_parameters(
         "connection_low_water_bytes": 32768,
         "connection_high_water_bytes": 65536,
         "connection_hard_limit_bytes": 262144,
+        "server_send_buffer_bytes": 4096,
         "recovery_pending_threshold_bytes": 0,
         "pressure_settle_ms": 500,
         "recovery_stable_ms": 250,
@@ -118,6 +119,7 @@ PARAMETER_ARGUMENTS = (
     ("connection_low_water_bytes", "--low-water-bytes"),
     ("connection_high_water_bytes", "--high-water-bytes"),
     ("connection_hard_limit_bytes", "--hard-limit-bytes"),
+    ("server_send_buffer_bytes", "--server-send-buffer-bytes"),
     (
         "recovery_pending_threshold_bytes",
         "--recovery-threshold-bytes",
@@ -190,6 +192,7 @@ def validate_gate_document(
         "threads",
         "messages",
         "payload_bytes",
+        "server_send_buffer_bytes",
         "pressure_settle_ms",
         "recovery_stable_ms",
         "timeout_ms",

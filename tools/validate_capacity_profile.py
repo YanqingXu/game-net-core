@@ -240,6 +240,14 @@ def validate_document(
     payload_bytes = positive_integer(
         parameters.get("payload_bytes"), f"{label}.payload_bytes"
     )
+    server_send_buffer_bytes = non_negative_integer(
+        parameters.get("server_send_buffer_bytes", 0),
+        f"{label}.server_send_buffer_bytes",
+    )
+    require(
+        server_send_buffer_bytes <= 2_147_483_647,
+        f"{label}: server send buffer exceeds the native int range",
+    )
     non_negative_integer(parameters.get("pressure_settle_ms"), f"{label}.pressure_settle_ms")
     recovery_stable_ms = positive_integer(
         parameters.get("recovery_stable_ms"), f"{label}.recovery_stable_ms"

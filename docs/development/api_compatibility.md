@@ -307,3 +307,25 @@ cross-thread diagnostics must post through the connection owner executor.
 The direct compatibility and lifecycle evidence is
 `tests/contract/tcp_connection/test_tcp_connection_lifecycle.cpp` and
 `tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`.
+
+## PERF-R1 Send-Buffer Additive Review
+
+PERF-R1 adds `TcpConnection::setSendBufferSize(std::size_t)` to the stable Core
+source surface. The addition does not remove or change an existing declaration,
+constructor, default, enum value, ownership rule, or callback order. Existing
+callers remain source compatible. ABI remains outside the pre-1.0 policy.
+
+The method is an explicit owner-loop-only socket-option mutation. It accepts a
+positive value representable by the native `int`, requests `SO_SNDBUF`, and
+reports invalid range or system-call failure. Operating-system rounding is not
+presented as an exact effective-size guarantee, and the setting does not replace
+the application output-memory hard limit. The capacity harness invokes it only
+from the established callback before application sends.
+
+Direct evidence is
+`tests/contract/tcp_connection/test_tcp_connection_socket_options.cpp`; the
+thread contract also requires the owner-loop assertion. The PERF-R1 capacity
+contract freezes one 4 KiB request for Linux and Windows and separately checks
+typed overload, recovery, probe health, and teardown. The non-self-referential
+reviewed-surface checkpoint and compatibility snapshot are bound during the
+candidate refreeze after this implementation state is committed.

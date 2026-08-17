@@ -13,6 +13,19 @@ tag `v0.3.0-rel-c1-refreeze-1` 唯一标识，其 peeled commit 是权威
 attempt 1 的六个 producer 成功，但 aggregate verifier 仍错误地期望一个
 install consumer，因此不能作为 REL-V2 成功证据。
 
+替代候选的 peeled commit 是
+`944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`。REL-V1 已从该 SHA 的 detached
+clean worktree 完成本地门；REL-V2 已由 GitHub Actions run `32007753147`
+attempt 4 完成六个 producer、required artifacts 和 aggregate verifier，全部
+结论为 `success`。当前发布关键路径已推进到 PERF-R1。
+
+PERF-R1 首次远端执行已在同一候选 SHA 上完成，但门禁结论为 `failure`：
+Core benchmark run `32027919772` 与 capacity run `32027919807` 都未产生可接受的
+paired success evidence。当前候选因此仍被冻结但不可晋级；END-R1 未获准启动。
+本地已准备 evidence-tooling/harness remediation，任何采纳后的新提交都会按本计划
+规则使候选任务退回 REL-C1，并需要新的不可变候选 tag 以及 REL-V1/REL-V2/PERF-R1
+全链重验。
+
 长期方向见 `goal.md`。`goal.md` 只定义目标和边界，不授权实现；模块实现仍须由
 `active` intent、rules、contracts、tests 和当前阶段 gate 共同授权。
 
@@ -63,10 +76,20 @@ REL-C1 或使当前候选证据失效。
 - [x] REL-C1 已以 annotated reviewed-surface tag 和独立 candidate freeze tag
   消除候选 commit 自引用，冻结唯一 v0.3 候选，并把完整 SHA 的权威记录放在
   tag object、远端 ref 与 Actions push identity 中。
+- [x] REL-V1 已在 `944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7` 的 detached
+  clean worktree 完成 Windows Debug/Release clean build、各 120/120 CTest、
+  install consumers 各 2/2、focused repeats 共 700/700、36/36 guards、API
+  zero diff 和 inventory evidence；`Not Run` 为 0。
+- [x] REL-V2 已由 run `32007753147` attempt 4 完成 Linux Debug/Release/
+  ASan/UBSan 各 120/120、TSan threading 93/93、Windows IOCP Debug/Release
+  各 120/120、install consumers 2/2/2 和 PacketFramer libFuzzer 1000 units；
+  六个 producer artifacts 与 aggregate artifact 均为 required、非空且可下载，
+  aggregate verifier 通过。
 
 ### 2.2 未完成
 
-- [ ] 同 SHA paired benchmark/capacity；
+- [ ] 同 SHA paired benchmark/capacity（首次 runs `32027919772` / `32027919807`
+  已执行并失败，详见 PERF-R1 执行记录）；
 - [ ] 同 SHA 24/72 小时 endurance；
 - [ ] 许可证决定；
 - [ ] 最终 release decision。
@@ -399,23 +422,31 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 
 ### 11.1 Windows
 
-- [ ] 全新 Debug configure/build；
-- [ ] 全新 Release configure/build；
-- [ ] Debug 全量 CTest；
-- [ ] Release 全量 CTest；
-- [ ] install/package consumer Debug；
-- [ ] install/package consumer Release；
-- [ ] 新 establishment saturation test focused repeat 50；
-- [ ] IOCP final drain、partial write、read storage、AcceptEx pool focused repeats；
-- [ ] 36 个或更新后的全部 repository/API/CI guards；
-- [ ] public API diff 和 CTest inventory evidence。
+- [x] 全新 Debug configure/build；
+- [x] 全新 Release configure/build；
+- [x] Debug 全量 CTest；
+- [x] Release 全量 CTest；
+- [x] install/package consumer Debug；
+- [x] install/package consumer Release；
+- [x] 新 establishment saturation test focused repeat 50；
+- [x] IOCP final drain、partial write、read storage、AcceptEx pool focused repeats；
+- [x] 36 个或更新后的全部 repository/API/CI guards；
+- [x] public API diff 和 CTest inventory evidence。
 
 ### 11.2 结果要求
 
-- [ ] 没有 Not Run；
-- [ ] 没有依赖旧 build tree 的缺失 executable；
-- [ ] 命令、配置、test count、SHA 和日志完整；
-- [ ] 本地结果只作为 preflight，不替代 remote gate。
+- [x] 没有 Not Run；
+- [x] 没有依赖旧 build tree 的缺失 executable；
+- [x] 命令、配置、test count、SHA 和日志完整；
+- [x] 本地结果只作为 preflight，不替代 remote gate。
+
+关闭证据（2026-08-17）：历史执行声明
+**REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。** 已完成。证据目录为
+`G:\gnc-relv1-944f722-run2\rel-v1-evidence`；`summary.json` SHA-256 是
+`21061efc2ef82cf16c3fd76af44c46dfef4b4e1299b9fd370a9a2e96321cff89`，
+证据索引 `SHA256SUMS.txt` SHA-256 是
+`74c5aef414beaf7cd0afa3861fdc3cefa919ed5a1efd9050f858ec435e212c84`。
+本地门只作为 preflight；其后独立的 REL-V2 远端门已经完成。
 
 ## 12. REL-V2：候选同 SHA 远端 CI
 
@@ -424,26 +455,35 @@ header/target/fingerprint 与真实 Git tree 一致。freeze tag 不是 release 
 
 必须成功：
 
-- [ ] Linux CMake Debug；
-- [ ] Linux Release；
-- [ ] Linux ASan/UBSan；
-- [ ] Linux TSan threading set；
-- [ ] Windows MSVC IOCP Debug；
-- [ ] Windows MSVC IOCP Release；
-- [ ] install/package consumers；
-- [ ] PacketFramer libFuzzer smoke；
-- [ ] aggregate evidence-set verifier。
+- [x] Linux CMake Debug；
+- [x] Linux Release；
+- [x] Linux ASan/UBSan；
+- [x] Linux TSan threading set；
+- [x] Windows MSVC IOCP Debug；
+- [x] Windows MSVC IOCP Release；
+- [x] install/package consumers；
+- [x] PacketFramer libFuzzer smoke；
+- [x] aggregate evidence-set verifier。
 
 每个 producer 必须：
 
-- checkout 最终 `CANDIDATE_SHA`；
-- 写入 success manifest；
-- 记录真实命令；
-- 保存 CTest/API/fuzz/install evidence；
-- 使用 canonical artifact name；
-- artifact 可下载且 hash 可验证。
+- [x] checkout 最终 `CANDIDATE_SHA`；
+- [x] 写入 success manifest；
+- [x] 记录真实命令；
+- [x] 保存 CTest/API/fuzz/install evidence；
+- [x] 使用 canonical artifact name；
+- [x] artifact 可下载且 hash 可验证。
 
 queued、cancelled、billing failure、checkout failure、artifact quota failure 和 best-effort warning 都不是成功证据。
+
+关闭证据（2026-08-17）：GitHub Actions run `32007753147` attempt 4 的 head SHA
+严格等于 `944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`。六个 producer jobs 和
+`Aggregate six-job CI evidence` 全部为 `success`；artifact policy 是 `required`，
+六个 producer artifacts 与一个 aggregate artifact 均非空、未过期且已重新下载。
+候选源码中的 `tools/verify_ci_evidence_set.py` 对下载副本重验成功，本地结果与
+远端 aggregate manifest 除 `generated_at_utc` 外完全一致。远端 aggregate manifest
+SHA-256 是
+`f6b8c96b4e8afac629bf0e2a1879931f7ebfb81dc966f3cb6bae032ba8bcfbdc`。
 
 ## 13. PERF-R1：候选性能与容量收口
 
@@ -452,14 +492,15 @@ queued、cancelled、billing failure、checkout failure、artifact quota failure
 
 ### 13.1 Core benchmark
 
-- [ ] Linux/epoll 和 Windows/IOCP 使用相同候选 SHA；
-- [ ] baseline 和 candidate 在同 runner、同 toolchain class、同参数执行；
-- [ ] canonical performance matrix 三次重复；
-- [ ] core-capacity matrix 三次重复；
-- [ ] slow-client overload/recovery；
-- [ ] idle 1k/10k、small echo 1/2/4 workers、sustained churn；
+- [x] Linux/epoll 和 Windows/IOCP 使用相同候选 SHA；
+- [x] baseline 和 candidate 在同 runner、同 toolchain class、同矩阵命令执行；
+- [x] canonical performance matrix 三次重复；
+- [x] core-capacity matrix 三次重复；
+- [x] slow-client overload/recovery；
+- [x] idle 1k/10k、small echo 1/2/4 workers、sustained churn；
 - [ ] paired evidence verifier 通过；
-- [ ] 对 accept topology 给出保留 base-loop accept 或进入独立设计轮的明确结论。
+- [x] accept topology 结论为保留 single-listener/base-loop accept，不进入
+  `SO_REUSEPORT` 独立设计轮。
 
 ### 13.2 Capacity gate
 
@@ -468,7 +509,7 @@ queued、cancelled、billing failure、checkout failure、artifact quota failure
 - [ ] recovery stable window 达标；
 - [ ] 所有 terminal rejection 可归因；
 - [ ] 普通 gate 通过后再决定是否运行 dedicated 100k profile；
-- [ ] 不用降低阈值或删除失败样本制造通过。
+- [x] 未降低阈值、未删除失败样本、未以重跑覆盖确定性失败。
 
 ### 13.3 关闭门
 
@@ -476,6 +517,104 @@ queued、cancelled、billing failure、checkout failure、artifact quota failure
 - [ ] paired identity/parameter/hash verifier success；
 - [ ] regression decision 有数字和 reviewer；
 - [ ] 结果写入 migration status，旧 seed 明确标为 historical。
+
+### 13.4 首次执行记录（2026-08-17）
+
+候选身份：annotated tag `v0.3.0-rel-c1-refreeze-1` peeled commit
+`944f7222d7aa7a36e12ffda4ad038ec3ae7d30d7`。
+
+Core benchmark run `32027919772` attempt 1：
+
+- Linux/epoll 与 Windows/IOCP producer 都完整生成 canonical performance
+  12 scenarios × 3 repetitions 和 core-capacity 12 scenarios × 3 repetitions；
+- 两个平台都在 `Enforce same-runner performance budgets` 被拒绝，直接原因不是
+  数值超预算，而是比较器把 frozen `gamenet.core_benchmark.v1` baseline 的参数对象
+  与 candidate v2 的新增参数做全量相等比较，首个错误均为
+  `core.connections-256: baseline/candidate parameters differ`；
+- 下载原始 artifacts 后，以 fail-closed 的 v1 → v2 参数兼容规则重算：旧参数必须
+  继续存在且值相等，只允许 candidate 增加 v2 字段。四份数值结果全部为 `pass`：
+  Linux performance 21/21 metrics、Windows performance 21/21、Linux
+  core-capacity 30/30、Windows core-capacity 30/30；
+- 最接近预算的 performance 指标分别为 Linux
+  `phase4.broadcast-fanout.operations_per_second`：baseline median
+  `4,678,121.459`、candidate `3,914,200.084333`、threshold
+  `3,274,685.0213`，以及 Windows
+  `phase4.framing.throughput_mib_per_second`：baseline `2,078.244`、candidate
+  `1,750.409601`、threshold `1,558.683`；
+- core-capacity 两个平台最接近预算的指标均为
+  `core.connection-churn-1000.churn_attempts_per_second`：Linux baseline
+  `999.077654706`、candidate `998.962572773`、threshold `899.1698892354`；
+  Windows baseline `992.862786006`、candidate `992.8523566`、threshold
+  `893.5765074054`；
+- 对同一 Linux candidate 原始矩阵运行 accept-topology evaluator，实际 rate ratio
+  为 `0.998962572773`，`rate_missed=false`、`accept_saturated=false`，结论
+  `retain_single_listener`；
+- 以上是失败 producer 原始样本的 remediation review，不替代远端 producer 与
+  paired verifier success。原 verifier 仍正确拒绝：
+  `benchmark job did not succeed: linux-release-benchmark`。
+
+Capacity run `32027919807` attempt 1：
+
+- Linux producer 在第一个 `candidate-10k` sample 创建约 1,000 个真实 TCP client
+  后，用 `fd_set/select()` 等待新连接；数值 fd 超过 `FD_SETSIZE`，glibc 以
+  `bit out of range 0 - FD_SETSIZE` 终止。这是 benchmark client harness 缺陷，
+  不是 runner interruption；
+- 本地 remediation 把 Linux 单 socket connect wait 改为 `poll()`，Windows 继续
+  使用 WinSock `select()`。Windows Release、WSL Linux Release 构建和
+  `tests/cmake/test_capacity_profile_contract.py` 均通过；
+- 修复后 WSL/Linux 能跑完整的原 `candidate-10k` 参数，但 10 × 32 KiB/connection
+  可全部进入 Linux kernel send buffer：10,000 endpoints 全部 accepted、
+  `pending_peak_bytes=32,768,000`、`overloaded_connections=0`，最终因
+  `overload_observed=false` 按合同失败。这证明当前 32/64/256 KiB profile 只由
+  历史 Windows seed 支撑，尚未形成 Linux/epoll 可重复的 typed-overload profile；
+- 一个不作为 gate evidence 的 10-client feasibility probe 保持 32/64/256 KiB
+  watermarks、把 payload 提高到 256 KiB 后，两平台都出现 typed rejection：Linux
+  70 accepted/30 dropped，Windows 30/70；这只是后续 profile 设计输入。它会把
+  candidate 的 logical payload 从约 312.5 MiB 提高到约 2.44 GiB，必须先审查
+  hosted-runner 资源和 dedicated-100k 放大效应，不能直接写入固定 profile；
+- Windows producer sample 1 通过：8,252 accepted、1,748
+  `EndpointOverloaded`、pending peak `262,144,000` bytes、500/500 healthy probes、
+  16 workers 回收 1,000/1,000 sockets；sample 2 在远端约 120 秒后失败，旧 runner
+  未保留该失败 JSON。本地 Windows 同参数三次均通过，三次均为 8,252/1,748、
+  pending peak `262,144,000`、500/500 probes，说明远端失败可重试但不能弥补
+  Linux profile blocker；
+- 两个平台都没有成功 manifest，paired verifier 正确拒绝：
+  `expected 2 capacity manifests, got 0`；普通 gate 未通过，因此没有触发
+  dedicated 100k profile。
+
+当前 decision：PERF-R1 保持 open，END-R1 保持 blocked-by-dependency。已准备的
+本地 remediation 包含 Linux high-fd connect wait 和 v1 → v2 performance
+parameter compatibility 及其负向合同；在 profile 重新获得 Linux/Windows 同参数
+typed-overload 证据前，不提交“通过”结论。若采纳任何代码/profile 修复，必须返回
+REL-C1 冻结新 SHA，而不能移动现有候选 tag 或复用本次失败 attempt。
+
+### 13.5 remediation 本地验证记录（2026-08-17）
+
+- performance comparator 已限定为唯一受支持的 Core v1 → v2 bridge：所有 legacy
+  parameter 必须继续存在且值相等，只允许 candidate 增加 v2 字段；同 schema 仍要求
+  参数对象完全相等。正向与 shared-parameter drift 负向 fixture 已在 Windows/WSL
+  通过；首次失败 artifacts 的四份数值重算仍全部通过预算；
+- Linux client connect wait 已由 `fd_set/select()` 改为单 fd `poll()`，避免 1,000+
+  descriptor 越过 `FD_SETSIZE`；Windows 保留 WinSock `select()`；
+- 为保持 32 KiB payload、32/64/256 KiB application watermarks 和 dedicated-100k
+  逻辑流量不放大，新增 owner-loop-only
+  `TcpConnection::setSendBufferSize(std::size_t)`。它只请求有限 kernel send buffer，
+  不改变应用层 output admission、ownership、callback 顺序或 lifecycle；稳定 API
+  fingerprint、intent、rules、直接 socket-option 合同和兼容性审查已同步；
+- candidate/dedicated profile 冻结相同 `server_send_buffer_bytes=4096`。三次 10-client
+  微型重复在两平台都稳定产生完全可归因的 `EndpointOverloaded`；
+- 完整本地 `candidate-10k` 三次重复均通过严格 v3 validator：Windows 每次
+  8,252 accepted / 1,748 typed overload、pending peak 262,144,000 B；WSL Linux
+  每次 8,000 / 2,000、pending peak 256,000,000 B。六个样本都完成 500/500
+  healthy probes、16 workers 回收 1,000/1,000 sockets、pending 归零和 teardown
+  release；
+- 以上目录 `G:\gnc-perf-r1-remediation-4k` 是带 synthetic identity 的 precommit
+  feasibility evidence，不是 candidate/release evidence。
+
+当前 decision：profile remediation 已获得跨平台、同参数、三重复本地可行性证据，
+但 PERF-R1 仍为 open。稳定 surface 必须先绑定新的不可变 reviewed checkpoint，随后
+REL-C1 冻结新 candidate SHA，并从该 SHA 重新完成 REL-V1、REL-V2 与 PERF-R1；旧
+tag 和失败 run 保持不可变，END-R1 继续 blocked-by-dependency。
 
 ## 14. END-R1：候选 endurance
 
@@ -511,11 +650,11 @@ queued、cancelled、billing failure、checkout failure、artifact quota failure
 
 只有以下全部满足才能进入 release decision：
 
-- [ ] P1-01、P2-01 有代码和测试关闭证据；
-- [ ] stable API review 通过；
-- [ ] 唯一候选 SHA 未发生漂移；
-- [ ] local clean gate 通过；
-- [ ] six-job remote CI 与 aggregate 通过；
+- [x] P1-01、P2-01 有代码和测试关闭证据；
+- [x] stable API review 通过；
+- [x] 唯一候选 SHA 未发生漂移；
+- [x] local clean gate 通过；
+- [x] six-job remote CI 与 aggregate 通过；
 - [ ] paired benchmark/capacity 通过；
 - [ ] 24/72 小时 endurance 通过；
 - [ ] 文档与 manifest 同 SHA；
@@ -721,9 +860,16 @@ completion 或 stranded Accepted operation；Linux Readiness 合同无回归。
 
 下一项任务是：
 
-> **REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**
+> **PERF-R1 remediation：审查并落地 evidence-tooling/harness 修复，重新设计且验证
+> Linux/Windows 同参数 typed-overload capacity profile，然后返回 REL-C1 冻结新的
+> 唯一候选 SHA。**
 
-REL-C1 已冻结包含 M3-R2、API-R1、post-review TCP remediation 与治理同步的
-唯一替代候选。REL-V1 必须从 `v0.3.0-rel-c1-refreeze-1^{commit}` 的 clean checkout
-执行 Windows Debug/Release、120 项 CTest、install consumers、focused repeats、
-全部 guards、public API zero diff 与 inventory evidence；完成前不能进入 REL-V2。
+REL-V1 本地 clean gate 与 REL-V2 同 SHA 远端六 producer/aggregate gate 已完成。
+当前 candidate 的 PERF-R1 runs `32027919772` / `32027919807` 已失败，不能进入
+END-R1。现有失败 artifacts 继续绑定
+`v0.3.0-rel-c1-refreeze-1^{commit}`；一旦 remediation 形成新提交，候选自动退回
+REL-C1，并需以新 tag 重新完成 REL-V1、REL-V2 和 PERF-R1。新的 PERF-R1 仍必须在
+Linux/epoll 与 Windows/IOCP 上使用同参数、同 runner/toolchain class 的
+baseline/candidate 运行 canonical performance matrix、core-capacity matrix 和
+mixed-pressure-recovery，并由 paired identity/parameter/hash verifier 给出可审查的
+regression decision；完成前不能进入 END-R1。

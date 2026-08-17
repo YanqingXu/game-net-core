@@ -74,6 +74,7 @@ def valid_document() -> dict[str, object]:
             "threads": 2,
             "messages": 64,
             "payload_bytes": 262144,
+            "server_send_buffer_bytes": 0,
             "pressure_settle_ms": 500,
             "recovery_stable_ms": 250,
             "timeout_ms": 30000,
@@ -232,6 +233,7 @@ def capacity_gate_document(
             "threads",
             "messages",
             "payload_bytes",
+            "server_send_buffer_bytes",
             "pressure_settle_ms",
             "recovery_stable_ms",
             "timeout_ms",
@@ -404,6 +406,9 @@ def main() -> None:
     source = repo_root / "benchmarks" / "capacity" / "main.cpp"
     validator = repo_root / "tools" / "validate_capacity_profile.py"
     intent = repo_root / "intents" / "modules" / "broadcast.intent.md"
+    tcp_intent = (
+        repo_root / "intents" / "modules" / "tcp_connection.intent.md"
+    )
     release_intent = (
         repo_root
         / "intents"
@@ -411,6 +416,7 @@ def main() -> None:
         / "production_candidate_release.intent.md"
     )
     testing_rules = repo_root / "rules" / "testing_rules.md"
+    thread_rules = repo_root / "rules" / "thread_affinity_rules.md"
     docs = repo_root / "docs" / "development" / "capacity_profile.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     capacity_workflow = (
@@ -428,8 +434,10 @@ def main() -> None:
     source_text = source.read_text(encoding="utf-8")
     validator_text = validator.read_text(encoding="utf-8")
     intent_text = intent.read_text(encoding="utf-8")
+    tcp_intent_text = tcp_intent.read_text(encoding="utf-8")
     release_intent_text = release_intent.read_text(encoding="utf-8")
     rules_text = testing_rules.read_text(encoding="utf-8")
+    thread_rules_text = thread_rules.read_text(encoding="utf-8")
     docs_text = docs.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     capacity_workflow_text = capacity_workflow.read_text(
@@ -468,6 +476,12 @@ def main() -> None:
         "sampledWorkingSetPeak",
         "HealthyProbePool",
         "connectToWithDeadline",
+        "#include <poll.h>",
+        "pollfd descriptor{",
+        "::poll(",
+        "poll(connect): invalid socket",
+        "--server-send-buffer-bytes",
+        "setSendBufferSize",
         "healthyProbeAccounted",
         "drainAvailable",
         "readerClosedSockets",
@@ -483,6 +497,7 @@ def main() -> None:
         "healthy probe accounting is inconsistent",
         "recovery reader accounting is inconsistent",
         "RSS is deliberately observational",
+        "server send buffer exceeds the native int range",
     ):
         require(validator_text, fragment, validator)
     require(intent_text, "gamenet_capacity_profile --scenario slow-broadcast-recovery", intent)
@@ -491,6 +506,16 @@ def main() -> None:
         intent_text,
         "fixed-size recovery-reader pool",
         intent,
+    )
+    require(
+        intent_text,
+        "`SO_SNDBUF`",
+        intent,
+    )
+    require(
+        tcp_intent_text,
+        "test_tcp_connection_socket_options.cpp",
+        tcp_intent,
     )
     require(
         release_intent_text,
@@ -509,6 +534,16 @@ def main() -> None:
     )
     require(
         rules_text,
+        "reviewed finite server send-buffer",
+        testing_rules,
+    )
+    require(
+        thread_rules_text,
+        "TcpConnection::setSendBufferSize()",
+        thread_rules,
+    )
+    require(
+        rules_text,
         "a production promotion artifact must revalidate",
         testing_rules,
     )
@@ -522,6 +557,8 @@ def main() -> None:
         "M3-P1-D scale seed",
         "gamenet.capacity_profile.v3",
         "fixed-size recovery-reader pool",
+        "4 KiB server `SO_SNDBUF` request",
+        "2026-08-17 PERF-R1 remediation preflight",
     ):
         require(docs_text, fragment, docs)
     require(
@@ -551,6 +588,7 @@ def main() -> None:
         '"dedicated-100k"',
         "connections=1000",
         "connections=10000",
+        '"server_send_buffer_bytes": 4096',
         "validate_gate_document",
         "capacity gate requires the scale-ready v3 schema",
     ):
@@ -588,6 +626,12 @@ def main() -> None:
         expected_build_type="Release",
         expected_connections=4,
     )
+    legacy_v1_document = copy.deepcopy(document)
+    legacy_v1_document["parameters"].pop("server_send_buffer_bytes")  # type: ignore[union-attr]
+    capacity_validator.validate_document(
+        legacy_v1_document,
+        label="legacy v1 without send-buffer evidence",
+    )
     mixed_document = valid_mixed_document()
     capacity_validator.validate_document(
         mixed_document,
@@ -617,6 +661,11 @@ def main() -> None:
         ("fixed-storage leak", ("process", "fixed_storage_after_teardown", "total_retained_bytes"), 1),
         ("incoherent RSS peak", ("process", "working_set_peak_bytes"), 14999999),
         ("false producer check", ("checks", "passed"), False),
+        (
+            "server send buffer native overflow",
+            ("parameters", "server_send_buffer_bytes"),
+            2_147_483_648,
+        ),
     )
     for label, path, value in mutations:
         mutated = copy.deepcopy(document)
@@ -728,10 +777,12 @@ def main() -> None:
     assert candidate_profile.endpoint_attempts == 10_000
     assert candidate_profile.repetitions == 3
     assert candidate_profile.parameters["connections"] == 1_000
+    assert candidate_profile.parameters["server_send_buffer_bytes"] == 4_096
     assert candidate_profile.parameters["reader_concurrency_limit"] == 16
     assert dedicated_profile.endpoint_attempts == 100_000
     assert dedicated_profile.repetitions == 1
     assert dedicated_profile.parameters["connections"] == 10_000
+    assert dedicated_profile.parameters["server_send_buffer_bytes"] == 4_096
     assert dedicated_profile.parameters["reader_concurrency_limit"] == 64
 
     with tempfile.TemporaryDirectory(

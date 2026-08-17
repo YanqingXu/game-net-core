@@ -38,6 +38,13 @@ def main() -> None:
         / "tcp_connection"
         / "test_tcp_connection_cross_thread_state.cpp"
     )
+    socket_options_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "tcp_connection"
+        / "test_tcp_connection_socket_options.cpp"
+    )
     tests_cmake = repo_root / "tests" / "CMakeLists.txt"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     long_soak_workflow = repo_root / ".github" / "workflows" / "long-soak.yml"
@@ -47,6 +54,7 @@ def main() -> None:
     source_text = source.read_text(encoding="utf-8")
     server_source_text = server_source.read_text(encoding="utf-8")
     contract_text = contract_test.read_text(encoding="utf-8")
+    socket_options_text = socket_options_test.read_text(encoding="utf-8")
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     long_soak_workflow_text = long_soak_workflow.read_text(encoding="utf-8")
@@ -73,6 +81,7 @@ def main() -> None:
 
     for signature in (
         "void TcpConnection::setTcpNoDelay(bool on)",
+        "void TcpConnection::setSendBufferSize(std::size_t bytes)",
         "void TcpConnection::setConnectionCallback(ConnectionCallback cb)",
         "void TcpConnection::setMessageCallback(MessageCallback cb)",
         "void TcpConnection::setHighWaterMarkCallback(HighWaterMarkCallback cb, std::size_t highWaterMark)",
@@ -98,6 +107,15 @@ def main() -> None:
     require(
         "connection->connected()" in contract_text and "connection->disconnected()" in contract_text,
         "cross-thread contract test must observe both public connection states",
+    )
+    require(
+        "setSendBufferSize" in socket_options_text
+        and "wrongThreadRejected" in socket_options_text,
+        "socket-option contract must prove positive and wrong-thread behavior",
+    )
+    require(
+        "test_tcp_connection_socket_options.cpp threading lifecycle" in tests_cmake_text,
+        "socket-option contract must be in threading and lifecycle CTest slices",
     )
     require(
         "test_tcp_connection_cross_thread_state.cpp threading lifecycle" in tests_cmake_text,

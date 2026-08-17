@@ -40,6 +40,7 @@
 #else
 #include <fcntl.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <unistd.h>
 #endif
 
@@ -61,6 +62,7 @@ struct Config {
     std::size_t lowWaterBytes{256U * 1024U};
     std::size_t highWaterBytes{512U * 1024U};
     std::size_t hardLimitBytes{2U * 1024U * 1024U};
+    std::size_t serverSendBufferBytes{0};
     std::size_t recoveryThresholdBytes{0};
     std::size_t iocpAcceptDepth{8};
     std::chrono::milliseconds pressureSettle{500};
@@ -289,6 +291,7 @@ void printUsage(std::ostream& output) {
         << "  --low-water-bytes N      connection recovery watermark\n"
         << "  --high-water-bytes N     connection read-pause watermark\n"
         << "  --hard-limit-bytes N     connection pending-output limit\n"
+        << "  --server-send-buffer-bytes N (0 keeps the OS default)\n"
         << "  --recovery-threshold-bytes N\n"
         << "  --pressure-settle-ms N\n"
         << "  --recovery-stable-ms N\n"
@@ -336,6 +339,14 @@ Config parseArgs(int argc, char* argv[]) {
         } else if (option == "--hard-limit-bytes") {
             config.hardLimitBytes =
                 parseSize(value, option, 1, 1024U * 1024U * 1024U);
+        } else if (option == "--server-send-buffer-bytes") {
+            config.serverSendBufferBytes =
+                parseSize(
+                    value,
+                    option,
+                    0,
+                    static_cast<std::size_t>(
+                        (std::numeric_limits<int>::max)()));
         } else if (option == "--recovery-threshold-bytes") {
             config.recoveryThresholdBytes =
                 parseSize(value, option, 0, 1024U * 1024U * 1024U);
@@ -771,6 +782,7 @@ private:
                 throw std::runtime_error(
                     "connect: deadline expired");
             }
+#ifdef _WIN32
             const auto remainingMicroseconds =
                 std::chrono::duration_cast<
                     std::chrono::microseconds>(remaining);
@@ -787,18 +799,39 @@ private:
             FD_ZERO(&failed);
             FD_SET(fd_, &writable);
             FD_SET(fd_, &failed);
-#ifdef _WIN32
             constexpr int descriptorCount = 0;
-#else
-            const int descriptorCount = fd_ + 1;
-#endif
             const int ready = ::select(
                 descriptorCount,
                 nullptr,
                 &writable,
                 &failed,
                 &timeoutValue);
+#else
+            const auto remainingMilliseconds =
+                std::chrono::ceil<std::chrono::milliseconds>(
+                    remaining);
+            const auto boundedTimeout = std::min(
+                remainingMilliseconds.count(),
+                static_cast<decltype(
+                    remainingMilliseconds.count())>(
+                    std::numeric_limits<int>::max()));
+            pollfd descriptor{
+                .fd = fd_,
+                .events = POLLOUT,
+                .revents = 0,
+            };
+            const int ready = ::poll(
+                &descriptor,
+                1,
+                static_cast<int>(boundedTimeout));
+#endif
             if (ready > 0) {
+#ifndef _WIN32
+                if ((descriptor.revents & POLLNVAL) != 0) {
+                    throw std::runtime_error(
+                        "poll(connect): invalid socket");
+                }
+#endif
                 const int socketError =
                     gamenet::net::sockets::getSocketError(fd_);
                 if (socketError != 0) {
@@ -813,14 +846,18 @@ private:
                 throw std::runtime_error(
                     "connect: deadline expired");
             }
-            const int selectError =
+            const int waitError =
                 gamenet::net::sockets::lastError();
             if (!gamenet::net::sockets::isInterrupted(
-                    selectError)) {
+                    waitError)) {
                 throw std::runtime_error(
+#ifdef _WIN32
                     "select(connect): " +
+#else
+                    "poll(connect): " +
+#endif
                     gamenet::net::sockets::errorMessage(
-                        selectError));
+                        waitError));
             }
         }
     }
@@ -1844,6 +1881,8 @@ void printDocument(
         << "    \"threads\": " << config.threads << ",\n"
         << "    \"messages\": " << config.messages << ",\n"
         << "    \"payload_bytes\": " << config.payloadBytes << ",\n"
+        << "    \"server_send_buffer_bytes\": "
+        << config.serverSendBufferBytes << ",\n"
         << "    \"pressure_settle_ms\": "
         << config.pressureSettle.count() << ",\n"
         << "    \"recovery_stable_ms\": "
@@ -2236,12 +2275,16 @@ int run(const Config& config) {
                     state.markDisconnected(connection.get());
                     return;
                 }
-                if (state.classifyConnected(
-                        connection.get(),
-                        config.connections)) {
-                    return;
-                }
                 try {
+                    if (config.serverSendBufferBytes != 0) {
+                        connection->setSendBufferSize(
+                            config.serverSendBufferBytes);
+                    }
+                    if (state.classifyConnected(
+                            connection.get(),
+                            config.connections)) {
+                        return;
+                    }
                     auto endpoint = std::make_shared<
                         gamenet::transport::TcpTransportEndpoint>(
                         gamenet::transport::TransportSessionId{

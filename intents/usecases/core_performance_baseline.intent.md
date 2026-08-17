@@ -37,6 +37,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - report connection count, EventLoop worker count, backend, completion mode,
   build type, IOCP accept depth, parameters, and measurements as one versioned
   JSON document
+- compare a frozen Core v1 baseline with a Core v2 candidate by requiring every
+  legacy parameter to remain present and equal while allowing only candidate
+  v2 additions; any shared-parameter drift remains a fail-closed evidence error
 - provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
   and 4/16-slow-client Release matrix three times for both baseline and candidate
 - keep that reviewed 12-scenario release-regression inventory frozen while a

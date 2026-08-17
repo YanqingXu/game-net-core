@@ -115,6 +115,7 @@ add_gamenet_test(contract tcp_server ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_se
 add_gamenet_test(contract timer_queue ${CMAKE_CURRENT_SOURCE_DIR}/contract/timer_queue/test_timer_queue.cpp threading lifecycle)
 add_gamenet_test(contract timer_queue ${CMAKE_CURRENT_SOURCE_DIR}/contract/timer_queue/test_deadline_queue.cpp threading lifecycle)
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_lifecycle.cpp lifecycle)
+add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_socket_options.cpp threading lifecycle)
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp lifecycle)
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_queue_saturation.cpp threading lifecycle)
 add_gamenet_test(contract tcp_connection ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp lifecycle)

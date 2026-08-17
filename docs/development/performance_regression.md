@@ -13,6 +13,13 @@ performance measurements; it never invents v2 admission accounting for the v1
 baseline. After the v2 benchmark anchor is merged, the next reviewed baseline
 must also be v2.
 
+For the temporary v1-to-v2 bridge, parameter comparison is asymmetric but
+fail-closed: every baseline parameter must still exist with the same value in
+the candidate, while documented v2-only parameters may be added. A missing or
+changed legacy value is an evidence error, not a performance failure or an
+implicit profile update. Same-schema comparisons continue to require exact
+parameter-object equality.
+
 ## Matrix
 
 `tools/run_performance_matrix.py` runs 12 fixed Release scenarios three times

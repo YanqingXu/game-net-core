@@ -132,6 +132,10 @@ state.
   server-close, zero-failure healthy probes, a common paced interval, and
   internally consistent connect/probe P99 and attempt-rate measurements before
   the slow/Broadcast recovery result can pass.
+- Candidate and dedicated mixed profiles request the same finite server
+  `SO_SNDBUF` in each owner-loop established callback. This keeps the 32 KiB
+  payload/eight-payload application limit while making typed overload
+  independent of the host kernel's default send-buffer capacity.
 - The scale-ready mixed profile hands every slow client socket to exactly one
   member of a fixed-size recovery-reader pool after the pressure sample. Each
   worker owns a stable disjoint socket shard, uses nonblocking bounded reads,

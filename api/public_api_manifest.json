@@ -118,7 +118,7 @@
     "include/gamenet/core/net/SocketsOps.h": "01f41163df8a3b356808c0a6a9ecbb75aaa6174a63ab81305ce1d8693aa8e53d",
     "include/gamenet/core/net/TcpClient.h": "f69080c0a61572251ca8c90b6aa6ca4804b90c66868dc33ea33196a92d45ae9f",
     "include/gamenet/core/net/TcpClientControl.h": "b94a3da603300fc0742209ad558f9cf0e66197a1ea10ca1abec4a5be29786c2c",
-    "include/gamenet/core/net/TcpConnection.h": "3569bb5482922df1419843c549b36786d424691de9296afbbe36e5689cf5b381",
+    "include/gamenet/core/net/TcpConnection.h": "86430ee090250e014d47336ab2a0e5ffbdf0c9a4ba555e6c8e8d04788b5e7552",
     "include/gamenet/core/net/TcpConnectionClose.h": "d8441b5901bb3639412c2b527581164890d959ed63bda870dcd18f45ca32e1c6",
     "include/gamenet/core/net/TcpConnectionOptions.h": "519691853ea869a965864ec77aea794cbda6ec4bfe587f0dc0ad7edf56d793b7",
     "include/gamenet/core/net/TcpOutputMemoryBudget.h": "48dfb0dfac06bcc03025ef77a29e3807b1155fc597349b596e7066e3ded18a94",

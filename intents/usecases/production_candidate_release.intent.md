@@ -28,7 +28,9 @@ matrix, and immutable evidence are explicit and machine checked.
 - compare fixed benchmark scenarios against same-platform baselines with
   explicit regression budgets
 - retain paired Linux/Windows 10k mixed slow-reader/Broadcast capacity evidence
-  with exact healthy-probe and bounded recovery-reader lifecycle accounting
+  with exact healthy-probe and bounded recovery-reader lifecycle accounting;
+  freeze the same finite server send-buffer request on both platforms so typed
+  application overload does not depend on each host's kernel default
 - keep the 100k endpoint-attempt profile on explicitly labeled dedicated
   capacity runners; it is not an ordinary hosted-CI or cross-host score gate
 - retain structured 24-hour candidate and 72-hour release endurance evidence
@@ -84,6 +86,8 @@ matrix, and immutable evidence are explicit and machine checked.
   server mutation through the existing owner-loop APIs
 - release automation owns evidence files only; it does not own runtime network
   objects or alter callback affinity
+- the capacity server applies its finite send-buffer request inside each
+  connection's established callback on that connection's owner loop
 - this intent adds no re-entrant runtime callback before the metrics exporter
   contract is promoted and tested
 

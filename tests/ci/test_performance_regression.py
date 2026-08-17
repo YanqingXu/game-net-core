@@ -26,13 +26,30 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_matrix(root: Path, sha: str, runner, budgets, scale: float = 1.0) -> None:
+def write_matrix(
+    root: Path,
+    sha: str,
+    runner,
+    budgets,
+    scale: float = 1.0,
+    *,
+    legacy_core_v1: bool = False,
+    legacy_parameter_drift: bool = False,
+) -> None:
     root.mkdir()
     scenarios = []
     budget_by_key = {item["key"]: item for item in budgets["scenarios"]}
     for scenario in runner.SCENARIOS:
         key = f"{scenario.group}.{scenario.key}"
         parameters = {"fixture_key": key}
+        schema = scenario.schema
+        if scenario.group == "core":
+            if legacy_core_v1:
+                schema = "gamenet.core_benchmark.v1"
+            else:
+                parameters["v2_only_default"] = 1
+                if legacy_parameter_drift:
+                    parameters["fixture_key"] += "-drift"
         samples = []
         for repetition in range(1, budgets["repetitions"] + 1):
             measurements = {
@@ -40,7 +57,7 @@ def write_matrix(root: Path, sha: str, runner, budgets, scale: float = 1.0) -> N
                 for metric in budget_by_key[key]["metrics"]
             }
             document = {
-                "schema": scenario.schema,
+                "schema": schema,
                 "status": "ok",
                 "error": None,
                 "scenario": scenario.reported_scenario,
@@ -59,7 +76,7 @@ def write_matrix(root: Path, sha: str, runner, budgets, scale: float = 1.0) -> N
             "key": key,
             "group": scenario.group,
             "reported_scenario": scenario.reported_scenario,
-            "schema": scenario.schema,
+            "schema": schema,
             "parameters": parameters,
             "samples": samples,
         })
@@ -216,7 +233,13 @@ def main() -> None:
         baseline = root / "baseline"
         candidate = root / "candidate"
         output = root / "regression.json"
-        write_matrix(baseline, BASELINE_SHA, runner, budgets)
+        write_matrix(
+            baseline,
+            BASELINE_SHA,
+            runner,
+            budgets,
+            legacy_core_v1=True,
+        )
         write_matrix(candidate, CANDIDATE_SHA, runner, budgets)
         command = [
             sys.executable,
@@ -238,6 +261,32 @@ def main() -> None:
         assert len(evidence["comparisons"]) == 12
         assert all(len(metric["candidate_samples"]) == 3
                    for scenario in evidence["comparisons"] for metric in scenario["metrics"])
+        core_comparison = next(
+            item for item in evidence["comparisons"]
+            if item["key"].startswith("core.")
+        )
+        assert core_comparison["baseline_schema"] == "gamenet.core_benchmark.v1"
+        assert core_comparison["candidate_schema"] == "gamenet.core_benchmark.v2"
+        assert core_comparison["parameters"]["v2_only_default"] == 1
+
+        candidate_drift = root / "candidate-drift"
+        write_matrix(
+            candidate_drift,
+            CANDIDATE_SHA,
+            runner,
+            budgets,
+            legacy_parameter_drift=True,
+        )
+        drift_command = list(command)
+        drift_command[drift_command.index(str(candidate))] = str(candidate_drift)
+        drift = subprocess.run(
+            drift_command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert drift.returncode == 2, drift.stderr
+        assert "legacy parameter fixture_key differs" in drift.stderr
 
         first_budget = budgets["scenarios"][0]
         first_metric = first_budget["metrics"][0]

@@ -231,9 +231,11 @@ For lifecycle-sensitive modules, tests should include:
   before reporting recovery
 - the scale-ready mixed capacity profile must recover slow clients through a
   fixed-size nonblocking reader pool with stable disjoint socket ownership;
-  exact worker/assigned/closed counts must converge before teardown, and 10k
-  candidate versus 100k dedicated endpoint-attempt parameter drift must be
-  rejected by structured evidence guards
+  exact worker/assigned/closed counts must converge before teardown; candidate
+  and dedicated runs must record the same reviewed finite server send-buffer
+  request so Linux and Windows typed overload is independent of OS defaults;
+  and 10k candidate versus 100k dedicated endpoint-attempt parameter drift
+  must be rejected by structured evidence guards
 - a production promotion artifact must revalidate retained raw capacity and
   endurance evidence rather than trusting a copied summary; candidate mode
   requires 10k plus 24h, release mode requires dedicated 100k plus same-SHA

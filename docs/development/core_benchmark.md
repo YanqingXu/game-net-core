@@ -224,7 +224,9 @@ The frozen performance baseline still emits `gamenet.core_benchmark.v1`.
 The matrix runner accepts v1 only for that reviewed baseline and v2 for the
 candidate. Relative regression compares their common reviewed performance
 metrics; v2 admission and recovery accounting is validated independently and
-is never inferred for v1 samples.
+is never inferred for v1 samples. The comparator requires every v1 parameter
+to be present and equal in the v2 candidate, permits only additional v2
+parameters, and rejects any legacy parameter drift as malformed evidence.
 
 ## Evidence Discipline
 
