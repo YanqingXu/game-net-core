@@ -43,9 +43,12 @@ to annotated tag `api-r1-perf-r1-reviewed-surface` and peeled commit
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
-`mini_trantor` project. The active execution front is now ARCH-G1, followed
-directly by IOE-R1; RTM-R1 Profile contracts are prepared in parallel. Candidate
-freeze, REL-V1 and release packaging are not development prerequisites.
+`mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
+intents, an accepted ADR, a semantic-coupling inventory, a concrete test map,
+and a dual-platform local baseline. IOE-R1 contract/adapter implementation is
+the active execution front while independent architecture review and RTM-R1
+Profile contract preparation proceed in parallel. Candidate freeze, REL-V1 and
+release packaging are not development prerequisites.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
@@ -61,8 +64,8 @@ annotated-tag checkout, warm paired/interleaved collection, one retention
 snapshot batch per owner loop, complete JSON flush, byte-preserving stderr
 diagnostics, and a connect/accept/echo/close batch barrier that leaves the
 reviewed two-second probe deadline unchanged. The
-inventory is 121 configured CTest tests: 8 unit tests, 100 contract tests, and
-13 integration tests, with 94 threading and 99 lifecycle labels. Complete local
+inventory is 122 configured CTest tests: 8 unit tests, 101 contract tests, and
+13 integration tests, with 95 threading and 100 lifecycle labels. Complete local
 `candidate-10k` preflight for the barrier passed nine times on Windows and
 three times on Linux with identical profile parameters; local Windows
 regression/Core-capacity paired matrices pass their original budgets. None is
@@ -212,7 +215,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 → IOE-R1 → IOE-R2 → IOE-C1, with RTM-R1 proceeding in parallel after ARCH-G1. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 contract/adapter implementation is underway, followed by IOE-R2 and IOE-C1. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 
@@ -223,7 +226,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 141 |
+| 63 | 32 | 20 | 11 | 156 |
 
 ## Historical Production-Hardening Evidence
 

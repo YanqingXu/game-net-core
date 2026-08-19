@@ -8,6 +8,7 @@ set(GAMENET_CORE_SOURCES
     net/Connector.cc
     net/DeadlineQueue.cc
     net/detail/ConnectionBackpressureController.cc
+    net/detail/PollerIoEngineAdapter.cc
     net/EventLoop.cc
     net/EventLoopThread.cc
     net/EventLoopThreadPool.cc

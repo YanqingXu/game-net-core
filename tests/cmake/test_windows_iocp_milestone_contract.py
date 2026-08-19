@@ -220,7 +220,11 @@ def main() -> None:
     require(poller_header_text, "preserveSocketAssociation", poller_header)
 
     event_loop_text = event_loop_source.read_text(encoding="utf-8")
-    require(event_loop_text, "poller_->wakeup()", event_loop_source)
+    require(
+        event_loop_text,
+        "ioEngineFromPoller(*poller_).wakeup()",
+        event_loop_source,
+    )
     require(event_loop_text, "platform::writeWakeup", event_loop_source)
 
     iocp_header_text = iocp_header.read_text(encoding="utf-8")

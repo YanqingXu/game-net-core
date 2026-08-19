@@ -6,6 +6,7 @@
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "IoEngine.h"
 
 #ifdef _WIN32
 #include "gamenet/core/net/poller/IocpPoller.h"
@@ -118,6 +119,24 @@ public:
         (void)loop;
         return false;
 #endif
+    }
+
+    static IoCompletionProgress completionProgress(
+        EventLoop& loop) noexcept {
+#ifdef _WIN32
+        const auto* poller =
+            dynamic_cast<const IocpPoller*>(loop.poller_.get());
+        if (poller != nullptr) {
+            return {
+                poller->lastCompletionPacketsDrained_,
+                poller->lastDeferredCompletionCount_,
+                poller->lastCompletionBudgetExhausted_,
+            };
+        }
+#else
+        (void)loop;
+#endif
+        return {};
     }
 
 #ifdef _WIN32

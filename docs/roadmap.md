@@ -15,8 +15,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
-  integration, with 94 threading and 99 lifecycle labels. The new direct
+- The current inventory is 122 CTest tests: 8 unit, 101 contract, and 13
+  integration, with 95 threading and 100 lifecycle labels. The new direct
   socket-option contract and all repository/API/CI guards pass on Windows/IOCP
   and Linux/epoll; the PERF-R1 reviewed-surface diff is strictly empty.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
@@ -267,11 +267,11 @@ In progress after production hardening:
 
 Active execution front:
 
-- [ ] ARCH-G1: activate the owner-loop/I/O Engine and Runtime Model architecture
-  intents, publish ADRs, inventory semantic coupling, and freeze numerical
-  behavior/performance baselines within a two-day design timebox.
+- [ ] ARCH-G1: the owner-loop/I/O Engine and Runtime Model intents, accepted ADR,
+  semantic-coupling inventory, concrete test map, and dual-platform numerical
+  baseline are complete; independent architecture review remains in parallel.
 - [ ] IOE-R1: introduce a source-private Engine seam and Poller adapter without
-  changing public behavior.
+  changing public behavior. Contract and adapter implementation are active now.
 - [ ] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
   registrations.
 - [ ] IOE-C1: publish native IOCP Completion notices and retire fake Channel

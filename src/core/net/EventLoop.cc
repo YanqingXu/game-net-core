@@ -5,9 +5,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TimerQueue.h"
 #include "gamenet/core/net/platform/Wakeup.h"
-#ifdef _WIN32
-#include "gamenet/core/net/poller/IocpPoller.h"
-#endif
+#include "detail/IoEngine.h"
 
 #include "gamenet/core/base/Logger.h"
 
@@ -335,7 +333,7 @@ EventLoop::EventLoop(EventLoopOptions options)
               this,
               options_.maxLifecycleNodes)),
       controlDrainWords_(controlState_->pendingWords.size(), 0),
-      poller_(Poller::newDefaultPoller(this)),
+      poller_(detail::makePollerIoEngineAdapter(this)),
       timerQueue_(std::unique_ptr<TimerQueue>(new TimerQueue(this))),
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
@@ -377,6 +375,7 @@ EventLoop::~EventLoop() {
     wakeupChannel_->disableAll();
     wakeupChannel_->remove();
     platform::closeWakeupFds(wakeupFds_);
+    detail::ioEngineFromPoller(*poller_).markShutdown();
     t_loopInThisThread = nullptr;
 }
 
@@ -392,7 +391,9 @@ void EventLoop::loop() {
                 (hasPendingControlSources() || hasPendingLifecycleNodes())
                 ? 0
                 : timerQueue_->pollTimeoutMs(10000);
-            pollReturnTime_ = poller_->poll(pollTimeout, &activeChannels_);
+            detail::IoNoticeBatch notices(activeChannels_);
+            pollReturnTime_ =
+                detail::ioEngineFromPoller(*poller_).wait(pollTimeout, notices);
             emitIocpCompletionMetric();
         }
         dispatchActiveChannels();
@@ -401,6 +402,8 @@ void EventLoop::loop() {
         doLifecycleNodes();
         doPendingFunctors(options_.maxFunctorsPerIteration);
     }
+
+    detail::ioEngineFromPoller(*poller_).beginQuiesce();
 
     {
         std::lock_guard lock(executorState_->mutex);
@@ -416,7 +419,9 @@ void EventLoop::loop() {
         if (!hasPendingActiveChannels()) {
             activeChannels_.clear();
             activeChannelCursor_ = 0;
-            pollReturnTime_ = poller_->poll(0, &activeChannels_);
+            detail::IoNoticeBatch notices(activeChannels_);
+            pollReturnTime_ =
+                detail::ioEngineFromPoller(*poller_).wait(0, notices);
             emitIocpCompletionMetric();
         }
         dispatchActiveChannels();
@@ -437,7 +442,7 @@ void EventLoop::loop() {
             !hasPendingControlSources() &&
             !hasPendingLifecycleNodes() &&
             !hasPendingActiveChannels() &&
-            !poller_->hasPendingCompletionOperations()) {
+            detail::ioEngineFromPoller(*poller_).quiescent()) {
             break;
         }
     }
@@ -455,11 +460,13 @@ void EventLoop::loop() {
     // external producer can enter after Quiescing linearized.
     while (true) {
         if (hasPendingActiveChannels() ||
-            poller_->hasPendingCompletionOperations()) {
+            !detail::ioEngineFromPoller(*poller_).quiescent()) {
             if (!hasPendingActiveChannels()) {
                 activeChannels_.clear();
                 activeChannelCursor_ = 0;
-                pollReturnTime_ = poller_->poll(0, &activeChannels_);
+                detail::IoNoticeBatch notices(activeChannels_);
+                pollReturnTime_ =
+                    detail::ioEngineFromPoller(*poller_).wait(0, notices);
                 emitIocpCompletionMetric();
             }
             dispatchActiveChannels();
@@ -477,7 +484,7 @@ void EventLoop::loop() {
             !hasPendingControlSources() &&
             !hasPendingLifecycleNodes() &&
             !hasPendingActiveChannels() &&
-            !poller_->hasPendingCompletionOperations()) {
+            detail::ioEngineFromPoller(*poller_).quiescent()) {
             break;
         }
     }
@@ -896,7 +903,7 @@ void EventLoop::cancel(TimerId timerId) {
 
 void EventLoop::wakeup() {
     wakeupCount_.fetch_add(1, std::memory_order_relaxed);
-    if (poller_->wakeup()) {
+    if (detail::ioEngineFromPoller(*poller_).wakeup()) {
         return;
     }
 
@@ -913,7 +920,7 @@ void EventLoop::updateChannel(Channel* channel) {
             "EventLoop::updateChannel requires a Channel owned by this loop");
     }
     const bool newRegistration = !channel->addedToLoop_;
-    poller_->updateChannel(channel);
+    detail::ioEngineFromPoller(*poller_).updateReadiness(channel);
     if (newRegistration) {
         channel->addedToLoop_ = true;
         channel->advanceRegistrationGeneration();
@@ -934,12 +941,12 @@ void EventLoop::removeChannel(Channel* channel) {
         throw std::logic_error(
             "EventLoop::removeChannel requires disabled interests");
     }
-    if (!poller_->hasChannel(channel)) {
+    if (!detail::ioEngineFromPoller(*poller_).hasReadiness(channel)) {
         throw std::logic_error(
             "EventLoop::removeChannel registration identity mismatch");
     }
 
-    poller_->removeChannel(channel);
+    detail::ioEngineFromPoller(*poller_).removeReadiness(channel);
 
     if (channel->activeBatchEpoch_ == activeBatchEpoch_) {
         const std::size_t index = channel->activeBatchIndex_;
@@ -956,39 +963,35 @@ void EventLoop::removeChannel(Channel* channel) {
 
 void EventLoop::preserveSocketAssociation(SocketFd sockfd) {
     assertInLoopThread();
-    poller_->preserveSocketAssociation(sockfd);
+    detail::ioEngineFromPoller(*poller_).preserveSocketAssociation(sockfd);
 }
 
 void EventLoop::forgetSocketAssociation(SocketFd sockfd) noexcept {
     if (!isInLoopThread()) {
         LOG_FATAL << "EventLoop socket association rollback used from a different thread";
     }
-#ifdef _WIN32
-    if (auto* iocp = dynamic_cast<IocpPoller*>(poller_.get())) {
-        iocp->forgetSocketAssociation(sockfd);
-    }
-#else
-    (void)sockfd;
-#endif
+    detail::ioEngineFromPoller(*poller_).forgetSocketAssociation(sockfd);
 }
 
 void EventLoop::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
     assertInLoopThread();
-    poller_->retainCompletionOperation(operation, std::move(lifetime));
+    detail::ioEngineFromPoller(*poller_).retainCompletionOperation(
+        operation,
+        std::move(lifetime));
 }
 
 void EventLoop::trackCompletionOperation(void* operation) {
     assertInLoopThread();
-    poller_->trackCompletionOperation(operation);
+    detail::ioEngineFromPoller(*poller_).trackCompletionOperation(operation);
 }
 
 bool EventLoop::hasPendingCompletionOperations() const noexcept {
-    return poller_->hasPendingCompletionOperations();
+    return !detail::ioEngineFromPoller(*poller_).quiescent();
 }
 
 bool EventLoop::hasChannel(Channel* channel) {
     assertInLoopThread();
-    return poller_->hasChannel(channel);
+    return detail::ioEngineFromPoller(*poller_).hasReadiness(channel);
 }
 
 void EventLoop::dispatchActiveChannels() {
@@ -1102,11 +1105,9 @@ void EventLoop::doExpiredTimers(gamenet::base::Timestamp now) {
 }
 
 void EventLoop::emitIocpCompletionMetric() {
-#ifdef _WIN32
-    auto* iocp = dynamic_cast<IocpPoller*>(poller_.get());
-    if (iocp == nullptr ||
-        (iocp->lastCompletionPacketsDrained_ == 0 &&
-         iocp->lastDeferredCompletionCount_ == 0)) {
+    const auto progress =
+        detail::ioEngineFromPoller(*poller_).completionProgress();
+    if (progress.drained == 0 && progress.deferred == 0) {
         return;
     }
 
@@ -1114,15 +1115,13 @@ void EventLoop::emitIocpCompletionMetric() {
     sample.event =
         EventLoopMetricEvent::IocpCompletionPacketsDrained;
     sample.loop = this;
-    sample.drainedWork = iocp->lastCompletionPacketsDrained_;
+    sample.drainedWork = progress.drained;
     // This is the exact user-space deferred remainder. Windows exposes no
     // non-destructive kernel completion-port queue depth; a full dequeue is
     // reported independently through budgetExhausted.
-    sample.remainingWork = iocp->lastDeferredCompletionCount_;
-    sample.budgetExhausted =
-        iocp->lastCompletionBudgetExhausted_;
+    sample.remainingWork = progress.deferred;
+    sample.budgetExhausted = progress.budgetExhausted;
     emitEventLoopMetric(sample);
-#endif
 }
 
 void EventLoop::retireCurrentChannel(

@@ -10,7 +10,7 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：121（8/100/13；threading 94、lifecycle 99）。API-R1 已完成，
+当前测试基线：122（8/101/13；threading 95、lifecycle 100）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -88,7 +88,8 @@ Runtime Profile 完成，RTM-R1 也不等待 IOCP direct completion 完成。
 - [x] 把历史 tag、review、run 和失败样本保留为不可变 evidence；
 - [x] 将长期目标中的冻结前置条件改为 continuous-evidence 原则；
 - [x] 更新 roadmap、assessment、README、migration status 和治理合同的当前任务；
-- [ ] 建立每个新架构切片的 commit-bound evidence ledger 条目模板。
+- [x] 建立每个新架构切片的 commit-bound evidence ledger 条目模板：
+  `docs/development/commit_bound_evidence_ledger.md`。
 
 关闭门：仓库不再有“REL-V1 是唯一下一任务”或“运行时变化必须 refreeze”的当前约束；
 历史记录可以继续包含这些词，但必须标明 historical/superseded。
@@ -101,22 +102,22 @@ Runtime Profile 完成，RTM-R1 也不等待 IOCP direct completion 完成。
 
 ### 5.1 Intent 与 ADR
 
-- [ ] 新建并激活 owner-loop + I/O Engine architecture intent；
-- [ ] 新建并激活 Runtime Model architecture intent；
-- [ ] 用 ADR 明确 EventLoop 是 owner scheduler/event pump，不等同于 epoll Reactor；
-- [ ] 明确 `Channel` 只属于 Readiness registration/callback binding；
-- [ ] 明确 Completion operation identity、generation、lease 和 terminal retirement；
-- [ ] 明确 ConnectionPlacementPolicy 与 LogicShardPolicy 分离；
-- [ ] 写出 source-private seam 到 stable public surface 的兼容策略。
+- [x] 新建并激活 owner-loop + I/O Engine architecture intent；
+- [x] 新建并激活 Runtime Model architecture intent；
+- [x] 用 ADR 明确 EventLoop 是 owner scheduler/event pump，不等同于 epoll Reactor；
+- [x] 明确 `Channel` 只属于 Readiness registration/callback binding；
+- [x] 明确 Completion operation identity、generation、lease 和 terminal retirement；
+- [x] 明确 ConnectionPlacementPolicy 与 LogicShardPolicy 分离；
+- [x] 写出 source-private seam 到 stable public surface 的兼容策略。
 
 ### 5.2 基线与测试地图
 
-- [ ] 盘点 `EventLoop`、`Poller`、`Channel`、IOCP transport、options 和 metrics 的
+- [x] 盘点 `EventLoop`、`Poller`、`Channel`、IOCP transport、options 和 metrics 的
   readiness/completion 耦合点；
-- [ ] 固化 Linux/epoll 与 Windows/IOCP 当前吞吐、P99/P999、wakeup、内存、shutdown、
+- [x] 固化 Linux/epoll 与 Windows/IOCP 当前吞吐、P99/P999、wakeup、内存、shutdown、
   operation-retention 基线；
-- [ ] 为 IOE-R1/IOE-R2/IOE-C1 指定具体 contract 文件和失败 fixture；
-- [ ] 为三个 Runtime Profile 指定生命周期、饱和、handoff、Tick、内存和 shutdown 测试；
+- [x] 为 IOE-R1/IOE-R2/IOE-C1 指定具体 contract 文件和失败 fixture；
+- [x] 为三个 Runtime Profile 指定生命周期、饱和、handoff、Tick、内存和 shutdown 测试；
 - [ ] 独立 review 只审 intent、边界、合同和基线，不等待发布证据。
 
 关闭门：所有下一阶段的 owner、生命周期、失败结果、测试文件和性能预算可直接执行；
@@ -132,18 +133,19 @@ Poller/IOCP 形状的长期耦合。
 ### 6.1 合同先行
 
 - [ ] 为 `IoEngine` 定义 owner-thread-only register/submit/cancel/dispatch；
-- [ ] 定义 `IoNoticeBatch`、capabilities、wakeup、`beginQuiesce()` 与 `quiescent()`；
+- [x] 定义 `IoNoticeBatch`、capabilities、wakeup、`beginQuiesce()` 与 `quiescent()`；
 - [ ] 固定 Accepted/Rejected、admission seal、final drain 和 callback containment；
 - [ ] 新合同覆盖跨线程 wakeup、callback 内关闭、generation stale notice 和预算耗尽续跑；
-- [ ] 现有 EventLoop/Poller/Channel/TCP lifecycle contracts 必须保持通过。
+- [x] 现有 EventLoop/Poller/Channel/TCP lifecycle contracts 保持通过；Windows/IOCP
+  与 Linux/epoll Release CTest 均为 122/122。
 
 ### 6.2 最小实现
 
-- [ ] 新增 source-private `PollerIoEngineAdapter`；
-- [ ] EventLoop 只依赖 Engine seam，不直接判断具体 IocpPoller 类型；
-- [ ] 维持当前 Poller/Channel 数据路径，不在本阶段顺手重写 epoll 或 IOCP；
+- [x] 新增 source-private `PollerIoEngineAdapter`；
+- [x] EventLoop 只依赖 Engine seam，不直接判断具体 IocpPoller 类型；
+- [x] 维持当前 Poller/Channel 数据路径，不在本阶段顺手重写 epoll 或 IOCP；
 - [ ] 将公共调度预算与 backend capacity 配置分层，但暂不改变 stable options；
-- [ ] 不新增公共 header，除非独立兼容性 review 明确批准。
+- [x] 不新增公共 header；同线 public API compatibility gate 保持通过。
 
 关闭门：Windows/IOCP 与 Linux/epoll 全量合同通过；相对 ARCH-G1 基线没有未接受的
 吞吐、延迟或内存回归；EventLoop 已可在不改变 owner/lifecycle 公理的情况下驱动不同
@@ -340,10 +342,10 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **ARCH-G1：在两个工作日内完成 I/O Engine 与 Runtime Model 的 active architecture
-> intent、ADR、耦合清单、基线和具体测试地图；随后不等待新的冻结或发布决定，直接进入
-> IOE-R1 的 source-private Engine seam 合同与最小 adapter。**
+> **IOE-R1：ARCH-G1 的 intent、ADR、耦合清单、双平台基线和具体测试地图已落地并通过
+> intent 治理；独立架构 review 与实现并行，不作为冻结点。现在直接提交 source-private
+> Engine seam 失败合同与最小 Poller adapter。**
 
-并行准备 RTM-R1 的三个 Profile contract，但在 ARCH-G1 关闭前不提交 Profile
+并行准备 RTM-R1 的三个 Profile contract，但在 ARCH-G1 独立 review 前不提交 Profile
 运行时代码。第一个可运行目标不是新发布 tag，而是：EventLoop 经 source-private
 Engine seam 驱动现有 Poller，双平台行为不变、合同全绿、基准无未接受回归。

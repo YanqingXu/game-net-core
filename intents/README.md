@@ -89,6 +89,8 @@ Core-module change gate:
 
 These intents apply to the current migrated core:
 
+- `intents/architecture/io_engine.intent.md`
+- `intents/architecture/runtime_models.intent.md`
 - `intents/usecases/production_endurance.intent.md`
 - `intents/usecases/production_candidate_release.intent.md`
 - `intents/usecases/core_performance_baseline.intent.md`

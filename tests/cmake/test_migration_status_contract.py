@@ -290,7 +290,11 @@ def main() -> None:
     )
     require(assessment_text, "P2-02 | P2（已关闭）", assessment)
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
-    require(plan_text, "ARCH-G1：在两个工作日内完成 I/O Engine", plan)
+    require(
+        plan_text,
+        "IOE-R1：ARCH-G1 的 intent、ADR、耦合清单、双平台基线",
+        plan,
+    )
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
     require(plan_text, "P1-04 | API-R1（已关闭）", plan)
     require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)
