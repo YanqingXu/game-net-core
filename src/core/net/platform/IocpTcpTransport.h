@@ -19,7 +19,11 @@ class IocpTcpTransport {
 public:
     static constexpr std::size_t kReadChunkBytes = 4 * 1024;
 
-    explicit IocpTcpTransport(Channel* channel);
+    IocpTcpTransport(
+        Channel* channel,
+        void* completionContext,
+        IocpCompletionConsumer readConsumer,
+        IocpCompletionConsumer writeConsumer);
     ~IocpTcpTransport();
 
     // Returns zero once an overlapped operation owns a future completion, or
@@ -43,25 +47,40 @@ private:
     static void observeTerminal(
         void* context,
         IocpOperationKind kind) noexcept;
+    static void consumeReadCompletion(
+        void* context,
+        gamenet::base::Timestamp observedAt,
+        bool observerCurrent);
+    static void consumeWriteCompletion(
+        void* context,
+        gamenet::base::Timestamp observedAt,
+        bool observerCurrent);
 
     struct WriteSegment {
         std::string bytes;
         std::size_t offset{0};
     };
 
-    Channel* channel_;
-    IocpOperation readOperation_;
-    IocpOperation writeOperation_;
-    std::unique_ptr<char[]> readStorage_;
-    std::size_t readStorageBytes_{0};
-    std::size_t peakReadStorageBytes_{0};
-    std::deque<WriteSegment> writeSegments_;
-    std::size_t bufferedWriteBytes_{0};
-    WSABUF readBuffer_{};
-    WSABUF writeBuffer_{};
-    ULONG submittedWriteBytes_{0};
-    bool readPending_{false};
-    bool writePending_{false};
+    struct SharedState;
+    std::shared_ptr<SharedState> sharedState_;
+    Channel*& channel_;
+    void*& completionContext_;
+    IocpCompletionConsumer& readConsumer_;
+    IocpCompletionConsumer& writeConsumer_;
+    IocpOperation& readOperation_;
+    IocpOperation& writeOperation_;
+    std::unique_ptr<char[]>& readStorage_;
+    std::size_t& readStorageBytes_;
+    std::size_t& peakReadStorageBytes_;
+    std::deque<WriteSegment>& writeSegments_;
+    std::size_t& bufferedWriteBytes_;
+    WSABUF& readBuffer_;
+    WSABUF& writeBuffer_;
+    ULONG& submittedWriteBytes_;
+    bool& readPending_;
+    bool& writePending_;
+    bool& readCompletionPending_;
+    bool& writeCompletionPending_;
 };
 
 namespace detail {

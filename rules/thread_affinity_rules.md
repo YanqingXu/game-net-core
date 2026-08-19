@@ -124,10 +124,17 @@ No other direct mutation path is allowed for core loop state.
 - On Windows, GQCSEx decoding, generation validation, terminal retirement, and
   source-private transport terminal bookkeeping are owner-thread-only. The
   terminal bookkeeping callback cannot invoke user code or re-enter EventLoop
-- EventLoop retires the last completion wait batch only after its active
-  observers have dispatched or been invalidated. A callback may remove its
-  Channel, but that removal cannot strand terminal transport state or preserve
-  an unowned deferred operation pointer
+- EventLoop alone pulls typed read/write notices after wait returns. It shares
+  `maxActiveChannelsPerIteration` with readiness dispatch, revalidates the
+  observer after every earlier callback, holds a surviving Channel tie, and
+  contains exceptions under the ChannelEvent callback policy
+- a revoked read/write observer still enters its source-private consumer with
+  `observerCurrent == false` to clear dispatch-terminal state. That path cannot
+  call TcpConnection or user code
+- EventLoop retires the last completion wait batch only after its direct notices
+  and active compatibility observers have dispatched or been invalidated. A
+  callback may remove or disable/re-enable its Channel, but that mutation cannot
+  strand terminal transport state or preserve an unowned deferred pointer
 - Completion cancellation is only a request plus a final-drain obligation.
   Only a validated terminal dequeue may clear that obligation
 - `IoEngineOptions::maxCompletionNoticesPerWait` is backend capacity. It is

@@ -192,10 +192,14 @@ TDD implementation plan in
 - EventLoop owns wakeup state. EventLoop wakeup must complete through IOCP so
   cross-thread `queueInLoop()`, `runAfter()`, and `cancel()` cannot sleep until
   the default poll timeout.
-- TcpConnection or a dedicated loop-owned transport helper owns overlapped read/write state.
-  No stack `OVERLAPPED` or buffer may outlive the operation that submitted it.
-- Channel remains an observer of readiness/completion interest. Poller still
-  does not own Channel.
+- TcpConnection's source-private transport helper owns shared overlapped
+  read/write state. Completion Engine leases that state, not TcpConnection, and
+  no stack `OVERLAPPED` or buffer may outlive the operation that submitted it.
+- EventLoop directly consumes production read/write typed notices. Channel is a
+  borrowed, generation-checked callback observer guarded by its tie; it carries
+  no production read/write operation result. Accept/connect still use the
+  compatibility publisher until their direct-consumer slice lands. Poller does
+  not own Channel.
 - Socket close, Channel removal, pending overlapped cancellation, and final
   callbacks must have explicit cancel/close ordering.
 

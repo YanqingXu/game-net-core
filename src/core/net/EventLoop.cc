@@ -405,9 +405,11 @@ EventLoop::~EventLoop() {
 void EventLoop::loop() {
     assertInLoopThread();
     looping_ = true;
+    auto& ioEngine = detail::ioEngineFromPoller(*poller_);
 
     while (!quit_) {
-        if (!hasPendingActiveChannels()) {
+        if (!hasPendingActiveChannels() &&
+            ioEngine.pendingCompletionNoticeCount() == 0) {
             activeChannels_.clear();
             activeChannelCursor_ = 0;
             const int pollTimeout =
@@ -416,7 +418,7 @@ void EventLoop::loop() {
                 : timerQueue_->pollTimeoutMs(10000);
             detail::IoNoticeBatch notices(activeChannels_);
             pollReturnTime_ =
-                detail::ioEngineFromPoller(*poller_).wait(pollTimeout, notices);
+                ioEngine.wait(pollTimeout, notices);
             emitIocpCompletionMetric();
         }
         dispatchActiveChannels();
@@ -426,7 +428,7 @@ void EventLoop::loop() {
         doPendingFunctors(options_.maxFunctorsPerIteration);
     }
 
-    detail::ioEngineFromPoller(*poller_).beginQuiesce();
+    ioEngine.beginQuiesce();
 
     {
         std::lock_guard lock(executorState_->mutex);
@@ -439,12 +441,13 @@ void EventLoop::loop() {
     // IOCP: CancelIoEx publishes completion packets rather than synchronously
     // completing connection-owned operation storage.
     while (true) {
-        if (!hasPendingActiveChannels()) {
+        if (!hasPendingActiveChannels() &&
+            ioEngine.pendingCompletionNoticeCount() == 0) {
             activeChannels_.clear();
             activeChannelCursor_ = 0;
             detail::IoNoticeBatch notices(activeChannels_);
             pollReturnTime_ =
-                detail::ioEngineFromPoller(*poller_).wait(0, notices);
+                ioEngine.wait(0, notices);
             emitIocpCompletionMetric();
         }
         dispatchActiveChannels();
@@ -465,7 +468,8 @@ void EventLoop::loop() {
             !hasPendingControlSources() &&
             !hasPendingLifecycleNodes() &&
             !hasPendingActiveChannels() &&
-            detail::ioEngineFromPoller(*poller_).quiescent()) {
+            ioEngine.pendingCompletionNoticeCount() == 0 &&
+            ioEngine.quiescent()) {
             break;
         }
     }
@@ -483,13 +487,15 @@ void EventLoop::loop() {
     // external producer can enter after Quiescing linearized.
     while (true) {
         if (hasPendingActiveChannels() ||
-            !detail::ioEngineFromPoller(*poller_).quiescent()) {
-            if (!hasPendingActiveChannels()) {
+            ioEngine.pendingCompletionNoticeCount() != 0 ||
+            !ioEngine.quiescent()) {
+            if (!hasPendingActiveChannels() &&
+                ioEngine.pendingCompletionNoticeCount() == 0) {
                 activeChannels_.clear();
                 activeChannelCursor_ = 0;
                 detail::IoNoticeBatch notices(activeChannels_);
                 pollReturnTime_ =
-                    detail::ioEngineFromPoller(*poller_).wait(0, notices);
+                    ioEngine.wait(0, notices);
                 emitIocpCompletionMetric();
             }
             dispatchActiveChannels();
@@ -507,7 +513,8 @@ void EventLoop::loop() {
             !hasPendingControlSources() &&
             !hasPendingLifecycleNodes() &&
             !hasPendingActiveChannels() &&
-            detail::ioEngineFromPoller(*poller_).quiescent()) {
+            ioEngine.pendingCompletionNoticeCount() == 0 &&
+            ioEngine.quiescent()) {
             break;
         }
     }
@@ -1051,10 +1058,12 @@ void EventLoop::dispatchActiveChannels() {
     if (eventHandling_) {
         throw std::logic_error("EventLoop active Channel dispatch cannot re-enter");
     }
-    if (!hasPendingActiveChannels()) {
+    auto& ioEngine = detail::ioEngineFromPoller(*poller_);
+    if (!hasPendingActiveChannels() &&
+        ioEngine.pendingCompletionNoticeCount() == 0) {
         activeChannels_.clear();
         activeChannelCursor_ = 0;
-        detail::ioEngineFromPoller(*poller_).retireWaitBatch();
+        ioEngine.retireWaitBatch();
         return;
     }
 
@@ -1079,6 +1088,35 @@ void EventLoop::dispatchActiveChannels() {
 
     std::size_t drained = 0;
     eventHandling_ = true;
+    while (drained < options_.maxActiveChannelsPerIteration) {
+        detail::CompletionNotice notice;
+        if (!ioEngine.takeNextCompletionNotice(&notice)) {
+            break;
+        }
+        ++drained;
+        if (notice.consumer == nullptr) {
+            continue;
+        }
+        bool observerCurrent =
+            ioEngine.completionObserverCurrent(notice);
+        std::shared_ptr<void> observerGuard;
+        if (observerCurrent && notice.observer->tied_) {
+            observerGuard = notice.observer->tie_.lock();
+            if (!observerGuard) {
+                observerCurrent = false;
+            }
+        }
+        try {
+            notice.consumer(
+                notice.consumerContext,
+                pollReturnTime_,
+                observerCurrent);
+        } catch (...) {
+            handleCallbackException(
+                EventLoopCallbackSource::ChannelEvent,
+                std::current_exception());
+        }
+    }
     while (activeChannelCursor_ < activeChannels_.size() &&
            drained < options_.maxActiveChannelsPerIteration) {
         Channel* channel = activeChannels_[activeChannelCursor_++];
@@ -1099,7 +1137,8 @@ void EventLoop::dispatchActiveChannels() {
     }
     eventHandling_ = false;
 
-    std::size_t remaining = 0;
+    std::size_t remaining =
+        ioEngine.pendingCompletionNoticeCount();
     for (std::size_t index = activeChannelCursor_;
          index < activeChannels_.size();
          ++index) {
@@ -1123,7 +1162,7 @@ void EventLoop::dispatchActiveChannels() {
     if (remaining == 0) {
         activeChannels_.clear();
         activeChannelCursor_ = 0;
-        detail::ioEngineFromPoller(*poller_).retireWaitBatch();
+        ioEngine.retireWaitBatch();
     }
 }
 

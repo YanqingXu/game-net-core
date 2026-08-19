@@ -2,6 +2,7 @@
 
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/net/SocketTypes.h"
+#include "CompletionPort.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -75,9 +76,9 @@ struct IoEngineOptions {
     std::size_t maxCompletionNoticesPerWait{64};
 };
 
-// IOE-R1 intentionally carries the existing readiness-shaped delivery buffer.
-// IOE-C1 will add typed completion notices instead of translating them into
-// this vector.
+// Readiness observers remain an EventLoop-owned vector. Completion notices
+// stay in Engine-owned fixed batch storage and are pulled by EventLoop through
+// the typed methods below so wait itself never invokes callbacks.
 class IoNoticeBatch {
 public:
     explicit IoNoticeBatch(std::vector<Channel*>& readiness) noexcept
@@ -118,6 +119,11 @@ public:
     // Retires storage leases owned by the last wait batch after every
     // observer in that batch has either dispatched or been revoked.
     virtual void retireWaitBatch() noexcept = 0;
+    virtual std::size_t pendingCompletionNoticeCount() const noexcept = 0;
+    virtual bool takeNextCompletionNotice(
+        CompletionNotice* notice) noexcept = 0;
+    virtual bool completionObserverCurrent(
+        const CompletionNotice& notice) const noexcept = 0;
     virtual IoEngineOperationResult registerOrUpdateReadiness(
         Channel* channel) = 0;
     virtual IoEngineOperationResult cancelReadiness(Channel* channel) = 0;

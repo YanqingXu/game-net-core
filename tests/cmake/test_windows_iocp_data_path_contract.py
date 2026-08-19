@@ -25,6 +25,10 @@ def main() -> None:
     tcp_client_source = repo_root / "src" / "core" / "net" / "TcpClient.cc"
     tcp_connection_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpConnection.h"
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
+    event_loop_source = repo_root / "src" / "core" / "net" / "EventLoop.cc"
+    io_engine_adapter = (
+        repo_root / "src" / "core" / "net" / "detail" / "PollerIoEngineAdapter.cc"
+    )
     tcp_transport = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport.h"
     tcp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
     sync_error_test = (
@@ -113,6 +117,9 @@ def main() -> None:
     require(operation_text, "generation", operation)
     require(operation_text, "terminalGeneration", operation)
     require(operation_text, "terminalObserver", operation)
+    require(operation_text, "observerSource", operation)
+    require(operation_text, "observerRegistrationGeneration", operation)
+    require(operation_text, "observerIdentityCaptured", operation)
 
     completion_port_text = completion_port.read_text(encoding="utf-8")
     require(completion_port_text, "struct CompletionOperationIdentity", completion_port)
@@ -218,14 +225,15 @@ def main() -> None:
     require(tcp_transport_text, "[[nodiscard]] int startRead", tcp_transport)
     require(tcp_transport_text, "completeRead", tcp_transport)
     require(tcp_transport_text, "kReadChunkBytes = 4 * 1024", tcp_transport)
-    require(tcp_transport_text, "std::unique_ptr<char[]> readStorage_", tcp_transport)
+    require(tcp_transport_text, "std::unique_ptr<char[]>& readStorage_", tcp_transport)
+    require(tcp_transport_text, "std::shared_ptr<SharedState> sharedState_", tcp_transport)
     require(tcp_transport_text, "releaseReadStorage", tcp_transport)
     assert "std::array<char, 65536> readStorage_" not in tcp_transport_text, (
         "idle IOCP connections must not embed the historical 64 KiB read array"
     )
     require(tcp_transport_text, "[[nodiscard]] int startWrite", tcp_transport)
     require(tcp_transport_text, "completeWrite", tcp_transport)
-    require(tcp_transport_text, "std::deque<WriteSegment>", tcp_transport)
+    require(tcp_transport_text, "std::deque<WriteSegment>&", tcp_transport)
     require(tcp_transport_text, "bufferedWriteBytes_", tcp_transport)
     assert "writeStorage_" not in tcp_transport_text, (
         "IOCP writes must not retain a full transport mirror"
@@ -350,7 +358,11 @@ def main() -> None:
     require(poller_text, "operation->terminalObserver", poller_source)
     require(poller_text, "reinterpret_cast<IocpOperation*>", poller_source)
     require(poller_text, "operation->bytesTransferred", poller_source)
-    require(poller_text, "setIocpCompletionOperation(operation)", poller_source)
+    assert "setIocpCompletionOperation(operation)" not in poller_text, (
+        "production IOCP publication must not restore the Channel operation mailbox"
+    )
+    require(poller_text, "takeNextDirectCompletionNotice", poller_source)
+    require(poller_text, "pendingDirectCompletionNoticeCount", poller_source)
     require(
         poller_text,
         "appendIocpAcceptCompletionOperation(operation)",
@@ -393,6 +405,24 @@ def main() -> None:
     require(completion_engine_text, "testNativePacketsBecomeDistinctTerminalNotices", completion_engine_test)
     require(completion_engine_text, "testGenerationRejectsDuplicateAndRejectedSubmissionPackets", completion_engine_test)
     require(completion_engine_text, "testObserverRevokeDoesNotRetireKernelLeaseEarly", completion_engine_test)
+    require(completion_engine_text, "testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget", completion_engine_test)
+    require(completion_engine_text, "testDirectDispatchRevalidatesObserverAfterReentry", completion_engine_test)
+    require(completion_engine_text, "testSubmissionCapturesObserverBeforeNativeDequeue", completion_engine_test)
+    require(completion_engine_text, "testSameAddressObserverReplacementCannotReviveOldCompletion", completion_engine_test)
+    require(completion_engine_text, "terminalCalls == 2", completion_engine_test)
+
+    event_loop_text = event_loop_source.read_text(encoding="utf-8")
+    require(event_loop_text, "takeNextCompletionNotice", event_loop_source)
+    require(event_loop_text, "completionObserverCurrent", event_loop_source)
+    require(event_loop_text, "notice.consumer(", event_loop_source)
+    adapter_text = io_engine_adapter.read_text(encoding="utf-8")
+    require(adapter_text, "waitCompletionEngine", io_engine_adapter)
+    assert "return NativePoller::poll(timeoutMs, notices.readiness_)" not in adapter_text
+
+    transport_text = tcp_transport_source.read_text(encoding="utf-8")
+    require(transport_text, "readCompletionPending", tcp_transport_source)
+    require(transport_text, "writeCompletionPending", tcp_transport_source)
+    require(transport_text, "sharedState_", tcp_transport_source)
 
     core_cmake_text = core_cmake.read_text(encoding="utf-8")
     require(core_cmake_text, "net/platform/IocpSocketOps_win.cc", core_cmake)

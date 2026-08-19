@@ -75,10 +75,18 @@ A completion operation has an identity, kind, generation, retained storage
 lease, result, cancellation state, and exactly one terminal retirement. A
 successful submission owns a future kernel completion packet. Cancellation is
 not consumption. IOE-C1 now decodes GQCSEx directly into a fixed typed
-`CompletionNotice` batch and generation-validates terminal retirement. Its
-first operation-model slice retains a temporary Channel compatibility publisher;
-later slices move typed notices to direct operation consumers and remove that
-synthetic readiness path.
+`CompletionNotice` batch and generation-validates terminal retirement. The
+production adapter leaves read/write notices in that batch; EventLoop pulls
+them under its bounded I/O dispatch budget instead of creating fake readiness.
+Accept/Connect and the legacy Poller shell still retain compatibility
+publication until their direct-consumer slices land.
+
+Read/write storage has two terminal phases. Native dequeue clears the
+kernel-pending bit and establishes consumer-pending; the source-private driver
+clears consumer-pending when EventLoop consumes the notice, including a notice
+whose observer was revoked. Repost of the same operation is forbidden between
+those phases, so an earlier write completion cannot reuse a read operation whose
+older result still exists later in the same fixed batch.
 
 ### Runtime Models
 
@@ -134,14 +142,20 @@ wakeup Channel on epoll. The initial port is explicitly level-triggered and
 uses a fixed 64-notice default capacity independent of EventLoop dispatch
 budget.
 
-IOE-C1's first slice introduces typed IOCP completion notices, submission
-generations, duplicate/rejected packet filtering, owner-side terminal transport
-bookkeeping, and wait-batch lease retirement. Same-Channel read/write results
-coalesce without retaining an unowned pointer across callbacks. The remaining
-slices move direct read/write and accept/connect consumers behind the Completion
-Engine, then delete Channel's IOCP operation mailboxes and EventLoop's backend
-downcasts. Public API changes, if any, require a later additive review after both
-native engines have evidence.
+IOE-C1's operation-model slice introduces typed IOCP completion notices,
+submission generations, duplicate/rejected packet filtering, owner-side
+terminal transport bookkeeping, and wait-batch lease retirement. Its next
+vertical slice moves production read/write directly behind EventLoop: notices
+remain distinct, observer source and a process-unique registration generation
+are frozen at accepted submission, source/pointer/generation is revalidated
+after every re-entrant callback, and a Channel tie guards each surviving upper
+callback.
+Only source-private shared driver state is leased through kernel and batch
+retirement; the installed TcpConnection layout remains unchanged. The remaining
+slices move accept/connect consumers behind the Completion Engine, close the
+shutdown escape, then delete the dormant Channel mailbox and legacy fake
+translation. Public API changes, if any, require a later additive review after
+both native engines have evidence.
 
 ## Current Coupling Inventory
 
@@ -158,8 +172,8 @@ Line numbers refer to the ARCH-G1 runtime checkpoint and may move as slices land
 | EventLoop downcasts to IocpPoller for association cleanup and metrics | `src/core/net/EventLoop.cc:967`, `:1106` | typed Engine capability/progress |
 | Public options contain IOCP batch width | `include/gamenet/core/net/EventLoop.h:124` | compatibility option mapped by adapter; later capability review |
 | Metric vocabulary contains IOCP packets | `src/core/net/EventLoop.cc:1115` | backend event plus neutral wait/dispatch metrics |
-| Channel installed header stores IOCP operation mailboxes | `include/gamenet/core/net/Channel.h:82`, `:100` | Completion Engine/operation consumer in IOE-C1 |
-| IocpPoller maps operation kinds to fake read/write readiness | `src/core/net/poller/IocpPoller.cc:40`, `:250`, `:257` | typed Completion notice |
+| Channel installed header retains dormant IOCP mailbox ABI and active Accept queue | `include/gamenet/core/net/Channel.h` | delete after accept/connect direct consumers and stable-surface review |
+| Legacy IocpPoller shell maps read/write kinds to fake readiness; production adapter does not | `src/core/net/poller/IocpPoller.cc`, `src/core/net/detail/PollerIoEngineAdapter.cc` | delete legacy translation after compatibility consumers migrate |
 | Acceptor recovers completed accept operations from Channel | `src/core/net/Acceptor.cc:355`, `:762` | accept completion consumer |
 | Connector/Acceptor/TCP transport call EventLoop completion hooks | `src/core/net/Connector.cc:285`, `src/core/net/Acceptor.cc:653`, `src/core/net/platform/IocpTcpTransport_win.cc:458` | Completion Engine submission/lease API |
 | TcpClient preserves IOCP socket association through EventLoop | `src/core/net/TcpClient.cc:766` | Completion Engine association lifetime |
@@ -173,7 +187,7 @@ slice. It will be added with the slice rather than as an empty placeholder.
 | --- | --- | --- | --- |
 | IOE-R1 | `tests/contract/io_engine/test_io_engine_poller_adapter.cpp` | Poller, EventLoop, fair-budget, Channel active-batch tests | adapter rejects non-owner mutation and preserves shutdown drain |
 | IOE-R2 | `tests/contract/io_engine/test_readiness_engine.cpp` | Poller and Channel lifetime tests | stale registration generation after remove/re-register |
-| IOE-C1 | `tests/contract/io_engine/test_completion_engine.cpp` | IOCP sync-error, partial/segmented write and completion-drain tests | cancel-before-dequeue retains lease and emits one terminal notice |
+| IOE-C1 | `tests/contract/io_engine/test_completion_engine.cpp` | IOCP sync-error, partial/segmented write, high-water resume and completion-drain tests | cancel-before-dequeue retains lease; direct dispatch is budgeted; observer replacement retires driver state without upper callback |
 | Network-only | `tests/contract/runtime_model/test_network_only_profile.cpp` | TcpServer/TcpConnection lifecycle and memory tests | callback/thread mismatch and bounded shutdown |
 | Network/logic split | `tests/contract/runtime_model/test_network_logic_split_profile.cpp` | LogicLoop and pipeline handoff/saturation/shutdown tests | saturated handoff, stale binding, close race |
 | Hybrid contract | `tests/contract/runtime_model/test_hybrid_profile_contract.cpp` | broadcast multi-loop and pipeline Tick tests | forbidden inline fallback and Tick starvation |

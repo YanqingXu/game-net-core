@@ -115,16 +115,69 @@ void observeReadStorageChange(
 }  // namespace
 #endif
 
-IocpTcpTransport::IocpTcpTransport(Channel* channel)
-    : channel_(channel) {
+struct IocpTcpTransport::SharedState {
+    Channel* channel{nullptr};
+    void* completionContext{nullptr};
+    IocpCompletionConsumer readConsumer{nullptr};
+    IocpCompletionConsumer writeConsumer{nullptr};
+    IocpOperation readOperation{};
+    IocpOperation writeOperation{};
+    std::unique_ptr<char[]> readStorage;
+    std::size_t readStorageBytes{0};
+    std::size_t peakReadStorageBytes{0};
+    std::deque<WriteSegment> writeSegments;
+    std::size_t bufferedWriteBytes{0};
+    WSABUF readBuffer{};
+    WSABUF writeBuffer{};
+    ULONG submittedWriteBytes{0};
+    bool readPending{false};
+    bool writePending{false};
+    bool readCompletionPending{false};
+    bool writeCompletionPending{false};
+};
+
+IocpTcpTransport::IocpTcpTransport(
+    Channel* channel,
+    void* completionContext,
+    IocpCompletionConsumer readConsumer,
+    IocpCompletionConsumer writeConsumer)
+    : sharedState_(std::make_shared<SharedState>()),
+      channel_(sharedState_->channel),
+      completionContext_(sharedState_->completionContext),
+      readConsumer_(sharedState_->readConsumer),
+      writeConsumer_(sharedState_->writeConsumer),
+      readOperation_(sharedState_->readOperation),
+      writeOperation_(sharedState_->writeOperation),
+      readStorage_(sharedState_->readStorage),
+      readStorageBytes_(sharedState_->readStorageBytes),
+      peakReadStorageBytes_(sharedState_->peakReadStorageBytes),
+      writeSegments_(sharedState_->writeSegments),
+      bufferedWriteBytes_(sharedState_->bufferedWriteBytes),
+      readBuffer_(sharedState_->readBuffer),
+      writeBuffer_(sharedState_->writeBuffer),
+      submittedWriteBytes_(sharedState_->submittedWriteBytes),
+      readPending_(sharedState_->readPending),
+      writePending_(sharedState_->writePending),
+      readCompletionPending_(sharedState_->readCompletionPending),
+      writeCompletionPending_(sharedState_->writeCompletionPending) {
+    channel_ = channel;
+    completionContext_ = completionContext;
+    readConsumer_ = readConsumer;
+    writeConsumer_ = writeConsumer;
     readOperation_.kind = IocpOperationKind::Read;
     readOperation_.channel = channel_;
-    readOperation_.terminalContext = this;
+    readOperation_.terminalContext = sharedState_.get();
     readOperation_.terminalObserver = &IocpTcpTransport::observeTerminal;
+    readOperation_.completionContext = sharedState_.get();
+    readOperation_.completionConsumer =
+        &IocpTcpTransport::consumeReadCompletion;
     writeOperation_.kind = IocpOperationKind::Write;
     writeOperation_.channel = channel_;
-    writeOperation_.terminalContext = this;
+    writeOperation_.terminalContext = sharedState_.get();
     writeOperation_.terminalObserver = &IocpTcpTransport::observeTerminal;
+    writeOperation_.completionContext = sharedState_.get();
+    writeOperation_.completionConsumer =
+        &IocpTcpTransport::consumeWriteCompletion;
 }
 
 IocpTcpTransport::~IocpTcpTransport() {
@@ -134,16 +187,46 @@ IocpTcpTransport::~IocpTcpTransport() {
 void IocpTcpTransport::observeTerminal(
     void* context,
     IocpOperationKind kind) noexcept {
-    auto& transport = *static_cast<IocpTcpTransport*>(context);
+    auto& state = *static_cast<SharedState*>(context);
     if (kind == IocpOperationKind::Read) {
-        transport.readPending_ = false;
+        state.readPending = false;
+        state.readCompletionPending = true;
     } else if (kind == IocpOperationKind::Write) {
-        transport.writePending_ = false;
+        state.writePending = false;
+        state.writeCompletionPending = true;
+    }
+}
+
+void IocpTcpTransport::consumeReadCompletion(
+    void* context,
+    gamenet::base::Timestamp observedAt,
+    bool observerCurrent) {
+    auto& state = *static_cast<SharedState*>(context);
+    state.readCompletionPending = false;
+    if (observerCurrent && state.readConsumer != nullptr) {
+        state.readConsumer(
+            state.completionContext,
+            observedAt,
+            true);
+    }
+}
+
+void IocpTcpTransport::consumeWriteCompletion(
+    void* context,
+    gamenet::base::Timestamp observedAt,
+    bool observerCurrent) {
+    auto& state = *static_cast<SharedState*>(context);
+    state.writeCompletionPending = false;
+    if (observerCurrent && state.writeConsumer != nullptr) {
+        state.writeConsumer(
+            state.completionContext,
+            observedAt,
+            true);
     }
 }
 
 int IocpTcpTransport::startRead(std::size_t maxBytes) {
-    if (readPending_) {
+    if (readPending_ || readCompletionPending_) {
         return 0;
     }
     if (maxBytes == 0) {
@@ -223,9 +306,9 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
             sockets::lastError();
 #endif
         if (error == WSA_IO_PENDING) {
-            if (!detail::commitIocpOperationSubmission(readOperation_)) {
-                LOG_FATAL << "IOCP read submission generation conflict";
-            }
+            channel_->ownerLoop()->retainCompletionOperation(
+                &readOperation_,
+                sharedState_);
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             updatePeak(maxReadSubmissionBytes, submissionBytes);
 #endif
@@ -237,9 +320,9 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
         readOperation_.error = static_cast<DWORD>(error);
         return error;
     }
-    if (!detail::commitIocpOperationSubmission(readOperation_)) {
-        LOG_FATAL << "IOCP read submission generation conflict";
-    }
+    channel_->ownerLoop()->retainCompletionOperation(
+        &readOperation_,
+        sharedState_);
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
     updatePeak(maxReadSubmissionBytes, submissionBytes);
 #endif
@@ -248,6 +331,7 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
 
 ssize_t IocpTcpTransport::completeRead(Buffer* input, int* savedErrno) {
     readPending_ = false;
+    readCompletionPending_ = false;
     readBuffer_ = WSABUF{};
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
     observeCompletion(
@@ -318,7 +402,7 @@ void IocpTcpTransport::enqueueWrite(std::string payload) {
 }
 
 int IocpTcpTransport::startWrite() {
-    if (writePending_) {
+    if (writePending_ || writeCompletionPending_) {
         return 0;
     }
     if (writeSegments_.empty()) {
@@ -384,9 +468,9 @@ int IocpTcpTransport::startWrite() {
             sockets::lastError();
 #endif
         if (error == WSA_IO_PENDING) {
-            if (!detail::commitIocpOperationSubmission(writeOperation_)) {
-                LOG_FATAL << "IOCP write submission generation conflict";
-            }
+            channel_->ownerLoop()->retainCompletionOperation(
+                &writeOperation_,
+                sharedState_);
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             observeWriteSubmission(submittedWriteBytes_);
 #endif
@@ -399,9 +483,9 @@ int IocpTcpTransport::startWrite() {
         writeOperation_.error = static_cast<DWORD>(error);
         return error;
     }
-    if (!detail::commitIocpOperationSubmission(writeOperation_)) {
-        LOG_FATAL << "IOCP write submission generation conflict";
-    }
+    channel_->ownerLoop()->retainCompletionOperation(
+        &writeOperation_,
+        sharedState_);
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
     observeWriteSubmission(submittedWriteBytes_);
 #endif
@@ -410,6 +494,7 @@ int IocpTcpTransport::startWrite() {
 
 ssize_t IocpTcpTransport::completeWrite(int* savedErrno) {
     writePending_ = false;
+    writeCompletionPending_ = false;
     const std::size_t submittedBytes = submittedWriteBytes_;
     writeBuffer_ = WSABUF{};
     submittedWriteBytes_ = 0;

@@ -17,9 +17,9 @@ See `migration_status.md` for the current checked state of these phases.
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 124 CTest tests: 8 unit, 103 contract, and 13
   integration, with 97 threading and 102 lifecycle labels. The IOE-R2
-  Readiness Engine contract and all repository/API/CI guards pass on
-  Windows/IOCP and Linux/epoll; the PERF-R1 reviewed-surface diff is strictly
-  empty.
+  Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
+  and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
+  the PERF-R1 reviewed-surface diff remains strictly empty.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
   leak and TcpClient construction-failure request wedge with deterministic
   recovery contracts and remains the immutable reviewed-surface checkpoint.
@@ -44,11 +44,12 @@ See `migration_status.md` for the current checked state of these phases.
   as source-compatible at `api-r1-perf-r1-reviewed-surface`.
 - Candidate freeze is retired as a development gate. IOE-R1 is closed at
   `8bb14e72d8935879396d12a7a51c891311aa2a78`; IOE-R2 is closed at
-  `6f45aa6e78152b8fd86df925962e580101b2f2ee`, and the active Engine front is
-  now IOE-C1 native Completion notices, with ARCH-G1 independent review and
-  RTM-R1 Profile contracts proceeding in parallel. CI/performance evidence
-  stays commit-bound and continuous; endurance and licensing move to promotion
-  time.
+  `6f45aa6e78152b8fd86df925962e580101b2f2ee`; IOE-C1's operation model is
+  committed at `f407440084c48f324ab3a65912443bb257aa8e77`. Production
+  read/write notice consumption is now direct and the active Engine front moves
+  to accept/connect and shutdown, with ARCH-G1 independent review and RTM-R1
+  Profile contracts proceeding in parallel. CI/performance evidence stays
+  commit-bound and continuous; endurance and licensing move to promotion time.
 
 ## Phase 1: Project Skeleton
 
@@ -280,8 +281,9 @@ Active execution front:
   stable public-surface drift.
 - [x] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
   registrations; closed at `6f45aa6e78152b8fd86df925962e580101b2f2ee`.
-- [ ] IOE-C1: publish native IOCP Completion notices and retire fake Channel
-  read/write translation.
+- [ ] IOE-C1: native typed notices and production direct read/write consumers
+  are implemented; retire accept/connect compatibility publication, legacy fake
+  translation, and shutdown escape next.
 - [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
   Engine line.
 - [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at

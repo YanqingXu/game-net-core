@@ -5,6 +5,7 @@
 // readiness mask at this boundary.
 
 #include "gamenet/core/base/Timestamp.h"
+#include "gamenet/core/net/SocketTypes.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -40,13 +41,23 @@ struct CompletionOperationIdentity {
     bool operator==(const CompletionOperationIdentity&) const = default;
 };
 
+using CompletionConsumer =
+    void (*)(
+        void* context,
+        gamenet::base::Timestamp observedAt,
+        bool observerCurrent);
+
 struct CompletionNotice {
     CompletionOperationIdentity identity{};
     CompletionOperationKind kind{CompletionOperationKind::Read};
     Channel* observer{nullptr};
+    SocketFd observerSource{kInvalidSocket};
+    std::uint64_t observerGeneration{0};
     std::size_t bytesTransferred{0};
     std::uint32_t nativeError{0};
     CompletionTerminalStatus status{CompletionTerminalStatus::Failed};
+    void* consumerContext{nullptr};
+    CompletionConsumer consumer{nullptr};
 
     bool terminal() const noexcept {
         return true;

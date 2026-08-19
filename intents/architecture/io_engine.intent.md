@@ -136,20 +136,29 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
   acceptance commits it, synchronous non-pending failure rejects it, and only
   one terminal dequeue may retire it;
 - `CompletionNotice` is a value result containing identity, operation kind,
-  bytes, native error, terminal status, and an optional observer. GQCSEx is
-  decoded into this fixed typed batch before compatibility publication;
+  bytes, native error, terminal status, optional observer source/generation,
+  and a source-private consumer. GQCSEx is decoded into this fixed typed batch
+  before any scheduler dispatch;
 - duplicate, rejected-generation, null, and already-terminal packets are
   invalid backend work. They produce no callback and cannot decrement a drain
   obligation;
 - terminal dequeue retires kernel state and invokes only source-private
-  terminal bookkeeping on the owner thread. EventLoop retires the typed-batch
-  storage lease only after every surviving observer has dispatched or been
-  revoked;
-- the temporary Channel compatibility publisher may coalesce distinct
-  read/write terminal results for one Channel in the same scheduler batch, but
-  it may not retain an unowned operation or Channel pointer across callbacks.
-  Accept operations retain their bounded intrusive identity list until the
-  direct accept consumer replaces it.
+  terminal bookkeeping on the owner thread. Read/write driver state then owns
+  a separate consumer-terminal bit, so the same operation cannot be reposted
+  while an older typed notice from the current batch is still undispatched;
+- accepted read/write submission freezes its observer fd and a process-unique
+  registration generation. EventLoop pulls notices under the same bounded I/O
+  dispatch budget as readiness callbacks, revalidates fd, Channel identity,
+  and the frozen generation, holds the Channel tie during a surviving callback,
+  and invokes the source-private consumer even for a revoked or same-address
+  replacement observer so driver retirement cannot be stranded;
+- the operation lease retains only the source-private shared driver state, not
+  TcpConnection application ownership. The entire typed-batch lease is released
+  only after all direct notices and compatibility observers are consumed;
+- the production Engine adapter does not publish read/write as fake Channel
+  readiness. The legacy Poller shell may still do so for compatibility tests,
+  while Accept/Connect retain their temporary Channel publication until their
+  direct consumers replace it.
 
 ## 7. Compatibility Sequence
 
@@ -180,8 +189,10 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
 - `tests/contract/io_engine/test_completion_engine.cpp` verifies operation
   identity and generation, distinct typed terminal notices, duplicate and
   rejected-generation filtering, source-private terminal bookkeeping,
-  cancellation status, observer revocation, lease retirement, and conflicting
-  submission/cancellation rejection. On non-Windows it verifies that the
+  cancellation status, observer revocation, lease retirement, conflicting
+  submission/cancellation rejection, direct owner dispatch, bounded
+  continuation, generation revalidation after re-entry, and mandatory driver
+  retirement for a revoked observer. On non-Windows it verifies that the
   completion vocabulary remains platform-neutral.
 - `tests/contract/poller/test_poller_contract.cpp` verifies bounded backend
   waiting and backend-neutral Poller behavior during the adapter slice.

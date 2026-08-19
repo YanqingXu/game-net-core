@@ -764,7 +764,6 @@ void Acceptor::closePendingAccept() noexcept {
     if (!iocpAccept_) {
         return;
     }
-    (void)acceptChannel_.takeIocpCompletionOperation();
     acceptChannel_.clearIocpAcceptCompletionOperations();
     iocpAccept_->phase = IocpAcceptState::Phase::Stopped;
     cancelPendingAccepts(true);

@@ -1,6 +1,8 @@
 #include "../../../src/core/net/detail/CompletionPort.h"
 #include "support/TestAssert.h"
 
+#include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 
@@ -44,6 +46,90 @@ struct TerminalObservation {
     gamenet::net::IocpOperationKind kind{
         gamenet::net::IocpOperationKind::Read};
 };
+
+struct DirectCompletionObservation {
+    gamenet::net::EventLoop* loop{nullptr};
+    gamenet::net::Channel* channel{nullptr};
+    int terminalCalls{0};
+    int calls{0};
+    int expectedCalls{0};
+    bool replaceObserverOnFirstCall{false};
+    bool quitOnTerminal{false};
+    gamenet::base::Timestamp lastObservedAt{};
+};
+
+void consumeDirectCompletion(
+    void* context,
+    gamenet::base::Timestamp observedAt,
+    bool observerCurrent) {
+    auto& observation =
+        *static_cast<DirectCompletionObservation*>(context);
+    ++observation.terminalCalls;
+    if (!observerCurrent) {
+        if (observation.quitOnTerminal) {
+            observation.loop->quit();
+        }
+        return;
+    }
+    ++observation.calls;
+    observation.lastObservedAt = observedAt;
+    if (observation.replaceObserverOnFirstCall &&
+        observation.calls == 1) {
+        observation.channel->disableAll();
+        observation.channel->remove();
+        CompletionHarness::preserveSocketAssociation(
+            *observation.loop,
+            observation.channel->fd());
+        observation.channel->enableReading();
+        observation.loop->quit();
+        return;
+    }
+    if (observation.calls == observation.expectedCalls) {
+        observation.loop->quit();
+    }
+}
+
+struct RecreatedObserverObservation {
+    gamenet::net::EventLoop* loop{nullptr};
+    gamenet::net::Channel* channel{nullptr};
+    gamenet::net::SocketFd source{gamenet::net::kInvalidSocket};
+    int terminalCalls{0};
+    int calls{0};
+    bool replaced{false};
+};
+
+void consumeCompletionAcrossSameAddressReplacement(
+    void* context,
+    gamenet::base::Timestamp,
+    bool observerCurrent) {
+    auto& observation =
+        *static_cast<RecreatedObserverObservation*>(context);
+    ++observation.terminalCalls;
+    if (observerCurrent) {
+        ++observation.calls;
+        if (!observation.replaced) {
+            observation.channel->disableAll();
+            observation.channel->remove();
+            CompletionHarness::preserveSocketAssociation(
+                *observation.loop,
+                observation.source);
+            GAMENET_TEST_ASSERT(
+                CompletionHarness::tracks(
+                    *observation.loop,
+                    observation.source));
+            std::destroy_at(observation.channel);
+            std::construct_at(
+                observation.channel,
+                observation.loop,
+                observation.source);
+            observation.channel->enableReading();
+            observation.replaced = true;
+        }
+    }
+    if (observation.terminalCalls == 2) {
+        observation.loop->quit();
+    }
+}
 
 void observeTerminal(
     void* context,
@@ -231,6 +317,187 @@ void testObserverRevokeDoesNotRetireKernelLeaseEarly() {
             &operation) == IoEngineOperationResult::RejectedConflict);
 }
 
+void testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget() {
+    gamenet::net::EventLoopOptions options;
+    options.maxActiveChannelsPerIteration = 1;
+    gamenet::net::EventLoop loop(options);
+    SocketPair sockets;
+    gamenet::net::Channel channel(&loop, sockets.first);
+    int fakeReadinessCalls = 0;
+    channel.setReadCallback(
+        [&fakeReadinessCalls](gamenet::base::Timestamp) {
+            ++fakeReadinessCalls;
+        });
+    channel.setWriteCallback([&fakeReadinessCalls] {
+        ++fakeReadinessCalls;
+    });
+    channel.enableReading();
+
+    DirectCompletionObservation observation{
+        .loop = &loop,
+        .channel = &channel,
+        .expectedCalls = 2,
+    };
+    std::array<gamenet::net::IocpOperation, 2> operations{};
+    operations[0].kind = gamenet::net::IocpOperationKind::Read;
+    operations[1].kind = gamenet::net::IocpOperationKind::Write;
+    for (auto& operation : operations) {
+        operation.channel = &channel;
+        operation.completionContext = &observation;
+        operation.completionConsumer = &consumeDirectCompletion;
+        GAMENET_TEST_ASSERT(
+            CompletionHarness::beginSyntheticCompletionSubmission(
+                &operation));
+        GAMENET_TEST_ASSERT(
+            CompletionHarness::postCompletion(loop, &operation, 1));
+    }
+    loop.runAfter(std::chrono::seconds(1), [&loop] { loop.quit(); });
+
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(observation.calls == 2);
+    GAMENET_TEST_ASSERT(observation.terminalCalls == 2);
+    GAMENET_TEST_ASSERT(fakeReadinessCalls == 0);
+    GAMENET_TEST_ASSERT(
+        observation.lastObservedAt != gamenet::base::Timestamp{});
+    channel.disableAll();
+    channel.remove();
+}
+
+void testDirectDispatchRevalidatesObserverAfterReentry() {
+    gamenet::net::EventLoopOptions options;
+    options.maxActiveChannelsPerIteration = 1;
+    gamenet::net::EventLoop loop(options);
+    SocketPair sockets;
+    gamenet::net::Channel channel(&loop, sockets.first);
+    channel.enableReading();
+
+    DirectCompletionObservation observation{
+        .loop = &loop,
+        .channel = &channel,
+        .expectedCalls = 2,
+        .replaceObserverOnFirstCall = true,
+    };
+    std::array<gamenet::net::IocpOperation, 2> operations{};
+    operations[0].kind = gamenet::net::IocpOperationKind::Read;
+    operations[1].kind = gamenet::net::IocpOperationKind::Write;
+    for (auto& operation : operations) {
+        operation.channel = &channel;
+        operation.completionContext = &observation;
+        operation.completionConsumer = &consumeDirectCompletion;
+        GAMENET_TEST_ASSERT(
+            CompletionHarness::beginSyntheticCompletionSubmission(
+                &operation));
+        GAMENET_TEST_ASSERT(
+            CompletionHarness::postCompletion(loop, &operation, 1));
+    }
+    loop.runAfter(std::chrono::seconds(1), [&loop] { loop.quit(); });
+
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(observation.calls == 1);
+    GAMENET_TEST_ASSERT(observation.terminalCalls == 2);
+    channel.disableAll();
+    channel.remove();
+}
+
+void testSubmissionCapturesObserverBeforeNativeDequeue() {
+    gamenet::net::EventLoop loop;
+    SocketPair sockets;
+    gamenet::net::Channel channel(&loop, sockets.first);
+    channel.enableReading();
+
+    DirectCompletionObservation observation{
+        .loop = &loop,
+        .channel = &channel,
+        .expectedCalls = 1,
+        .quitOnTerminal = true,
+    };
+    gamenet::net::IocpOperation operation{};
+    operation.kind = gamenet::net::IocpOperationKind::Read;
+    operation.channel = &channel;
+    operation.completionContext = &observation;
+    operation.completionConsumer = &consumeDirectCompletion;
+    auto lifetime = std::make_shared<int>(7);
+    GAMENET_TEST_ASSERT(
+        EngineHarness::commitIoEngineCompletionSubmission(
+            loop,
+            &operation,
+            lifetime) == IoEngineOperationResult::Accepted);
+    GAMENET_TEST_ASSERT(operation.observerIdentityCaptured);
+    GAMENET_TEST_ASSERT(
+        operation.observerSource == sockets.first);
+    GAMENET_TEST_ASSERT(
+        operation.observerRegistrationGeneration != 0);
+
+    channel.disableAll();
+    channel.remove();
+    CompletionHarness::preserveSocketAssociation(
+        loop,
+        sockets.first);
+    channel.enableReading();
+    GAMENET_TEST_ASSERT(
+        CompletionHarness::postCompletion(loop, &operation, 1));
+    loop.runAfter(std::chrono::seconds(1), [&loop] { loop.quit(); });
+
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(observation.terminalCalls == 1);
+    GAMENET_TEST_ASSERT(observation.calls == 0);
+    channel.disableAll();
+    channel.remove();
+}
+
+void testSameAddressObserverReplacementCannotReviveOldCompletion() {
+    gamenet::net::EventLoop loop;
+    SocketPair sockets;
+    alignas(gamenet::net::Channel)
+        std::byte channelStorage[sizeof(gamenet::net::Channel)]{};
+    auto* channel = std::construct_at(
+        reinterpret_cast<gamenet::net::Channel*>(channelStorage),
+        &loop,
+        sockets.first);
+    channel->enableReading();
+
+    RecreatedObserverObservation observation{
+        .loop = &loop,
+        .channel = channel,
+        .source = sockets.first,
+    };
+    std::array<gamenet::net::IocpOperation, 2> operations{};
+    std::array<std::shared_ptr<int>, 2> lifetimes{
+        std::make_shared<int>(1),
+        std::make_shared<int>(2),
+    };
+    for (std::size_t index = 0; index < operations.size(); ++index) {
+        auto& operation = operations[index];
+        operation.kind = index == 0
+            ? gamenet::net::IocpOperationKind::Read
+            : gamenet::net::IocpOperationKind::Write;
+        operation.channel = channel;
+        operation.completionContext = &observation;
+        operation.completionConsumer =
+            &consumeCompletionAcrossSameAddressReplacement;
+        GAMENET_TEST_ASSERT(
+            EngineHarness::commitIoEngineCompletionSubmission(
+                loop,
+                &operation,
+                lifetimes[index]) == IoEngineOperationResult::Accepted);
+        GAMENET_TEST_ASSERT(
+            CompletionHarness::postCompletion(loop, &operation, 1));
+    }
+    loop.runAfter(std::chrono::seconds(1), [&loop] { loop.quit(); });
+
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(observation.replaced);
+    GAMENET_TEST_ASSERT(observation.terminalCalls == 2);
+    GAMENET_TEST_ASSERT(observation.calls == 1);
+    channel->disableAll();
+    channel->remove();
+    std::destroy_at(channel);
+}
+
 #endif
 
 }  // namespace
@@ -241,6 +508,10 @@ int main() {
     testNativePacketsBecomeDistinctTerminalNotices();
     testGenerationRejectsDuplicateAndRejectedSubmissionPackets();
     testObserverRevokeDoesNotRetireKernelLeaseEarly();
+    testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget();
+    testDirectDispatchRevalidatesObserverAfterReentry();
+    testSubmissionCapturesObserverBeforeNativeDequeue();
+    testSameAddressObserverReplacementCannotReviveOldCompletion();
 #endif
     return 0;
 }

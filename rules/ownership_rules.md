@@ -93,29 +93,40 @@ It must not blur these roles.
   cannot erase a same-fd replacement on behalf of a stale Channel
 - Native IOCP entries are decoded into fixed `CompletionNotice` value snapshots
   before scheduler publication. Each notice preserves operation address plus
-  submission generation, kind, bytes, native error, terminal status, and only
-  a validated borrowed observer
+  submission generation, kind, bytes, native error, terminal status, borrowed
+  observer source/generation, and a source-private consumer
 - terminal dequeue retires exactly that generation's kernel/final-drain state.
   An operation-owned terminal observer may update source-private transport
   bookkeeping on the owner thread, but owns no callback target and cannot
   invoke user code
-- a retained operation lease transfers to the typed wait batch at dequeue and
+- a retained operation lease owns only source-private operation/transport state;
+  it does not grant application execution permission or keep TcpConnection
+  ownership alive. The lease transfers to the typed wait batch at dequeue and
   survives observer dispatch/revocation. EventLoop releases it after the whole
   active batch is dispatched; direct native test consumers retire it explicitly
 - the configured IOCP dequeue width borrows a prefix of the Poller's fixed
   64-entry storage; it allocates no packet array and owns no completion
-- distinct read/write terminal results for one registered Channel may coalesce
-  into one temporary compatibility callback batch. Their source-private
-  terminal bookkeeping is already complete, so callback-side Channel removal
-  cannot strand transport pending state. No unowned Channel or operation
-  pointer is deferred across callbacks
+- production read/write terminal results remain distinct typed notices and are
+  never stored in Channel. Kernel-terminal bookkeeping and consumer-terminal
+  bookkeeping are separate: dequeue clears native pending, while the direct
+  consumer clears dispatch pending even when its Channel observer was revoked.
+  The driver cannot repost the same operation between those two transitions
+- accepted read/write submission freezes the observer source and a
+  process-unique Channel registration generation. EventLoop validates that
+  source, Channel identity, and frozen generation before a callback and holds
+  the Channel tie through it. A stale or same-address replacement observer
+  still runs source-private consumer retirement but cannot reach TcpConnection
+  or user code
+- the installed Channel ABI temporarily retains its private single-operation
+  mailbox, but the production read/write publisher neither writes nor reads it;
+  Accept keeps only its bounded intrusive compatibility queue until its direct
+  consumer slice lands
 - independent Accept operations for one listen Channel are appended through
   their operation-embedded links to one bounded callback queue in the current
   batch
-- for a registered Channel, IOCP publication also lends that callback the exact
-  operation identity for the current active entry. Accept publication lends a
-  bounded intrusive queue of exact identities; no queue node allocation or
-  operation-storage transfer is introduced
+- Accept compatibility publication lends one bounded intrusive queue of exact
+  identities; no queue node allocation or operation-storage transfer is
+  introduced
 - an IOCP retained lease owns operation storage but is not by itself a shutdown
   obligation. A successfully submitted operation canceled during teardown is
   marked exactly once as outstanding; packet dequeue clears the mark and

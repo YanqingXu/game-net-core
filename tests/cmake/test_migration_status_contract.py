@@ -292,9 +292,11 @@ def main() -> None:
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
     require(
         plan_text,
-        "IOE-C1：operation-model 垂直切片已实现",
+        "IOE-C1：read/write typed consumer 已进入 EventLoop owner dispatch",
         plan,
     )
+    require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
+    require(status_text, "kernel-terminal and consumer-terminal", migration_status)
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
     require(plan_text, "P1-04 | API-R1（已关闭）", plan)
     require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)

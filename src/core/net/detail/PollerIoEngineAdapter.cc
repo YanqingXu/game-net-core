@@ -117,7 +117,17 @@ public:
             throw std::logic_error("I/O Engine wait after shutdown");
         }
 #ifdef _WIN32
-        return NativePoller::poll(timeoutMs, notices.readiness_);
+        const auto batch = IocpPollerAccess::waitCompletionEngine(
+            *this,
+            timeoutMs,
+            notices.readiness_);
+        lastWaitProgress_ = {
+            .deliveredNotices = batch.progress.deliveredNotices,
+            .staleNotices = batch.progress.invalidPackets,
+            .wakeupNotices = batch.progress.wakeupPackets,
+            .budgetExhausted = batch.progress.budgetExhausted,
+        };
+        return batch.observedAt;
 #else
         return waitForReadiness(timeoutMs, notices.readiness_);
 #endif
@@ -126,6 +136,38 @@ public:
     void retireWaitBatch() noexcept override {
 #ifdef _WIN32
         IocpPollerAccess::retireCompletionNotices(*this);
+#endif
+    }
+
+    std::size_t pendingCompletionNoticeCount() const noexcept override {
+#ifdef _WIN32
+        return IocpPollerAccess::pendingCompletionNoticeCount(*this);
+#else
+        return 0;
+#endif
+    }
+
+    bool takeNextCompletionNotice(
+        CompletionNotice* notice) noexcept override {
+#ifdef _WIN32
+        return IocpPollerAccess::takeNextCompletionNotice(
+            *this,
+            notice);
+#else
+        (void)notice;
+        return false;
+#endif
+    }
+
+    bool completionObserverCurrent(
+        const CompletionNotice& notice) const noexcept override {
+#ifdef _WIN32
+        return IocpPollerAccess::completionObserverCurrent(
+            *this,
+            notice);
+#else
+        (void)notice;
+        return false;
 #endif
     }
 

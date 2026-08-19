@@ -46,6 +46,9 @@ Current IOE-R1 source-private Engine checkpoint:
 Current IOE-R2 generation-safe Readiness checkpoint:
 `6f45aa6e78152b8fd86df925962e580101b2f2ee` (2026-08-19)
 
+Current IOE-C1 typed operation-model checkpoint:
+`f407440084c48f324ab3a65912443bb257aa8e77` (2026-08-19)
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -56,9 +59,20 @@ typed results, option layering, Poller adapter, and shutdown/dispatch contracts
 are closed at `8bb14e72`. IOE-R2's generation-safe epoll Readiness Engine,
 internal wakeup, bounded wait, and current-interest/stale-token contracts are
 closed at `6f45aa6e`. IOE-C1 native Completion contracts are the active
-execution front while independent architecture review and RTM-R1
-Profile contract preparation proceed in parallel. Candidate freeze, REL-V1 and
-release packaging are not development prerequisites.
+execution front. The operation model is committed at `f4074400`; the current
+vertical slice makes EventLoop directly consume production read/write notices,
+keeps kernel-terminal and consumer-terminal state separate, and leases only
+source-private driver storage. Accept/connect and shutdown are next while
+independent architecture review and RTM-R1 Profile contract preparation proceed
+in parallel. Candidate freeze, REL-V1 and release packaging are not development
+prerequisites.
+
+This worktree's directional Windows Release echo check used 4 connections, one
+I/O thread, 10,000 messages per connection, 256-byte payloads, a 500 ms settle
+window, and a 30 s timeout. Across five local samples, the medians were
+123,144.027 round trips/s, 60.1289 MiB/s, and 69.7 us P99. These numbers are a
+same-worktree smoke signal only, not a paired cross-commit regression result or
+promotion evidence.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
@@ -225,7 +239,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 is closed at `6f45aa6e`, and IOE-C1's native typed operation-model slice is implemented. Direct read/write consumers are the current Engine front. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, and IOE-C1's typed operation model at `f4074400`. Production read/write completion now enters EventLoop directly under the unified I/O budget and no longer uses Channel publication; accept/connect and shutdown are the current Engine front. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 

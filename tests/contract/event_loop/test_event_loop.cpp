@@ -335,6 +335,7 @@ int main() {
         });
 
 #ifdef _WIN32
+        int fakeReadinessCalls = 0;
         gamenet::net::IocpOperation readOperation{};
         readOperation.kind = gamenet::net::IocpOperationKind::Read;
         readOperation.channel = &channel;
@@ -344,18 +345,36 @@ int main() {
 
         channel.setReadCallback([&](gamenet::base::Timestamp) {
 #ifdef _WIN32
-            GAMENET_TEST_ASSERT(readOperation.error == 0);
+            ++fakeReadinessCalls;
 #else
             char byte = 0;
             GAMENET_TEST_ASSERT(gamenet::net::sockets::read(pair.readFd, &byte, 1) == 1);
-#endif
             channel.disableAll();
             channel.remove();
             throw std::runtime_error("channel callback failure");
+#endif
         });
         channel.enableReading();
 
 #ifdef _WIN32
+        struct DirectFailureContext {
+            gamenet::net::Channel* channel;
+            gamenet::net::IocpOperation* operation;
+        } directFailure{&channel, &readOperation};
+        readOperation.completionContext = &directFailure;
+        readOperation.completionConsumer =
+            +[](void* context,
+                gamenet::base::Timestamp,
+                bool observerCurrent) {
+                auto& failure =
+                    *static_cast<DirectFailureContext*>(context);
+                GAMENET_TEST_ASSERT(observerCurrent);
+                GAMENET_TEST_ASSERT(failure.operation->error == 0);
+                failure.channel->disableAll();
+                failure.channel->remove();
+                throw std::runtime_error(
+                    "completion consumer failure");
+            };
         readBuffer.buf = readStorage.data();
         readBuffer.len = static_cast<ULONG>(readStorage.size());
         DWORD bytes = 0;
@@ -402,6 +421,9 @@ int main() {
         GAMENET_TEST_ASSERT(gamenet::net::sockets::write(pair.writeFd, &byte, 1) == 1);
         loop.loop();
         GAMENET_TEST_ASSERT(laterTimerRan);
+#ifdef _WIN32
+        GAMENET_TEST_ASSERT(fakeReadinessCalls == 0);
+#endif
         GAMENET_TEST_ASSERT(!loop.hasChannel(&channel));
     }
 

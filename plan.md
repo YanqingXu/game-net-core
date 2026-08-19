@@ -192,9 +192,16 @@ capability Engine。IOE-R1 在精确提交
 - [x] GQCSEx 结果直接形成 `CompletionNotice`；
 - [x] read/write/accept/connect/cancel completion 保留独立 operation 身份；
 - [ ] 移除 fake `kReadEvent/kWriteEvent` 的结果转译；
+  - [x] EventLoop 生产 adapter 直接按统一 I/O dispatch budget 消费 read/write
+    typed notice；
+  - [ ] 删除 legacy `IocpPoller::poll()` 对 read/write 的兼容转译；
 - [ ] 移除 Channel 对 IOCP operation 和 storage 的携带职责；
-- [ ] TcpConnection 保持统一连接、发送、背压、关闭和 callback contract；
-- [ ] source-private IOCP TCP driver 管理 repost、pause-read、partial write 和 buffer lease。
+  - [x] 生产 read/write 路径不再写入 Channel completion mailbox；
+  - [ ] accept/connect 直接 consumer 完成后删除兼容字段与 accept intrusive queue；
+- [x] read/write 子切片保持 TcpConnection 统一连接、发送、背压、关闭和 callback
+  contract；
+- [x] source-private IOCP TCP driver 管理 read/write repost、pause-read、partial write
+  和 buffer lease；accept/connect 与 shutdown lease 仍由后续子切片收口。
 
 ### 8.3 关闭
 
@@ -348,12 +355,13 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **IOE-C1：operation-model 垂直切片已实现 native `CompletionNotice`、operation
-> identity/generation、唯一 terminal retirement、observer revoke/lease 分离和真实
-> Accept/Connect/Read/Write 提交接线。现在直接推进 read/write typed consumer，退役
-> temporary Channel compatibility publisher。**
+> **IOE-C1：read/write typed consumer 已进入 EventLoop owner dispatch，生产 adapter
+> 不再把 data completion 转回 fake Channel readiness；source-private driver 已拆分
+> kernel-terminal 与 consumer-terminal，禁止同批旧 notice 消费前复用 operation。
+> 现在直接推进 accept/connect typed consumer 与 shutdown 收口，随后删除 legacy
+> compatibility publisher 和 Channel IOCP mailbox。**
 
 ARCH-G1 独立 review 与 RTM-R1 的三个 Profile contract 继续并行，不形成冻结点。下一个
-可运行目标不是新发布 tag，而是：Windows/IOCP 让 read/write driver 直接消费现有 typed
-native Completion notice，再按 accept/connect、shutdown 小切片逐步退役 fake Channel
-read/write translation；Linux/epoll 与 stable public surface 持续全绿。
+可运行目标不是新发布 tag，而是：Windows/IOCP 把 accept/connect 与 shutdown 继续迁入
+typed Completion owner-dispatch，再删除 legacy fake Channel translation；Linux/epoll 与
+stable public surface 持续全绿。

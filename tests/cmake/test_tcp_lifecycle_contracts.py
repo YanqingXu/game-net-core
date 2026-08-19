@@ -1690,10 +1690,13 @@ def main() -> None:
     require(iocp_transport_header_text, "hasPendingOperations", iocp_transport_header)
     require(iocp_transport_header_text, "[[nodiscard]] int startRead", iocp_transport_header)
     require(iocp_transport_header_text, "[[nodiscard]] int startWrite", iocp_transport_header)
-    require(iocp_transport_header_text, "std::deque<WriteSegment>", iocp_transport_header)
+    require(iocp_transport_header_text, "std::deque<WriteSegment>&", iocp_transport_header)
     require(iocp_transport_header_text, "discardBufferedWrites", iocp_transport_header)
     require(iocp_transport_header_text, "kReadChunkBytes = 4 * 1024", iocp_transport_header)
-    require(iocp_transport_header_text, "std::unique_ptr<char[]> readStorage_", iocp_transport_header)
+    require(iocp_transport_header_text, "std::unique_ptr<char[]>& readStorage_", iocp_transport_header)
+    require(iocp_transport_header_text, "std::shared_ptr<SharedState> sharedState_", iocp_transport_header)
+    require(iocp_transport_header_text, "readCompletionPending_", iocp_transport_header)
+    require(iocp_transport_header_text, "writeCompletionPending_", iocp_transport_header)
     require(iocp_transport_header_text, "releaseReadStorage", iocp_transport_header)
     assert "std::array<char, 65536> readStorage_" not in iocp_transport_header_text
     assert "writeStorage_" not in iocp_transport_header_text

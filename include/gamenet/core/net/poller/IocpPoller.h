@@ -2,11 +2,12 @@
 
 // Windows IOCP backend for EventLoop.
 // IocpPoller owns the completion port, associates loop-owned socket handles,
-// decodes completion packets into fixed typed terminal notices, temporarily
-// compatibility-publishes surviving observers as Channel events, and posts
-// wakeup packets through the same backend abstraction. TCP read/write
-// operations are owned by the connection transport; Poller owns neither
-// Channel nor TcpConnection and carries no raw deferred pointer across a
+// decodes completion packets into fixed typed terminal notices, publishes only
+// Accept/Connect observers for the production adapter, and posts wakeup packets
+// through the same backend abstraction. The legacy Poller::poll shell retains
+// read/write Channel translation only for compatibility. TCP read/write
+// operations are owned by shared source-private driver state; Poller owns
+// neither Channel nor TcpConnection and carries no unleased pointer across a
 // callback boundary.
 
 #include "gamenet/core/net/Poller.h"
@@ -20,6 +21,7 @@
 namespace gamenet::net {
 
 namespace detail {
+struct CompletionNotice;
 struct CompletionWaitResult;
 class EventLoopIocpAssociationHarness;
 struct IocpCompletionState;
@@ -59,7 +61,13 @@ private:
         int timeoutMs);
     void publishCompletionNotices(
         const detail::CompletionWaitResult& batch,
-        ChannelList* activeChannels);
+        ChannelList* activeChannels,
+        bool publishReadWrite);
+    std::size_t pendingDirectCompletionNoticeCount() const noexcept;
+    bool takeNextDirectCompletionNotice(
+        detail::CompletionNotice* notice) noexcept;
+    bool completionObserverCurrent(
+        const detail::CompletionNotice& notice) const noexcept;
     void retireCompletionNoticeLeases() noexcept;
     bool commitNativeCompletionSubmission(
         void* operation,

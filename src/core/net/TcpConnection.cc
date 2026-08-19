@@ -135,7 +135,15 @@ TcpConnection::TcpConnection(
       peerAddr_(peerAddr) {
     backpressureOptions_.validate();
 #ifdef _WIN32
-    iocpTransport_ = std::make_unique<IocpTcpTransport>(channel_.get());
+    iocpTransport_ = std::make_unique<IocpTcpTransport>(
+        channel_.get(),
+        this,
+        +[](void* context, gamenet::base::Timestamp observedAt, bool) {
+            static_cast<TcpConnection*>(context)->handleRead(observedAt);
+        },
+        +[](void* context, gamenet::base::Timestamp, bool) {
+            static_cast<TcpConnection*>(context)->handleWrite();
+        });
 #endif
     channel_->setReadCallback([this](gamenet::base::Timestamp receiveTime) { handleRead(receiveTime); });
     channel_->setWriteCallback([this] { handleWrite(); });
@@ -711,7 +719,8 @@ void TcpConnection::handleWrite() {
 #ifdef _WIN32
         else {
             if (!iocpTransport_->writePending()) {
-                const int submitError = iocpTransport_->startWrite();
+                const int submitError =
+                    iocpTransport_->startWrite();
                 if (submitError != 0) {
                     handleError(submitError);
                 }
@@ -895,7 +904,8 @@ void TcpConnection::sendReservedInLoop(std::string payload) {
     const std::size_t newLen = iocpTransport_->bufferedWriteBytes();
     applyBackpressureInLoop();
     if (!iocpTransport_->writePending()) {
-        const int submitError = iocpTransport_->startWrite();
+        const int submitError =
+            iocpTransport_->startWrite();
         if (submitError != 0) {
             handleError(submitError);
             return;

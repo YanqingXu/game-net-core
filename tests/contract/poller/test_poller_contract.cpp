@@ -126,6 +126,7 @@ void testReadableCompletion() {
     bool removed = false;
 
 #ifdef _WIN32
+    int fakeReadinessCalls = 0;
     gamenet::net::IocpOperation readOperation{};
     readOperation.kind = gamenet::net::IocpOperationKind::Read;
     readOperation.channel = &channel;
@@ -134,18 +135,14 @@ void testReadableCompletion() {
 #endif
 
     channel.setReadCallback([&](gamenet::base::Timestamp) {
-        ++readCount;
-
 #ifdef _WIN32
-        GAMENET_TEST_ASSERT(readOperation.error == 0);
-        GAMENET_TEST_ASSERT(readOperation.bytesTransferred == 4);
-        GAMENET_TEST_ASSERT(std::string_view(readBufferStorage.data(), readOperation.bytesTransferred) == "ping");
+        ++fakeReadinessCalls;
 #else
+        ++readCount;
         char buffer[16] = {};
         const ssize_t n = gamenet::net::sockets::read(pair.readFd, buffer, sizeof(buffer));
         GAMENET_TEST_ASSERT(n == 4);
         GAMENET_TEST_ASSERT(std::string_view(buffer, static_cast<std::size_t>(n)) == "ping");
-#endif
 
         channel.disableAll();
         channel.remove();
@@ -153,12 +150,53 @@ void testReadableCompletion() {
         removed = true;
         writePayload(pair.writeFd, "pong");
         loop.runAfter(20ms, [&] { loop.quit(); });
+#endif
     });
 
     channel.enableReading();
     GAMENET_TEST_ASSERT(loop.hasChannel(&channel));
 
 #ifdef _WIN32
+    struct DirectReadContext {
+        gamenet::net::EventLoop* loop;
+        gamenet::net::Channel* channel;
+        ReadablePair* pair;
+        gamenet::net::IocpOperation* operation;
+        std::array<char, 16>* storage;
+        int* readCount;
+        bool* removed;
+    } directRead{
+        &loop,
+        &channel,
+        &pair,
+        &readOperation,
+        &readBufferStorage,
+        &readCount,
+        &removed,
+    };
+    readOperation.completionContext = &directRead;
+    readOperation.completionConsumer =
+        +[](void* context, gamenet::base::Timestamp, bool observerCurrent) {
+            auto& read = *static_cast<DirectReadContext*>(context);
+            GAMENET_TEST_ASSERT(observerCurrent);
+            ++*read.readCount;
+            GAMENET_TEST_ASSERT(read.operation->error == 0);
+            GAMENET_TEST_ASSERT(
+                read.operation->bytesTransferred == 4);
+            GAMENET_TEST_ASSERT(
+                std::string_view(
+                    read.storage->data(),
+                    read.operation->bytesTransferred) == "ping");
+            read.channel->disableAll();
+            read.channel->remove();
+            GAMENET_TEST_ASSERT(
+                !read.loop->hasChannel(read.channel));
+            *read.removed = true;
+            writePayload(read.pair->writeFd, "pong");
+            read.loop->runAfter(20ms, [loop = read.loop] {
+                loop->quit();
+            });
+        };
     readBuffer.buf = readBufferStorage.data();
     readBuffer.len = static_cast<ULONG>(readBufferStorage.size());
     DWORD bytes = 0;
@@ -181,6 +219,9 @@ void testReadableCompletion() {
     loop.loop();
 
     GAMENET_TEST_ASSERT(readCount == 1);
+#ifdef _WIN32
+    GAMENET_TEST_ASSERT(fakeReadinessCalls == 0);
+#endif
     GAMENET_TEST_ASSERT(removed);
     GAMENET_TEST_ASSERT(!loop.hasChannel(&channel));
 }

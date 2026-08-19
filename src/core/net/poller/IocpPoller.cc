@@ -34,6 +34,7 @@ struct IocpCompletionState {
     std::array<Channel*, IocpPoller::kCompletionBatchSize>
         publishedChannels{};
     ULONG noticeCount{0};
+    ULONG directNoticeCursor{0};
     CompletionWaitProgress progress{};
 };
 
@@ -185,7 +186,9 @@ gamenet::base::Timestamp IocpPoller::poll(
     ChannelList* activeChannels) {
     retireCompletionNoticeLeases();
     const auto batch = waitNativeCompletionNotices(timeoutMs);
-    publishCompletionNotices(batch, activeChannels);
+    publishCompletionNotices(batch, activeChannels, true);
+    completionState_->directNoticeCursor =
+        completionState_->noticeCount;
     lastDeferredCompletionCount_ = 0;
     return batch.observedAt;
 }
@@ -195,6 +198,7 @@ detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
     auto& state = *completionState_;
     retireCompletionNoticeLeases();
     state.noticeCount = 0;
+    state.directNoticeCursor = 0;
     state.progress = {};
     lastCompletionPacketsDrained_ = 0;
     lastDeferredCompletionCount_ = 0;
@@ -260,14 +264,29 @@ detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
         }
 
         Channel* channel = operation->channel;
+        const SocketFd packetSource =
+            static_cast<SocketFd>(entry.lpCompletionKey);
+        const bool capturedObserverIdentity =
+            operation->observerIdentityCaptured;
+        const SocketFd observerSource = capturedObserverIdentity
+            ? operation->observerSource
+            : packetSource;
+        const std::uint64_t observerGeneration =
+            capturedObserverIdentity
+            ? operation->observerRegistrationGeneration
+            : (channel == nullptr
+                ? 0
+                : channel->registrationGeneration_);
+        const bool packetMatchesObserver =
+            !capturedObserverIdentity || packetSource == observerSource;
         const auto registered =
-            channel == nullptr
+            channel == nullptr || observerSource == kInvalidSocket
             ? channels_.end()
-            : channels_.find(channel->fd());
+            : channels_.find(observerSource);
         const bool channelRegistered =
+            packetMatchesObserver &&
             registered != channels_.end() &&
-            registered->second == channel &&
-            channel->index() == kAdded;
+            registered->second == channel;
 
         operation->bytesTransferred =
             entry.dwNumberOfBytesTransferred;
@@ -306,9 +325,13 @@ detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
             .identity = identity,
             .kind = completionKind(operation->kind),
             .observer = channelRegistered ? channel : nullptr,
+            .observerSource = observerSource,
+            .observerGeneration = observerGeneration,
             .bytesTransferred = operation->bytesTransferred,
             .nativeError = operation->error,
             .status = completionStatus(operation->error),
+            .consumerContext = operation->completionContext,
+            .consumer = operation->completionConsumer,
         };
     }
     state.progress.deliveredNotices = state.noticeCount;
@@ -323,13 +346,19 @@ detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
 
 void IocpPoller::publishCompletionNotices(
     const detail::CompletionWaitResult& batch,
-    ChannelList* activeChannels) {
+    ChannelList* activeChannels,
+    bool publishReadWrite) {
     auto& state = *completionState_;
     std::size_t activeCount = 0;
     for (std::size_t noticeIndex = 0;
          noticeIndex < batch.notices.size();
          ++noticeIndex) {
         const auto& notice = batch.notices[noticeIndex];
+        if (!publishReadWrite &&
+            (notice.kind == detail::CompletionOperationKind::Read ||
+             notice.kind == detail::CompletionOperationKind::Write)) {
+            continue;
+        }
         Channel* channel = notice.observer;
         if (channel == nullptr) {
             continue;
@@ -355,8 +384,6 @@ void IocpPoller::publishCompletionNotices(
             // Coalesce their exact identities into one allocation-free
             // owner-loop callback instead of forcing one loop turn per slot.
             channel->appendIocpAcceptCompletionOperation(operation);
-        } else {
-            channel->setIocpCompletionOperation(operation);
         }
         if (channelAlreadyPublished) {
             channel->revents_ |= completionEvents(notice.kind);
@@ -366,6 +393,53 @@ void IocpPoller::publishCompletionNotices(
         state.publishedChannels[activeCount++] = channel;
         activeChannels->push_back(channel);
     }
+}
+
+std::size_t IocpPoller::pendingDirectCompletionNoticeCount() const noexcept {
+    const auto& state = *completionState_;
+    std::size_t pending = 0;
+    for (ULONG index = state.directNoticeCursor;
+         index < state.noticeCount;
+         ++index) {
+        const auto kind = state.notices[index].kind;
+        if (kind == detail::CompletionOperationKind::Read ||
+            kind == detail::CompletionOperationKind::Write) {
+            ++pending;
+        }
+    }
+    return pending;
+}
+
+bool IocpPoller::takeNextDirectCompletionNotice(
+    detail::CompletionNotice* notice) noexcept {
+    if (notice == nullptr) {
+        return false;
+    }
+    auto& state = *completionState_;
+    while (state.directNoticeCursor < state.noticeCount) {
+        const auto& candidate =
+            state.notices[state.directNoticeCursor++];
+        if (candidate.kind != detail::CompletionOperationKind::Read &&
+            candidate.kind != detail::CompletionOperationKind::Write) {
+            continue;
+        }
+        *notice = candidate;
+        return true;
+    }
+    return false;
+}
+
+bool IocpPoller::completionObserverCurrent(
+    const detail::CompletionNotice& notice) const noexcept {
+    Channel* channel = notice.observer;
+    if (channel == nullptr) {
+        return false;
+    }
+    const auto registered = channels_.find(notice.observerSource);
+    return registered != channels_.end() &&
+           registered->second == channel &&
+           channel->registrationGeneration_ ==
+               notice.observerGeneration;
 }
 
 void IocpPoller::retireCompletionNoticeLeases() noexcept {
@@ -398,6 +472,19 @@ bool IocpPoller::commitNativeCompletionSubmission(
         return false;
     }
     auto* completion = static_cast<IocpOperation*>(operation);
+    completion->observerSource = kInvalidSocket;
+    completion->observerRegistrationGeneration = 0;
+    completion->observerIdentityCaptured = true;
+    if (Channel* observer = completion->channel;
+        observer != nullptr) {
+        const auto registered = channels_.find(observer->fd());
+        if (registered != channels_.end() &&
+            registered->second == observer) {
+            completion->observerSource = observer->fd();
+            completion->observerRegistrationGeneration =
+                observer->registrationGeneration_;
+        }
+    }
     if (!detail::commitIocpOperationSubmission(*completion)) {
         retainedOperations_.erase(retained);
         return false;

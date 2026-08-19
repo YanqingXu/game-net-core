@@ -35,6 +35,36 @@ public:
         return poller.waitNativeCompletionNotices(timeoutMs);
     }
 
+    static CompletionWaitResult waitCompletionEngine(
+        IocpPoller& poller,
+        int timeoutMs,
+        Poller::ChannelList* activeChannels) {
+        const auto batch =
+            poller.waitNativeCompletionNotices(timeoutMs);
+        poller.publishCompletionNotices(
+            batch,
+            activeChannels,
+            false);
+        return batch;
+    }
+
+    static std::size_t pendingCompletionNoticeCount(
+        const IocpPoller& poller) noexcept {
+        return poller.pendingDirectCompletionNoticeCount();
+    }
+
+    static bool takeNextCompletionNotice(
+        IocpPoller& poller,
+        CompletionNotice* notice) noexcept {
+        return poller.takeNextDirectCompletionNotice(notice);
+    }
+
+    static bool completionObserverCurrent(
+        const IocpPoller& poller,
+        const CompletionNotice& notice) noexcept {
+        return poller.completionObserverCurrent(notice);
+    }
+
     static void retireCompletionNotices(
         IocpPoller& poller) noexcept {
         poller.retireCompletionNoticeLeases();

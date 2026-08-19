@@ -7,10 +7,28 @@
 
 #include "gamenet/core/base/Logger.h"
 
+#include <atomic>
+#include <cstdint>
 #include <stdexcept>
 #include <utility>
 
 namespace gamenet::net {
+
+namespace {
+
+std::atomic<std::uint64_t> nextRegistrationGeneration{1};
+
+std::uint64_t allocateRegistrationGeneration() noexcept {
+    std::uint64_t generation =
+        nextRegistrationGeneration.fetch_add(1, std::memory_order_relaxed);
+    if (generation == 0) {
+        generation =
+            nextRegistrationGeneration.fetch_add(1, std::memory_order_relaxed);
+    }
+    return generation;
+}
+
+}  // namespace
 
 Channel::Channel(EventLoop* loop, SocketFd fd)
     : loop_(loop),
@@ -164,10 +182,7 @@ void Channel::update() {
 }
 
 void Channel::advanceRegistrationGeneration() noexcept {
-    ++registrationGeneration_;
-    if (registrationGeneration_ == 0) {
-        ++registrationGeneration_;
-    }
+    registrationGeneration_ = allocateRegistrationGeneration();
 }
 
 #ifdef _WIN32
