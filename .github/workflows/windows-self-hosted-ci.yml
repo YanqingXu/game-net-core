@@ -126,6 +126,7 @@ jobs:
             "tests/cmake/test_threading_gate_contracts.py"
             "tests/cmake/test_windows_iocp_milestone_contract.py"
             "tests/cmake/test_windows_iocp_data_path_contract.py"
+            "tests/cmake/test_runtime_profile_contract.py"
             "tests/cmake/test_release_safe_tests.py"
             "tests/ci/test_workflow_jobs.py"
             "tests/ci/test_long_soak_workflow.py"
@@ -165,7 +166,7 @@ jobs:
           py -3 tools/verify_ctest_inventory.py `
             --test-dir "$env:GAMENET_BUILD_DIR" `
             --config "$env:GAMENET_CONFIGURATION" `
-            --expected-total 124 `
+            --expected-total 125 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build

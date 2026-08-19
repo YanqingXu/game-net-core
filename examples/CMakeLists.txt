@@ -33,3 +33,33 @@ add_executable(gamenet_game_server_pipeline_demo
 )
 target_link_libraries(gamenet_game_server_pipeline_demo PRIVATE gamenet_pipeline_demo_support)
 set_target_properties(gamenet_game_server_pipeline_demo PROPERTIES OUTPUT_NAME game_server_pipeline_demo)
+
+add_library(gamenet_runtime_profile_demo_support STATIC
+    runtime_profiles/SingleLoopInlineEvent.cc
+)
+target_include_directories(
+    gamenet_runtime_profile_demo_support
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(
+    gamenet_runtime_profile_demo_support
+    PUBLIC GameNet::core GameNet::protocol GameNet::transport
+)
+target_compile_features(gamenet_runtime_profile_demo_support PUBLIC cxx_std_23)
+target_compile_options(
+    gamenet_runtime_profile_demo_support
+    PUBLIC $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
+)
+gamenet_configure_sanitizers(gamenet_runtime_profile_demo_support)
+
+add_executable(gamenet_single_loop_inline_echo
+    runtime_profiles/single_loop_inline_echo.cpp
+)
+target_link_libraries(
+    gamenet_single_loop_inline_echo
+    PRIVATE gamenet_runtime_profile_demo_support
+)
+set_target_properties(
+    gamenet_single_loop_inline_echo
+    PROPERTIES OUTPUT_NAME single_loop_inline_echo
+)

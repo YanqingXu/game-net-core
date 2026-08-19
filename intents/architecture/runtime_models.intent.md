@@ -35,7 +35,15 @@ lifecycle rejection. No Profile gains an unbounded fallback queue.
 
 The connection EventLoop owns TCP state and invokes application callbacks on
 that owner thread. No LogicLoop handoff is required. This is the lowest-latency
-and lowest-isolation profile and preserves the current Core default.
+and lowest-isolation profile and preserves the current Core default. RTM-R1
+names its first runnable composition `SingleLoopInlineEvent`: TcpServer has zero
+worker loops; framing and the immediate handler live in per-connection owner-
+loop state; frame-count and frame-byte budgets bound one dispatch; one bounded
+same-owner continuation carries any remainder. The handler must not block. A
+configured wall-time overrun, continuation rejection, protocol fault, or output
+overload is observable and terminal instead of switching thread or recursively
+draining. This first composition is a non-installed example/support target, not
+a stable public Profile API.
 
 ### Profile B: Network/logic split
 
@@ -109,6 +117,11 @@ Each Profile must state and test:
   verifies multi-domain shutdown.
 - `tests/integration/broadcast/test_broadcast_tcp_multi_loop.cpp` verifies real
   multi-loop connection placement and fanout.
+- `tests/contract/runtime_model/test_network_only_profile.cpp` verifies the
+  first runnable Profile A composition, bounded inline handler dispatch, zero
+  cross-domain handoff, overload closure, and shutdown convergence.
+- `tests/cmake/test_runtime_profile_contract.py` guards the non-installed
+  Profile A topology and contract registration.
 
 RTM-R1 adds Profile-specific contracts before exposing runtime Profile types.
 Existing tests are the regression anchors, not a claim that all three Profiles

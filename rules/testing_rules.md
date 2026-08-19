@@ -126,6 +126,25 @@ Contract tests verify:
   emits no user notice, and preserves EventLoop's wakeup observation; every
   other direct port operation rejects a foreign thread
 
+## 5.1 Runtime Profile Required Test Examples
+- Profile A uses one real TcpServer with zero worker loops and proves accept,
+  connection, framing, handler, reply, and close callbacks stay on the caller's
+  EventLoop owner thread
+- a five-frame input with a two-frame dispatch budget must advance as 2/2/1
+  through same-owner continuations, preserve order, and report zero cross-domain
+  handoffs
+- saturation of the owner continuation queue closes with overload and never
+  recursively invokes the remaining handler
+- a deterministic handler wall-time violation is observed once, prevents the
+  next frame from running, and converges to close; the test does not describe
+  the violating sleep as safe application behavior
+- protocol/response-size and TcpConnection output-hard-limit failures close
+  with exact metrics and release all per-connection Profile state
+- callback-reentrant stop revokes later handler/reply/continuation work and its
+  TcpServer completion future becomes ready after EventLoop final drain
+- the Profile support/example targets remain non-installed and the same-line
+  stable API manifest remains unchanged
+
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents
 - tied owner expired => dangerous callback path blocked

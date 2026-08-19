@@ -33,6 +33,10 @@ PHASE4_ARTIFACTS = {
 
 CONCRETE_ACTIVE_ARTIFACTS = {
     "intents/usecases/echo_server.intent.md": ("example", "gamenet_echo_server"),
+    "intents/usecases/single_loop_inline_event_profile.intent.md": (
+        "example",
+        "gamenet_single_loop_inline_echo",
+    ),
     "intents/usecases/core_performance_baseline.intent.md": (
         "benchmark",
         "gamenet_core_benchmark",

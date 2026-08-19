@@ -28,6 +28,7 @@ ALLOWED_TARGETS = {
     "GameNet::game",
     "GameNet::experimental",
     "gamenet_echo_server",
+    "gamenet_single_loop_inline_echo",
     "gamenet_core_benchmark",
     "gamenet_game_server_pipeline_demo",
     "gamenet_phase4_benchmark",
@@ -72,6 +73,10 @@ PHASE4_ACTIVE_INTENTS = {
 
 CONCRETE_ACTIVE_ARTIFACTS = {
     "intents/usecases/echo_server.intent.md": ("example", "gamenet_echo_server"),
+    "intents/usecases/single_loop_inline_event_profile.intent.md": (
+        "example",
+        "gamenet_single_loop_inline_echo",
+    ),
     "intents/usecases/core_performance_baseline.intent.md": (
         "benchmark",
         "gamenet_core_benchmark",

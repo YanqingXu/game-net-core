@@ -1,6 +1,6 @@
 # game-net-core 加速执行计划
 
-计划重制日期：2026-08-19
+计划重制日期：2026-08-20
 
 长期方向：`goal.md`
 
@@ -10,7 +10,7 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：124（8/103/13；threading 97、lifecycle 102）。API-R1 已完成，
+当前测试基线：125（8/104/13；threading 98、lifecycle 103）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策

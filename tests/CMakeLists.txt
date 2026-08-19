@@ -156,6 +156,7 @@ add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_S
 add_gamenet_component_test(contract transport GameNet::transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/transport/test_tcp_transport_endpoint_contract.cpp threading lifecycle)
 add_gamenet_component_test(contract transport GameNet::transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/transport/test_tcp_transport_endpoint_lifetime.cpp threading lifecycle)
 add_gamenet_component_test(contract transport GameNet::transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/transport/test_tcp_transport_endpoint_dispatch.cpp threading lifecycle backpressure)
+add_gamenet_component_test(contract runtime_model gamenet_runtime_profile_demo_support ${CMAKE_CURRENT_SOURCE_DIR}/contract/runtime_model/test_network_only_profile.cpp threading lifecycle backpressure)
 add_gamenet_component_test(contract game_session GameNet::game_session ${CMAKE_CURRENT_SOURCE_DIR}/contract/game_session/test_session_manager_contract.cpp threading lifecycle)
 add_gamenet_component_test(contract game_session GameNet::game_session ${CMAKE_CURRENT_SOURCE_DIR}/contract/game_session/test_session_manager_lifecycle.cpp threading lifecycle)
 add_gamenet_component_test(contract game_session GameNet::game_session ${CMAKE_CURRENT_SOURCE_DIR}/contract/game_session/test_session_manager_dispatch.cpp threading lifecycle backpressure)

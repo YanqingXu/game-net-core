@@ -33,6 +33,19 @@ Cross-thread interaction must go through:
 
 No other direct mutation path is allowed for core loop state.
 
+## 3.1 Runtime Profile A
+- `SingleLoopInlineEvent` configures TcpServer with zero worker loops; accept,
+  connection state, framing, handler, reply admission, and close all execute on
+  the caller-owned EventLoop
+- Profile A performs no network-to-logic handoff and publishes zero cross-domain
+  handoffs; a same-owner framing continuation is scheduling, not a new owner
+- each dispatch invokes at most the configured frame-count/byte budget; complete
+  remainder is queued once through bounded owner admission
+- continuation rejection closes and never falls back to recursive inline work
+- inline handlers must not block; an observed wall-time overrun is terminal
+- Profile start, stop, configuration, metrics observation, and destruction are
+  owner-thread-only; cross-thread callers marshal through EventLoop first
+
 ## 4. runInLoop
 - If current thread == owner thread: execute immediately
 - Else: enqueue and wakeup loop if needed

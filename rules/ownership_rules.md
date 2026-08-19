@@ -347,6 +347,20 @@ It must not blur these roles.
   its current logical bytes, preserves ring order, and releases the historical
   allocation without acquiring transport/session ownership
 
+## 11.2 Runtime Profile A Ownership
+- the caller owns and outlives the EventLoop and non-installed
+  `SingleLoopInlineEvent` Profile object
+- TcpConnection context owns one finite Profile connection state; that state
+  owns its PacketFramer and shared TransportEndpoint and is released on the
+  connection owner thread
+- a queued same-owner continuation retains only that connection state and
+  rechecks both callback admission and closing state before use
+- the shared callback gate may outlive the Profile stack frame but revocation
+  permanently removes permission to invoke the handler or send a reply
+- stop revokes handler admission before delegating TcpServer connection drain;
+  accepted callback frames finish or become terminal, never move to another
+  owner and never survive as an unbounded queue
+
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists

@@ -5,7 +5,7 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-19
+## Current Roadmap Checkpoint — 2026-08-20
 
 - Historical REL-C1 implementation checkpoint
   `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled
@@ -15,8 +15,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 124 CTest tests: 8 unit, 103 contract, and 13
-  integration, with 97 threading and 102 lifecycle labels. The IOE-R2
+- The current inventory is 125 CTest tests: 8 unit, 104 contract, and 13
+  integration, with 98 threading and 103 lifecycle labels. The IOE-R2
   Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
   and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
   the PERF-R1 reviewed-surface diff remains strictly empty.

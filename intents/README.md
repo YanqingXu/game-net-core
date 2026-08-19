@@ -17,7 +17,7 @@ Every `*.intent.md` document starts with this authoritative front matter:
 ```yaml
 ---
 status: active | deferred | legacy
-target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | gamenet_echo_server | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | historical
+target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | historical
 migration_source: mini_trantor | native
 promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundation | post-core-preview | post-phase-4-protocol | experimental-only | never
 ---
@@ -113,6 +113,7 @@ These intents apply to the current migrated core:
 - `intents/architecture/lifetime_rules.intent.md`
 - `intents/architecture/threading_model.intent.md`
 - `intents/usecases/echo_server.intent.md`
+- `intents/usecases/single_loop_inline_event_profile.intent.md`
 - `intents/modules/packet_framer.intent.md`
 - `intents/modules/transport_endpoint.intent.md`
 - `intents/modules/player_session.intent.md`
