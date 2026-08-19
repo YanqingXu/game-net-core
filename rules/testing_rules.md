@@ -92,6 +92,10 @@ Contract tests verify:
 - a committed completion submission plus cancellation retains its lease until
   an actual terminal packet is drained during quit; a backend without
   Completion capability returns RejectedUnsupported without acquiring a lease
+- the native Completion Engine contract proves nonzero operation generation,
+  one terminal notice per Accepted generation, duplicate/rejected packet
+  filtering, terminal status, owner-side transport bookkeeping, observer
+  revocation, and batch-owned lease retirement
 - one budgeted Engine notice batch combines callback-local close, stale
   remove/re-register invalidation, callback exception containment, and a later
   continuation round with exact drained/remaining/exhausted metrics
@@ -130,8 +134,8 @@ Contract tests verify:
 - invalid removal path is detected or guarded
 - Windows bounded batch dequeue with more than 64 completion packets, an
   interleaved wakeup, exact outstanding-operation release, distinct-Channel
-  batching, same-Channel read/write deferral across poll rounds, and deferred
-  error preservation after the first callback removes the Channel
+  batching, same-Channel read/write terminal coalescing, and terminal error
+  preservation after the first callback removes the Channel
 - Windows wakeup coalescing remains allocation-free, does not truncate the
   real-I/O entries beside its packet, and exposes exact physical post/consume
   counts only through a source-private repository-test seam

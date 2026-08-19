@@ -15,8 +15,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 123 CTest tests: 8 unit, 102 contract, and 13
-  integration, with 96 threading and 101 lifecycle labels. The IOE-R2
+- The current inventory is 124 CTest tests: 8 unit, 103 contract, and 13
+  integration, with 97 threading and 102 lifecycle labels. The IOE-R2
   Readiness Engine contract and all repository/API/CI guards pass on
   Windows/IOCP and Linux/epoll; the PERF-R1 reviewed-surface diff is strictly
   empty.

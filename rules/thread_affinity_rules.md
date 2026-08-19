@@ -121,6 +121,15 @@ No other direct mutation path is allowed for core loop state.
 - Engine wait only publishes notices. EventLoop alone invokes user callbacks,
   contains callback exceptions, invalidates stale active-batch slots, and
   continues budgeted dispatch in a later scheduler round
+- On Windows, GQCSEx decoding, generation validation, terminal retirement, and
+  source-private transport terminal bookkeeping are owner-thread-only. The
+  terminal bookkeeping callback cannot invoke user code or re-enter EventLoop
+- EventLoop retires the last completion wait batch only after its active
+  observers have dispatched or been invalidated. A callback may remove its
+  Channel, but that removal cannot strand terminal transport state or preserve
+  an unowned deferred operation pointer
+- Completion cancellation is only a request plus a final-drain obligation.
+  Only a validated terminal dequeue may clear that obligation
 - `IoEngineOptions::maxCompletionNoticesPerWait` is backend capacity. It is
   compatibility-mapped from the legacy public IOCP option and is not an
   EventLoop scheduling/fairness budget

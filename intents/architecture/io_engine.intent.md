@@ -129,6 +129,28 @@ IOE-R2 gives Readiness its own source-private vocabulary and native owner:
 - `IoEngineOptions::maxReadinessNoticesPerWait` is backend capacity, independent
   of EventLoop's `maxActiveChannelsPerIteration` dispatch budget.
 
+IOE-C1's operation-model slice gives Completion its native result vocabulary:
+
+- `CompletionOperationIdentity` is the operation address plus a nonzero
+  submission generation. Preparation advances the generation, kernel
+  acceptance commits it, synchronous non-pending failure rejects it, and only
+  one terminal dequeue may retire it;
+- `CompletionNotice` is a value result containing identity, operation kind,
+  bytes, native error, terminal status, and an optional observer. GQCSEx is
+  decoded into this fixed typed batch before compatibility publication;
+- duplicate, rejected-generation, null, and already-terminal packets are
+  invalid backend work. They produce no callback and cannot decrement a drain
+  obligation;
+- terminal dequeue retires kernel state and invokes only source-private
+  terminal bookkeeping on the owner thread. EventLoop retires the typed-batch
+  storage lease only after every surviving observer has dispatched or been
+  revoked;
+- the temporary Channel compatibility publisher may coalesce distinct
+  read/write terminal results for one Channel in the same scheduler batch, but
+  it may not retain an unowned operation or Channel pointer across callbacks.
+  Accept operations retain their bounded intrusive identity list until the
+  direct accept consumer replaces it.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -155,6 +177,12 @@ IOE-R2 gives Readiness its own source-private vocabulary and native owner:
   same-generation mask merge, bounded wait
   continuation, and internal cross-thread wakeup. On Windows it verifies that
   the same owner-loop Engine remains Completion-only.
+- `tests/contract/io_engine/test_completion_engine.cpp` verifies operation
+  identity and generation, distinct typed terminal notices, duplicate and
+  rejected-generation filtering, source-private terminal bookkeeping,
+  cancellation status, observer revocation, lease retirement, and conflicting
+  submission/cancellation rejection. On non-Windows it verifies that the
+  completion vocabulary remains platform-neutral.
 - `tests/contract/poller/test_poller_contract.cpp` verifies bounded backend
   waiting and backend-neutral Poller behavior during the adapter slice.
 - `tests/contract/event_loop/test_event_loop.cpp` verifies owner-thread dispatch,

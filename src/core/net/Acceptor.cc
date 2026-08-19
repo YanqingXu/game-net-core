@@ -8,6 +8,7 @@
 #ifdef _WIN32
 #include "gamenet/core/net/platform/IocpOperation.h"
 #include "gamenet/core/net/platform/IocpSocketOps.h"
+#include "detail/IocpOperationState.h"
 #include "detail/NetworkMemoryRetentionTracker.h"
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
 #include "detail/AcceptorIocpHarness.h"
@@ -615,6 +616,9 @@ bool Acceptor::postAccept(IocpAcceptSlot& slot) {
     slot.operation.completionObserved = false;
     slot.operation.nextPublishedCompletion = nullptr;
     slot.cancelling = false;
+    if (!detail::prepareIocpOperationSubmission(slot.operation)) {
+        LOG_FATAL << "AcceptEx operation generation conflict";
+    }
 
     DWORD bytes = 0;
     BOOL ok = FALSE;
@@ -637,6 +641,7 @@ bool Acceptor::postAccept(IocpAcceptSlot& slot) {
         acceptError = ok ? 0 : sockets::lastError();
     }
     if (!ok && acceptError != ERROR_IO_PENDING) {
+        (void)detail::rejectIocpOperationSubmission(slot.operation);
         sockets::close(slot.accepted);
         slot.accepted = kInvalidSocket;
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS

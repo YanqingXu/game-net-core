@@ -165,7 +165,7 @@ jobs:
           py -3 tools/verify_ctest_inventory.py `
             --test-dir "$env:GAMENET_BUILD_DIR" `
             --config "$env:GAMENET_CONFIGURATION" `
-            --expected-total 123 `
+            --expected-total 124 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build

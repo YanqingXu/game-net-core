@@ -91,18 +91,27 @@ It must not blur these roles.
   business payload; it only represents one-or-more logical scheduling requests
 - Poller erases a registration only after exact fd-plus-pointer validation; it
   cannot erase a same-fd replacement on behalf of a stale Channel
-- IOCP batch entries are value snapshots and do not acquire Channel ownership.
-  Publishing one entry releases exactly that operation's outstanding/retained
-  backend lease before its Channel callback runs; a same-Channel entry deferred
-  to the next round keeps both leases intact. Its transferred-byte and terminal
-  error result is captured at dequeue time so later socket closure cannot
-  mutate the observation
+- Native IOCP entries are decoded into fixed `CompletionNotice` value snapshots
+  before scheduler publication. Each notice preserves operation address plus
+  submission generation, kind, bytes, native error, terminal status, and only
+  a validated borrowed observer
+- terminal dequeue retires exactly that generation's kernel/final-drain state.
+  An operation-owned terminal observer may update source-private transport
+  bookkeeping on the owner thread, but owns no callback target and cannot
+  invoke user code
+- a retained operation lease transfers to the typed wait batch at dequeue and
+  survives observer dispatch/revocation. EventLoop releases it after the whole
+  active batch is dispatched; direct native test consumers retire it explicitly
 - the configured IOCP dequeue width borrows a prefix of the Poller's fixed
   64-entry storage; it allocates no packet array and owns no completion
-- the same-Channel deferral rule has one bounded AcceptEx exception: independent
-  Accept operations for one listen Channel are released and appended through
-  their operation-embedded links to one callback queue in the current batch.
-  Read/write/connect operations retain the existing one-entry-per-round rule
+- distinct read/write terminal results for one registered Channel may coalesce
+  into one temporary compatibility callback batch. Their source-private
+  terminal bookkeeping is already complete, so callback-side Channel removal
+  cannot strand transport pending state. No unowned Channel or operation
+  pointer is deferred across callbacks
+- independent Accept operations for one listen Channel are appended through
+  their operation-embedded links to one bounded callback queue in the current
+  batch
 - for a registered Channel, IOCP publication also lends that callback the exact
   operation identity for the current active entry. Accept publication lends a
   bounded intrusive queue of exact identities; no queue node allocation or

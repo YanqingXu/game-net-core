@@ -46,15 +46,17 @@ Poller is not channel owner.
 - backend registration state must be consistent with internal channel bookkeeping
 - removed channels must not continue appearing as valid active channels
 - one poll result contains at most one active entry per Channel; readiness
-  backend event bits are merged before EventLoop dispatch, while additional
-  IOCP operations for the same Channel are retained for a later poll round so
-  Channel registration-generation re-entry cannot strand a dequeued operation
-- Windows IOCP owns fixed 64-entry packet/deferred storage and passes the
+  backend event bits are merged before EventLoop dispatch. IOCP first decodes
+  every validated operation into a typed terminal notice; distinct read/write
+  results for one Channel may coalesce for temporary compatibility dispatch,
+  but no unowned operation or Channel pointer crosses a callback boundary
+- Windows IOCP owns fixed 64-entry native packet, typed notice, batch-lifetime,
+  and published-Channel storage and passes the
   EventLoop startup-validated `[1, 64]` width to
   `GetQueuedCompletionStatusEx`; backlog remains queued for a later EventLoop
   iteration so timer, control, lifecycle, and functor phases retain service
-- the packet, same-Channel deferred, and published-Channel identity arrays are
-  Poller-lifetime fixed working storage. Process-level retention accounting
+- the native packet, typed notice, batch-lifetime, and published-Channel
+  identity arrays are Poller-lifetime fixed working storage. Process-level retention accounting
   adds their exact bytes at Poller construction and releases them at Poller
   destruction; configured dequeue width changes work per round, not retained
   capacity

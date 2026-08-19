@@ -1054,6 +1054,7 @@ void EventLoop::dispatchActiveChannels() {
     if (!hasPendingActiveChannels()) {
         activeChannels_.clear();
         activeChannelCursor_ = 0;
+        detail::ioEngineFromPoller(*poller_).retireWaitBatch();
         return;
     }
 
@@ -1122,6 +1123,7 @@ void EventLoop::dispatchActiveChannels() {
     if (remaining == 0) {
         activeChannels_.clear();
         activeChannelCursor_ = 0;
+        detail::ioEngineFromPoller(*poller_).retireWaitBatch();
     }
 }
 

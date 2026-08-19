@@ -10,6 +10,7 @@
 #ifdef _WIN32
 #include "gamenet/core/net/platform/IocpOperation.h"
 #include "gamenet/core/net/platform/IocpSocketOps.h"
+#include "detail/IocpOperationState.h"
 #endif
 
 #include <cassert>
@@ -264,6 +265,10 @@ void Connector::connect(std::uint64_t generation) {
     iocpConnect_->operation.channel = channel_.get();
     iocpConnect_->connectEx = connectEx;
     iocpConnect_->generation = generation;
+    if (!detail::prepareIocpOperationSubmission(
+            iocpConnect_->operation)) {
+        LOG_FATAL << "ConnectEx operation generation conflict";
+    }
 
     DWORD bytes = 0;
     iocpConnect_->pending = true;
@@ -277,6 +282,8 @@ void Connector::connect(std::uint64_t generation) {
         &iocpConnect_->operation.overlapped);
     const int connectError = ok ? 0 : sockets::lastError();
     if (!ok && connectError != ERROR_IO_PENDING) {
+        (void)detail::rejectIocpOperationSubmission(
+            iocpConnect_->operation);
         iocpConnect_->pending = false;
         iocpConnect_->operation.error = static_cast<DWORD>(connectError);
         handleError(generation);

@@ -10,7 +10,7 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：123（8/102/13；threading 96、lifecycle 101）。API-R1 已完成，
+当前测试基线：124（8/103/13；threading 97、lifecycle 102）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -180,17 +180,17 @@ capability Engine。IOE-R1 在精确提交
 
 ### 8.1 Operation 公理
 
-- [ ] operation identity + generation 唯一；
-- [ ] Accepted submission 导向唯一 terminal completion；
-- [ ] 同步非 pending 失败不建立 future obligation；
-- [ ] observer revoke 与 kernel obligation/storage lease 分离；
-- [ ] terminal dequeue 后只在 owner 完成 retirement；
-- [ ] cancel request 不等于 completion 已发生。
+- [x] operation identity + generation 唯一；
+- [x] Accepted submission 导向唯一 terminal completion；
+- [x] 同步非 pending 失败不建立 future obligation；
+- [x] observer revoke 与 kernel obligation/storage lease 分离；
+- [x] terminal dequeue 后只在 owner 完成 retirement；
+- [x] cancel request 不等于 completion 已发生。
 
 ### 8.2 数据路径
 
-- [ ] GQCSEx 结果直接形成 `CompletionNotice`；
-- [ ] read/write/accept/connect/cancel completion 保留独立 operation 身份；
+- [x] GQCSEx 结果直接形成 `CompletionNotice`；
+- [x] read/write/accept/connect/cancel completion 保留独立 operation 身份；
 - [ ] 移除 fake `kReadEvent/kWriteEvent` 的结果转译；
 - [ ] 移除 Channel 对 IOCP operation 和 storage 的携带职责；
 - [ ] TcpConnection 保持统一连接、发送、背压、关闭和 callback contract；
@@ -348,12 +348,12 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **IOE-C1：IOE-R2 已在精确提交
-> `6f45aa6e78152b8fd86df925962e580101b2f2ee` 关闭。现在直接以失败合同定义 native
-> `CompletionNotice`、operation identity/generation、Accepted submission 的唯一
-> terminal completion，以及 observer revoke 与 kernel obligation/storage lease 的分离。**
+> **IOE-C1：operation-model 垂直切片已实现 native `CompletionNotice`、operation
+> identity/generation、唯一 terminal retirement、observer revoke/lease 分离和真实
+> Accept/Connect/Read/Write 提交接线。现在直接推进 read/write typed consumer，退役
+> temporary Channel compatibility publisher。**
 
 ARCH-G1 独立 review 与 RTM-R1 的三个 Profile contract 继续并行，不形成冻结点。下一个
-可运行目标不是新发布 tag，而是：Windows/IOCP 先让 GQCSEx 结果直接形成 typed native
-Completion notice，再按 read/write、accept/connect、shutdown 小切片逐步退役 fake Channel
+可运行目标不是新发布 tag，而是：Windows/IOCP 让 read/write driver 直接消费现有 typed
+native Completion notice，再按 accept/connect、shutdown 小切片逐步退役 fake Channel
 read/write translation；Linux/epoll 与 stable public surface 持续全绿。

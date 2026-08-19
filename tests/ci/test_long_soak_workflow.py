@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 96
+EXPECTED_THREADING_TESTS = 97
 EXPECTED_PHASE4_SOAK_TESTS = 12
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -240,7 +240,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 123", workflow)
+    require(inventory, "--expected-total 124", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=7", workflow)
     require(inventory, "--expect-label broadcast=5", workflow)
@@ -293,7 +293,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 123",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 124",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -417,8 +417,8 @@ def main() -> None:
     assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
         "      - name: Check repository guards"
     ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
-    require(self_hosted_ci, "--expected-total 123", workflow)
-    require(self_hosted_ci, "inventory+=(--expect-label threading=96)", workflow)
+    require(self_hosted_ci, "--expected-total 124", workflow)
+    require(self_hosted_ci, "inventory+=(--expect-label threading=97)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
     require(self_hosted_ci, "--expected-total 2", workflow)
@@ -734,7 +734,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "96 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "97 threading-labeled tests", ci_docs)
     require(ci_docs_text, "12 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "`ci_artifact_policy`", ci_docs)
     require(ci_docs_text, "defaults to `best-effort`", ci_docs)

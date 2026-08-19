@@ -115,6 +115,9 @@ public:
     virtual gamenet::base::Timestamp wait(
         int timeoutMs,
         IoNoticeBatch& notices) = 0;
+    // Retires storage leases owned by the last wait batch after every
+    // observer in that batch has either dispatched or been revoked.
+    virtual void retireWaitBatch() noexcept = 0;
     virtual IoEngineOperationResult registerOrUpdateReadiness(
         Channel* channel) = 0;
     virtual IoEngineOperationResult cancelReadiness(Channel* channel) = 0;

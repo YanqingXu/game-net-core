@@ -74,8 +74,11 @@ same-address or same-fd replacement.
 A completion operation has an identity, kind, generation, retained storage
 lease, result, cancellation state, and exactly one terminal retirement. A
 successful submission owns a future kernel completion packet. Cancellation is
-not consumption. IOE-C1 will deliver a typed completion notice directly to its
-operation consumer and will remove synthetic Channel readiness from this path.
+not consumption. IOE-C1 now decodes GQCSEx directly into a fixed typed
+`CompletionNotice` batch and generation-validates terminal retirement. Its
+first operation-model slice retains a temporary Channel compatibility publisher;
+later slices move typed notices to direct operation consumers and remove that
+synthetic readiness path.
 
 ### Runtime Models
 
@@ -131,10 +134,14 @@ wakeup Channel on epoll. The initial port is explicitly level-triggered and
 uses a fixed 64-notice default capacity independent of EventLoop dispatch
 budget.
 
-IOE-C1 introduces typed IOCP completion notices, moves completion retention and
-association behind the Completion Engine, then deletes Channel's IOCP operation
-mailboxes and EventLoop's backend downcasts. Public API changes, if any, require
-a later additive review after both native engines have evidence.
+IOE-C1's first slice introduces typed IOCP completion notices, submission
+generations, duplicate/rejected packet filtering, owner-side terminal transport
+bookkeeping, and wait-batch lease retirement. Same-Channel read/write results
+coalesce without retaining an unowned pointer across callbacks. The remaining
+slices move direct read/write and accept/connect consumers behind the Completion
+Engine, then delete Channel's IOCP operation mailboxes and EventLoop's backend
+downcasts. Public API changes, if any, require a later additive review after both
+native engines have evidence.
 
 ## Current Coupling Inventory
 

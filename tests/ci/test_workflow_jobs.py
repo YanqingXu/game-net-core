@@ -13,8 +13,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 123
-EXPECTED_THREADING_TOTAL = 96
+EXPECTED_CTEST_TOTAL = 124
+EXPECTED_THREADING_TOTAL = 97
 EXPECTED_CONSUMER_TOTAL = 2
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
@@ -708,7 +708,7 @@ def main() -> None:
     require(self_hosted_job, '"tests/ci/test_workflow_jobs.py"')
     require(self_hosted_job, "& py -3 $guard")
     require(self_hosted_job, '-G "Visual Studio 18 2026"')
-    require(self_hosted_job, "--expected-total 123")
+    require(self_hosted_job, "--expected-total 124")
     require(self_hosted_job, "--timeout 30")
     require(self_hosted_job, "- name: Install and verify package consumer")
     require(self_hosted_job, "--expected-total 2")
@@ -1012,8 +1012,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 123")
-    require(ci_docs, "threading=96")
+    require(ci_docs, "exactly 124")
+    require(ci_docs, "threading=97")
     require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")

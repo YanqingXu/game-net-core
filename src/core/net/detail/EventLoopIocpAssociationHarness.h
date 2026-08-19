@@ -11,9 +11,12 @@
 #ifdef _WIN32
 #include "gamenet/core/net/poller/IocpPoller.h"
 #include "gamenet/core/net/platform/IocpOperation.h"
+#include "IocpOperationState.h"
+#include "IocpPollerAccess.h"
 #endif
 
 #include <cstddef>
+#include <stdexcept>
 
 namespace gamenet::net::detail {
 
@@ -140,9 +143,54 @@ public:
     }
 
 #ifdef _WIN32
+    static bool beginSyntheticCompletionSubmission(
+        IocpOperation* operation) noexcept {
+        if (operation == nullptr ||
+            !prepareIocpOperationSubmission(*operation)) {
+            return false;
+        }
+        if (commitIocpOperationSubmission(*operation)) {
+            return true;
+        }
+        (void)rejectIocpOperationSubmission(*operation);
+        return false;
+    }
+
+    static bool prepareRejectedCompletionSubmission(
+        IocpOperation* operation) noexcept {
+        return operation != nullptr &&
+               prepareIocpOperationSubmission(*operation) &&
+               rejectIocpOperationSubmission(*operation);
+    }
+
+    static CompletionWaitResult waitNativeCompletions(
+        EventLoop& loop,
+        int timeoutMs) {
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        return poller == nullptr
+            ? CompletionWaitResult{}
+            : IocpPollerAccess::waitNativeCompletions(
+                  *poller,
+                  timeoutMs);
+    }
+
+    static void retireNativeCompletions(EventLoop& loop) noexcept {
+        auto* poller =
+            dynamic_cast<IocpPoller*>(loop.poller_.get());
+        if (poller != nullptr) {
+            IocpPollerAccess::retireCompletionNotices(*poller);
+        }
+    }
+
     static void trackCompletion(
         EventLoop& loop,
         IocpOperation* operation) {
+        if (operation != nullptr && !operation->submissionAccepted &&
+            !beginSyntheticCompletionSubmission(operation)) {
+            throw std::logic_error(
+                "test IOCP completion submission conflict");
+        }
         loop.trackCompletionOperation(operation);
     }
 

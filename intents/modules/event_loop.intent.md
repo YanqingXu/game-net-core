@@ -176,8 +176,10 @@ EventLoop is the heart of reactor execution in game-net-core.
   within fixed 64-entry Poller storage. One configured packet batch is consumed
   per normal loop iteration; an I/O backlog therefore yields to expired timers,
   control sources, lifecycle nodes, and pending functors before the next batch
-- IOCP scheduler metrics report dequeued packet count, exact user-space
-  same-Channel deferred count, and full-width exhaustion. Windows exposes no
+- IOCP scheduler metrics report dequeued packet count and full-width
+  exhaustion. The legacy deferred field is zero during the typed operation
+  model slice because no unowned completion pointer crosses callback rounds.
+  Windows exposes no
   non-destructive completion-port queue-depth/oldest-packet query, so those
   fields never claim an unknown kernel remainder or lag
 - one asynchronous callback exception never skips later ready timers or
@@ -413,8 +415,8 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - the Windows Poller contract uses a configured width below the fixed 64-entry
   ceiling, interleaves a wakeup with more than one configured batch, verifies
   bounded multi-round progress, exact completion-obligation
-  release, distinct-Channel batching, and same-Channel deferral across
-  registration-safe rounds
+  release, distinct-Channel batching, and same-Channel read/write terminal
+  coalescing without deferred raw pointers
 - the Windows wakeup-coalescing contract verifies a multi-producer burst emits
   one physical packet, producers on both sides of the owner reset cannot lose
   accepted work, self-rearm remains non-recursive, and quit/final-drain

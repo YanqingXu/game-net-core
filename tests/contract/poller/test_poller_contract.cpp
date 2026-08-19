@@ -163,6 +163,9 @@ void testReadableCompletion() {
     readBuffer.len = static_cast<ULONG>(readBufferStorage.size());
     DWORD bytes = 0;
     DWORD flags = 0;
+    GAMENET_TEST_ASSERT(
+        gamenet::net::detail::EventLoopIocpAssociationHarness::
+            beginSyntheticCompletionSubmission(&readOperation));
     const int rc = ::WSARecv(
         pair.readFd,
         &readBuffer,
@@ -272,7 +275,7 @@ void testBoundedIocpBatch() {
         EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
 }
 
-void testSameChannelCompletionDeferral() {
+void testSameChannelCompletionsCoalesceWithoutLosingTerminalState() {
     using gamenet::net::IocpOperation;
     using gamenet::net::IocpOperationKind;
     using gamenet::net::detail::EventLoopIocpAssociationHarness;
@@ -325,7 +328,7 @@ void testSameChannelCompletionDeferral() {
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 1);
     GAMENET_TEST_ASSERT(firstReads == 1);
-    GAMENET_TEST_ASSERT(firstWrites == 0);
+    GAMENET_TEST_ASSERT(firstWrites == 1);
     GAMENET_TEST_ASSERT(secondReads == 0);
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::
@@ -336,13 +339,13 @@ void testSameChannelCompletionDeferral() {
         EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 1);
     GAMENET_TEST_ASSERT(firstReads == 1);
     GAMENET_TEST_ASSERT(firstWrites == 1);
-    GAMENET_TEST_ASSERT(secondReads == 0);
+    GAMENET_TEST_ASSERT(secondReads == 1);
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::
-            hasPendingCompletionOperations(loop));
+        !EventLoopIocpAssociationHarness::
+             hasPendingCompletionOperations(loop));
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 1);
+        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
     GAMENET_TEST_ASSERT(firstReads == 1);
     GAMENET_TEST_ASSERT(firstWrites == 1);
     GAMENET_TEST_ASSERT(secondReads == 1);
@@ -408,7 +411,7 @@ void testIocpCompletionBudgetMetrics() {
     GAMENET_TEST_ASSERT(!samples[1].budgetExhausted);
 }
 
-void testDeferredCompletionPreservesDequeuedError() {
+void testCoalescedTerminalErrorSurvivesObserverRemoval() {
     using gamenet::net::IocpOperation;
     using gamenet::net::IocpOperationKind;
     using gamenet::net::detail::EventLoopIocpAssociationHarness;
@@ -457,8 +460,8 @@ void testDeferredCompletionPreservesDequeuedError() {
     GAMENET_TEST_ASSERT(
         operations[1].error == ERROR_OPERATION_ABORTED);
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::
-            hasPendingCompletionOperations(loop));
+        !EventLoopIocpAssociationHarness::
+             hasPendingCompletionOperations(loop));
 
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
@@ -479,9 +482,9 @@ int main() {
     testReadableCompletion();
 #ifdef _WIN32
     testBoundedIocpBatch();
-    testSameChannelCompletionDeferral();
+    testSameChannelCompletionsCoalesceWithoutLosingTerminalState();
     testIocpCompletionBudgetMetrics();
-    testDeferredCompletionPreservesDequeuedError();
+    testCoalescedTerminalErrorSurvivesObserverRemoval();
 #endif
 
     return 0;

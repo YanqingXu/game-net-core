@@ -231,18 +231,18 @@ determinism。因此任一早期检查点的 CI、性能、容量或 endurance �
 | intent 显式 verification paths | 157 |
 | public headers | 55 |
 | `.cc` sources | 42 |
-| CTest tests | 123 |
+| CTest tests | 124 |
 
 测试分区：
 
 - unit：8；
-- contract：102；
+- contract：103；
 - integration：13。
 
 交叉标签中包括：
 
-- threading：96；
-- lifecycle：101；
+- threading：97；
+- lifecycle：102；
 - game pipeline：7；
 - broadcast：5。
 

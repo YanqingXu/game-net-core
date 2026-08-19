@@ -123,6 +123,12 @@ public:
 #endif
     }
 
+    void retireWaitBatch() noexcept override {
+#ifdef _WIN32
+        IocpPollerAccess::retireCompletionNotices(*this);
+#endif
+    }
+
     IoEngineOperationResult registerOrUpdateReadiness(
         Channel* channel) override {
         assertOwnerThread();
@@ -249,10 +255,12 @@ public:
             return IoEngineOperationResult::RejectedShutdown;
         }
 #ifdef _WIN32
-        NativePoller::retainCompletionOperation(
-            operation,
-            std::move(lifetime));
-        return IoEngineOperationResult::Accepted;
+        return IocpPollerAccess::commitCompletionSubmission(
+                   *this,
+                   operation,
+                   std::move(lifetime))
+            ? IoEngineOperationResult::Accepted
+            : IoEngineOperationResult::RejectedConflict;
 #else
         (void)operation;
         (void)lifetime;
@@ -270,8 +278,11 @@ public:
             return IoEngineOperationResult::RejectedShutdown;
         }
 #ifdef _WIN32
-        NativePoller::trackCompletionOperation(operation);
-        return IoEngineOperationResult::Accepted;
+        return IocpPollerAccess::commitCompletionCancellation(
+                   *this,
+                   operation)
+            ? IoEngineOperationResult::Accepted
+            : IoEngineOperationResult::RejectedConflict;
 #else
         (void)operation;
         return IoEngineOperationResult::RejectedUnsupported;

@@ -13,6 +13,8 @@ def main() -> None:
     plan = repo_root / "docs" / "superpowers" / "plans" / "2026-07-07-windows-iocp-data-path.md"
     milestone = repo_root / "docs" / "development" / "windows_iocp_milestone.md"
     operation = repo_root / "include" / "gamenet" / "core" / "net" / "platform" / "IocpOperation.h"
+    completion_port = repo_root / "src" / "core" / "net" / "detail" / "CompletionPort.h"
+    operation_state = repo_root / "src" / "core" / "net" / "detail" / "IocpOperationState.h"
     socket_ops = repo_root / "include" / "gamenet" / "core" / "net" / "platform" / "IocpSocketOps.h"
     socket_ops_source = repo_root / "src" / "core" / "net" / "platform" / "IocpSocketOps_win.cc"
     sockets_win = repo_root / "src" / "core" / "net" / "platform" / "SocketsOps_win.cc"
@@ -67,6 +69,13 @@ def main() -> None:
         / "poller"
         / "test_poller_contract.cpp"
     )
+    completion_engine_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "io_engine"
+        / "test_completion_engine.cpp"
+    )
     accept_connect_drain_test = (
         repo_root
         / "tests"
@@ -101,6 +110,21 @@ def main() -> None:
     require(operation_text, "shutdownObligation", operation)
     require(operation_text, "completionObserved", operation)
     require(operation_text, "nextPublishedCompletion", operation)
+    require(operation_text, "generation", operation)
+    require(operation_text, "terminalGeneration", operation)
+    require(operation_text, "terminalObserver", operation)
+
+    completion_port_text = completion_port.read_text(encoding="utf-8")
+    require(completion_port_text, "struct CompletionOperationIdentity", completion_port)
+    require(completion_port_text, "struct CompletionNotice", completion_port)
+    require(completion_port_text, "CompletionTerminalStatus", completion_port)
+    require(completion_port_text, "CompletionWaitResult", completion_port)
+
+    operation_state_text = operation_state.read_text(encoding="utf-8")
+    require(operation_state_text, "prepareIocpOperationSubmission", operation_state)
+    require(operation_state_text, "commitIocpOperationSubmission", operation_state)
+    require(operation_state_text, "rejectIocpOperationSubmission", operation_state)
+    require(operation_state_text, "retireIocpOperationSubmission", operation_state)
 
     socket_ops_text = socket_ops.read_text(encoding="utf-8")
     require(socket_ops_text, "loadAcceptEx", socket_ops)
@@ -287,7 +311,7 @@ def main() -> None:
 
     poller_header_text = poller_header.read_text(encoding="utf-8")
     require(poller_header_text, "Windows IOCP backend for EventLoop", poller_header)
-    require(poller_header_text, "loop-owned IocpOperation metadata", poller_header)
+    require(poller_header_text, "fixed typed terminal notices", poller_header)
     assert "skeleton" not in poller_header_text.lower(), (
         "IocpPoller comments must describe the active data path, not the old skeleton milestone"
     )
@@ -320,10 +344,12 @@ def main() -> None:
         "physicalWakeupPacketsPosted() ==",
         wakeup_coalescing_test,
     )
-    require(poller_text, "deferredEntries_", poller_source)
+    require(poller_text, "waitNativeCompletionNotices", poller_source)
+    require(poller_text, "CompletionNotice", poller_source)
+    require(poller_text, "retireIocpOperationSubmission", poller_source)
+    require(poller_text, "operation->terminalObserver", poller_source)
     require(poller_text, "reinterpret_cast<IocpOperation*>", poller_source)
     require(poller_text, "operation->bytesTransferred", poller_source)
-    require(poller_text, "operation->completionObserved = true", poller_source)
     require(poller_text, "setIocpCompletionOperation(operation)", poller_source)
     require(
         poller_text,
@@ -337,18 +363,19 @@ def main() -> None:
     poller_header_text = poller_header.read_text(encoding="utf-8")
     require(poller_header_text, "kCompletionBatchSize = 64", poller_header)
     require(poller_header_text, "completionBatchSize_", poller_header)
-    require(poller_header_text, "deferredEntries_", poller_header)
+    require(poller_header_text, "IocpCompletionState", poller_header)
+    assert "deferredEntries_" not in poller_header_text
 
     poller_contract_text = poller_contract_test.read_text(encoding="utf-8")
     require(poller_contract_text, "testBoundedIocpBatch", poller_contract_test)
     require(
         poller_contract_text,
-        "testSameChannelCompletionDeferral",
+        "testSameChannelCompletionsCoalesceWithoutLosingTerminalState",
         poller_contract_test,
     )
     require(
         poller_contract_text,
-        "testDeferredCompletionPreservesDequeuedError",
+        "testCoalescedTerminalErrorSurvivesObserverRemoval",
         poller_contract_test,
     )
     require(
@@ -361,6 +388,11 @@ def main() -> None:
         "testIocpCompletionBudgetMetrics",
         poller_contract_test,
     )
+
+    completion_engine_text = completion_engine_test.read_text(encoding="utf-8")
+    require(completion_engine_text, "testNativePacketsBecomeDistinctTerminalNotices", completion_engine_test)
+    require(completion_engine_text, "testGenerationRejectsDuplicateAndRejectedSubmissionPackets", completion_engine_test)
+    require(completion_engine_text, "testObserverRevokeDoesNotRetireKernelLeaseEarly", completion_engine_test)
 
     core_cmake_text = core_cmake.read_text(encoding="utf-8")
     require(core_cmake_text, "net/platform/IocpSocketOps_win.cc", core_cmake)

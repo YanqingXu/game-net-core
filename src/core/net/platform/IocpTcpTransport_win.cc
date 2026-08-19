@@ -6,6 +6,7 @@
 #include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
+#include "../detail/IocpOperationState.h"
 #include "../detail/NetworkMemoryRetentionTracker.h"
 
 #include <algorithm>
@@ -118,12 +119,27 @@ IocpTcpTransport::IocpTcpTransport(Channel* channel)
     : channel_(channel) {
     readOperation_.kind = IocpOperationKind::Read;
     readOperation_.channel = channel_;
+    readOperation_.terminalContext = this;
+    readOperation_.terminalObserver = &IocpTcpTransport::observeTerminal;
     writeOperation_.kind = IocpOperationKind::Write;
     writeOperation_.channel = channel_;
+    writeOperation_.terminalContext = this;
+    writeOperation_.terminalObserver = &IocpTcpTransport::observeTerminal;
 }
 
 IocpTcpTransport::~IocpTcpTransport() {
     releaseReadStorage();
+}
+
+void IocpTcpTransport::observeTerminal(
+    void* context,
+    IocpOperationKind kind) noexcept {
+    auto& transport = *static_cast<IocpTcpTransport*>(context);
+    if (kind == IocpOperationKind::Read) {
+        transport.readPending_ = false;
+    } else if (kind == IocpOperationKind::Write) {
+        transport.writePending_ = false;
+    }
 }
 
 int IocpTcpTransport::startRead(std::size_t maxBytes) {
@@ -168,6 +184,9 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
 
     readBuffer_.buf = readStorage_.get();
     readBuffer_.len = static_cast<ULONG>(submissionBytes);
+    if (!detail::prepareIocpOperationSubmission(readOperation_)) {
+        return WSAEALREADY;
+    }
 
     DWORD flags = 0;
     DWORD bytes = 0;
@@ -204,15 +223,22 @@ int IocpTcpTransport::startRead(std::size_t maxBytes) {
             sockets::lastError();
 #endif
         if (error == WSA_IO_PENDING) {
+            if (!detail::commitIocpOperationSubmission(readOperation_)) {
+                LOG_FATAL << "IOCP read submission generation conflict";
+            }
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             updatePeak(maxReadSubmissionBytes, submissionBytes);
 #endif
             return 0;
         }
+        (void)detail::rejectIocpOperationSubmission(readOperation_);
         readPending_ = false;
         readBuffer_ = WSABUF{};
         readOperation_.error = static_cast<DWORD>(error);
         return error;
+    }
+    if (!detail::commitIocpOperationSubmission(readOperation_)) {
+        LOG_FATAL << "IOCP read submission generation conflict";
     }
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
     updatePeak(maxReadSubmissionBytes, submissionBytes);
@@ -318,6 +344,11 @@ int IocpTcpTransport::startWrite() {
     writeBuffer_.buf = front.bytes.data() + front.offset;
     writeBuffer_.len = static_cast<ULONG>(submissionBytes);
     submittedWriteBytes_ = writeBuffer_.len;
+    if (!detail::prepareIocpOperationSubmission(writeOperation_)) {
+        submittedWriteBytes_ = 0;
+        writeBuffer_ = WSABUF{};
+        return WSAEALREADY;
+    }
 
     DWORD bytes = 0;
     writePending_ = true;
@@ -353,16 +384,23 @@ int IocpTcpTransport::startWrite() {
             sockets::lastError();
 #endif
         if (error == WSA_IO_PENDING) {
+            if (!detail::commitIocpOperationSubmission(writeOperation_)) {
+                LOG_FATAL << "IOCP write submission generation conflict";
+            }
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             observeWriteSubmission(submittedWriteBytes_);
 #endif
             return 0;
         }
+        (void)detail::rejectIocpOperationSubmission(writeOperation_);
         writePending_ = false;
         writeBuffer_ = WSABUF{};
         submittedWriteBytes_ = 0;
         writeOperation_.error = static_cast<DWORD>(error);
         return error;
+    }
+    if (!detail::commitIocpOperationSubmission(writeOperation_)) {
+        LOG_FATAL << "IOCP write submission generation conflict";
     }
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
     observeWriteSubmission(submittedWriteBytes_);

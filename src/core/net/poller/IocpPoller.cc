@@ -8,16 +8,36 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/platform/IocpOperation.h"
+#include "../detail/CompletionPort.h"
+#include "../detail/IocpOperationState.h"
 #include "../detail/NetworkMemoryRetentionTracker.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <exception>
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
 #include <atomic>
 #endif
 #include <new>
 #include <stdexcept>
+
+namespace gamenet::net::detail {
+
+struct IocpCompletionState {
+    std::array<OVERLAPPED_ENTRY, IocpPoller::kCompletionBatchSize>
+        nativeEntries{};
+    std::array<CompletionNotice, IocpPoller::kCompletionBatchSize>
+        notices{};
+    std::array<std::shared_ptr<void>, IocpPoller::kCompletionBatchSize>
+        noticeLifetimes{};
+    std::array<Channel*, IocpPoller::kCompletionBatchSize>
+        publishedChannels{};
+    ULONG noticeCount{0};
+    CompletionWaitProgress progress{};
+};
+
+}  // namespace gamenet::net::detail
 
 namespace gamenet::net {
 
@@ -37,16 +57,43 @@ HANDLE createCompletionPortOrDie() {
     return iocp;
 }
 
-uint32_t completionEvents(const IocpOperation& operation) noexcept {
-    switch (operation.kind) {
+detail::CompletionOperationKind completionKind(
+    IocpOperationKind kind) noexcept {
+    switch (kind) {
     case IocpOperationKind::Accept:
-    case IocpOperationKind::Read:
-        return Channel::kReadEvent;
+        return detail::CompletionOperationKind::Accept;
     case IocpOperationKind::Connect:
+        return detail::CompletionOperationKind::Connect;
+    case IocpOperationKind::Read:
+        return detail::CompletionOperationKind::Read;
     case IocpOperationKind::Write:
+        return detail::CompletionOperationKind::Write;
+    }
+    std::terminate();
+}
+
+uint32_t completionEvents(
+    detail::CompletionOperationKind kind) noexcept {
+    switch (kind) {
+    case detail::CompletionOperationKind::Accept:
+    case detail::CompletionOperationKind::Read:
+        return Channel::kReadEvent;
+    case detail::CompletionOperationKind::Connect:
+    case detail::CompletionOperationKind::Write:
         return Channel::kWriteEvent;
     }
     return Channel::kErrorEvent;
+}
+
+detail::CompletionTerminalStatus completionStatus(
+    DWORD error) noexcept {
+    if (error == 0) {
+        return detail::CompletionTerminalStatus::Succeeded;
+    }
+    if (error == ERROR_OPERATION_ABORTED) {
+        return detail::CompletionTerminalStatus::Cancelled;
+    }
+    return detail::CompletionTerminalStatus::Failed;
 }
 
 DWORD toTimeout(int timeoutMs) noexcept {
@@ -108,6 +155,8 @@ IocpPoller::IocpPoller(
     EventLoop* loop,
     std::size_t completionBatchSize)
     : Poller(loop),
+      completionState_(
+          std::make_unique<detail::IocpCompletionState>()),
       iocp_(createCompletionPortOrDie()),
       completionBatchSize_(static_cast<ULONG>(completionBatchSize)) {
     if (completionBatchSize == 0 ||
@@ -119,62 +168,66 @@ IocpPoller::IocpPoller(
     }
     detail::retainNetworkFixedStorage(
         detail::NetworkFixedStorageCategory::IocpCompletionBatch,
-        sizeof(completionEntries_) +
-            sizeof(deferredEntries_) +
-            sizeof(publishedChannels_));
+        sizeof(*completionState_));
 }
 
 IocpPoller::~IocpPoller() {
     detail::releaseNetworkFixedStorage(
         detail::NetworkFixedStorageCategory::IocpCompletionBatch,
-        sizeof(completionEntries_) +
-            sizeof(deferredEntries_) +
-            sizeof(publishedChannels_));
+        sizeof(*completionState_));
     if (iocp_ != nullptr) {
         ::CloseHandle(iocp_);
     }
 }
 
-gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChannels) {
+gamenet::base::Timestamp IocpPoller::poll(
+    int timeoutMs,
+    ChannelList* activeChannels) {
+    retireCompletionNoticeLeases();
+    const auto batch = waitNativeCompletionNotices(timeoutMs);
+    publishCompletionNotices(batch, activeChannels);
+    lastDeferredCompletionCount_ = 0;
+    return batch.observedAt;
+}
+
+detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
+    int timeoutMs) {
+    auto& state = *completionState_;
+    retireCompletionNoticeLeases();
+    state.noticeCount = 0;
+    state.progress = {};
     lastCompletionPacketsDrained_ = 0;
     lastDeferredCompletionCount_ = 0;
     lastCompletionBudgetExhausted_ = false;
     ULONG removed = 0;
-    BOOL ok = TRUE;
-    const bool processingDeferredEntries = deferredEntryCount_ != 0;
-    if (processingDeferredEntries) {
-        removed = deferredEntryCount_;
-        std::copy_n(
-            deferredEntries_.begin(),
-            removed,
-            completionEntries_.begin());
-        deferredEntryCount_ = 0;
-    } else {
-        ok = ::GetQueuedCompletionStatusEx(
-            iocp_,
-            completionEntries_.data(),
-            completionBatchSize_,
-            &removed,
-            toTimeout(timeoutMs),
-            FALSE);
-    }
+    const BOOL ok = ::GetQueuedCompletionStatusEx(
+        iocp_,
+        state.nativeEntries.data(),
+        completionBatchSize_,
+        &removed,
+        toTimeout(timeoutMs),
+        FALSE);
 
-    const auto now = gamenet::base::now();
+    const auto observedAt = gamenet::base::now();
     if (!ok) {
         const DWORD error = ::GetLastError();
         if (error != WAIT_TIMEOUT) {
             iocpDie("GetQueuedCompletionStatusEx");
         }
-        return now;
+        return {
+            .observedAt = observedAt,
+            .notices = {},
+            .progress = state.progress,
+        };
     }
-    lastCompletionPacketsDrained_ = removed;
-    lastCompletionBudgetExhausted_ =
+    state.progress.nativePackets = removed;
+    state.progress.budgetExhausted =
         removed == completionBatchSize_;
-
-    std::size_t activeCount = 0;
+    lastCompletionPacketsDrained_ = removed;
+    lastCompletionBudgetExhausted_ = state.progress.budgetExhausted;
 
     for (ULONG index = 0; index < removed; ++index) {
-        const auto& entry = completionEntries_[index];
+        const auto& entry = state.nativeEntries[index];
         if (entry.lpCompletionKey == kWakeupCompletionKey) {
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             if (const auto hook =
@@ -184,6 +237,7 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             }
 #endif
             wakeupPending_.store(false, std::memory_order_release);
+            ++state.progress.wakeupPackets;
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
             wakeupPacketsConsumed.fetch_add(1, std::memory_order_relaxed);
             if (const auto hook =
@@ -197,7 +251,11 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
 
         auto* operation =
             reinterpret_cast<IocpOperation*>(entry.lpOverlapped);
-        if (operation == nullptr) {
+        if (operation == nullptr ||
+            !operation->submissionAccepted ||
+            operation->generation == 0 ||
+            operation->terminalGeneration == operation->generation) {
+            ++state.progress.invalidPackets;
             continue;
         }
 
@@ -211,32 +269,23 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             registered->second == channel &&
             channel->index() == kAdded;
 
-        if (!processingDeferredEntries) {
-            operation->bytesTransferred =
-                entry.dwNumberOfBytesTransferred;
-            operation->error =
-                completionError(*operation, channelRegistered);
-        }
-
-        const bool channelAlreadyPublished =
-            channelRegistered &&
-            std::find(
-                publishedChannels_.begin(),
-                publishedChannels_.begin() +
-                    static_cast<std::ptrdiff_t>(activeCount),
-                channel) !=
-                publishedChannels_.begin() +
-                    static_cast<std::ptrdiff_t>(activeCount);
-        if (channelAlreadyPublished &&
-            operation->kind != IocpOperationKind::Accept) {
-            if (deferredEntryCount_ >= deferredEntries_.size()) {
-                iocpDie("IOCP deferred completion batch overflow");
-            }
-            deferredEntries_[deferredEntryCount_++] = entry;
+        operation->bytesTransferred =
+            entry.dwNumberOfBytesTransferred;
+        operation->error =
+            completionError(*operation, channelRegistered);
+        const detail::CompletionOperationIdentity identity{
+            .operation = operation,
+            .generation = operation->generation,
+        };
+        if (!detail::retireIocpOperationSubmission(*operation)) {
+            ++state.progress.invalidPackets;
             continue;
         }
-
-        operation->completionObserved = true;
+        if (operation->terminalObserver != nullptr) {
+            operation->terminalObserver(
+                operation->terminalContext,
+                operation->kind);
+        }
         if (operation->shutdownObligation) {
             operation->shutdownObligation = false;
             if (outstandingOperationCount_ == 0) {
@@ -244,18 +293,64 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             }
             --outstandingOperationCount_;
         }
-        std::shared_ptr<void> completionLifetime;
+        if (state.noticeCount >= completionBatchSize_) {
+            iocpDie("IOCP typed completion batch overflow");
+        }
         const auto retained = retainedOperations_.find(operation);
         if (retained != retainedOperations_.end()) {
-            completionLifetime = std::move(retained->second);
+            state.noticeLifetimes[state.noticeCount] =
+                std::move(retained->second);
             retainedOperations_.erase(retained);
         }
+        state.notices[state.noticeCount++] = detail::CompletionNotice{
+            .identity = identity,
+            .kind = completionKind(operation->kind),
+            .observer = channelRegistered ? channel : nullptr,
+            .bytesTransferred = operation->bytesTransferred,
+            .nativeError = operation->error,
+            .status = completionStatus(operation->error),
+        };
+    }
+    state.progress.deliveredNotices = state.noticeCount;
+    return {
+        .observedAt = observedAt,
+        .notices = std::span<const detail::CompletionNotice>(
+            state.notices.data(),
+            state.noticeCount),
+        .progress = state.progress,
+    };
+}
 
-        if (!channelRegistered) {
+void IocpPoller::publishCompletionNotices(
+    const detail::CompletionWaitResult& batch,
+    ChannelList* activeChannels) {
+    auto& state = *completionState_;
+    std::size_t activeCount = 0;
+    for (std::size_t noticeIndex = 0;
+         noticeIndex < batch.notices.size();
+         ++noticeIndex) {
+        const auto& notice = batch.notices[noticeIndex];
+        Channel* channel = notice.observer;
+        if (channel == nullptr) {
             continue;
         }
-
-        if (operation->kind == IocpOperationKind::Accept) {
+        const auto registered = channels_.find(channel->fd());
+        if (registered == channels_.end() ||
+            registered->second != channel ||
+            channel->index() != kAdded) {
+            continue;
+        }
+        auto* operation =
+            static_cast<IocpOperation*>(notice.identity.operation);
+        const bool channelAlreadyPublished =
+            std::find(
+                state.publishedChannels.begin(),
+                state.publishedChannels.begin() +
+                    static_cast<std::ptrdiff_t>(activeCount),
+                channel) !=
+                state.publishedChannels.begin() +
+                    static_cast<std::ptrdiff_t>(activeCount);
+        if (notice.kind == detail::CompletionOperationKind::Accept) {
             // A listen Channel can have multiple independent AcceptEx slots.
             // Coalesce their exact identities into one allocation-free
             // owner-loop callback instead of forcing one loop turn per slot.
@@ -264,30 +359,68 @@ gamenet::base::Timestamp IocpPoller::poll(int timeoutMs, ChannelList* activeChan
             channel->setIocpCompletionOperation(operation);
         }
         if (channelAlreadyPublished) {
+            channel->revents_ |= completionEvents(notice.kind);
             continue;
         }
-        channel->setRevents(completionEvents(*operation));
-        publishedChannels_[activeCount++] = channel;
+        channel->setRevents(completionEvents(notice.kind));
+        state.publishedChannels[activeCount++] = channel;
         activeChannels->push_back(channel);
     }
-    lastDeferredCompletionCount_ = deferredEntryCount_;
-    return now;
+}
+
+void IocpPoller::retireCompletionNoticeLeases() noexcept {
+    for (auto& lifetime : completionState_->noticeLifetimes) {
+        lifetime.reset();
+    }
 }
 
 void IocpPoller::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
-    if (operation != nullptr && lifetime) {
-        retainedOperations_[operation] = std::move(lifetime);
-    }
+    (void)commitNativeCompletionSubmission(
+        operation,
+        std::move(lifetime));
 }
 
 void IocpPoller::trackCompletionOperation(void* operation) {
-    if (operation != nullptr) {
-        auto* completion = static_cast<IocpOperation*>(operation);
-        if (!completion->shutdownObligation) {
-            completion->shutdownObligation = true;
-            ++outstandingOperationCount_;
-        }
+    (void)commitNativeCompletionCancellation(operation);
+}
+
+bool IocpPoller::commitNativeCompletionSubmission(
+    void* operation,
+    std::shared_ptr<void> lifetime) {
+    if (operation == nullptr || !lifetime ||
+        retainedOperations_.contains(operation)) {
+        return false;
     }
+    const auto [retained, inserted] = retainedOperations_.emplace(
+        operation,
+        std::move(lifetime));
+    if (!inserted) {
+        return false;
+    }
+    auto* completion = static_cast<IocpOperation*>(operation);
+    if (!detail::commitIocpOperationSubmission(*completion)) {
+        retainedOperations_.erase(retained);
+        return false;
+    }
+    return true;
+}
+
+bool IocpPoller::commitNativeCompletionCancellation(
+    void* operation) noexcept {
+    if (operation == nullptr) {
+        return false;
+    }
+    auto* completion = static_cast<IocpOperation*>(operation);
+    if (!completion->submissionAccepted ||
+        completion->completionObserved ||
+        completion->terminalGeneration == completion->generation) {
+        return false;
+    }
+    if (!completion->shutdownObligation) {
+        completion->shutdownObligation = true;
+        ++outstandingOperationCount_;
+    }
+    return true;
 }
 
 bool IocpPoller::hasPendingCompletionOperations() const noexcept {

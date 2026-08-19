@@ -20,6 +20,7 @@
 
 #ifdef _WIN32
 #include "gamenet/core/net/platform/IocpOperation.h"
+#include "../../../src/core/net/detail/EventLoopIocpAssociationHarness.h"
 #else
 #include <sys/socket.h>
 #endif
@@ -359,6 +360,9 @@ int main() {
         readBuffer.len = static_cast<ULONG>(readStorage.size());
         DWORD bytes = 0;
         DWORD flags = 0;
+        GAMENET_TEST_ASSERT(
+            gamenet::net::detail::EventLoopIocpAssociationHarness::
+                beginSyntheticCompletionSubmission(&readOperation));
         const int rc = ::WSARecv(
             pair.readFd,
             &readBuffer,

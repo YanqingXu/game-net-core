@@ -40,6 +40,10 @@ public:
     void cancelPendingOperations(SocketFd sockfd) noexcept;
 
 private:
+    static void observeTerminal(
+        void* context,
+        IocpOperationKind kind) noexcept;
+
     struct WriteSegment {
         std::string bytes;
         std::size_t offset{0};

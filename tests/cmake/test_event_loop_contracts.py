@@ -243,6 +243,7 @@ def main() -> None:
     require(io_engine_header_text, "registerOrUpdateReadiness", io_engine_header)
     require(io_engine_header_text, "commitCompletionSubmission", io_engine_header)
     require(io_engine_header_text, "commitCompletionCancellation", io_engine_header)
+    require(io_engine_header_text, "retireWaitBatch", io_engine_header)
     require(io_engine_header_text, "maxCompletionNoticesPerWait", io_engine_header)
     require(io_engine_header_text, "maxReadinessNoticesPerWait", io_engine_header)
     require(readiness_port_header_text, "struct ReadinessRegistrationIdentity", readiness_port_header)

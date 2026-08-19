@@ -174,7 +174,8 @@ This module is not business logic.
 - `tests/contract/poller/test_poller_contract.cpp` verifies backend-neutral poller
   registration behavior and, on Windows, bounded GQCSEx dequeue, wakeup
   coexistence, exact operation release, distinct-Channel batching, and
-  same-Channel deferral with dequeued-error preservation.
+  same-Channel terminal coalescing with dequeued-error preservation after
+  observer removal.
 - TCP client/server/connection contract tests verify socket operation behavior
   through the public path.
 - `tests/contract/socket/test_socket_contract.cpp` runs the Linux peer-close
