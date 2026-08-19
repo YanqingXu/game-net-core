@@ -32,6 +32,39 @@ def git(repo_root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def git_is_ancestor(
+    repo_root: Path,
+    ancestor: str,
+    descendant: str,
+) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    assert result.returncode in {0, 1}, (
+        "git merge-base --is-ancestor failed with "
+        f"{result.returncode}:\n{result.stderr}"
+    )
+    return result.returncode == 0
+
+
+def verify_post_checkpoint_allowlist(
+    changed_paths: set[str],
+    allowed_paths: set[str],
+) -> None:
+    unexpected_checkpoint_drift = changed_paths - allowed_paths
+    assert not unexpected_checkpoint_drift, (
+        "current implementation checkpoint is stale; non-governance paths "
+        "changed after it: "
+        + ", ".join(sorted(unexpected_checkpoint_drift))
+    )
+
+
 def verify_current_intent_inventory(
     status_text: str,
     inventory: IntentInventory,
@@ -205,8 +238,13 @@ def main() -> None:
     assert git(repo_root, "cat-file", "-t", f"refs/tags/{candidate_tag}") == "tag"
     candidate_sha = git(repo_root, "rev-parse", f"refs/tags/{candidate_tag}^{{commit}}")
     assert re.fullmatch(r"[0-9a-f]{40}", candidate_sha), candidate_sha
-    assert candidate_sha == git(repo_root, "rev-parse", "HEAD"), (
-        "REL-C1 candidate tag must peel to the exact checked-out commit"
+    assert git_is_ancestor(repo_root, candidate_sha, "HEAD"), (
+        "REL-C1 candidate tag must be an ancestor of the checked-out commit"
+    )
+    require(
+        normalized_status_text,
+        "candidate tag remains an ancestor of the checked-out commit",
+        migration_status,
     )
     assert git(repo_root, "cat-file", "-t", f"refs/tags/{reviewed_surface_tag}") == "tag"
     assert (
@@ -264,13 +302,22 @@ def main() -> None:
         ).splitlines()
         if path
     }
-    unexpected_checkpoint_drift = (
-        changed_since_checkpoint - allowed_post_checkpoint_paths
+    verify_post_checkpoint_allowlist(
+        changed_since_checkpoint,
+        allowed_post_checkpoint_paths,
     )
-    assert not unexpected_checkpoint_drift, (
-        "current implementation checkpoint is stale; non-governance paths "
-        "changed after it: " + ", ".join(sorted(unexpected_checkpoint_drift))
-    )
+    synthetic_runtime_drift = "src/core/net/unreviewed_runtime_drift.cc"
+    try:
+        verify_post_checkpoint_allowlist(
+            changed_since_checkpoint | {synthetic_runtime_drift},
+            allowed_post_checkpoint_paths,
+        )
+    except AssertionError as error:
+        assert synthetic_runtime_drift in str(error), error
+    else:
+        raise AssertionError(
+            "post-checkpoint allowlist accepted synthetic runtime drift"
+        )
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),

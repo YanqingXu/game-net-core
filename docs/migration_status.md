@@ -19,7 +19,10 @@ failure documents remain historical evidence.
 
 Current final v0.3 production candidate: the commit peeled from annotated tag
 `v0.3.0-rel-c1-refreeze-5`; the tag object and remote ref record the
-authoritative full `CANDIDATE_SHA`
+authoritative full `CANDIDATE_SHA`. In PR validation and allowlisted post-freeze
+governance updates, the candidate tag remains an ancestor of the checked-out
+commit rather than matching GitHub's temporary merge commit. The existing
+post-checkpoint path allowlist continues to reject runtime/source drift.
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
 
