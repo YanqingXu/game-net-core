@@ -43,8 +43,9 @@ See `migration_status.md` for the current checked state of these phases.
   returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
   as source-compatible at `api-r1-perf-r1-reviewed-surface`.
 - Candidate freeze is retired as a development gate. IOE-R1 is closed at
-  `8bb14e72d8935879396d12a7a51c891311aa2a78`; the active front is now IOE-R2's
-  generation-safe epoll Readiness Engine, with ARCH-G1 independent review and
+  `8bb14e72d8935879396d12a7a51c891311aa2a78`; IOE-R2 is closed at
+  `6f45aa6e78152b8fd86df925962e580101b2f2ee`, and the active Engine front is
+  now IOE-C1 native Completion notices, with ARCH-G1 independent review and
   RTM-R1 Profile contracts proceeding in parallel. CI/performance evidence
   stays commit-bound and continuous; endurance and licensing move to promotion
   time.
@@ -277,8 +278,8 @@ Active execution front:
   owner/lifetime contracts, Poller adapter, option layering, and dual-platform
   evidence are closed at `8bb14e72d8935879396d12a7a51c891311aa2a78` without
   stable public-surface drift.
-- [ ] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
-  registrations.
+- [x] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
+  registrations; closed at `6f45aa6e78152b8fd86df925962e580101b2f2ee`.
 - [ ] IOE-C1: publish native IOCP Completion notices and retire fake Channel
   read/write translation.
 - [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the

@@ -27,7 +27,7 @@ M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查�
 4. 每份验证证据仍绑定精确 commit，不允许把旧证据提升为新提交的结论；
 5. 24/72 小时 endurance、许可证和发布包装只阻塞对外推广，不阻塞架构演进；
 6. endurance waiver 只能表达缺失证据，不能表达 endurance 通过；
-7. ARCH-G1 合同资产与 IOE-R1 已落地；当前连续进入 IOE-R2，不等待候选冻结或独立
+7. ARCH-G1 合同资产、IOE-R1 与 IOE-R2 已落地；当前连续进入 IOE-C1，不等待候选冻结或独立
    review 排期；
 8. IOE 与 Runtime Model 是两条并行实现线，持续证据是第三条伴随线。
 
@@ -158,17 +158,20 @@ capability Engine。IOE-R1 在精确提交
 
 时间盒：4–7 个工作日。
 
-- [ ] 定义 `ReadinessPort`、registration identity/generation 和 `ReadinessNotice`；
-- [ ] 将 epoll register/wait/wakeup/dispatch 收入 Readiness Engine；
-- [ ] 保持 level/edge、EAGAIN、fd replacement、remove-before-destroy 和 active-batch
-  retirement 合同；
-- [ ] 明确同 source mask 可合并，但 stale generation 不可回调；
-- [ ] 用批处理和预算保护 accept/read 热路径；
-- [ ] epoll 保持 Linux 默认后端和后续 io_uring 的 fallback；
-- [ ] benchmark/capacity 与 ARCH-G1 基线比较并形成数字决策。
+- [x] 定义 `ReadinessPort`、registration identity/generation 和 `ReadinessNotice`；
+- [x] 将 epoll register/wait/wakeup/dispatch 收入 Readiness Engine；
+- [x] 保持 level-triggered、EAGAIN、fd replacement、remove-before-destroy 和
+  active-batch retirement 合同；edge-triggered 仍未开放；
+- [x] 明确同 source mask 只在当前 interests 内合并，stale generation 不可回调；
+- [x] 用固定批处理和预算保护 accept/read 热路径；
+- [x] epoll 保持 Linux 默认后端和后续 io_uring 的 fallback；
+- [x] benchmark/capacity 与 ARCH-G1 基线比较并形成数字决策。
 
 关闭门：Linux Readiness 路径不再依赖 Completion 抽象；核心 TCP 行为和 public surface
-无意外变化。
+无意外变化。IOE-R2 在精确提交
+`6f45aa6e78152b8fd86df925962e580101b2f2ee` 关闭；完整双平台、sanitizer、治理、API
+和配对 benchmark/capacity 证据见
+`docs/development/commit_bound_evidence_ledger.md`。
 
 ## 8. M4 / IOE-C1：IOCP direct Completion
 
@@ -345,11 +348,12 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **IOE-R2：IOE-R1 已在精确提交 `8bb14e72d8935879396d12a7a51c891311aa2a78`
-> 关闭。现在直接以失败合同定义 `ReadinessPort`、registration identity/generation 和
-> `ReadinessNotice`，随后把 epoll register/wait/wakeup 收入显式 Readiness Engine。**
+> **IOE-C1：IOE-R2 已在精确提交
+> `6f45aa6e78152b8fd86df925962e580101b2f2ee` 关闭。现在直接以失败合同定义 native
+> `CompletionNotice`、operation identity/generation、Accepted submission 的唯一
+> terminal completion，以及 observer revoke 与 kernel obligation/storage lease 的分离。**
 
 ARCH-G1 独立 review 与 RTM-R1 的三个 Profile contract 继续并行，不形成冻结点。下一个
-可运行目标不是新发布 tag，而是：Linux 默认 epoll 路径具有显式、generation-safe 的
-Readiness registration/notice 边界，Windows/IOCP 兼容路径与 stable public surface 保持
-不变，合同和配对基准持续全绿。
+可运行目标不是新发布 tag，而是：Windows/IOCP 先让 GQCSEx 结果直接形成 typed native
+Completion notice，再按 read/write、accept/connect、shutdown 小切片逐步退役 fake Channel
+read/write translation；Linux/epoll 与 stable public surface 持续全绿。

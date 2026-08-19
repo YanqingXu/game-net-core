@@ -292,7 +292,7 @@ def main() -> None:
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
     require(
         plan_text,
-        "IOE-R2：IOE-R1 已在精确提交",
+        "IOE-C1：IOE-R2 已在精确提交",
         plan,
     )
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
