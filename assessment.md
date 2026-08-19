@@ -7,8 +7,8 @@
 
 2026-08-19 的执行决策废止候选冻结作为开发门。REL-C1、REL-V1、REL-V2、PERF-R1
 和 END-R1 继续作为历史/持续证据名称，但不再串行阻塞 ARCH-G1、IOE 或 Runtime
-Profile 工作。当前执行前沿以 `plan.md` 为准：ARCH-G1 完成后直接进入 IOE-R1，
-RTM-R1 合同并行准备。
+Profile 工作。当前执行前沿以 `plan.md` 为准：IOE-R1 已在 `8bb14e72` 关闭，直接进入
+IOE-R2；ARCH-G1 独立 review 和 RTM-R1 合同并行推进。
 
 ## 1. 执行结论
 
@@ -644,10 +644,12 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 当前最重要的事情不是继续扩展协议或 Gateway，也不是再次冻结候选，而是向长期架构
 目标形成连续可运行切片：
 
-1. 在两个工作日内完成 ARCH-G1 的 active architecture intents、ADR、耦合清单、
-   基线和具体测试地图；
-2. 直接实现 IOE-R1 source-private Engine seam 与最小 Poller adapter；
-3. 并行准备 RTM-R1 三个 TCP-only provisional Profile 的合同；
+1. 直接用失败合同定义 IOE-R2 的 ReadinessPort、registration identity/generation 和
+   ReadinessNotice；
+2. 将 epoll register/wait/wakeup 收入显式 Readiness Engine，并保持现有 TCP 与 stable
+   public surface；
+3. 并行完成 ARCH-G1 独立 review，并准备 RTM-R1 三个 TCP-only provisional Profile
+   的合同；
 4. 把 CI、benchmark、capacity 作为伴随证据；只有准备 promotion 时才执行 endurance、
    许可证和 REL-D1。
 

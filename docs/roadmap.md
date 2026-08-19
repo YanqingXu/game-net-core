@@ -41,10 +41,12 @@ See `migration_status.md` for the current checked state of these phases.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
   as source-compatible at `api-r1-perf-r1-reviewed-surface`.
-- Candidate freeze is retired as a development gate. The active front is
-  ARCH-G1 followed immediately by the source-private IOE-R1 Engine seam, with
-  RTM-R1 Profile contracts prepared in parallel. CI/performance evidence stays
-  commit-bound and continuous; endurance and licensing move to promotion time.
+- Candidate freeze is retired as a development gate. IOE-R1 is closed at
+  `8bb14e72d8935879396d12a7a51c891311aa2a78`; the active front is now IOE-R2's
+  generation-safe epoll Readiness Engine, with ARCH-G1 independent review and
+  RTM-R1 Profile contracts proceeding in parallel. CI/performance evidence
+  stays commit-bound and continuous; endurance and licensing move to promotion
+  time.
 
 ## Phase 1: Project Skeleton
 
@@ -270,8 +272,10 @@ Active execution front:
 - [ ] ARCH-G1: the owner-loop/I/O Engine and Runtime Model intents, accepted ADR,
   semantic-coupling inventory, concrete test map, and dual-platform numerical
   baseline are complete; independent architecture review remains in parallel.
-- [ ] IOE-R1: introduce a source-private Engine seam and Poller adapter without
-  changing public behavior. Contract and adapter implementation are active now.
+- [x] IOE-R1: the source-private Engine seam, typed admission/operation results,
+  owner/lifetime contracts, Poller adapter, option layering, and dual-platform
+  evidence are closed at `8bb14e72d8935879396d12a7a51c891311aa2a78` without
+  stable public-surface drift.
 - [ ] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
   registrations.
 - [ ] IOE-C1: publish native IOCP Completion notices and retire fake Channel

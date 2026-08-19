@@ -40,12 +40,17 @@ Current PERF-R1 additive stable-surface decision:
 to annotated tag `api-r1-perf-r1-reviewed-surface` and peeled commit
 `6b292156e3e94d3389e9f3b8513445e7eb4ab541`
 
+Current IOE-R1 source-private Engine checkpoint:
+`8bb14e72d8935879396d12a7a51c891311aa2a78` (2026-08-19)
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
 intents, an accepted ADR, a semantic-coupling inventory, a concrete test map,
-and a dual-platform local baseline. IOE-R1 contract/adapter implementation is
+and a dual-platform local baseline. IOE-R1's source-private Engine contract,
+typed results, option layering, Poller adapter, and shutdown/dispatch contracts
+are closed at `8bb14e72`. IOE-R2 generation-safe epoll Readiness contracts are
 the active execution front while independent architecture review and RTM-R1
 Profile contract preparation proceed in parallel. Candidate freeze, REL-V1 and
 release packaging are not development prerequisites.
@@ -215,7 +220,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 contract/adapter implementation is underway, followed by IOE-R2 and IOE-C1. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, and IOE-R2 generation-safe epoll Readiness contracts are the current front before IOE-C1. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 

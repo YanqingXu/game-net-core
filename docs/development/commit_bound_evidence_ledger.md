@@ -59,3 +59,24 @@ a completed, exact-commit record.
 | Governance | Exact clean commit; all 26 repository/API/CI guard scripts passed; 32 active intents and 156 explicit verification paths; same-line public API blocking gate passed. |
 | Remote evidence | `not collected`; local evidence is not promoted to CI or release evidence. |
 | Decision | `integrate` this first IOE-R1 slice; IOE-R1 remains open for explicit register/submit/cancel admission results, stale-notice and budget-exhaustion contracts, and option layering. |
+
+## IOE-R1 Contract Closure — 2026-08-19
+
+| Field | Evidence |
+| --- | --- |
+| Slice | IOE-R1 closure: typed admission/operation outcomes, owner-only mutation, completion obligation drain, callback containment, stale-notice/budget continuation, and backend-capacity option layering |
+| Commit | `8bb14e72d8935879396d12a7a51c891311aa2a78` |
+| Parent/baseline | Parent `c9c9c47b73370b6d92541b179a0023048a5ff3f6`; runtime comparison `669ebb0a7c5c475dea74b12275c66a2ce1876804`; `docs/development/io_engine_baseline.md` |
+| Intent/ADR | `intents/architecture/io_engine.intent.md`; `docs/architecture/io_engine_runtime_model_adr.md`; `rules/thread_affinity_rules.md`; `rules/ownership_rules.md`; `rules/testing_rules.md` |
+| Owner/lifetime | EventLoop's owner thread performs registration, cancellation, accepted completion commit, wait, phase transition, and callback dispatch. `wakeup()` remains the only direct cross-thread Engine operation. Engine borrows readiness Channels; a successful completion submission acquires the supplied lease until its real terminal packet is dequeued. Quiescing rejects new external admission while already-accepted cleanup and final drain remain legal. EventLoop contains callback exceptions and generation-checks retained notices before invocation. |
+| Public surface | `none`; stable installed declarations and targets have zero same-line diff. The IOCP batch constructor is classified `platform_internal`; the new Engine vocabulary and accessor remain source-private. `tests/api/test_public_api_manifest.py` and the blocking same-line comparator passed. |
+| Changed production paths | `src/core/net/detail/IoEngine.h`; `src/core/net/detail/PollerIoEngineAdapter.cc`; `src/core/net/detail/IocpPollerAccess.h`; `src/core/net/detail/EventLoopControlRegistry.h`; `src/core/net/EventLoop.cc`; `include/gamenet/core/net/poller/IocpPoller.h`; `src/core/net/poller/IocpPoller.cc` |
+| Focused contracts | Exact clean commit, `contract.io_engine.test_io_engine_poller_adapter`: Windows 1/1 in 0.02 s; Linux/WSL 1/1 in 0.03 s. The contract covers owner-thread rejection, invalid/unsupported results, admission seal, actual IOCP terminal drain, callback-local close, stale generation, contained exception, exact budget continuation metrics, option mapping, and cross-thread wakeup. |
+| Windows full gate | Exact clean commit; Release build passed; 122/122 CTest tests passed in 12.79 s with four workers. |
+| Linux full gate | Exact clean commit; GCC 13.3 Release build passed under WSL Ubuntu 24.04; 122/122 CTest tests passed in 12.66 s with four workers. |
+| Benchmark/capacity | Exact clean commit against `669ebb0`, one warmup per side plus three alternating echo pairs. Windows throughput 58.990 -> 61.452 MiB/s (+4.17%), P99 69.3 -> 62.0 us (-10.53%), stop 0.185 -> 0.190 ms (+0.005 ms). Linux throughput 49.991 -> 49.593 MiB/s (-0.80%), P99 89.948 -> 91.191 us (+1.38%), close 1.262 -> 1.238 ms. Linux stop 0.122 -> 0.160 ms (+0.038 ms, +30.9%) crossed the percentage investigation trigger, but all paired samples were drained in 0.12–0.18 ms; the sub-0.04 ms absolute shift is accepted as local scheduler/timer noise. No connection storage or per-connection allocation changed; the decision is integrate. |
+| Sanitizer/race evidence | No sanitizer result is claimed. This slice adds no shared producer queue or non-owner mutation path; completion storage still uses the already-contracted native backend lease. Sanitizer/race evidence remains mandatory for IOE-C1's direct completion storage/retirement change. |
+| Review | Codex `/root` self-review followed intent, public contract, invariant, thread-affinity, ownership, lifecycle, implementation, and test-completeness order. Production no longer includes a repository test harness for IOCP progress; `IocpPollerAccess` is the source-private accessor. Independent ARCH-G1 review remains pending and is not claimed as closure evidence. |
+| Governance | Exact clean commit; all 26 repository/API/CI guard scripts passed; 32 active intents and 156 explicit verification paths; same-line stable public API blocking gate passed. |
+| Remote evidence | `not collected`; this is local exact-commit integration evidence, not CI, endurance, capacity, or release evidence. |
+| Decision | `integrate` and close IOE-R1. Move the active implementation front directly to IOE-R2 generation-safe epoll Readiness contracts; no candidate freeze is introduced. |

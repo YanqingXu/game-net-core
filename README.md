@@ -49,11 +49,11 @@ batch lifecycle keeps connected sockets open through accept convergence before
 exact echo and abortive close; it does not relax the two-second deadline.
 The tag is now a historical engineering reference, not a development gate or
 REL-D1 decision. Development proceeds continuously on `main`, with exact-commit
-CI and performance evidence attached to each capability milestone. The active
-front is ARCH-G1, followed directly by the source-private IOE-R1 Engine seam;
-Runtime Profile contracts proceed in parallel. A future release will select a
-promotion commit when evidence is needed rather than freezing development in
-advance.
+CI and performance evidence attached to each capability milestone. IOE-R1 is
+closed at `8bb14e72`; the active front is IOE-R2's generation-safe epoll
+Readiness Engine, while ARCH-G1 independent review and Runtime Profile contracts
+proceed in parallel. A future release will select a promotion commit when
+evidence is needed rather than freezing development in advance.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

@@ -27,7 +27,8 @@ M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查�
 4. 每份验证证据仍绑定精确 commit，不允许把旧证据提升为新提交的结论；
 5. 24/72 小时 endurance、许可证和发布包装只阻塞对外推广，不阻塞架构演进；
 6. endurance waiver 只能表达缺失证据，不能表达 endurance 通过；
-7. 当前立即推进 ARCH-G1，并在其合同落地后连续进入 IOE-R1；
+7. ARCH-G1 合同资产与 IOE-R1 已落地；当前连续进入 IOE-R2，不等待候选冻结或独立
+   review 排期；
 8. IOE 与 Runtime Model 是两条并行实现线，持续证据是第三条伴随线。
 
 ## 2. 不可放宽的工程约束
@@ -132,10 +133,10 @@ Poller/IOCP 形状的长期耦合。
 
 ### 6.1 合同先行
 
-- [ ] 为 `IoEngine` 定义 owner-thread-only register/submit/cancel/dispatch；
+- [x] 为 `IoEngine` 定义 owner-thread-only register/submit/cancel/dispatch；
 - [x] 定义 `IoNoticeBatch`、capabilities、wakeup、`beginQuiesce()` 与 `quiescent()`；
-- [ ] 固定 Accepted/Rejected、admission seal、final drain 和 callback containment；
-- [ ] 新合同覆盖跨线程 wakeup、callback 内关闭、generation stale notice 和预算耗尽续跑；
+- [x] 固定 Accepted/Rejected、admission seal、final drain 和 callback containment；
+- [x] 新合同覆盖跨线程 wakeup、callback 内关闭、generation stale notice 和预算耗尽续跑；
 - [x] 现有 EventLoop/Poller/Channel/TCP lifecycle contracts 保持通过；Windows/IOCP
   与 Linux/epoll Release CTest 均为 122/122。
 
@@ -144,12 +145,14 @@ Poller/IOCP 形状的长期耦合。
 - [x] 新增 source-private `PollerIoEngineAdapter`；
 - [x] EventLoop 只依赖 Engine seam，不直接判断具体 IocpPoller 类型；
 - [x] 维持当前 Poller/Channel 数据路径，不在本阶段顺手重写 epoll 或 IOCP；
-- [ ] 将公共调度预算与 backend capacity 配置分层，但暂不改变 stable options；
+- [x] 将公共调度预算与 backend capacity 配置分层，但暂不改变 stable options；
 - [x] 不新增公共 header；同线 public API compatibility gate 保持通过。
 
 关闭门：Windows/IOCP 与 Linux/epoll 全量合同通过；相对 ARCH-G1 基线没有未接受的
 吞吐、延迟或内存回归；EventLoop 已可在不改变 owner/lifecycle 公理的情况下驱动不同
-capability Engine。
+capability Engine。IOE-R1 在精确提交
+`8bb14e72d8935879396d12a7a51c891311aa2a78` 关闭；完整双平台、治理和配对基准证据见
+`docs/development/commit_bound_evidence_ledger.md`。
 
 ## 7. M3 / IOE-R2：epoll Readiness Engine
 
@@ -342,10 +345,11 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **IOE-R1：ARCH-G1 的 intent、ADR、耦合清单、双平台基线和具体测试地图已落地并通过
-> intent 治理；独立架构 review 与实现并行，不作为冻结点。现在直接提交 source-private
-> Engine seam 失败合同与最小 Poller adapter。**
+> **IOE-R2：IOE-R1 已在精确提交 `8bb14e72d8935879396d12a7a51c891311aa2a78`
+> 关闭。现在直接以失败合同定义 `ReadinessPort`、registration identity/generation 和
+> `ReadinessNotice`，随后把 epoll register/wait/wakeup 收入显式 Readiness Engine。**
 
-并行准备 RTM-R1 的三个 Profile contract，但在 ARCH-G1 独立 review 前不提交 Profile
-运行时代码。第一个可运行目标不是新发布 tag，而是：EventLoop 经 source-private
-Engine seam 驱动现有 Poller，双平台行为不变、合同全绿、基准无未接受回归。
+ARCH-G1 独立 review 与 RTM-R1 的三个 Profile contract 继续并行，不形成冻结点。下一个
+可运行目标不是新发布 tag，而是：Linux 默认 epoll 路径具有显式、generation-safe 的
+Readiness registration/notice 边界，Windows/IOCP 兼容路径与 stable public surface 保持
+不变，合同和配对基准持续全绿。
