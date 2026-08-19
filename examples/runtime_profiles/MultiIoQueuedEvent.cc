@@ -736,8 +736,17 @@ void MultiIoQueuedEvent::drainQueue(
 
     state->drainScheduled.store(false, std::memory_order_release);
     if (state->active.load(std::memory_order_acquire) &&
-        state->queue.snapshot().depth != 0) {
-        scheduleProducerDrain(state);
+        state->queue.snapshot().depth != 0 &&
+        !state->drainScheduled.exchange(true, std::memory_order_acq_rel)) {
+        const auto posted = state->logicExecutor.post([state] { drainQueue(state); });
+        if (posted == gamenet::net::PostResult::Accepted) {
+            state->drainContinuations.fetch_add(1, std::memory_order_relaxed);
+        } else {
+            state->drainContinuationRejections.fetch_add(
+                1, std::memory_order_relaxed);
+            state->drainScheduled.store(false, std::memory_order_release);
+            revokeProfile(state, true);
+        }
     }
     finish();
 }
