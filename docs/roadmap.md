@@ -246,6 +246,9 @@ In progress after production hardening:
   evidence for the fixed Core and Phase 4 Release scenarios.
 - [x] Add structured fault-injection coverage and validate the real 24-hour
   candidate plus 72-hour paired Linux endurance infrastructure at `b344318`.
+- [x] Add explicit owner-approved candidate and release endurance waivers for
+  environments that omit long-duration evidence while preserving visible
+  missing-evidence metadata.
 - [x] Synchronize roadmap, assessment, plan, README, and migration status at
   GOV-R2 without promoting historical evidence to the current checkpoint.
 - [x] Complete independent stable Core API review, archive the historical and

@@ -640,9 +640,12 @@ def main() -> None:
         require(pair_verifier_text, fragment, pair_verifier)
     for fragment in (
         "gamenet.production_promotion_evidence.v1",
+        "gamenet.production_promotion_waiver.v1",
         "capacity pair manifest does not match revalidated raw evidence",
         "capacity profile does not satisfy the promotion stage",
         "release promotion requires candidate-24h evidence",
+        '"owner-waived"',
+        '"owner_authorized_promotion"',
     ):
         require(
             promotion_verifier_text,
@@ -1020,6 +1023,34 @@ def main() -> None:
         )
         assert len(candidate_promotion["endurance"]) == 1
 
+        waiver_reason = (
+            "Owner hardware cannot remain online for long-duration evidence"
+        )
+        candidate_waiver = promotion.verify_promotion(
+            stage="candidate",
+            capacity_root=candidate_capacity_root,
+            endurance_evidence=None,
+            candidate_sha=candidate_sha,
+            capacity_run_id=run_id,
+            capacity_run_attempt=run_attempt,
+            promotion_run_id="54322",
+            promotion_run_attempt=1,
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by="YanqingXu",
+        )
+        assert candidate_waiver["schema"] == promotion.WAIVER_SCHEMA
+        assert candidate_waiver["status"] == "waived"
+        assert candidate_waiver["endurance_policy"] == "owner-waived"
+        assert candidate_waiver["endurance"] == []
+        assert candidate_waiver["waiver"] == {
+            "scope": "candidate-24h",
+            "approved_by": "YanqingXu",
+            "reason": waiver_reason,
+            "duration_evidence_complete": False,
+            "owner_authorized_promotion": True,
+        }
+
         dedicated_capacity_root = (
             evidence_root / "dedicated-capacity"
         )
@@ -1130,6 +1161,28 @@ def main() -> None:
             for item in release_promotion["endurance"]
         ] == ["candidate-24h", "release-72h"]
 
+        release_waiver = promotion.verify_promotion(
+            stage="release",
+            capacity_root=dedicated_capacity_root,
+            endurance_evidence=None,
+            candidate_sha=candidate_sha,
+            capacity_run_id=dedicated_run_id,
+            capacity_run_attempt=dedicated_run_attempt,
+            promotion_run_id="60003",
+            promotion_run_attempt=1,
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by="YanqingXu",
+        )
+        assert release_waiver["status"] == "waived"
+        assert release_waiver["capacity"]["profile"] == "dedicated-100k"
+        assert release_waiver["endurance"] == []
+        assert (
+            release_waiver["waiver"]["scope"]
+            == "candidate-24h+release-72h"
+        )
+        assert release_waiver["waiver"]["owner_authorized_promotion"] is True
+
         def expect_promotion_failure(
             label: str,
             **overrides: object,
@@ -1165,6 +1218,26 @@ def main() -> None:
         expect_promotion_failure(
             "endurance source attempt drift",
             promotion_run_attempt=2,
+        )
+        expect_promotion_failure(
+            "waiver with current endurance evidence",
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by="YanqingXu",
+        )
+        expect_promotion_failure(
+            "waiver without a meaningful reason",
+            endurance_evidence=None,
+            waive_endurance=True,
+            waiver_reason="too short",
+            waiver_approved_by="YanqingXu",
+        )
+        expect_promotion_failure(
+            "waiver without an approver",
+            endurance_evidence=None,
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by=None,
         )
         expect_promotion_failure(
             "candidate capacity used for release",

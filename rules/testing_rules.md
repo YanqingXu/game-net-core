@@ -252,9 +252,13 @@ For lifecycle-sensitive modules, tests should include:
   must be rejected by structured evidence guards
 - a production promotion artifact must revalidate retained raw capacity and
   endurance evidence rather than trusting a copied summary; candidate mode
-  requires 10k plus 24h, release mode requires dedicated 100k plus same-SHA
-  24h/72h, and SHA, workflow run, rerun attempt, stage, profile, duration, hash,
-  or source-inventory drift must fail closed
+  requires 10k plus 24h unless the project owner records an explicit candidate
+  waiver, in which case the exact 10k pair is still required; release mode
+  requires dedicated 100k plus same-SHA 24h/72h unless the owner records an
+  explicit release waiver, in which case the exact dedicated 100k pair is still
+  required; waiver artifacts must use status `waived`, and SHA, workflow run,
+  rerun attempt, stage, profile, duration, hash, waiver approval, or source-
+  inventory drift must fail closed
 - a nonzero or invalid-JSON capacity-profile sample must retain its raw stdout
   under the run artifact; structured failures report the document error plus
   false checks, and stderr-only or toolchain-only evidence cannot support
@@ -297,3 +301,6 @@ for executing these runtime contracts on Linux and Windows.
   corresponding cycle
 - shortened smoke runs and combined shards are orchestration evidence only and
   cannot substitute for the fixed 24-hour or 72-hour gate
+- an owner-approved candidate or release waiver is missing-evidence metadata,
+  not a shortened substitute or a successful endurance result; it authorizes
+  only its named promotion stage

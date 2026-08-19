@@ -32,6 +32,13 @@ fails closed if either side disappears. The gate fails if maximum RSS exceeds
 - `candidate-24h`: exactly 86,400 seconds;
 - `release-72h`: exactly 259,200 seconds.
 
+The manual workflow additionally exposes `candidate-waiver` and
+`release-waiver`. They are not duration modes: they start no endurance process
+and make no Linux/epoll runtime claim. They exist for an owner who elects not
+to run the long-duration evidence. A waiver requires a single-line 12-500
+character reason, records the dispatching GitHub actor as approver, and applies
+only to its named promotion stage.
+
 Production modes reject duration overrides. `smoke` accepts 1–60 seconds for
 orchestration tests, but its result cannot pass either production verifier.
 The 72-hour verifier also requires retained successful 24-hour evidence from
@@ -45,7 +52,9 @@ capacity source:
 | Promotion stage | Capacity source | Endurance source |
 | --- | --- | --- |
 | candidate | paired `candidate-10k` raw artifacts | current `candidate-24h` |
+| candidate waiver | paired `candidate-10k` raw artifacts | none; explicit owner/reason metadata |
 | release | paired `dedicated-100k` raw artifacts | exact prior `candidate-24h` plus current `release-72h` |
+| release waiver | paired `dedicated-100k` raw artifacts | none; explicit owner/reason metadata covering 24h/72h |
 
 `tools/verify_production_promotion_evidence.py` does not trust copied summary
 fields. It revalidates both platform capacity manifests and raw v3 samples,
@@ -53,7 +62,10 @@ requires the checked-in `pair-manifest.json` to equal the recomputed pair,
 revalidates every endurance result and hashed log, and binds all inputs to the
 same candidate SHA and declared workflow attempts. The resulting
 `gamenet.production_promotion_evidence.v1` is included in the long-soak
-artifact and then hashed by its outer CI evidence manifest.
+artifact and then hashed by its outer CI evidence manifest. Either waiver uses
+the distinct `gamenet.production_promotion_waiver.v1` schema with
+`status: waived`, `endurance_policy: owner-waived`, an empty endurance list,
+`duration_evidence_complete: false`, and `owner_authorized_promotion: true`.
 
 ## Remote Runner Boundary
 
@@ -66,6 +78,11 @@ It uses the GitHub token only before the long child run to download the exact
 capacity run/attempt and, for release mode, the exact prior 24-hour
 run/attempt. Capacity evidence is revalidated before the expensive
 uninterrupted process starts.
+
+The shared production-endurance waiver job is deliberately separate and runs
+on `ubuntu-24.04`, because it only revalidates retained capacity artifacts and
+writes waiver metadata. GitHub-hosted execution does not weaken a duration
+claim here because the artifact explicitly makes no such claim.
 
 Official limits:
 

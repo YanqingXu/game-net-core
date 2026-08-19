@@ -190,6 +190,11 @@ the 72-hour run to consume same-SHA 24-hour evidence. Infrastructure snapshot
 `29984629032` (220,851 cycles). Its cross-platform performance run
 `29808395220` passed at earlier SHA `5f926f3`; these are historical
 infrastructure-validation records, not evidence for later runtime changes.
+For owner-authorized omission of long-duration evidence, the manual workflow
+now also exposes `candidate-waiver` and `release-waiver` paths. They revalidate
+the same frozen commit's 10k or dedicated 100k capacity pair on a hosted runner
+and record owner/reason metadata with `status: waived`; neither is represented
+as a passing 24/72-hour result.
 
 ## Phase Status
 
@@ -211,7 +216,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 140 |
+| 61 | 30 | 20 | 11 | 141 |
 
 ## Historical Production-Hardening Evidence
 

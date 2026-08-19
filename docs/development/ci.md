@@ -494,8 +494,10 @@ cannot be bypassed by repository YAML.
 Best-effort success proves only the logged repository guards, build, CTest, and
 package-consumer result. If upload failed, it does not provide retained artifact
 evidence and must not be cited as satisfying a formal artifact or release
-evidence gate. Repeat-soak and 24/72-hour production-endurance uploads remain
-strict and are not affected by this input.
+evidence gate. Repeat-soak and actual 24/72-hour production-endurance uploads
+remain strict and are not affected by this input. The separate
+`candidate-waiver` and `release-waiver` modes also use strict uploads, but their
+promotion status is `waived`, never a successful endurance result.
 
 LeakSanitizer needs to attach to the sanitizer process while collecting thread
 roots. The dedicated trusted runner must therefore persist Yama
@@ -572,13 +574,25 @@ revalidate its paired raw evidence before the long process starts:
 `dedicated-100k`. The 72-hour mode additionally downloads the exact successful
 24-hour run/attempt from the same candidate SHA.
 
+When the project owner elects not to run long-duration evidence, the explicit
+`candidate-waiver` and `release-waiver` modes run on `ubuntu-24.04` and skip
+the endurance executable. Candidate waiver still requires the exact same-
+commit paired `candidate-10k` artifacts; release waiver requires the
+`dedicated-100k` pair. The dispatch must include a 12-500 character
+`endurance_waiver_reason`; the workflow records `github.actor` as approver and
+emits `status: waived`, `duration_evidence_complete: false`, and
+`owner_authorized_promotion: true`. This lets either stage proceed without
+pretending that a 24-hour or 72-hour test passed.
+
 After the uninterrupted process passes,
 `tools/verify_production_promotion_evidence.py` revalidates all retained
 capacity samples, pair manifest, endurance results, and logs. It emits
 `gamenet.production_promotion_evidence.v1`, binding 10k + 24h for candidate
 promotion or dedicated 100k + 24/72h for release promotion. The outer
 `gamenet.ci_evidence.v1` manifest hashes that promotion result with the
-remaining job evidence. See
+remaining job evidence. In either waiver mode the same verifier instead binds
+the stage-appropriate capacity pair to explicit owner/reason metadata, leaves
+the endurance list empty, and marks the result `waived`. See
 `docs/development/production_endurance.md`.
 
 Phase 3.5 historical evidence: run `29077148022`, job `86311227712`, commit

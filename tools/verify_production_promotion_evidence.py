@@ -16,6 +16,7 @@ from verify_endurance_evidence import (
 
 
 SCHEMA = "gamenet.production_promotion_evidence.v1"
+WAIVER_SCHEMA = "gamenet.production_promotion_waiver.v1"
 STAGE_CAPACITY_PROFILES = {
     "candidate": "candidate-10k",
     "release": "dedicated-100k",
@@ -123,7 +124,7 @@ def verify_promotion(
     *,
     stage: str,
     capacity_root: Path,
-    endurance_evidence: Path,
+    endurance_evidence: Path | None,
     candidate_sha: str,
     capacity_run_id: str,
     capacity_run_attempt: int,
@@ -132,6 +133,9 @@ def verify_promotion(
     candidate_endurance_evidence: Path | None = None,
     candidate_endurance_run_id: str | None = None,
     candidate_endurance_run_attempt: int | None = None,
+    waive_endurance: bool = False,
+    waiver_reason: str | None = None,
+    waiver_approved_by: str | None = None,
 ) -> dict[str, Any]:
     require(stage in STAGE_CAPACITY_PROFILES, "unsupported promotion stage")
     require(
@@ -154,6 +158,38 @@ def verify_promotion(
         promotion_run_attempt,
         "promotion source",
     )
+    if waive_endurance:
+        require(
+            endurance_evidence is None,
+            "endurance waiver must not claim current endurance evidence",
+        )
+        require(
+            candidate_endurance_evidence is None
+            and candidate_endurance_run_id is None
+            and candidate_endurance_run_attempt is None,
+            "endurance waiver must not claim prior endurance evidence",
+        )
+        require(
+            isinstance(waiver_reason, str)
+            and 12 <= len(waiver_reason.strip()) <= 500
+            and "\n" not in waiver_reason
+            and "\r" not in waiver_reason,
+            "endurance waiver reason must be a 12-500 character single line",
+        )
+        require(
+            isinstance(waiver_approved_by, str)
+            and 1 <= len(waiver_approved_by.strip()) <= 100
+            and "\n" not in waiver_approved_by
+            and "\r" not in waiver_approved_by,
+            "endurance waiver approver must be a 1-100 character single line",
+        )
+        waiver_reason = waiver_reason.strip()
+        waiver_approved_by = waiver_approved_by.strip()
+    else:
+        require(
+            waiver_reason is None and waiver_approved_by is None,
+            "waiver metadata requires --waive-endurance",
+        )
 
     require(
         capacity_root.is_dir() and not capacity_root.is_symlink(),
@@ -192,6 +228,42 @@ def verify_promotion(
         "capacity workflow run attempt does not match promotion input",
     )
 
+    capacity_entry = {
+        "profile": capacity_pair["profile"],
+        "workflow_run_id": capacity_run_id,
+        "workflow_run_attempt": capacity_run_attempt,
+        "pair_manifest_file": pair_manifest_path.name,
+        "pair_manifest_sha256": sha256_file(pair_manifest_path),
+        "endpoint_attempts": capacity_pair["endpoint_attempts"],
+        "probe_attempts": capacity_pair["probe_attempts"],
+        "platforms": capacity_pair["platforms"],
+    }
+    if waive_endurance:
+        return {
+            "schema": WAIVER_SCHEMA,
+            "status": "waived",
+            "stage": stage,
+            "candidate_sha": candidate_sha,
+            "promotion_source": {
+                "workflow_run_id": promotion_run_id,
+                "workflow_run_attempt": promotion_run_attempt,
+            },
+            "capacity": capacity_entry,
+            "endurance_policy": "owner-waived",
+            "endurance": [],
+            "waiver": {
+                "scope": (
+                    "candidate-24h"
+                    if stage == "candidate"
+                    else "candidate-24h+release-72h"
+                ),
+                "approved_by": waiver_approved_by,
+                "reason": waiver_reason,
+                "duration_evidence_complete": False,
+                "owner_authorized_promotion": True,
+            },
+        }
+
     endurance_entries: list[dict[str, Any]] = []
     if stage == "candidate":
         require(
@@ -223,6 +295,10 @@ def verify_promotion(
         )
         endurance_entries.append(candidate_entry)
 
+    require(
+        endurance_evidence is not None,
+        "promotion requires current endurance evidence",
+    )
     _, current_entry = verify_endurance(
         endurance_evidence,
         mode=STAGE_CURRENT_ENDURANCE_MODES[stage],
@@ -242,16 +318,7 @@ def verify_promotion(
             "workflow_run_id": promotion_run_id,
             "workflow_run_attempt": promotion_run_attempt,
         },
-        "capacity": {
-            "profile": capacity_pair["profile"],
-            "workflow_run_id": capacity_run_id,
-            "workflow_run_attempt": capacity_run_attempt,
-            "pair_manifest_file": pair_manifest_path.name,
-            "pair_manifest_sha256": sha256_file(pair_manifest_path),
-            "endpoint_attempts": capacity_pair["endpoint_attempts"],
-            "probe_attempts": capacity_pair["probe_attempts"],
-            "platforms": capacity_pair["platforms"],
-        },
+        "capacity": capacity_entry,
         "endurance": endurance_entries,
     }
 
@@ -268,7 +335,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         required=True,
     )
     parser.add_argument("--capacity-root", type=Path, required=True)
-    parser.add_argument("--endurance-evidence", type=Path, required=True)
+    parser.add_argument("--endurance-evidence", type=Path)
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--capacity-run-id", required=True)
     parser.add_argument("--capacity-run-attempt", type=int, required=True)
@@ -277,6 +344,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--candidate-endurance-evidence", type=Path)
     parser.add_argument("--candidate-endurance-run-id")
     parser.add_argument("--candidate-endurance-run-attempt", type=int)
+    parser.add_argument("--waive-endurance", action="store_true")
+    parser.add_argument("--waiver-reason")
+    parser.add_argument("--waiver-approved-by")
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -306,6 +376,9 @@ def main(argv: list[str] | None = None) -> int:
             candidate_endurance_run_attempt=(
                 arguments.candidate_endurance_run_attempt
             ),
+            waive_endurance=arguments.waive_endurance,
+            waiver_reason=arguments.waiver_reason,
+            waiver_approved_by=arguments.waiver_approved_by,
         )
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(
@@ -323,8 +396,9 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+    outcome = "waived" if document["status"] == "waived" else "passed"
     print(
-        f"production {document['stage']} promotion evidence passed: "
+        f"production {document['stage']} promotion evidence {outcome}: "
         f"{document['candidate_sha']}"
     )
     return 0

@@ -297,10 +297,12 @@ precommit results establish profile feasibility only; release evidence must be
 regenerated from the immutable candidate tag on the workflow runners.
 
 The mixed capacity gate complements rather than replaces the one-process
-long-soak lane. Candidate promotion still requires the capacity pair and the
-24-hour endurance artifact from the same frozen commit; the 72-hour soak and
-the dedicated 100k pair remain production-readiness evidence on provisioned
-hosts. The long-soak workflow consumes exact capacity and endurance
-run/attempt identities and uses
+long-soak lane. Candidate promotion normally requires the capacity pair and
+the 24-hour endurance artifact from the same frozen commit. An explicit
+owner-approved `candidate-waiver` may omit the 24-hour artifact while retaining
+exact paired 10k validation; `release-waiver` may omit both 24/72-hour artifacts
+while retaining the exact dedicated 100k pair. Both carry visible `waived`
+status instead of a duration pass. The long-soak workflow consumes exact capacity
+and endurance run/attempt identities and uses
 `tools/verify_production_promotion_evidence.py` to revalidate their raw inputs
 before emitting the candidate/release promotion manifest.

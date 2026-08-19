@@ -127,18 +127,21 @@ def main() -> None:
     assert workflow.exists(), f"missing non-default long-soak workflow: {workflow}"
 
     workflow_text = workflow.read_text(encoding="utf-8")
-    assert workflow_text.count("fetch-tags: true") == 3, (
+    assert workflow_text.count("fetch-tags: true") == 4, (
         "every full-history soak checkout must materialize annotated tags"
     )
-    assert workflow_text.count("- name: Restore annotated candidate tag object") == 3
-    assert workflow_text.count("if: github.ref_type == 'tag'") == 3
-    assert workflow_text.count("git fetch --force --no-tags origin") == 3
+    assert workflow_text.count("- name: Restore annotated candidate tag object") == 4
+    assert workflow_text.count("if: github.ref_type == 'tag'") == 4
+    assert workflow_text.count("git fetch --force --no-tags origin") == 4
     assert workflow_text.count(
         "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
-    ) == 3
+    ) == 4
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
     require(workflow_text, "          - ci", workflow)
+    require(workflow_text, "          - candidate-waiver", workflow)
+    require(workflow_text, "          - release-waiver", workflow)
+    require(workflow_text, "      endurance_waiver_reason:", workflow)
     require(workflow_text, 'default: "50"', workflow)
     require(workflow_text, 'default: "60"', workflow)
     require(workflow_text, "      ci_artifact_policy:", workflow)
@@ -630,6 +633,72 @@ def main() -> None:
         endurance_run
     ), "capacity evidence must fail before the expensive endurance process starts"
 
+    waiver_job = job_block(workflow_text, "production-endurance-waiver")
+    require(
+        waiver_job,
+        "if: inputs.mode == 'candidate-waiver' || inputs.mode == 'release-waiver'",
+        workflow,
+    )
+    require(waiver_job, "runs-on: ubuntu-24.04", workflow)
+    assert "tools/run_endurance_gate.py" not in waiver_job, (
+        "waiver job must not launch a long-duration endurance process"
+    )
+    waiver_source_checkout = step_block(
+        waiver_job, "Checkout migration provenance source"
+    )
+    waiver_guards = step_block(waiver_job, "Check repository guards")
+    require(waiver_source_checkout, f"repository: {SOURCE_REPOSITORY}", workflow)
+    require(waiver_source_checkout, f"ref: {SOURCE_COMMIT}", workflow)
+    require(waiver_guards, verifier, workflow)
+    require(waiver_guards, semantic_guard, workflow)
+    assert waiver_guards.index(verifier) < waiver_guards.index(semantic_guard)
+    assert waiver_job.index(waiver_source_checkout) < waiver_job.index(waiver_guards)
+
+    waiver_validation = step_block(
+        waiver_job, "Validate production endurance waiver inputs"
+    )
+    require(waiver_validation, "endurance waiver must not name endurance evidence", workflow)
+    require(waiver_validation, "endurance waiver requires exact capacity run/attempt", workflow)
+    require(waiver_validation, "12-500 character single line", workflow)
+    waiver_download = step_block(
+        waiver_job, "Download exact paired waiver capacity evidence"
+    )
+    require(
+        waiver_download,
+        "inputs.mode == 'candidate-waiver' && 'candidate-10k' || 'dedicated-100k'",
+        workflow,
+    )
+    waiver_revalidation = step_block(
+        waiver_job, "Revalidate exact paired waiver capacity source"
+    )
+    require(waiver_revalidation, "--retained-pair-manifest capacity-evidence/pair-manifest.json", workflow)
+    waiver_record = step_block(
+        waiver_job, "Record owner-approved production endurance waiver"
+    )
+    require(waiver_record, "--waive-endurance", workflow)
+    require(waiver_record, "--waiver-reason", workflow)
+    require(waiver_record, "--waiver-approved-by '${{ github.actor }}'", workflow)
+    require(
+        waiver_record,
+        "inputs.mode == 'candidate-waiver' && 'candidate' || 'release'",
+        workflow,
+    )
+    assert waiver_job.index(waiver_revalidation) < waiver_job.index(waiver_record)
+    waiver_manifest = step_block(
+        waiver_job, "Write production endurance waiver manifest"
+    )
+    waiver_artifact_name = (
+        "production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-"
+        "${{ github.run_id }}-${{ github.run_attempt }}"
+    )
+    require(waiver_manifest, f"--artifact-name '{waiver_artifact_name}'", workflow)
+    require(waiver_manifest, "--require-canonical-artifact-name", workflow)
+    waiver_upload = step_block(
+        waiver_job, "Upload production endurance waiver evidence"
+    )
+    require(waiver_upload, f"name: {waiver_artifact_name}", workflow)
+    require(waiver_upload, "if-no-files-found: error", workflow)
+
     cmake_calls = re.findall(
         r"^add_gamenet_(?:component_)?test\(([^\n]*)\)$",
         tests_cmake.read_text(encoding="utf-8"),
@@ -679,9 +748,10 @@ def main() -> None:
     require(ci_docs_text, "does not provide retained artifact\nevidence", ci_docs)
     require(
         ci_docs_text,
-        "Repeat-soak and 24/72-hour production-endurance uploads remain\nstrict",
+        "Repeat-soak and actual 24/72-hour production-endurance uploads",
         ci_docs,
     )
+    require(ci_docs_text, "`candidate-waiver` and `release-waiver`", ci_docs)
     require(ci_docs_text, "kernel.yama.ptrace_scope=0", ci_docs)
     require(ci_docs_text, "/etc/sysctl.d/99-gamenet-lsan.conf", ci_docs)
     require(ci_docs_text, "ci-evidence/asan-ubsan-runner.txt", ci_docs)

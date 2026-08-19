@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Repeat soak or fixed production endurance mode
+        description: Repeat soak, fixed production endurance, or owner waiver mode
         required: true
         type: choice
         options:
           - ci
           - repeat
+          - candidate-waiver
+          - release-waiver
           - candidate-24h
           - release-72h
         default: repeat
@@ -43,6 +45,10 @@ on:
         default: ""
       capacity_run_attempt:
         description: Exact paired capacity workflow rerun attempt required by production modes
+        required: false
+        default: ""
+      endurance_waiver_reason:
+        description: Owner reason required for candidate/release waiver (12-500 characters)
         required: false
         default: ""
 
@@ -807,5 +813,169 @@ jobs:
         with:
           name: production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: endurance-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+  production-endurance-waiver:
+    name: Production endurance waiver (${{ inputs.mode }})
+    if: inputs.mode == 'candidate-waiver' || inputs.mode == 'release-waiver'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout frozen candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Restore annotated candidate tag object
+        if: github.ref_type == 'tag'
+        run: >-
+          git fetch --force --no-tags origin
+          +refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}
+
+      - name: Checkout migration provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+
+      - name: Validate production endurance waiver inputs
+        env:
+          GAMENET_ENDURANCE_MODE: "${{ inputs.mode }}"
+          GAMENET_CANDIDATE_RUN_ID: "${{ inputs.candidate_run_id }}"
+          GAMENET_CANDIDATE_RUN_ATTEMPT: "${{ inputs.candidate_run_attempt }}"
+          GAMENET_CAPACITY_RUN_ID: "${{ inputs.capacity_run_id }}"
+          GAMENET_CAPACITY_RUN_ATTEMPT: "${{ inputs.capacity_run_attempt }}"
+          GAMENET_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_WAIVER_REASON: "${{ inputs.endurance_waiver_reason }}"
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+
+          mode = os.environ["GAMENET_ENDURANCE_MODE"]
+          if mode not in {"candidate-waiver", "release-waiver"}:
+              raise SystemExit("unsupported production endurance waiver mode")
+          expected_sha = os.environ["GAMENET_CANDIDATE_SHA"]
+          actual_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          if re.fullmatch(r"[0-9a-f]{40}", expected_sha) is None:
+              raise SystemExit("github.sha is not an immutable commit identity")
+          if actual_sha != expected_sha:
+              raise SystemExit(f"checkout identity drift: {actual_sha} != {expected_sha}")
+          if os.environ["GAMENET_CANDIDATE_RUN_ID"] or os.environ[
+              "GAMENET_CANDIDATE_RUN_ATTEMPT"
+          ]:
+              raise SystemExit("endurance waiver must not name endurance evidence")
+          positive = re.compile(r"[1-9][0-9]*")
+          if (
+              positive.fullmatch(os.environ["GAMENET_CAPACITY_RUN_ID"]) is None
+              or positive.fullmatch(
+                  os.environ["GAMENET_CAPACITY_RUN_ATTEMPT"]
+              )
+              is None
+          ):
+              raise SystemExit(
+                  "endurance waiver requires exact capacity run/attempt"
+              )
+          reason = os.environ["GAMENET_WAIVER_REASON"].strip()
+          if not 12 <= len(reason) <= 500 or "\n" in reason or "\r" in reason:
+              raise SystemExit(
+                  "endurance waiver reason must be a 12-500 character single line"
+              )
+          PY
+
+      - name: Record waiver toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p endurance-waiver-evidence
+          {
+            python3 --version
+            git --version
+          } 2>&1 | tee endurance-waiver-evidence/toolchain.txt
+
+      - name: Check repository guards
+        run: |
+          python3 tests/scope/test_scope_guard.py
+          python3 tests/scope/test_intent_consistency.py
+          python3 tests/scope/test_intent_metadata.py
+          python3 tools/verify_migration_provenance.py
+          python3 tests/scope/test_intent_semantics.py
+          python3 tools/check_scope_boundaries.py
+          python3 tests/api/test_public_api_manifest.py
+          python3 tests/ci/test_performance_regression.py
+          python3 tests/ci/test_core_capacity_matrix.py
+          python3 tests/ci/test_endurance_gate.py
+          python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_long_soak_workflow.py
+
+      - name: Download exact paired waiver capacity evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.capacity_run_id }}
+          pattern: capacity-gate-pair-${{ inputs.mode == 'candidate-waiver' && 'candidate-10k' || 'dedicated-100k' }}-${{ github.sha }}-${{ inputs.capacity_run_id }}-${{ inputs.capacity_run_attempt }}
+          merge-multiple: true
+          path: capacity-evidence
+
+      - name: Revalidate exact paired waiver capacity source
+        run: |
+          set -euo pipefail
+          python3 tools/verify_capacity_gate_evidence_set.py \
+            --input-root capacity-evidence \
+            --expected-profile '${{ inputs.mode == 'candidate-waiver' && 'candidate-10k' || 'dedicated-100k' }}' \
+            --expected-candidate-sha '${{ github.sha }}' \
+            --expected-run-id '${{ inputs.capacity_run_id }}' \
+            --expected-run-attempt '${{ inputs.capacity_run_attempt }}' \
+            --retained-pair-manifest capacity-evidence/pair-manifest.json \
+            --output endurance-waiver-evidence/capacity-pair-revalidated.json
+
+      - name: Record owner-approved production endurance waiver
+        env:
+          GAMENET_WAIVER_REASON: "${{ inputs.endurance_waiver_reason }}"
+          GAMENET_WAIVER_STAGE: "${{ inputs.mode == 'candidate-waiver' && 'candidate' || 'release' }}"
+        run: |
+          set -euo pipefail
+          python3 tools/verify_production_promotion_evidence.py \
+            --stage "$GAMENET_WAIVER_STAGE" \
+            --capacity-root capacity-evidence \
+            --candidate-sha '${{ github.sha }}' \
+            --capacity-run-id '${{ inputs.capacity_run_id }}' \
+            --capacity-run-attempt '${{ inputs.capacity_run_attempt }}' \
+            --promotion-run-id '${{ github.run_id }}' \
+            --promotion-run-attempt '${{ github.run_attempt }}' \
+            --waive-endurance \
+            --waiver-reason "$GAMENET_WAIVER_REASON" \
+            --waiver-approved-by '${{ github.actor }}' \
+            --output endurance-waiver-evidence/promotion.json
+
+      - name: Write production endurance waiver manifest
+        if: always()
+        env:
+          GAMENET_CI_CANDIDATE_SHA: "${{ github.sha }}"
+          GAMENET_CI_MERGE_OR_CURRENT_SHA: "${{ github.sha }}"
+          GAMENET_CI_STATUS: "${{ job.status }}"
+        run: |
+          python3 tools/write_ci_evidence.py \
+            --evidence-root endurance-waiver-evidence \
+            --output endurance-waiver-evidence/manifest.json \
+            --artifact-name 'production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
+            --require-canonical-artifact-name \
+            --command 'python3 tools/verify_production_promotion_evidence.py --stage $GAMENET_WAIVER_STAGE --capacity-root capacity-evidence --waive-endurance --waiver-reason $GAMENET_WAIVER_REASON --waiver-approved-by $GITHUB_ACTOR --output endurance-waiver-evidence/promotion.json'
+
+      - name: Upload production endurance waiver evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: endurance-waiver-evidence/
           if-no-files-found: error
           retention-days: 90

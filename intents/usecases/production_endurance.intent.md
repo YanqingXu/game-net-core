@@ -40,7 +40,11 @@ smoke run may validate orchestration but is not release evidence.
 ## 4. Evidence Contract
 - `candidate-24h` is fixed at 86,400 seconds and `release-72h` at 259,200
   seconds; production modes reject duration overrides
-- both modes run one uninterrupted fault-injection executable process and bind
+- `candidate-waiver` and `release-waiver` are workflow-only owner exceptions;
+  they run no endurance process, require a non-empty reason and recorded
+  approver, revalidate the exact same-commit paired 10k or dedicated 100k
+  capacity source respectively, and emit status `waived`
+- both duration modes run one uninterrupted fault-injection executable process and bind
   its executable hash, immutable candidate SHA, platform, backend, start/end
   timestamps, heartbeat sequence, completed cycles, and final result
 - Linux production evidence samples the same child process RSS after every
@@ -57,6 +61,8 @@ smoke run may validate orchestration but is not release evidence.
 - GitHub-hosted runners are not eligible because their maximum job execution
   time is shorter than either production duration; the workflow targets a
   dedicated self-hosted endurance runner
+- the waiver evidence job may use a GitHub-hosted runner because it makes no
+  duration or Linux/epoll runtime claim
 
 ## 5. Failure Semantics
 - any child exit, malformed or missing heartbeat, non-monotonic counter,
@@ -66,6 +72,8 @@ smoke run may validate orchestration but is not release evidence.
 - runner cancellation or host loss cannot be reported as a passing result
 - restarting the child or combining shorter shards cannot satisfy a production
   duration
+- a waiver cannot be reported as successful endurance evidence; it authorizes
+  only the named promotion stage and records that duration evidence is missing
 
 ## 6. Verification
 - `tests/integration/resilience/test_fault_injection.cpp` verifies every fault
@@ -73,7 +81,11 @@ smoke run may validate orchestration but is not release evidence.
   forced graceful-stop convergence in one reusable cycle
 - `tests/ci/test_endurance_gate.py` verifies smoke execution, fixed production
   durations, workflow/runner wiring, structured checkpoint evidence,
-  candidate/release promotion inputs, and malformed/failed/tampered fixtures
+  candidate/release promotion inputs, both waiver boundaries, and
+  malformed/failed/tampered fixtures
+- `tests/cmake/test_capacity_profile_contract.py` verifies waiver approval,
+  same-commit stage-appropriate capacity revalidation, and missing-evidence
+  metadata
 
 ## 7. Review Checklist
 - Does one process remain alive for the complete claimed duration?
@@ -81,3 +93,5 @@ smoke run may validate orchestration but is not release evidence.
 - Can any driver operation mutate loop-owned state off-thread?
 - Are all sockets and callbacks released through existing lifecycle paths?
 - Does evidence fail closed on missing duration, identity, or heartbeat data?
+- Does every waiver remain distinguishable from successful endurance and
+  limited to its named promotion stage?
