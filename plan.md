@@ -319,12 +319,21 @@ IOE-X5 shared-Hub capacity/soak decision 立即接续，不等待冻结或 promo
 
 IOE-X6 source-private adapter contract 立即接续：
 
-- [ ] 用现有 `TcpSendResult` 与 `TcpConnectionCloseInfo` 固化 Hub route 的窄语义映射；
-- [ ] connection-local low/high/hard backpressure 驱动 pause/resume，通知有界且可观测；
-- [ ] message/high-water/write-complete/close callback owner-only、可重入、异常封闭；
-- [ ] adapter observer 可先销毁，Hub 仍完成 socket/operation/future 物理退休；
-- [ ] 同一真实 TCP 场景并排验证 production epoll 与 io_uring adapter 的共同语义；
-- [ ] 保持 non-installed、default-off、无 selector、无 production `TcpConnection` 修改和 API 漂移。
+- [x] 用现有 `TcpSendResult` 与 `TcpConnectionCloseInfo` 固化 Hub route 的窄语义映射；
+- [x] connection-local low/high/hard backpressure 驱动 pause/resume，通知有界且可观测；
+- [x] message/high-water/write-complete/close callback owner-only、可重入、异常封闭；
+- [x] adapter observer 可先销毁，Hub 仍完成 socket/operation/future 物理退休；
+- [x] 同一真实 TCP 场景并排验证 production epoll 与 io_uring adapter 的共同语义；
+- [x] 保持 non-installed、default-off、无 selector、无 production `TcpConnection` 修改和 API 漂移。
+
+IOE-X7 graceful-drain / half-close equivalence 立即接续：
+
+- [ ] Adapter `tryShutdown` 与 force-close 分离，首次 Graceful 原因不可被升级覆盖；
+- [ ] shutdown 前已接受输出完整发送，随后只执行一次 `shutdownWrite`，读侧继续有效；
+- [ ] peer EOF 才发布 graceful terminal；force escalation 只加速物理关闭、不改首原因；
+- [ ] owner quit、peer reset、callback failure 与 pending Recv/Send 组合保持唯一 terminal；
+- [ ] 与 production epoll pending-output shutdown 合同跑同一真实 TCP 观察序列；
+- [ ] 仍不增加 selector、Accept ownership、安装 header 或 production `TcpConnection` 改动。
 
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
@@ -439,10 +448,10 @@ IOE-X4 shared-Pump routing 已以一个 EventLoop/Engine/Pump generation-safe �
 operation slot 也改为保留到对应 terminal notice 被取走，消除了 decoded-but-undispatched
 notice 与新 generation 共槽的歧义。
 
-IOE-X5 已用固定 256 route、64-route generation churn、aggregate saturation、Release
-latency/throughput/memory 和 shutdown latency 得出受限 `PROMOTE`：只推进 source-private
-production-adapter contract shaping。当前下一前沿转为 **IOE-X6 adapter contract**，先统一
-cross-backend ownership、close reason、backpressure、callback re-entry 和 shutdown observation，
-再讨论任何 selector。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X6 开放
-multishot、provided buffers、fixed files、zero-copy、SQPOLL、公共 backend selector 或直接
-替换 production `TcpConnection`。
+IOE-X5 已用固定 256 route、64-route generation churn 和方向性数字得出受限 `PROMOTE`；
+IOE-X6 又以真实 epoll/io_uring 双路径关闭 source-private forced-close/backpressure adapter
+合同。当前下一前沿转为 **IOE-X7 graceful-drain / half-close equivalence**：先证明 pending
+output、`shutdownWrite`、继续读、peer EOF 与 force escalation 的共同语义，再讨论任何
+selector。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X7 开放 multishot、
+provided buffers、fixed files、zero-copy、SQPOLL、公共 backend selector 或直接替换
+production `TcpConnection`。

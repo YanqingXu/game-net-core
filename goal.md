@@ -299,9 +299,9 @@ Runtime Model
   shared-Pump Hub 进一步在一个 owner Engine 上 generation-safe 路由多个真实 TCP route，
   证明 per-route/aggregate 预算、隔离关闭、slot 换代复用和 owner-quit aggregate drain；
   固定 256-route/64-churn 容量与结构化 Release 数字又给出受限 adapter `PROMOTE`；
-  source-private semantic adapter 正把稳定 `TcpSendResult`/close info、low/high/hard
-  backpressure、回调重入和可等待终局映射到单个 Hub route。这些能力仍不安装，生产默认
-  和 fallback 仍是 epoll；
+  source-private semantic adapter 已把稳定 `TcpSendResult`/close info、low/high/hard
+  backpressure、回调重入和可等待终局映射到单个 Hub route；下一合同继续补齐 graceful
+  pending-output drain 与 TCP half-close。这些能力仍不安装，生产默认和 fallback 仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
   多 I/O owner、独立逻辑 owner、有界合并唤醒和 generation-safe 回送；
