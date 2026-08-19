@@ -20,7 +20,6 @@ inline bool prepareIocpOperationSubmission(
     operation.completionObserved = false;
     operation.bytesTransferred = 0;
     operation.error = 0;
-    operation.nextPublishedCompletion = nullptr;
     return true;
 }
 

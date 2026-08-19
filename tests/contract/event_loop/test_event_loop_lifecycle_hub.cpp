@@ -11,6 +11,7 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 using namespace std::chrono_literals;
 
@@ -18,6 +19,47 @@ namespace {
 
 using LifecycleRegistry =
     gamenet::net::detail::EventLoopLifecycleRegistry;
+
+std::vector<gamenet::net::EventLoopPhase>* observedPhases{nullptr};
+
+void observeEventLoopPhase(
+    gamenet::net::EventLoop* loop,
+    gamenet::net::EventLoopPhase phase) noexcept {
+    GAMENET_TEST_ASSERT(loop != nullptr);
+    GAMENET_TEST_ASSERT(loop->phase() == phase);
+    GAMENET_TEST_ASSERT(observedPhases != nullptr);
+    observedPhases->push_back(phase);
+    if (phase == gamenet::net::EventLoopPhase::FinalDraining) {
+        loop->quit();
+        GAMENET_TEST_ASSERT(
+            loop->phase() == gamenet::net::EventLoopPhase::FinalDraining);
+    }
+}
+
+void testShutdownPhaseSequenceIsObservableAndMonotonic() {
+    std::vector<gamenet::net::EventLoopPhase> phases;
+    observedPhases = &phases;
+    LifecycleRegistry::setPhaseObserverForTesting(&observeEventLoopPhase);
+
+    gamenet::net::EventLoop loop;
+    GAMENET_TEST_ASSERT(
+        loop.phase() == gamenet::net::EventLoopPhase::Running);
+    loop.runAfter(0ms, [&] {
+        loop.quit();
+        GAMENET_TEST_ASSERT(
+            loop.phase() == gamenet::net::EventLoopPhase::Quiescing);
+    });
+    loop.loop();
+
+    LifecycleRegistry::setPhaseObserverForTesting(nullptr);
+    observedPhases = nullptr;
+    const std::vector expected{
+        gamenet::net::EventLoopPhase::Quiescing,
+        gamenet::net::EventLoopPhase::FinalDraining,
+        gamenet::net::EventLoopPhase::Shutdown,
+    };
+    GAMENET_TEST_ASSERT(phases == expected);
+}
 
 void testCommittedNotifySurvivesDetachAndSaturation() {
     gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
@@ -192,6 +234,7 @@ void testLifecycleNotifyQuitLinearization() {
 }  // namespace
 
 int main() {
+    testShutdownPhaseSequenceIsObservableAndMonotonic();
     testCommittedNotifySurvivesDetachAndSaturation();
     testLifecycleCapacityGenerationAndBudgetedSelfSignal();
     testLifecycleNotifyQuitLinearization();

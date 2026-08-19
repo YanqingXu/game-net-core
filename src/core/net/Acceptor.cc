@@ -410,9 +410,6 @@ void Acceptor::handleRead(gamenet::base::Timestamp receiveTime) {
         IocpOperation* completedOperation = state->directCompletion;
         if (completedOperation != nullptr) {
             state->directCompletion = nullptr;
-        } else {
-            completedOperation =
-                acceptChannel_.takeIocpAcceptCompletionOperation();
         }
         if (completedOperation == nullptr) {
             break;
@@ -677,7 +674,6 @@ bool Acceptor::postAccept(IocpAcceptSlot& slot) {
     slot.operation.bytesTransferred = 0;
     slot.operation.error = 0;
     slot.operation.completionObserved = false;
-    slot.operation.nextPublishedCompletion = nullptr;
     slot.completionPending = false;
     slot.cancelling = false;
     if (!detail::prepareIocpOperationSubmission(slot.operation)) {
@@ -812,7 +808,6 @@ void Acceptor::closePendingAccept() noexcept {
     if (!iocpAccept_) {
         return;
     }
-    acceptChannel_.clearIocpAcceptCompletionOperations();
     iocpAccept_->phase = IocpAcceptState::Phase::Stopped;
     iocpAccept_->owner = nullptr;
     cancelPendingAccepts(true);

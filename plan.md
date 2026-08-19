@@ -191,13 +191,16 @@ capability Engine。IOE-R1 在精确提交
 
 - [x] GQCSEx 结果直接形成 `CompletionNotice`；
 - [x] read/write/accept/connect/cancel completion 保留独立 operation 身份；
-- [ ] 移除 fake `kReadEvent/kWriteEvent` 的结果转译；
+- [x] 移除 fake `kReadEvent/kWriteEvent` 的结果转译；
   - [x] EventLoop 生产 adapter 直接按统一 I/O dispatch budget 消费
     Accept/Connect/Read/Write typed notice；
-  - [ ] 删除 legacy `IocpPoller::poll()` 对 completion 的兼容转译；
-- [ ] 移除 Channel 对 IOCP operation 和 storage 的携带职责；
+  - [x] 删除 legacy `IocpPoller::poll()` 对 completion 的兼容转译；继承的 ABI slot
+    显式拒绝调用，不会 dequeue 后丢弃 notice；
+- [x] 移除 Channel 对 IOCP operation 和 storage 的运行时携带职责；
   - [x] 生产四类 completion 路径均不再写入 Channel mailbox/Accept queue；
-  - [ ] 随 legacy Poller shell 删除 ABI-reserved 字段与 accept intrusive queue；
+  - [x] 删除 operation-embedded publication link、Channel.cc mailbox/queue 实现、
+    Acceptor fallback 与 accept intrusive queue；0.3 stable `Channel.h` 的三个 private
+    pointer slot 保留为不可达且不初始化的布局字节，物理缩减只进入显式评审的破坏性版本线；
 - [x] read/write 子切片保持 TcpConnection 统一连接、发送、背压、关闭和 callback
   contract；
 - [x] source-private IOCP TCP driver 管理 read/write repost、pause-read、partial write
@@ -206,12 +209,12 @@ capability Engine。IOE-R1 在精确提交
 
 ### 8.3 关闭
 
-- [ ] `Running -> Quiescing -> FinalDraining -> Shutdown` 可观察；
-- [ ] cancel、late completion、peer close、owner quit 和 callback destruction 组合覆盖；
-- [ ] 无 callback-after-destroy、kernel-reference-after-free、phantom completion 或
+- [x] `Running -> Quiescing -> FinalDraining -> Shutdown` 可观察且单调；
+- [x] cancel、late completion、peer close、owner quit 和 callback destruction 组合覆盖；
+- [x] 无 callback-after-destroy、kernel-reference-after-free、phantom completion 或
   stranded Accepted operation；
-- [ ] Windows/IOCP 生命周期、饱和、容量和性能证据通过；
-- [ ] Linux/epoll 全量合同无回归。
+- [x] Windows/IOCP 生命周期、饱和、容量和性能证据通过；
+- [x] Linux/epoll 全量合同无回归。
 
 ## 9. M5 / RTM-R1：TCP-only Runtime Profiles
 
@@ -357,12 +360,11 @@ planned -> contract-ready -> implemented -> verified -> integrated
 现在立即执行：
 
 > **IOE-C1：Accept/Connect/Read/Write typed consumer 均已进入 EventLoop owner
-> dispatch，生产 adapter 不再发布 fake Channel readiness；source-private TCP driver、
-> Accept pool 与 Connect attempt 均拆分 kernel-terminal / consumer-terminal。
-> 现在直接推进 shutdown 收口，并删除 legacy compatibility publisher 与 Channel
-> IOCP mailbox。**
+> dispatch，completion-to-Channel publisher、operation link、Channel storage 实现与
+> Acceptor fallback 已删除；`Poller::poll()` 兼容 slot 显式拒绝。关闭 phase 现在可观察、
+> 单调，并在 Quiescing 消费真实 cancellation terminal。双平台全量、sanitizer、API、
+> 重复合同与性能证据门均通过；当前直接绑定精确提交证据并关闭 IOE-C1。**
 
 ARCH-G1 独立 review 与 RTM-R1 的三个 Profile contract 继续并行，不形成冻结点。下一个
-可运行目标不是新发布 tag，而是：Windows/IOCP 收口 shutdown typed retirement，删除
-legacy fake Channel translation 与 dormant mailbox；Linux/epoll 与
-stable public surface 持续全绿。
+可运行目标不是新发布 tag，而是：把当前 IOE-C1 worktree 绑定精确提交证据并直接推进
+RTM-R1 Profile A 的可运行合同；Linux/epoll 与 stable public surface 持续全绿。

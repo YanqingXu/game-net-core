@@ -227,6 +227,27 @@ void testReadableCompletion() {
 }
 
 #ifdef _WIN32
+struct DirectCompletionObservation {
+    int calls{0};
+    bool observerCurrent{false};
+    gamenet::net::Channel* removeOnConsume{nullptr};
+};
+
+void observeDirectCompletion(
+    void* context,
+    gamenet::base::Timestamp,
+    bool observerCurrent) {
+    auto& observation =
+        *static_cast<DirectCompletionObservation*>(context);
+    ++observation.calls;
+    observation.observerCurrent = observerCurrent;
+    if (observation.removeOnConsume != nullptr) {
+        observation.removeOnConsume->disableAll();
+        observation.removeOnConsume->remove();
+        observation.removeOnConsume = nullptr;
+    }
+}
+
 void testBoundedIocpBatch() {
     using gamenet::net::IocpOperation;
     using gamenet::net::IocpOperationKind;
@@ -245,6 +266,8 @@ void testBoundedIocpBatch() {
     GAMENET_TEST_ASSERT(batchSize == 4);
 
     std::vector<IocpOperation> operations(batchSize + 1);
+    std::vector<DirectCompletionObservation> observations(
+        operations.size());
     for (std::size_t index = 0; index < operations.size(); ++index) {
         auto& operation = operations[index];
         operation.kind =
@@ -252,6 +275,8 @@ void testBoundedIocpBatch() {
             ? IocpOperationKind::Read
             : IocpOperationKind::Write;
         operation.channel = nullptr;
+        operation.completionContext = &observations[index];
+        operation.completionConsumer = &observeDirectCompletion;
         EventLoopIocpAssociationHarness::trackCompletion(
             loop,
             &operation);
@@ -275,7 +300,7 @@ void testBoundedIocpBatch() {
         EventLoopIocpAssociationHarness::
             hasPendingCompletionOperations(loop));
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::
             lastCompletionPacketsDrained(loop) == batchSize);
@@ -298,9 +323,16 @@ void testBoundedIocpBatch() {
     GAMENET_TEST_ASSERT(
         processedAfterFirstPoll ==
         static_cast<std::ptrdiff_t>(batchSize - 1));
+    GAMENET_TEST_ASSERT(
+        std::count_if(
+            observations.begin(),
+            observations.end(),
+            [](const DirectCompletionObservation& observation) {
+                return observation.calls == 1;
+            }) == static_cast<std::ptrdiff_t>(batchSize - 1));
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
     GAMENET_TEST_ASSERT(
         !EventLoopIocpAssociationHarness::
             hasPendingCompletionOperations(loop));
@@ -310,13 +342,15 @@ void testBoundedIocpBatch() {
         GAMENET_TEST_ASSERT(
             operations[index].bytesTransferred ==
             static_cast<DWORD>(index + 1));
+        GAMENET_TEST_ASSERT(observations[index].calls == 1);
+        GAMENET_TEST_ASSERT(!observations[index].observerCurrent);
     }
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
 }
 
-void testSameChannelCompletionsCoalesceWithoutLosingTerminalState() {
+void testSameChannelCompletionsStayDistinctWithoutFakeReadiness() {
     using gamenet::net::IocpOperation;
     using gamenet::net::IocpOperationKind;
     using gamenet::net::detail::EventLoopIocpAssociationHarness;
@@ -329,20 +363,20 @@ void testSameChannelCompletionsCoalesceWithoutLosingTerminalState() {
     gamenet::net::Channel first(&loop, firstPair.readFd);
     gamenet::net::Channel second(&loop, secondPair.readFd);
 
-    int firstReads = 0;
-    int firstWrites = 0;
-    int secondReads = 0;
+    int fakeFirstReads = 0;
+    int fakeFirstWrites = 0;
+    int fakeSecondReads = 0;
     first.setReadCallback(
         [&](gamenet::base::Timestamp) {
-            ++firstReads;
+            ++fakeFirstReads;
         });
     first.setWriteCallback(
         [&] {
-            ++firstWrites;
+            ++fakeFirstWrites;
         });
     second.setReadCallback(
         [&](gamenet::base::Timestamp) {
-            ++secondReads;
+            ++fakeSecondReads;
         });
     first.enableReading();
     second.enableReading();
@@ -354,8 +388,11 @@ void testSameChannelCompletionsCoalesceWithoutLosingTerminalState() {
     operations[1].channel = &first;
     operations[2].kind = IocpOperationKind::Read;
     operations[2].channel = &second;
+    std::array<DirectCompletionObservation, 3> observations{};
 
     for (std::size_t index = 0; index < operations.size(); ++index) {
+        operations[index].completionContext = &observations[index];
+        operations[index].completionConsumer = &observeDirectCompletion;
         EventLoopIocpAssociationHarness::trackCompletion(
             loop,
             &operations[index]);
@@ -367,29 +404,36 @@ void testSameChannelCompletionsCoalesceWithoutLosingTerminalState() {
     }
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 1);
-    GAMENET_TEST_ASSERT(firstReads == 1);
-    GAMENET_TEST_ASSERT(firstWrites == 1);
-    GAMENET_TEST_ASSERT(secondReads == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
+    GAMENET_TEST_ASSERT(observations[0].calls == 1);
+    GAMENET_TEST_ASSERT(observations[0].observerCurrent);
+    GAMENET_TEST_ASSERT(observations[1].calls == 1);
+    GAMENET_TEST_ASSERT(observations[1].observerCurrent);
+    GAMENET_TEST_ASSERT(observations[2].calls == 0);
+    GAMENET_TEST_ASSERT(fakeFirstReads == 0);
+    GAMENET_TEST_ASSERT(fakeFirstWrites == 0);
+    GAMENET_TEST_ASSERT(fakeSecondReads == 0);
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::
             hasPendingCompletionOperations(loop));
     GAMENET_TEST_ASSERT(operations[1].bytesTransferred == 2);
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 1);
-    GAMENET_TEST_ASSERT(firstReads == 1);
-    GAMENET_TEST_ASSERT(firstWrites == 1);
-    GAMENET_TEST_ASSERT(secondReads == 1);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
+    GAMENET_TEST_ASSERT(observations[2].calls == 1);
+    GAMENET_TEST_ASSERT(observations[2].observerCurrent);
+    GAMENET_TEST_ASSERT(fakeFirstReads == 0);
+    GAMENET_TEST_ASSERT(fakeFirstWrites == 0);
+    GAMENET_TEST_ASSERT(fakeSecondReads == 0);
     GAMENET_TEST_ASSERT(
         !EventLoopIocpAssociationHarness::
              hasPendingCompletionOperations(loop));
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
-    GAMENET_TEST_ASSERT(firstReads == 1);
-    GAMENET_TEST_ASSERT(firstWrites == 1);
-    GAMENET_TEST_ASSERT(secondReads == 1);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
+    GAMENET_TEST_ASSERT(fakeFirstReads == 0);
+    GAMENET_TEST_ASSERT(fakeFirstWrites == 0);
+    GAMENET_TEST_ASSERT(fakeSecondReads == 0);
     GAMENET_TEST_ASSERT(
         !EventLoopIocpAssociationHarness::
             hasPendingCompletionOperations(loop));
@@ -452,7 +496,7 @@ void testIocpCompletionBudgetMetrics() {
     GAMENET_TEST_ASSERT(!samples[1].budgetExhausted);
 }
 
-void testCoalescedTerminalErrorSurvivesObserverRemoval() {
+void testDirectTerminalErrorSurvivesObserverRemoval() {
     using gamenet::net::IocpOperation;
     using gamenet::net::IocpOperationKind;
     using gamenet::net::detail::EventLoopIocpAssociationHarness;
@@ -461,17 +505,15 @@ void testCoalescedTerminalErrorSurvivesObserverRemoval() {
     ReadablePair pair;
     gamenet::net::Channel channel(&loop, pair.readFd);
 
-    int reads = 0;
-    int writes = 0;
+    int fakeReads = 0;
+    int fakeWrites = 0;
     channel.setReadCallback(
         [&](gamenet::base::Timestamp) {
-            ++reads;
-            channel.disableAll();
-            channel.remove();
+            ++fakeReads;
         });
     channel.setWriteCallback(
         [&] {
-            ++writes;
+            ++fakeWrites;
         });
     channel.enableReading();
 
@@ -481,8 +523,12 @@ void testCoalescedTerminalErrorSurvivesObserverRemoval() {
     operations[1].kind = IocpOperationKind::Write;
     operations[1].channel = &channel;
     operations[1].overlapped.Internal = 0xC0000120UL;
+    std::array<DirectCompletionObservation, 2> observations{};
+    observations[0].removeOnConsume = &channel;
 
     for (std::size_t index = 0; index < operations.size(); ++index) {
+        operations[index].completionContext = &observations[index];
+        operations[index].completionConsumer = &observeDirectCompletion;
         EventLoopIocpAssociationHarness::trackCompletion(
             loop,
             &operations[index]);
@@ -494,9 +540,13 @@ void testCoalescedTerminalErrorSurvivesObserverRemoval() {
     }
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 1);
-    GAMENET_TEST_ASSERT(reads == 1);
-    GAMENET_TEST_ASSERT(writes == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
+    GAMENET_TEST_ASSERT(observations[0].calls == 1);
+    GAMENET_TEST_ASSERT(observations[0].observerCurrent);
+    GAMENET_TEST_ASSERT(observations[1].calls == 1);
+    GAMENET_TEST_ASSERT(!observations[1].observerCurrent);
+    GAMENET_TEST_ASSERT(fakeReads == 0);
+    GAMENET_TEST_ASSERT(fakeWrites == 0);
     GAMENET_TEST_ASSERT(operations[1].bytesTransferred == 2);
     GAMENET_TEST_ASSERT(
         operations[1].error == ERROR_OPERATION_ABORTED);
@@ -505,9 +555,11 @@ void testCoalescedTerminalErrorSurvivesObserverRemoval() {
              hasPendingCompletionOperations(loop));
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
-    GAMENET_TEST_ASSERT(reads == 1);
-    GAMENET_TEST_ASSERT(writes == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
+    GAMENET_TEST_ASSERT(observations[0].calls == 1);
+    GAMENET_TEST_ASSERT(observations[1].calls == 1);
+    GAMENET_TEST_ASSERT(fakeReads == 0);
+    GAMENET_TEST_ASSERT(fakeWrites == 0);
     GAMENET_TEST_ASSERT(
         operations[1].error == ERROR_OPERATION_ABORTED);
     GAMENET_TEST_ASSERT(
@@ -523,9 +575,9 @@ int main() {
     testReadableCompletion();
 #ifdef _WIN32
     testBoundedIocpBatch();
-    testSameChannelCompletionsCoalesceWithoutLosingTerminalState();
+    testSameChannelCompletionsStayDistinctWithoutFakeReadiness();
     testIocpCompletionBudgetMetrics();
-    testCoalescedTerminalErrorSurvivesObserverRemoval();
+    testDirectTerminalErrorSurvivesObserverRemoval();
 #endif
 
     return 0;

@@ -18,12 +18,19 @@
 namespace {
 
 std::atomic<int> observedReadCompletionError{0};
+std::atomic<gamenet::net::EventLoopPhase> observedReadCompletionPhase{
+    gamenet::net::EventLoopPhase::Running};
+gamenet::net::EventLoop* observedLoop{nullptr};
 
 void observeCompletion(
     gamenet::net::IocpOperationKind kind,
     int error) noexcept {
     if (kind == gamenet::net::IocpOperationKind::Read && error != 0) {
         observedReadCompletionError.store(error, std::memory_order_relaxed);
+        GAMENET_TEST_ASSERT(observedLoop != nullptr);
+        observedReadCompletionPhase.store(
+            observedLoop->phase(),
+            std::memory_order_relaxed);
     }
 }
 
@@ -48,8 +55,12 @@ int main() {
 #ifdef _WIN32
     ScopedIocpCompletionObserver observer;
     observedReadCompletionError.store(0, std::memory_order_relaxed);
+    observedReadCompletionPhase.store(
+        gamenet::net::EventLoopPhase::Running,
+        std::memory_order_relaxed);
 
     gamenet::net::EventLoop loop;
+    observedLoop = &loop;
     gamenet::test::ConnectedSocketPair pair;
     std::shared_ptr<gamenet::net::TcpConnection> connection =
         gamenet::test::makeTcpConnection(
@@ -90,7 +101,11 @@ int main() {
         observedReadCompletionError.load(std::memory_order_relaxed) ==
         ERROR_OPERATION_ABORTED);
     GAMENET_TEST_ASSERT(
+        observedReadCompletionPhase.load(std::memory_order_relaxed) ==
+        gamenet::net::EventLoopPhase::Quiescing);
+    GAMENET_TEST_ASSERT(
         loop.phase() == gamenet::net::EventLoopPhase::Shutdown);
+    observedLoop = nullptr;
 #endif
     return 0;
 }

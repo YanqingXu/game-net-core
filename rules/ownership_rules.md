@@ -118,16 +118,13 @@ It must not blur these roles.
   the Channel tie through it. A stale or same-address replacement observer
   still runs source-private consumer retirement but cannot reach TcpConnection
   or user code
-- the installed Channel ABI temporarily retains its private single-operation
-  mailbox and bounded Accept queue, but the production Engine path neither
-  writes nor reads them; only the isolated legacy Poller shell uses the Accept
-  queue until that shell and the reserved fields receive stable-surface review
-- independent Accept operations for one listen Channel are appended through
-  their operation-embedded links to one bounded callback queue in the current
-  batch
-- legacy Accept compatibility publication lends one bounded intrusive queue of
-  exact identities; no queue node allocation or operation-storage transfer is
-  introduced
+- Channel owns no completion operation, result, link, or queue. Its stable 0.3
+  header retains three unreachable private pointer-sized slots only for
+  same-line source fingerprint/layout continuity; Channel.cc and every Engine,
+  Poller, Acceptor, Connector, and transport path leave them uninitialized and
+  never read or write them
+- `IocpOperation` owns no publication link. Each accepted operation is retained
+  only by its source-private driver/pool/attempt lease and the typed wait batch
 - an IOCP retained lease owns operation storage but is not by itself a shutdown
   obligation. A successfully submitted operation canceled during teardown is
   marked exactly once as outstanding; packet dequeue clears the mark and

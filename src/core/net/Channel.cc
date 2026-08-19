@@ -1,9 +1,6 @@
 #include "gamenet/core/net/Channel.h"
 
 #include "gamenet/core/net/EventLoop.h"
-#ifdef _WIN32
-#include "gamenet/core/net/platform/IocpOperation.h"
-#endif
 
 #include "gamenet/core/base/Logger.h"
 
@@ -41,11 +38,6 @@ Channel::Channel(EventLoop* loop, SocketFd fd)
       registrationGeneration_(0),
       activeBatchEpoch_(0),
       activeBatchIndex_(0),
-#ifdef _WIN32
-      iocpCompletionOperation_(nullptr),
-      iocpAcceptCompletionHead_(nullptr),
-      iocpAcceptCompletionTail_(nullptr),
-#endif
       tied_(false) {
 }
 
@@ -184,47 +176,6 @@ void Channel::update() {
 void Channel::advanceRegistrationGeneration() noexcept {
     registrationGeneration_ = allocateRegistrationGeneration();
 }
-
-#ifdef _WIN32
-void Channel::setIocpCompletionOperation(IocpOperation* operation) noexcept {
-    iocpCompletionOperation_ = operation;
-}
-
-IocpOperation* Channel::takeIocpCompletionOperation() noexcept {
-    IocpOperation* operation = iocpCompletionOperation_;
-    iocpCompletionOperation_ = nullptr;
-    return operation;
-}
-
-void Channel::appendIocpAcceptCompletionOperation(
-    IocpOperation* operation) noexcept {
-    operation->nextPublishedCompletion = nullptr;
-    if (iocpAcceptCompletionTail_ == nullptr) {
-        iocpAcceptCompletionHead_ = operation;
-    } else {
-        iocpAcceptCompletionTail_->nextPublishedCompletion = operation;
-    }
-    iocpAcceptCompletionTail_ = operation;
-}
-
-IocpOperation* Channel::takeIocpAcceptCompletionOperation() noexcept {
-    IocpOperation* operation = iocpAcceptCompletionHead_;
-    if (operation == nullptr) {
-        return nullptr;
-    }
-    iocpAcceptCompletionHead_ = operation->nextPublishedCompletion;
-    if (iocpAcceptCompletionHead_ == nullptr) {
-        iocpAcceptCompletionTail_ = nullptr;
-    }
-    operation->nextPublishedCompletion = nullptr;
-    return operation;
-}
-
-void Channel::clearIocpAcceptCompletionOperations() noexcept {
-    while (takeIocpAcceptCompletionOperation() != nullptr) {
-    }
-}
-#endif
 
 void Channel::handleEventWithGuard(gamenet::base::Timestamp receiveTime) {
     const std::uint64_t dispatchGeneration = registrationGeneration_;

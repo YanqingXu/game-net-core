@@ -109,8 +109,7 @@ hands them upward through a narrow callback boundary.
   every exact AcceptEx identity under EventLoop's I/O budget. The retained pool
   state clears consumer-terminal bookkeeping even after observer revocation;
   a current observer replenishes the exact slot before entering the upper
-  callback. The legacy Poller shell alone retains its bounded intrusive
-  listen-Channel queue for compatibility
+  callback. No AcceptEx identity is linked through or drained from Channel
 - callback re-entry through `stop()` is safe after the completed socket has
   left its slot, including when the replacement slot was already pre-posted
 - `tests/contract/acceptor/test_acceptor_contract.cpp` verifies unavailable

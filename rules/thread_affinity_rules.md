@@ -9,8 +9,8 @@ Mutable reactor state belongs to a specific EventLoop thread.
 - loop() must run only on the owner thread
 - Poller operations must run on the owner thread
 - pending functors are executed on the owner thread
-- Windows completion batches are dequeued, translated, merged, and dispatched
-  only on that EventLoop owner thread
+- Windows completion batches are dequeued, decoded into distinct typed notices,
+  and dispatched only on that EventLoop owner thread
 - the IOCP dequeue width is validated in `[1, 64]` before Poller construction;
   changing the width never moves completion or Channel state off the owner loop
 - Windows AcceptEx/ConnectEx submission, cancellation, Channel-observer
@@ -19,9 +19,9 @@ Mutable reactor state belongs to a specific EventLoop thread.
 - every Windows AcceptEx slot is created, submitted, completed, generation-
   advanced, canceled, and reused only by the Acceptor base loop; Poller decodes
   the completed operation identity but never mutates slot policy
-- production Accept/Connect notices are pulled and consumed by EventLoop under
-  the same bounded I/O budget as Read/Write. Only the legacy Poller shell may
-  append completed Accept identities to the listen Channel compatibility queue
+- production Accept/Connect/Read/Write notices are pulled and consumed by
+  EventLoop under one bounded I/O budget. No completion path appends an
+  operation identity to Channel or invokes `Poller::poll()`
 
 ## 3. Allowed Cross-Thread Interaction
 Cross-thread interaction must go through:
@@ -83,6 +83,9 @@ No other direct mutation path is allowed for core loop state.
   until both the hub and completion backend are silent
 - FinalDraining runs already-accepted functors and committed internal work to a
   fixed point; only then may EventLoop publish Shutdown
+- only Running may transition to Quiescing. Repeated owner or cross-thread
+  `quit()` in Quiescing/FinalDraining is idempotent and cannot rewind the phase
+  or rewrite a closed admission plane
 - User/data callbacks may not use lifecycle nodes as a priority queue
 
 - Partial active-Channel batches, ready timers beyond the current budget, and

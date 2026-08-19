@@ -144,6 +144,9 @@ EventLoop is the heart of reactor execution in game-net-core.
 - FinalDraining executes already-accepted normal functors and permitted
   self-rearmed control/lifecycle work to a fixed point; Shutdown is published
   only after all three admission planes are closed and silent
+- `quit()` is phase-monotonic: only Running can initiate Quiescing. Repeated
+  calls in Quiescing or FinalDraining preserve the current phase and cannot
+  rewrite executor/control/lifecycle admission state
 - normal iterations execute at most `maxFunctorsPerIteration`; accepted
   remainder is preserved and the loop is woken for another I/O/timer-aware
   iteration
@@ -214,7 +217,8 @@ poll to establish backend silence; Windows must continue zero-timeout IOCP
 polling while retained or participant-owned completion obligations exist.
 Only after backend and lifecycle silence may the loop enter FinalDraining and
 drain already-accepted pending functors plus committed control/lifecycle work
-before publishing Shutdown.
+before publishing Shutdown. Every phase is observable through `phase()`;
+re-entrant or concurrent repeated `quit()` cannot move the state backward.
 
 If this order changes, docs/tests/contracts must be updated.
 
@@ -416,8 +420,8 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
 - the Windows Poller contract uses a configured width below the fixed 64-entry
   ceiling, interleaves a wakeup with more than one configured batch, verifies
   bounded multi-round progress, exact completion-obligation
-  release, distinct-Channel batching, and same-Channel read/write terminal
-  coalescing without deferred raw pointers
+  release, distinct same-Channel read/write consumers, and zero fake readiness
+  callbacks or deferred raw pointers
 - the Windows wakeup-coalescing contract verifies a multi-producer burst emits
   one physical packet, producers on both sides of the owner reset cannot lose
   accepted work, self-rearm remains non-recursive, and quit/final-drain

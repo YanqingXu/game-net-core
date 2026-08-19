@@ -214,11 +214,15 @@ public:
     }
 #endif
 
-    static std::size_t pollAndDispatch(EventLoop& loop) {
+    static std::size_t waitAndDispatch(EventLoop& loop) {
 #ifdef _WIN32
         loop.activeChannels_.clear();
+        loop.activeChannelCursor_ = 0;
+        auto& ioEngine = ioEngineFromPoller(*loop.poller_);
+        IoNoticeBatch notices(loop.activeChannels_);
         loop.pollReturnTime_ =
-            loop.poller_->poll(0, &loop.activeChannels_);
+            ioEngine.wait(0, notices);
+        loop.emitIocpCompletionMetric();
         const std::size_t activeCount =
             loop.activeChannels_.size();
         loop.dispatchActiveChannels();

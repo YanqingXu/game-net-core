@@ -185,10 +185,10 @@ The detailed data-path design is recorded in
 TDD implementation plan in
 `docs/superpowers/plans/2026-07-07-windows-iocp-data-path.md`.
 
-## Ownership Model To Finish
+## Current Ownership Model
 
-- IocpPoller owns the completion port and maps completion keys back to
-  loop-owned reactor objects.
+- IocpPoller owns the completion port and decodes completion keys plus
+  `OVERLAPPED` addresses into generation-checked typed operation notices.
 - EventLoop owns wakeup state. EventLoop wakeup must complete through IOCP so
   cross-thread `queueInLoop()`, `runAfter()`, and `cancel()` cannot sleep until
   the default poll timeout.
@@ -201,6 +201,13 @@ TDD implementation plan in
   and ConnectEx attempt leases retain only source-private state, and revoked
   observers still complete consumer-terminal cleanup. Poller does not own
   Channel.
+- The inherited Windows `Poller::poll()` slot rejects use. There is no
+  completion-to-Channel publisher, operation intrusive link, or Acceptor
+  Channel-queue fallback. Repository contracts use the same Engine wait and
+  dispatch seam as production.
+- EventLoop publishes Running -> Quiescing -> FinalDraining -> Shutdown
+  monotonically. Repeated `quit()` during Quiescing or FinalDraining is
+  idempotent, and real cancellation packets are consumed before Shutdown.
 - Socket close, Channel removal, pending overlapped cancellation, and final
   callbacks must have explicit cancel/close ordering.
 

@@ -123,6 +123,13 @@ completion coalescing. This is not an application scheduling API and adds no
 public method. No binary ABI promise exists before 1.0, so consumers rebuild
 as already required.
 
+IOE-C1 later retired that backend responsibility without changing the reviewed
+0.3 stable-header fingerprint: `Channel.cc` no longer implements or accesses
+the mailbox/queue, `IocpOperation` no longer links published completions, and
+the legacy Poller publisher is gone. The three private pointer-sized Channel
+slots remain unreachable layout bytes until an explicitly reviewed breaking
+line can physically remove them.
+
 Direct contracts are
 `tests/contract/acceptor/test_acceptor_contract.cpp`,
 `tests/contract/acceptor/test_acceptor_iocp_pool.cpp`,

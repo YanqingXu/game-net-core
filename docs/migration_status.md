@@ -52,6 +52,9 @@ Current IOE-C1 typed operation-model checkpoint:
 Current IOE-C1 direct read/write checkpoint:
 `82d89831de81522ecd25c8eedd42f395e2a07613` (2026-08-19)
 
+Current IOE-C1 all-kind direct consumer checkpoint:
+`d0f2e07c3e3798605ac5d60ee33a7f7689fd542c` (2026-08-20)
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -63,24 +66,32 @@ are closed at `8bb14e72`. IOE-R2's generation-safe epoll Readiness Engine,
 internal wakeup, bounded wait, and current-interest/stale-token contracts are
 closed at `6f45aa6e`. IOE-C1 native Completion contracts are the active
 execution front. The operation model is committed at `f4074400` and direct
-read/write consumption at `82d8983`; the current vertical slice makes EventLoop
-directly consume production Accept/Connect notices as well. All four operation
+read/write consumption at `82d8983`; all-kind direct consumption is integrated
+at `d0f2e07`. All four operation
 kinds keep kernel-terminal and consumer-terminal state separate and lease only
-source-private driver/pool/attempt storage. Shutdown and legacy-shell removal are next while
-independent architecture review and RTM-R1 Profile contract preparation proceed
-in parallel. Candidate freeze, REL-V1 and release packaging are not development
-prerequisites.
+source-private driver/pool/attempt storage. The current worktree removes the
+remaining completion-to-Channel publisher, operation publication link, Channel
+storage implementations and Acceptor fallback; inherited Windows `Poller::poll()`
+rejects use. It also makes the four shutdown phases observably monotonic and
+proves real cancellation terminal consumption during Quiescing. Windows
+Debug/Release, Linux ASan/UBSan, repeated focused contracts, scope/API guards,
+and directional performance smoke all pass. Exact-commit evidence binding is
+the remaining IOE-C1 integration step while independent architecture review
+and RTM-R1 Profile contract preparation proceed in parallel. Candidate freeze,
+REL-V1 and release packaging are not development prerequisites.
 
 This worktree's directional Windows Release echo check used 4 connections, one
 I/O thread, 10,000 messages per connection, 256-byte payloads, a 500 ms settle
 window, and a 30 s timeout. Across five local samples, the medians were
-118,754.620 round trips/s, 57.9857 MiB/s, and 70.3 us P99. The matching five-
-sample 256-connection check reported 13.6504 ms establishment, 18,754.029
-connections/s, 12,256 bytes/connection, 7.7469 ms close, and 0.2554 ms server
-stop medians. The echo throughput shift from the immediately preceding local
-read/write slice is -3.56%, below the 5% investigation threshold. These numbers
-are same-worktree smoke signals only, not a paired cross-commit regression
-result or promotion evidence.
+124,021.278 round trips/s, 60.5573 MiB/s, and 68.1 us P99. The matching five-
+sample 256-connection check reported 15.7157 ms establishment, 16,289.443
+connections/s, 12,208 bytes/connection, 6.8434 ms close, and 0.2995 ms server
+stop medians. Echo throughput is 4.43% above the immediately preceding local
+all-kind-direct snapshot. Connection-establishment throughput is 13.15% lower,
+while close latency and retained bytes/connection improve; this unpaired local
+smoke has no regression threshold and does not claim a cross-commit performance
+decision. All ten runs report `status: ok`. These numbers are same-worktree
+smoke signals only, not promotion evidence.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
@@ -247,7 +258,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1's typed operation model at `f4074400`, and direct read/write at `82d8983`. Production Accept/Connect/Read/Write completion now enters EventLoop directly under the unified I/O budget and no longer uses Channel publication; shutdown and legacy-shell removal are the current Engine front. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, and IOE-C1 direct consumers at `d0f2e07`. The current worktree removes the final fake-readiness compatibility path and makes shutdown phase publication monotonic; dual-platform/API/sanitizer/performance evidence passes and exact-commit binding remains. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 
@@ -258,7 +269,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 63 | 32 | 20 | 11 | 158 |
+| 63 | 32 | 20 | 11 | 160 |
 
 ## Historical Production-Hardening Evidence
 
@@ -275,8 +286,8 @@ names the same SHA as the authoritative checkpoint above.
 - M3 PR-G completed its then-current local IOCP batching slice: fixed-size
   GQCSEx collection, bounded per-round publication, same-Channel deferral,
   wakeup coexistence, and exact outstanding-operation retention. IOE-C1 later
-  replaced the raw deferred storage with typed terminal notices and
-  same-batch read/write coalescing.
+  replaced the raw deferred storage with typed terminal notices and later
+  removed completion-to-Channel coalescing entirely.
 - M3-G2 adds a Poller-owned atomic wakeup-pending bit: one false-to-true
   producer posts the physical IOCP packet, later producers merge without
   allocation, and the owner clears the bit at packet dequeue without
@@ -312,8 +323,9 @@ names the same SHA as the authoritative checkpoint above.
 - M3-G5 replaces the single pending Windows `AcceptEx` with a configurable
   fixed pool that defaults to four and validates a hard maximum of 64. Every
   base-loop-owned slot has independent socket, `OVERLAPPED`, address storage,
-  and generation; Poller publication coalesces exact Accept operation
-  identities through an allocation-free, operation-embedded Channel queue.
+  and generation; that checkpoint's Poller publication coalesced exact Accept
+  operation identities through an allocation-free, operation-embedded Channel
+  queue, which IOE-C1 later removed.
   Read/write same-Channel deferral was still present at that checkpoint and was
   later retired by the IOE-C1 operation-model slice. Retry cancels and
   consumes the complete submitted generation before

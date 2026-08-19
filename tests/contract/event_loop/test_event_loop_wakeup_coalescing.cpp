@@ -73,7 +73,7 @@ void testMultiProducerBurstPostsOnePacket() {
         EventLoopIocpAssociationHarness::wakeupPending(loop));
 
     GAMENET_TEST_ASSERT(
-        EventLoopIocpAssociationHarness::pollAndDispatch(loop) == 0);
+        EventLoopIocpAssociationHarness::waitAndDispatch(loop) == 0);
     GAMENET_TEST_ASSERT(
         EventLoopIocpAssociationHarness::physicalWakeupPacketsConsumed() == 1);
     GAMENET_TEST_ASSERT(

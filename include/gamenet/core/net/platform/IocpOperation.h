@@ -47,7 +47,6 @@ struct IocpOperation {
     bool observerIdentityCaptured{false};
     bool shutdownObligation{false};
     bool completionObserved{false};
-    IocpOperation* nextPublishedCompletion{nullptr};
 };
 
 }  // namespace gamenet::net

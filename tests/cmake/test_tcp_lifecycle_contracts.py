@@ -2168,8 +2168,22 @@ def main() -> None:
     iocp_poller_source_text = iocp_poller_source.read_text(encoding="utf-8")
     require(iocp_poller_source_text, "IocpOperationKind::Read", iocp_poller_source)
     require(iocp_poller_source_text, "IocpOperationKind::Write", iocp_poller_source)
-    require(iocp_poller_source_text, "return Channel::kReadEvent", iocp_poller_source)
-    require(iocp_poller_source_text, "return Channel::kWriteEvent", iocp_poller_source)
+    require(
+        iocp_poller_source_text,
+        ".consumer = operation->completionConsumer",
+        iocp_poller_source,
+    )
+    require(
+        iocp_poller_source_text,
+        "takeNextDirectCompletionNotice",
+        iocp_poller_source,
+    )
+    assert "return Channel::kReadEvent" not in iocp_poller_source_text, (
+        "IOCP read completion must not be translated back into fake readiness"
+    )
+    assert "return Channel::kWriteEvent" not in iocp_poller_source_text, (
+        "IOCP write completion must not be translated back into fake readiness"
+    )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     require(tests_cmake_text, "test_tcp_server_stop_active_connections.cpp", tests_cmake)

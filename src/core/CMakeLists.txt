@@ -67,6 +67,10 @@ target_compile_options(gamenet_core
 find_package(Threads REQUIRED)
 target_link_libraries(gamenet_core PUBLIC Threads::Threads)
 
+if(GAMENET_BUILD_TESTING)
+    target_compile_definitions(gamenet_core PRIVATE GAMENET_INTERNAL_TEST_HOOKS=1)
+endif()
+
 if(WIN32)
     target_compile_definitions(gamenet_core PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
     if(GAMENET_BUILD_TESTING)

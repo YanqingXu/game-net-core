@@ -26,11 +26,21 @@ def main() -> None:
     tcp_connection_header = repo_root / "include" / "gamenet" / "core" / "net" / "TcpConnection.h"
     tcp_connection_source = repo_root / "src" / "core" / "net" / "TcpConnection.cc"
     event_loop_source = repo_root / "src" / "core" / "net" / "EventLoop.cc"
+    channel_header = repo_root / "include" / "gamenet" / "core" / "net" / "Channel.h"
+    channel_source = repo_root / "src" / "core" / "net" / "Channel.cc"
     io_engine_adapter = (
         repo_root / "src" / "core" / "net" / "detail" / "PollerIoEngineAdapter.cc"
     )
     iocp_poller_access = (
         repo_root / "src" / "core" / "net" / "detail" / "IocpPollerAccess.h"
+    )
+    iocp_test_harness = (
+        repo_root
+        / "src"
+        / "core"
+        / "net"
+        / "detail"
+        / "EventLoopIocpAssociationHarness.h"
     )
     tcp_transport = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport.h"
     tcp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
@@ -90,6 +100,20 @@ def main() -> None:
         / "tcp"
         / "test_iocp_accept_connect_quit_completion_drain.cpp"
     )
+    quit_completion_drain_test = (
+        repo_root
+        / "tests"
+        / "integration"
+        / "tcp"
+        / "test_iocp_quit_completion_drain.cpp"
+    )
+    lifecycle_hub_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "event_loop"
+        / "test_event_loop_lifecycle_hub.cpp"
+    )
     poller_header = repo_root / "include" / "gamenet" / "core" / "net" / "poller" / "IocpPoller.h"
     poller_source = repo_root / "src" / "core" / "net" / "poller" / "IocpPoller.cc"
     wakeup_coalescing_test = (
@@ -116,7 +140,9 @@ def main() -> None:
     require(operation_text, "Channel* channel", operation)
     require(operation_text, "shutdownObligation", operation)
     require(operation_text, "completionObserved", operation)
-    require(operation_text, "nextPublishedCompletion", operation)
+    assert "nextPublishedCompletion" not in operation_text, (
+        "typed IOCP operations must not carry a fake-readiness publication link"
+    )
     require(operation_text, "generation", operation)
     require(operation_text, "terminalGeneration", operation)
     require(operation_text, "terminalObserver", operation)
@@ -370,9 +396,19 @@ def main() -> None:
     )
     require(poller_text, "takeNextDirectCompletionNotice", poller_source)
     require(poller_text, "pendingDirectCompletionNoticeCount", poller_source)
+    for retired_fragment in (
+        "publishCompletionNotices",
+        "publishedChannels",
+        "completionEvents",
+        "appendIocpAcceptCompletionOperation",
+    ):
+        assert retired_fragment not in poller_text, (
+            f"legacy fake-readiness publication remains in {poller_source}: "
+            f"{retired_fragment}"
+        )
     require(
         poller_text,
-        "appendIocpAcceptCompletionOperation(operation)",
+        "IocpPoller::poll compatibility shell is retired",
         poller_source,
     )
     require(poller_text, "IocpOperationKind::Read", poller_source)
@@ -389,12 +425,12 @@ def main() -> None:
     require(poller_contract_text, "testBoundedIocpBatch", poller_contract_test)
     require(
         poller_contract_text,
-        "testSameChannelCompletionsCoalesceWithoutLosingTerminalState",
+        "testSameChannelCompletionsStayDistinctWithoutFakeReadiness",
         poller_contract_test,
     )
     require(
         poller_contract_text,
-        "testCoalescedTerminalErrorSurvivesObserverRemoval",
+        "testDirectTerminalErrorSurvivesObserverRemoval",
         poller_contract_test,
     )
     require(
@@ -430,6 +466,61 @@ def main() -> None:
     require(access_text, "return poller.waitNativeCompletionNotices(timeoutMs)", iocp_poller_access)
     assert "publishCompletionNotices" not in access_text, (
         "production IOCP Engine access must not publish any Completion kind through Channel"
+    )
+    channel_source_text = channel_source.read_text(encoding="utf-8")
+    for retired_fragment in (
+        "setIocpCompletionOperation",
+        "takeIocpCompletionOperation",
+        "appendIocpAcceptCompletionOperation",
+        "takeIocpAcceptCompletionOperation",
+        "clearIocpAcceptCompletionOperations",
+        "iocpCompletionOperation_",
+        "iocpAcceptCompletionHead_",
+        "iocpAcceptCompletionTail_",
+    ):
+        assert retired_fragment not in channel_source_text, (
+            f"Channel still implements IOCP operation storage in {channel_source}: "
+            f"{retired_fragment}"
+        )
+    channel_header_text = channel_header.read_text(encoding="utf-8")
+    require(channel_header_text, "IocpOperation* iocpCompletionOperation_", channel_header)
+    require(channel_header_text, "IocpOperation* iocpAcceptCompletionHead_", channel_header)
+    require(channel_header_text, "IocpOperation* iocpAcceptCompletionTail_", channel_header)
+    harness_text = iocp_test_harness.read_text(encoding="utf-8")
+    require(harness_text, "ioEngineFromPoller", iocp_test_harness)
+    assert "poller_->poll" not in harness_text, (
+        "repository contracts must exercise the production Engine path, not legacy Poller::poll"
+    )
+    assert "takeIocpAcceptCompletionOperation" not in acceptor_source_text
+    assert "clearIocpAcceptCompletionOperations" not in acceptor_source_text
+    require(
+        event_loop_text,
+        "lifecycleState_->phase != EventLoopPhase::Running",
+        event_loop_source,
+    )
+    lifecycle_hub_text = lifecycle_hub_test.read_text(encoding="utf-8")
+    require(
+        lifecycle_hub_text,
+        "testShutdownPhaseSequenceIsObservableAndMonotonic",
+        lifecycle_hub_test,
+    )
+    require(
+        lifecycle_hub_text,
+        "EventLoopPhase::FinalDraining",
+        lifecycle_hub_test,
+    )
+    quit_completion_drain_text = quit_completion_drain_test.read_text(
+        encoding="utf-8"
+    )
+    require(
+        quit_completion_drain_text,
+        "observedReadCompletionPhase",
+        quit_completion_drain_test,
+    )
+    require(
+        quit_completion_drain_text,
+        "EventLoopPhase::Quiescing",
+        quit_completion_drain_test,
     )
 
     transport_text = tcp_transport_source.read_text(encoding="utf-8")

@@ -12,7 +12,6 @@
 #include "../detail/IocpOperationState.h"
 #include "../detail/NetworkMemoryRetentionTracker.h"
 
-#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <exception>
@@ -31,8 +30,6 @@ struct IocpCompletionState {
         notices{};
     std::array<std::shared_ptr<void>, IocpPoller::kCompletionBatchSize>
         noticeLifetimes{};
-    std::array<Channel*, IocpPoller::kCompletionBatchSize>
-        publishedChannels{};
     ULONG noticeCount{0};
     ULONG directNoticeCursor{0};
     CompletionWaitProgress progress{};
@@ -71,19 +68,6 @@ detail::CompletionOperationKind completionKind(
         return detail::CompletionOperationKind::Write;
     }
     std::terminate();
-}
-
-uint32_t completionEvents(
-    detail::CompletionOperationKind kind) noexcept {
-    switch (kind) {
-    case detail::CompletionOperationKind::Accept:
-    case detail::CompletionOperationKind::Read:
-        return Channel::kReadEvent;
-    case detail::CompletionOperationKind::Connect:
-    case detail::CompletionOperationKind::Write:
-        return Channel::kWriteEvent;
-    }
-    return Channel::kErrorEvent;
 }
 
 detail::CompletionTerminalStatus completionStatus(
@@ -184,13 +168,10 @@ IocpPoller::~IocpPoller() {
 gamenet::base::Timestamp IocpPoller::poll(
     int timeoutMs,
     ChannelList* activeChannels) {
-    retireCompletionNoticeLeases();
-    const auto batch = waitNativeCompletionNotices(timeoutMs);
-    publishCompletionNotices(batch, activeChannels);
-    completionState_->directNoticeCursor =
-        completionState_->noticeCount;
-    lastDeferredCompletionCount_ = 0;
-    return batch.observedAt;
+    (void)timeoutMs;
+    (void)activeChannels;
+    throw std::logic_error(
+        "IocpPoller::poll compatibility shell is retired; use typed I/O Engine wait");
 }
 
 detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
@@ -342,51 +323,6 @@ detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
             state.noticeCount),
         .progress = state.progress,
     };
-}
-
-void IocpPoller::publishCompletionNotices(
-    const detail::CompletionWaitResult& batch,
-    ChannelList* activeChannels) {
-    auto& state = *completionState_;
-    std::size_t activeCount = 0;
-    for (std::size_t noticeIndex = 0;
-         noticeIndex < batch.notices.size();
-         ++noticeIndex) {
-        const auto& notice = batch.notices[noticeIndex];
-        Channel* channel = notice.observer;
-        if (channel == nullptr) {
-            continue;
-        }
-        const auto registered = channels_.find(channel->fd());
-        if (registered == channels_.end() ||
-            registered->second != channel ||
-            channel->index() != kAdded) {
-            continue;
-        }
-        auto* operation =
-            static_cast<IocpOperation*>(notice.identity.operation);
-        const bool channelAlreadyPublished =
-            std::find(
-                state.publishedChannels.begin(),
-                state.publishedChannels.begin() +
-                    static_cast<std::ptrdiff_t>(activeCount),
-                channel) !=
-                state.publishedChannels.begin() +
-                    static_cast<std::ptrdiff_t>(activeCount);
-        if (notice.kind == detail::CompletionOperationKind::Accept) {
-            // A listen Channel can have multiple independent AcceptEx slots.
-            // Coalesce their exact identities into one allocation-free
-            // owner-loop callback instead of forcing one loop turn per slot.
-            channel->appendIocpAcceptCompletionOperation(operation);
-        }
-        if (channelAlreadyPublished) {
-            channel->revents_ |= completionEvents(notice.kind);
-            continue;
-        }
-        channel->setRevents(completionEvents(notice.kind));
-        state.publishedChannels[activeCount++] = channel;
-        activeChannels->push_back(channel);
-    }
 }
 
 std::size_t IocpPoller::pendingDirectCompletionNoticeCount() const noexcept {

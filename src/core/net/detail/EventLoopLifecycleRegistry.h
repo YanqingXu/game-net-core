@@ -10,6 +10,12 @@
 
 namespace gamenet::net::detail {
 
+using EventLoopPhaseObserverForTesting =
+    void (*)(EventLoop*, EventLoopPhase) noexcept;
+
+void setEventLoopPhaseObserverForTesting(
+    EventLoopPhaseObserverForTesting observer) noexcept;
+
 class EventLoopLifecycleRegistry final {
 public:
     EventLoopLifecycleRegistry() = delete;
@@ -29,6 +35,11 @@ public:
     static std::size_t normalPendingFunctorCapacity(
         const EventLoop& loop) noexcept {
         return loop.options_.maxPendingFunctors;
+    }
+
+    static void setPhaseObserverForTesting(
+        EventLoopPhaseObserverForTesting observer) noexcept {
+        setEventLoopPhaseObserverForTesting(observer);
     }
 };
 

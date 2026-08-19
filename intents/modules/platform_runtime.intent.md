@@ -79,11 +79,10 @@ This module is not business logic.
   owned by the posting module until exactly one normal, error, or cancellation
   completion is consumed. `IocpPoller` only observes that operation storage.
 - Windows IOCP uses `GetQueuedCompletionStatusEx` with a fixed 64-packet
-  dequeue budget. Distinct Channels may share one active batch; additional
-  packets for an already-published Channel keep their operation leases in a
-  fixed deferred batch until a later EventLoop round. Completion bytes and
-  terminal error are captured at first dequeue and are not recomputed after an
-  earlier callback may have closed the socket.
+  dequeue budget. Every packet becomes a distinct typed notice; same-Channel
+  notices share only the bounded EventLoop dispatch budget and never merge into
+  readiness. Completion bytes and terminal error are captured at first dequeue
+  and are not recomputed after an earlier consumer may have closed the socket.
 
 ---
 
@@ -173,9 +172,9 @@ This module is not business logic.
   semantics.
 - `tests/contract/poller/test_poller_contract.cpp` verifies backend-neutral poller
   registration behavior and, on Windows, bounded GQCSEx dequeue, wakeup
-  coexistence, exact operation release, distinct-Channel batching, and
-  same-Channel terminal coalescing with dequeued-error preservation after
-  observer removal.
+  coexistence, exact operation release, distinct typed same-Channel consumers,
+  zero fake readiness callbacks, and dequeued-error preservation after observer
+  removal.
 - TCP client/server/connection contract tests verify socket operation behavior
   through the public path.
 - `tests/contract/socket/test_socket_contract.cpp` runs the Linux peer-close
@@ -184,7 +183,7 @@ This module is not business logic.
 - `tests/contract/socket/test_socket_contract.cpp` also verifies invalid socket
   creation, bind, and listen failures are returned without terminating the
   process.
-- Future Windows workflow verifies the Windows source selection and IOCP completion path.
+- The Windows workflow verifies Windows source selection and the IOCP completion path.
 - `tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp`
   injects `WSAENOBUFS` and `WSAECONNRESET` at the source-private submission
   boundary, verifies immediate single-shot close convergence, and observes a

@@ -31,6 +31,28 @@ std::atomic<std::uint64_t> nextExecutorId{1};
 constexpr std::size_t kMaxControlSources = 65536;
 constexpr std::size_t kMaxIocpCompletionBatchSize = 64;
 
+#ifdef GAMENET_INTERNAL_TEST_HOOKS
+using EventLoopPhaseObserverForTesting =
+    void (*)(EventLoop*, EventLoopPhase) noexcept;
+std::atomic<EventLoopPhaseObserverForTesting>
+    eventLoopPhaseObserverForTesting{nullptr};
+#endif
+
+void publishEventLoopPhaseForTesting(
+    EventLoop* loop,
+    EventLoopPhase phase) noexcept {
+#ifdef GAMENET_INTERNAL_TEST_HOOKS
+    if (const auto observer =
+            eventLoopPhaseObserverForTesting.load(std::memory_order_acquire);
+        observer != nullptr) {
+        observer(loop, phase);
+    }
+#else
+    (void)loop;
+    (void)phase;
+#endif
+}
+
 EventLoopOptions validatedEventLoopOptions(EventLoopOptions options) {
     options.validate();
     return options;
@@ -43,6 +65,19 @@ bool ioEngineAcceptedOrUnsupported(
 }
 
 }  // namespace
+
+namespace detail {
+
+#ifdef GAMENET_INTERNAL_TEST_HOOKS
+void setEventLoopPhaseObserverForTesting(
+    void (*observer)(EventLoop*, EventLoopPhase) noexcept) noexcept {
+    eventLoopPhaseObserverForTesting.store(
+        observer,
+        std::memory_order_release);
+}
+#endif
+
+}  // namespace detail
 
 struct EventLoopExecutor::State {
     explicit State(EventLoop* loopValue)
@@ -481,6 +516,9 @@ void EventLoop::loop() {
             EventLoopPhase::FinalDraining,
             std::memory_order_release);
     }
+    publishEventLoopPhaseForTesting(
+        this,
+        EventLoopPhase::FinalDraining);
 
     // Seal the backend/lifecycle quiet point and run one final accepted-work
     // fixed point. A self-rearmed internal callback remains legal, but no
@@ -530,34 +568,47 @@ void EventLoop::loop() {
         lifecycleState_->phase = EventLoopPhase::Shutdown;
         phase_.store(EventLoopPhase::Shutdown, std::memory_order_release);
     }
+    publishEventLoopPhaseForTesting(this, EventLoopPhase::Shutdown);
 
     looping_ = false;
 }
 
 void EventLoop::quit() {
     const bool crossThread = !isInLoopThread();
-    // Keep executor->control->lifecycle lock order shared with final shutdown
-    // and destruction so all admission planes observe one transition.
-    std::unique_lock executorLock(executorState_->mutex);
-    std::unique_lock controlLock(controlState_->mutex);
-    std::unique_lock lifecycleLock(lifecycleState_->mutex);
-    executorState_->accepting = false;
-    if (controlState_->phase == EventLoopControlSource::State::Phase::Shutdown ||
-        lifecycleState_->phase == EventLoopPhase::Shutdown) {
-        executorState_->drainingAccepted = false;
+    {
+        // Keep executor->control->lifecycle lock order shared with final
+        // shutdown and destruction so all admission planes observe one
+        // transition.
+        std::unique_lock executorLock(executorState_->mutex);
+        std::unique_lock controlLock(controlState_->mutex);
+        std::unique_lock lifecycleLock(lifecycleState_->mutex);
+        executorState_->accepting = false;
+        if (controlState_->phase == EventLoopControlSource::State::Phase::Shutdown ||
+            lifecycleState_->phase == EventLoopPhase::Shutdown) {
+            executorState_->drainingAccepted = false;
+            quit_.store(true, std::memory_order_relaxed);
+            return;
+        }
+        if (lifecycleState_->phase != EventLoopPhase::Running) {
+            // Quiescing and FinalDraining are monotonic owner states. A
+            // repeated quit request is already represented by quit_ and must
+            // not reopen or rewind any admission plane.
+            quit_.store(true, std::memory_order_relaxed);
+            return;
+        }
+        executorState_->drainingAccepted = true;
+        controlState_->phase = EventLoopControlSource::State::Phase::Draining;
+        lifecycleState_->phase = EventLoopPhase::Quiescing;
+        phase_.store(EventLoopPhase::Quiescing, std::memory_order_release);
         quit_.store(true, std::memory_order_relaxed);
-        return;
+        if (crossThread) {
+            // Keep the shared-state lock across wakeup so EventLoop
+            // destruction cannot invalidate Poller/wakeup storage until this
+            // call returns.
+            wakeup();
+        }
     }
-    executorState_->drainingAccepted = true;
-    controlState_->phase = EventLoopControlSource::State::Phase::Draining;
-    lifecycleState_->phase = EventLoopPhase::Quiescing;
-    phase_.store(EventLoopPhase::Quiescing, std::memory_order_release);
-    quit_.store(true, std::memory_order_relaxed);
-    if (crossThread) {
-        // Keep the shared-state lock across wakeup so EventLoop destruction
-        // cannot invalidate Poller/wakeup storage until this call returns.
-        wakeup();
-    }
+    publishEventLoopPhaseForTesting(this, EventLoopPhase::Quiescing);
 }
 
 gamenet::base::Timestamp EventLoop::pollReturnTime() const noexcept {

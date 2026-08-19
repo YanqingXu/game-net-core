@@ -45,18 +45,17 @@ Poller is not channel owner.
 - Poller is only used by owner EventLoop thread
 - backend registration state must be consistent with internal channel bookkeeping
 - removed channels must not continue appearing as valid active channels
-- one poll result contains at most one active entry per Channel; readiness
-  backend event bits are merged before EventLoop dispatch. IOCP first decodes
-  every validated operation into a typed terminal notice; distinct read/write
-  results for one Channel may coalesce for temporary compatibility dispatch,
-  but no unowned operation or Channel pointer crosses a callback boundary
-- Windows IOCP owns fixed 64-entry native packet, typed notice, batch-lifetime,
-  and published-Channel storage and passes the
+- one readiness poll result contains at most one active entry per Channel;
+  readiness backend event bits are merged before EventLoop dispatch. IOCP
+  instead decodes every validated operation into a distinct typed terminal
+  notice and never creates a Channel active entry
+- Windows IOCP owns fixed 64-entry native packet, typed notice, and batch-
+  lifetime storage and passes the
   EventLoop startup-validated `[1, 64]` width to
   `GetQueuedCompletionStatusEx`; backlog remains queued for a later EventLoop
   iteration so timer, control, lifecycle, and functor phases retain service
-- the native packet, typed notice, batch-lifetime, and published-Channel
-  identity arrays are Poller-lifetime fixed working storage. Process-level retention accounting
+- the native packet, typed notice, and batch-lifetime arrays are Poller-lifetime
+  fixed working storage. Process-level retention accounting
   adds their exact bytes at Poller construction and releases them at Poller
   destruction; configured dequeue width changes work per round, not retained
   capacity
@@ -71,7 +70,7 @@ Poller is not channel owner.
   the current awake turn, while a producer ordered after it changes false to
   true and posts a new packet; neither side of the race can lose a wakeup
 - wakeup packets coalesce independently of the configured completion batch:
-  consuming the signal never truncates real I/O translation in that batch
+  consuming the signal never truncates real completion decoding in that batch
 - backend removal validates both fd and Channel identity before erasing
   bookkeeping, so a stale same-fd remove cannot erase a replacement Channel
 - IOCP completion metadata remains allocated until the completion is dequeued
@@ -82,9 +81,9 @@ Poller is not channel owner.
 - obligation tracking is idempotent and allocation-free after submission;
   dequeue clears it exactly once, including packets whose Channel observer was
   already revoked
-- IOCP only activates a Channel for a packet actually dequeued from the
-  completion port; a synchronous overlapped-submission failure is returned to
-  the posting owner and is never represented by fabricated `revents`
+- IOCP never activates a Channel for a completion packet. A synchronous
+  overlapped-submission failure is returned to the posting owner and is never
+  represented by fabricated `revents` or a phantom notice
 - IOCP numeric-socket association bookkeeping tracks either a currently
   registered Channel or an immediately consumed same-loop TcpClient handoff;
   closing/rejecting a raw Connector handoff before Channel registration must
@@ -92,21 +91,22 @@ Poller is not channel owner.
 - association preservation is provisional until the replacement Channel
   registers; failed TcpClient publication explicitly forgets the numeric
   association record before the SOCKET value can be reused
-- one dequeued normal, error, or cancellation packet publishes one terminal
-  result into its observed operation record
-- multiple dequeued operations for one registered Channel publish only the
-  first operation in the current active list; later operations remain in a
-  fixed-size Poller-owned deferred batch with their outstanding/retained leases
-  intact until a later poll publishes them
+- one dequeued normal, error, or cancellation packet publishes one distinct
+  terminal notice under the EventLoop I/O budget
 - bytes transferred and the terminal error are captured when the kernel packet
-  is first dequeued, before an earlier callback can close the socket; a deferred
-  operation must not re-query and overwrite that result in a later poll round
+  is first dequeued, before an earlier consumer can close the socket; later
+  consumers cannot re-query and overwrite that result
+- the inherited Windows `Poller::poll()` slot rejects use. Completion wait,
+  dispatch, and retirement are available only through the source-private
+  Engine path, so an accidental compatibility call cannot strand a notice
 - backend errors must not silently corrupt Poller internal state
 
 ---
 
 ## 5. Collaboration
-- EventLoop owns Poller and calls poll/update/remove
+- EventLoop owns the dual-interface Poller/Engine adapter. Readiness
+  compatibility callers use poll/update/remove; Windows completion progress
+  uses the Engine interface only
 - Channel provides fd and event masks
 - concrete backend implementation (e.g. epoll/IOCP under `src/core/net/poller/`) performs actual OS interaction
 
@@ -183,12 +183,12 @@ High-risk mistakes:
   are skipped on both platforms
 - `tests/contract/poller/test_poller_contract.cpp` configures a width below the
   fixed storage ceiling, posts more than one bounded IOCP batch with an
-  interleaved wakeup, verifies the first poll consumes only its configured
-  budget, verifies the remainder is preserved for later polls, and
-  proves read/write completions for one Channel are dispatched in separate
-  registration-safe rounds while distinct Channels share one batch; a deferred
-  cancellation keeps its dequeued `ERROR_OPERATION_ABORTED` result even when
-  the first callback removes the Channel before the next poll. The same
+  interleaved wakeup, verifies the first Engine wait consumes only its
+  configured budget, verifies the remainder is preserved for later waits, and
+  proves same-Channel read/write completions remain distinct while no fake
+  readiness callback runs. A direct cancellation notice keeps its dequeued
+  `ERROR_OPERATION_ABORTED` result even when an earlier consumer removes the
+  Channel. The same
   contract verifies one Poller contributes a finite nonzero fixed-batch byte
   count and destruction returns the current process count to zero
 - `tests/contract/event_loop/test_event_loop_wakeup_coalescing.cpp` verifies

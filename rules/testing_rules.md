@@ -99,6 +99,13 @@ Contract tests verify:
   four Accept/Connect/Read/Write kinds without fake Channel callbacks, one-budget
   continuation, and consumer-side terminal retirement even after observer
   generation replacement
+- the Poller contract must exercise Windows completion progress through the
+  production Engine wait/dispatch seam, prove same-Channel notices remain
+  distinct, and assert zero fake Channel callbacks; source guards reject every
+  legacy publisher, intrusive operation link, and Channel storage implementation
+- the lifecycle-hub contract must observe the exact
+  Running/Quiescing/FinalDraining/Shutdown order and re-enter `quit()` during
+  FinalDraining to prove the public phase cannot rewind
 - one budgeted Engine notice batch combines callback-local close, stale
   remove/re-register invalidation, callback exception containment, and a later
   continuation round with exact drained/remaining/exhausted metrics
@@ -136,9 +143,9 @@ Contract tests verify:
 - poll returns active channels accurately
 - invalid removal path is detected or guarded
 - Windows bounded batch dequeue with more than 64 completion packets, an
-  interleaved wakeup, exact outstanding-operation release, distinct-Channel
-  batching, same-Channel read/write terminal coalescing, and terminal error
-  preservation after the first callback removes the Channel
+  interleaved wakeup, exact outstanding-operation release, distinct typed
+  same-Channel read/write consumers, zero fake readiness callbacks, and
+  terminal error preservation after the first consumer removes the Channel
 - Windows wakeup coalescing remains allocation-free, does not truncate the
   real-I/O entries beside its packet, and exposes exact physical post/consume
   counts only through a source-private repository-test seam
@@ -186,8 +193,8 @@ For lifecycle-sensitive modules, tests should include:
   pending submission, then prove cancellation creates exactly one obligation;
   synchronous non-pending failures must create none
 - Windows AcceptEx pool tests must prove default/configured finite depth,
-  independent slot generations and socket ownership, allocation-free
-  same-Channel Accept completion coalescing with exact identities,
+  independent slot generations and socket ownership, distinct direct
+  completion consumption with exact identities,
   replenishment before burst callbacks serialize the pool, callback `stop()`
   re-entry, generation-wide Retry after a deterministic synchronous submission
   failure, and delayed cancellation consumption

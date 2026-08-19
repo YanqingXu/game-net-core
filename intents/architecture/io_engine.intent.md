@@ -86,6 +86,9 @@ authority for the finer scheduler phase.
 - FinalDraining uses bounded nonblocking waits until registrations and
   completion obligations are retired.
 - Shutdown owns no live backend registration or retained completion lease.
+- Lifecycle phase publication is monotonic. Repeated `quit()` during
+  Quiescing or FinalDraining is idempotent and cannot rewind the EventLoop or
+  reopen any admission plane.
 
 Submission and registration failures remain explicit and synchronous when no
 kernel obligation was created. Once a completion operation was successfully
@@ -156,11 +159,16 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
 - an operation lease retains only source-private shared transport, Accept-pool,
   or Connect-attempt state, not TcpConnection, Acceptor, or Connector application
   ownership. The entire typed-batch lease is released only after all direct
-  notices and compatibility observers are consumed;
+  notices are consumed;
 - the production Engine adapter publishes no Completion kind as fake Channel
   readiness. Accept/Connect/Read/Write all enter EventLoop through typed direct
-  consumers. The legacy Poller shell may still translate notices only for its
-  isolated compatibility contracts until that shell is retired.
+  consumers. The inherited Windows `Poller::poll()` ABI slot rejects use and
+  cannot decode, publish, merge, or discard completion work;
+- `IocpOperation` has no publication link, Acceptor has no Channel-queue
+  fallback, and Channel implements no IOCP operation storage. The stable 0.3
+  Channel header keeps three unreachable private pointer slots solely to avoid
+  same-line fingerprint/layout churn; no production or test path initializes,
+  reads, or writes them.
 
 ## 7. Compatibility Sequence
 
@@ -169,9 +177,9 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
    change is introduced.
 2. IOE-R2 moves epoll/kqueue-style registration into a Readiness Engine while
    preserving Channel contracts and generation invalidation.
-3. IOE-C1 moves IOCP delivery to typed Completion notices and removes fake
-   Channel translation from the production Engine path before retiring the
-   legacy Poller shell.
+3. IOE-C1 moves IOCP delivery to typed Completion notices, removes fake
+   Channel translation from both production and compatibility paths, and makes
+   repeated shutdown requests phase-monotonic.
 4. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
@@ -198,9 +206,13 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
   retirement for a revoked observer. On non-Windows it verifies that the
   completion vocabulary remains platform-neutral.
 - `tests/contract/poller/test_poller_contract.cpp` verifies bounded backend
-  waiting and backend-neutral Poller behavior during the adapter slice.
+  waiting, distinct direct consumer dispatch, no fake Channel callbacks, and
+  backend-neutral Poller behavior.
 - `tests/contract/event_loop/test_event_loop.cpp` verifies owner-thread dispatch,
   wakeup, admission, and shutdown behavior.
+- `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
+  observable Running/Quiescing/FinalDraining/Shutdown sequence and re-entrant
+  `quit()` monotonicity in FinalDraining.
 - `tests/contract/event_loop/test_event_loop_fair_budget.cpp` verifies that I/O,
   timer, control, and pending-functor work remain bounded and make progress.
 - `tests/contract/channel/test_channel_active_batch_lifetime.cpp` verifies
@@ -209,6 +221,9 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
   verifies completion-obligation drain before loop exit.
 - `tests/integration/tcp/test_iocp_accept_connect_quit_completion_drain.cpp`
   verifies real AcceptEx/ConnectEx completion retention on Windows.
+- `tests/integration/tcp/test_iocp_quit_completion_drain.cpp` verifies a real
+  cancellation terminal packet is consumed while the loop is Quiescing and
+  before Shutdown publication.
 
 Every Engine implementation slice adds a focused contract before replacing a
 backend path. Cross-platform full CTest and the core benchmark are required for
