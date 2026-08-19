@@ -106,26 +106,27 @@ It must not blur these roles.
   active batch is dispatched; direct native test consumers retire it explicitly
 - the configured IOCP dequeue width borrows a prefix of the Poller's fixed
   64-entry storage; it allocates no packet array and owns no completion
-- production read/write terminal results remain distinct typed notices and are
-  never stored in Channel. Kernel-terminal bookkeeping and consumer-terminal
-  bookkeeping are separate: dequeue clears native pending, while the direct
-  consumer clears dispatch pending even when its Channel observer was revoked.
-  The driver cannot repost the same operation between those two transitions
-- accepted read/write submission freezes the observer source and a
+- production Accept/Connect/Read/Write terminal results remain distinct typed
+  notices and are never stored in Channel. Kernel-terminal bookkeeping and
+  consumer-terminal bookkeeping are separate: dequeue clears native pending,
+  while the direct consumer clears dispatch pending even when its Channel
+  observer was revoked. A source-private slot cannot be reused between those
+  two transitions
+- every accepted observer-bound submission freezes the observer source and a
   process-unique Channel registration generation. EventLoop validates that
   source, Channel identity, and frozen generation before a callback and holds
   the Channel tie through it. A stale or same-address replacement observer
   still runs source-private consumer retirement but cannot reach TcpConnection
   or user code
 - the installed Channel ABI temporarily retains its private single-operation
-  mailbox, but the production read/write publisher neither writes nor reads it;
-  Accept keeps only its bounded intrusive compatibility queue until its direct
-  consumer slice lands
+  mailbox and bounded Accept queue, but the production Engine path neither
+  writes nor reads them; only the isolated legacy Poller shell uses the Accept
+  queue until that shell and the reserved fields receive stable-surface review
 - independent Accept operations for one listen Channel are appended through
   their operation-embedded links to one bounded callback queue in the current
   batch
-- Accept compatibility publication lends one bounded intrusive queue of exact
-  identities; no queue node allocation or operation-storage transfer is
+- legacy Accept compatibility publication lends one bounded intrusive queue of
+  exact identities; no queue node allocation or operation-storage transfer is
   introduced
 - an IOCP retained lease owns operation storage but is not by itself a shutdown
   obligation. A successfully submitted operation canceled during teardown is

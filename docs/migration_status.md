@@ -49,6 +49,9 @@ Current IOE-R2 generation-safe Readiness checkpoint:
 Current IOE-C1 typed operation-model checkpoint:
 `f407440084c48f324ab3a65912443bb257aa8e77` (2026-08-19)
 
+Current IOE-C1 direct read/write checkpoint:
+`82d89831de81522ecd25c8eedd42f395e2a07613` (2026-08-19)
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -59,10 +62,11 @@ typed results, option layering, Poller adapter, and shutdown/dispatch contracts
 are closed at `8bb14e72`. IOE-R2's generation-safe epoll Readiness Engine,
 internal wakeup, bounded wait, and current-interest/stale-token contracts are
 closed at `6f45aa6e`. IOE-C1 native Completion contracts are the active
-execution front. The operation model is committed at `f4074400`; the current
-vertical slice makes EventLoop directly consume production read/write notices,
-keeps kernel-terminal and consumer-terminal state separate, and leases only
-source-private driver storage. Accept/connect and shutdown are next while
+execution front. The operation model is committed at `f4074400` and direct
+read/write consumption at `82d8983`; the current vertical slice makes EventLoop
+directly consume production Accept/Connect notices as well. All four operation
+kinds keep kernel-terminal and consumer-terminal state separate and lease only
+source-private driver/pool/attempt storage. Shutdown and legacy-shell removal are next while
 independent architecture review and RTM-R1 Profile contract preparation proceed
 in parallel. Candidate freeze, REL-V1 and release packaging are not development
 prerequisites.
@@ -70,9 +74,13 @@ prerequisites.
 This worktree's directional Windows Release echo check used 4 connections, one
 I/O thread, 10,000 messages per connection, 256-byte payloads, a 500 ms settle
 window, and a 30 s timeout. Across five local samples, the medians were
-123,144.027 round trips/s, 60.1289 MiB/s, and 69.7 us P99. These numbers are a
-same-worktree smoke signal only, not a paired cross-commit regression result or
-promotion evidence.
+118,754.620 round trips/s, 57.9857 MiB/s, and 70.3 us P99. The matching five-
+sample 256-connection check reported 13.6504 ms establishment, 18,754.029
+connections/s, 12,256 bytes/connection, 7.7469 ms close, and 0.2554 ms server
+stop medians. The echo throughput shift from the immediately preceding local
+read/write slice is -3.56%, below the 5% investigation threshold. These numbers
+are same-worktree smoke signals only, not a paired cross-commit regression
+result or promotion evidence.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
@@ -239,7 +247,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, and IOE-C1's typed operation model at `f4074400`. Production read/write completion now enters EventLoop directly under the unified I/O budget and no longer uses Channel publication; accept/connect and shutdown are the current Engine front. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1's typed operation model at `f4074400`, and direct read/write at `82d8983`. Production Accept/Connect/Read/Write completion now enters EventLoop directly under the unified I/O budget and no longer uses Channel publication; shutdown and legacy-shell removal are the current Engine front. RTM-R1 contract work proceeds in parallel. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 

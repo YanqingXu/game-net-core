@@ -43,7 +43,7 @@ hands them upward through a narrow callback boundary.
 - on IOCP, Acceptor owns one fixed pool on its base loop; each slot owns one
   accepted socket, `OVERLAPPED`, address buffer, and monotonically increasing
   submission generation, and a slot is never reused before its prior terminal
-  completion is published to that owner loop
+  notice is consumed by that owner loop
 - the IOCP pre-post depth is configured before `listen()`, defaults to four,
   and is validated in the finite range `[1, 64]`; Linux retains drain-until-
   would-block behavior and does not allocate accept slots
@@ -105,10 +105,12 @@ hands them upward through a narrow callback boundary.
   `EventLoop::quit()` keeps zero-timeout polling until the real AcceptEx
   cancellation packets for every submitted slot release all storage leases and
   shutdown obligations
-- completion dispatch appends every exact AcceptEx operation identity from one
-  IOCP batch to an allocation-free intrusive listen-Channel queue; one
-  `handleRead()` drains that bounded queue, and a slot cannot be consumed or
-  reused through another operation's completion
+- production completion dispatch invokes one source-private typed consumer for
+  every exact AcceptEx identity under EventLoop's I/O budget. The retained pool
+  state clears consumer-terminal bookkeeping even after observer revocation;
+  a current observer replenishes the exact slot before entering the upper
+  callback. The legacy Poller shell alone retains its bounded intrusive
+  listen-Channel queue for compatibility
 - callback re-entry through `stop()` is safe after the completed socket has
   left its slot, including when the replacement slot was already pre-posted
 - `tests/contract/acceptor/test_acceptor_contract.cpp` verifies unavailable

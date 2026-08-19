@@ -35,7 +35,7 @@ def main() -> None:
     require(milestone_text, "EventLoop wakeup must complete through IOCP", milestone)
     require(milestone_text, "source-private transport helper owns shared overlapped", milestone)
     require(milestone_text, "Completion Engine leases that state, not TcpConnection", milestone)
-    require(milestone_text, "directly consumes production read/write typed notices", milestone)
+    require(milestone_text, "directly consumes production Accept/Connect/Read/Write typed", milestone)
     require(milestone_text, "cancel/close ordering", milestone)
     require(milestone_text, "PostQueuedCompletionStatus", milestone)
     require(milestone_text, "passes 67/67 tests", milestone)

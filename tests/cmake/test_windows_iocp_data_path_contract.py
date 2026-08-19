@@ -29,6 +29,9 @@ def main() -> None:
     io_engine_adapter = (
         repo_root / "src" / "core" / "net" / "detail" / "PollerIoEngineAdapter.cc"
     )
+    iocp_poller_access = (
+        repo_root / "src" / "core" / "net" / "detail" / "IocpPollerAccess.h"
+    )
     tcp_transport = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport.h"
     tcp_transport_source = repo_root / "src" / "core" / "net" / "platform" / "IocpTcpTransport_win.cc"
     sync_error_test = (
@@ -165,6 +168,8 @@ def main() -> None:
     require(acceptor_source_text, "IocpOperationKind::Accept", acceptor_source)
     require(acceptor_source_text, "retainCompletionOperation", acceptor_source)
     require(acceptor_source_text, "trackCompletionOperation", acceptor_source)
+    require(acceptor_source_text, "operation.completionConsumer", acceptor_source)
+    require(acceptor_source_text, "completionPending", acceptor_source)
     require(acceptor_source_text, "CancelIoEx", acceptor_source)
     require(acceptor_source_text, "std::vector<IocpAcceptSlot>", acceptor_source)
     require(acceptor_source_text, "slot.generation", acceptor_source)
@@ -185,6 +190,8 @@ def main() -> None:
     assert "preserveSocketAssociation" not in connector_source_text
     require(connector_source_text, "retainCompletionOperation", connector_source)
     require(connector_source_text, "trackCompletionOperation", connector_source)
+    require(connector_source_text, "operation.completionConsumer", connector_source)
+    require(connector_source_text, "completionPending", connector_source)
     require(connector_source_text, "retryAfterCancel", connector_source)
     require(connector_source_text, "ERROR_NOT_FOUND", connector_source)
 
@@ -405,10 +412,11 @@ def main() -> None:
     require(completion_engine_text, "testNativePacketsBecomeDistinctTerminalNotices", completion_engine_test)
     require(completion_engine_text, "testGenerationRejectsDuplicateAndRejectedSubmissionPackets", completion_engine_test)
     require(completion_engine_text, "testObserverRevokeDoesNotRetireKernelLeaseEarly", completion_engine_test)
-    require(completion_engine_text, "testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget", completion_engine_test)
+    require(completion_engine_text, "testEventLoopDirectlyDispatchesAllOperationKindsWithinOwnerBudget", completion_engine_test)
     require(completion_engine_text, "testDirectDispatchRevalidatesObserverAfterReentry", completion_engine_test)
     require(completion_engine_text, "testSubmissionCapturesObserverBeforeNativeDequeue", completion_engine_test)
     require(completion_engine_text, "testSameAddressObserverReplacementCannotReviveOldCompletion", completion_engine_test)
+    require(completion_engine_text, "terminalCalls == 4", completion_engine_test)
     require(completion_engine_text, "terminalCalls == 2", completion_engine_test)
 
     event_loop_text = event_loop_source.read_text(encoding="utf-8")
@@ -418,6 +426,11 @@ def main() -> None:
     adapter_text = io_engine_adapter.read_text(encoding="utf-8")
     require(adapter_text, "waitCompletionEngine", io_engine_adapter)
     assert "return NativePoller::poll(timeoutMs, notices.readiness_)" not in adapter_text
+    access_text = iocp_poller_access.read_text(encoding="utf-8")
+    require(access_text, "return poller.waitNativeCompletionNotices(timeoutMs)", iocp_poller_access)
+    assert "publishCompletionNotices" not in access_text, (
+        "production IOCP Engine access must not publish any Completion kind through Channel"
+    )
 
     transport_text = tcp_transport_source.read_text(encoding="utf-8")
     require(transport_text, "readCompletionPending", tcp_transport_source)

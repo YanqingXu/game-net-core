@@ -143,22 +143,24 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
   invalid backend work. They produce no callback and cannot decrement a drain
   obligation;
 - terminal dequeue retires kernel state and invokes only source-private
-  terminal bookkeeping on the owner thread. Read/write driver state then owns
-  a separate consumer-terminal bit, so the same operation cannot be reposted
-  while an older typed notice from the current batch is still undispatched;
-- accepted read/write submission freezes its observer fd and a process-unique
+  terminal bookkeeping on the owner thread. Read/write driver, AcceptEx slot,
+  and ConnectEx attempt state each own a separate consumer-terminal bit, so the
+  same operation cannot be reused while an older typed notice from the current
+  batch is still undispatched;
+- every accepted observer-bound submission freezes its observer fd and a process-unique
   registration generation. EventLoop pulls notices under the same bounded I/O
   dispatch budget as readiness callbacks, revalidates fd, Channel identity,
   and the frozen generation, holds the Channel tie during a surviving callback,
   and invokes the source-private consumer even for a revoked or same-address
   replacement observer so driver retirement cannot be stranded;
-- the operation lease retains only the source-private shared driver state, not
-  TcpConnection application ownership. The entire typed-batch lease is released
-  only after all direct notices and compatibility observers are consumed;
-- the production Engine adapter does not publish read/write as fake Channel
-  readiness. The legacy Poller shell may still do so for compatibility tests,
-  while Accept/Connect retain their temporary Channel publication until their
-  direct consumers replace it.
+- an operation lease retains only source-private shared transport, Accept-pool,
+  or Connect-attempt state, not TcpConnection, Acceptor, or Connector application
+  ownership. The entire typed-batch lease is released only after all direct
+  notices and compatibility observers are consumed;
+- the production Engine adapter publishes no Completion kind as fake Channel
+  readiness. Accept/Connect/Read/Write all enter EventLoop through typed direct
+  consumers. The legacy Poller shell may still translate notices only for its
+  isolated compatibility contracts until that shell is retired.
 
 ## 7. Compatibility Sequence
 
@@ -167,8 +169,9 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
    change is introduced.
 2. IOE-R2 moves epoll/kqueue-style registration into a Readiness Engine while
    preserving Channel contracts and generation invalidation.
-3. IOE-C1 moves IOCP delivery to typed Completion notices and removes the fake
-   Channel read/write translation.
+3. IOE-C1 moves IOCP delivery to typed Completion notices and removes fake
+   Channel translation from the production Engine path before retiring the
+   legacy Poller shell.
 4. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 

@@ -45,9 +45,10 @@ See `migration_status.md` for the current checked state of these phases.
 - Candidate freeze is retired as a development gate. IOE-R1 is closed at
   `8bb14e72d8935879396d12a7a51c891311aa2a78`; IOE-R2 is closed at
   `6f45aa6e78152b8fd86df925962e580101b2f2ee`; IOE-C1's operation model is
-  committed at `f407440084c48f324ab3a65912443bb257aa8e77`. Production
-  read/write notice consumption is now direct and the active Engine front moves
-  to accept/connect and shutdown, with ARCH-G1 independent review and RTM-R1
+  committed at `f407440084c48f324ab3a65912443bb257aa8e77`, with direct
+  read/write closed at `82d89831de81522ecd25c8eedd42f395e2a07613`.
+  Production Accept/Connect/Read/Write notice consumption is now direct and the
+  active Engine front moves to shutdown plus legacy-shell removal, with ARCH-G1 independent review and RTM-R1
   Profile contracts proceeding in parallel. CI/performance evidence stays
   commit-bound and continuous; endurance and licensing move to promotion time.
 
@@ -281,9 +282,9 @@ Active execution front:
   stable public-surface drift.
 - [x] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
   registrations; closed at `6f45aa6e78152b8fd86df925962e580101b2f2ee`.
-- [ ] IOE-C1: native typed notices and production direct read/write consumers
-  are implemented; retire accept/connect compatibility publication, legacy fake
-  translation, and shutdown escape next.
+- [ ] IOE-C1: native typed notices and production direct
+  Accept/Connect/Read/Write consumers are implemented; retire the legacy fake
+  translation, dormant Channel fields, and shutdown escape next.
 - [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
   Engine line.
 - [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at

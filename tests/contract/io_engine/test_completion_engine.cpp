@@ -317,7 +317,7 @@ void testObserverRevokeDoesNotRetireKernelLeaseEarly() {
             &operation) == IoEngineOperationResult::RejectedConflict);
 }
 
-void testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget() {
+void testEventLoopDirectlyDispatchesAllOperationKindsWithinOwnerBudget() {
     gamenet::net::EventLoopOptions options;
     options.maxActiveChannelsPerIteration = 1;
     gamenet::net::EventLoop loop(options);
@@ -336,11 +336,13 @@ void testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget() {
     DirectCompletionObservation observation{
         .loop = &loop,
         .channel = &channel,
-        .expectedCalls = 2,
+        .expectedCalls = 4,
     };
-    std::array<gamenet::net::IocpOperation, 2> operations{};
-    operations[0].kind = gamenet::net::IocpOperationKind::Read;
-    operations[1].kind = gamenet::net::IocpOperationKind::Write;
+    std::array<gamenet::net::IocpOperation, 4> operations{};
+    operations[0].kind = gamenet::net::IocpOperationKind::Accept;
+    operations[1].kind = gamenet::net::IocpOperationKind::Connect;
+    operations[2].kind = gamenet::net::IocpOperationKind::Read;
+    operations[3].kind = gamenet::net::IocpOperationKind::Write;
     for (auto& operation : operations) {
         operation.channel = &channel;
         operation.completionContext = &observation;
@@ -355,8 +357,8 @@ void testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget() {
 
     loop.loop();
 
-    GAMENET_TEST_ASSERT(observation.calls == 2);
-    GAMENET_TEST_ASSERT(observation.terminalCalls == 2);
+    GAMENET_TEST_ASSERT(observation.calls == 4);
+    GAMENET_TEST_ASSERT(observation.terminalCalls == 4);
     GAMENET_TEST_ASSERT(fakeReadinessCalls == 0);
     GAMENET_TEST_ASSERT(
         observation.lastObservedAt != gamenet::base::Timestamp{});
@@ -379,8 +381,8 @@ void testDirectDispatchRevalidatesObserverAfterReentry() {
         .replaceObserverOnFirstCall = true,
     };
     std::array<gamenet::net::IocpOperation, 2> operations{};
-    operations[0].kind = gamenet::net::IocpOperationKind::Read;
-    operations[1].kind = gamenet::net::IocpOperationKind::Write;
+    operations[0].kind = gamenet::net::IocpOperationKind::Accept;
+    operations[1].kind = gamenet::net::IocpOperationKind::Connect;
     for (auto& operation : operations) {
         operation.channel = &channel;
         operation.completionContext = &observation;
@@ -508,7 +510,7 @@ int main() {
     testNativePacketsBecomeDistinctTerminalNotices();
     testGenerationRejectsDuplicateAndRejectedSubmissionPackets();
     testObserverRevokeDoesNotRetireKernelLeaseEarly();
-    testEventLoopDirectlyDispatchesReadWriteWithinOwnerBudget();
+    testEventLoopDirectlyDispatchesAllOperationKindsWithinOwnerBudget();
     testDirectDispatchRevalidatesObserverAfterReentry();
     testSubmissionCapturesObserverBeforeNativeDequeue();
     testSameAddressObserverReplacementCannotReviveOldCompletion();

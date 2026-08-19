@@ -37,15 +37,8 @@ public:
 
     static CompletionWaitResult waitCompletionEngine(
         IocpPoller& poller,
-        int timeoutMs,
-        Poller::ChannelList* activeChannels) {
-        const auto batch =
-            poller.waitNativeCompletionNotices(timeoutMs);
-        poller.publishCompletionNotices(
-            batch,
-            activeChannels,
-            false);
-        return batch;
+        int timeoutMs) {
+        return poller.waitNativeCompletionNotices(timeoutMs);
     }
 
     static std::size_t pendingCompletionNoticeCount(

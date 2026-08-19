@@ -195,11 +195,12 @@ TDD implementation plan in
 - TcpConnection's source-private transport helper owns shared overlapped
   read/write state. Completion Engine leases that state, not TcpConnection, and
   no stack `OVERLAPPED` or buffer may outlive the operation that submitted it.
-- EventLoop directly consumes production read/write typed notices. Channel is a
-  borrowed, generation-checked callback observer guarded by its tie; it carries
-  no production read/write operation result. Accept/connect still use the
-  compatibility publisher until their direct-consumer slice lands. Poller does
-  not own Channel.
+- EventLoop directly consumes production Accept/Connect/Read/Write typed
+  notices. Channel is a borrowed, generation-checked callback observer guarded
+  by its tie; it carries no production completion result. AcceptEx fixed-pool
+  and ConnectEx attempt leases retain only source-private state, and revoked
+  observers still complete consumer-terminal cleanup. Poller does not own
+  Channel.
 - Socket close, Channel removal, pending overlapped cancellation, and final
   callbacks must have explicit cancel/close ordering.
 

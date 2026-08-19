@@ -28,13 +28,43 @@ namespace gamenet::net {
 struct Connector::IocpConnectState {
     IocpOperation operation{};
     LPFN_CONNECTEX connectEx{nullptr};
+    std::weak_ptr<Connector> owner;
     std::uint64_t generation{0};
     bool pending{false};
+    bool completionPending{false};
     bool canceling{false};
     bool retryAfterCancel{false};
 
     IocpConnectState() {
         operation.kind = IocpOperationKind::Connect;
+        operation.terminalContext = this;
+        operation.terminalObserver = +[](
+            void* context,
+            IocpOperationKind kind) noexcept {
+            auto& state = *static_cast<IocpConnectState*>(context);
+            if (kind != IocpOperationKind::Connect || !state.pending) {
+                return;
+            }
+            state.pending = false;
+            state.completionPending = true;
+        };
+        operation.completionContext = this;
+        operation.completionConsumer = +[](
+            void* context,
+            gamenet::base::Timestamp,
+            bool observerCurrent) {
+            auto& state = *static_cast<IocpConnectState*>(context);
+            if (!state.completionPending) {
+                return;
+            }
+            state.completionPending = false;
+            if (!observerCurrent) {
+                return;
+            }
+            if (auto owner = state.owner.lock()) {
+                owner->handleWrite(state.generation);
+            }
+        };
     }
 };
 
@@ -262,6 +292,7 @@ void Connector::connect(std::uint64_t generation) {
     connecting(sockfd, generation);
 
     iocpConnect_ = std::make_shared<IocpConnectState>();
+    iocpConnect_->owner = weak_from_this();
     iocpConnect_->operation.channel = channel_.get();
     iocpConnect_->connectEx = connectEx;
     iocpConnect_->generation = generation;
@@ -359,6 +390,7 @@ void Connector::handleWrite(std::uint64_t generation) {
 #ifdef _WIN32
     if (iocpConnect_) {
         iocpConnect_->pending = false;
+        iocpConnect_->completionPending = false;
         if (iocpConnect_->canceling || !connect_) {
             finishCancelInLoop();
             return;
@@ -501,6 +533,7 @@ void Connector::handleError(std::uint64_t generation) {
 #ifdef _WIN32
     if (iocpConnect_) {
         iocpConnect_->pending = false;
+        iocpConnect_->completionPending = false;
         if (iocpConnect_->canceling || !connect_) {
             finishCancelInLoop();
             return;
@@ -636,6 +669,7 @@ void Connector::finishCancelInLoop() {
     state_.store(kDisconnected, std::memory_order_release);
     if (iocpConnect_) {
         iocpConnect_->pending = false;
+        iocpConnect_->completionPending = false;
         iocpConnect_->canceling = false;
         iocpConnect_->retryAfterCancel = false;
     }

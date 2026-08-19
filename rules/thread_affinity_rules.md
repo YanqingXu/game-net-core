@@ -17,11 +17,11 @@ Mutable reactor state belongs to a specific EventLoop thread.
   revocation, and completion-obligation tracking are owner-thread-only; final
   drain performs only zero-timeout owner-thread polls
 - every Windows AcceptEx slot is created, submitted, completed, generation-
-  advanced, canceled, and reused only by the Acceptor base loop; Poller may
-  publish the completed operation identity but never mutates slot policy
-- Poller may append multiple completed Accept identities to the listen
-  Channel's owner-loop queue in one batch; only the subsequent Acceptor
-  callback may drain slots or replenish the pool
+  advanced, canceled, and reused only by the Acceptor base loop; Poller decodes
+  the completed operation identity but never mutates slot policy
+- production Accept/Connect notices are pulled and consumed by EventLoop under
+  the same bounded I/O budget as Read/Write. Only the legacy Poller shell may
+  append completed Accept identities to the listen Channel compatibility queue
 
 ## 3. Allowed Cross-Thread Interaction
 Cross-thread interaction must go through:
@@ -124,11 +124,11 @@ No other direct mutation path is allowed for core loop state.
 - On Windows, GQCSEx decoding, generation validation, terminal retirement, and
   source-private transport terminal bookkeeping are owner-thread-only. The
   terminal bookkeeping callback cannot invoke user code or re-enter EventLoop
-- EventLoop alone pulls typed read/write notices after wait returns. It shares
+- EventLoop alone pulls typed Accept/Connect/Read/Write notices after wait returns. It shares
   `maxActiveChannelsPerIteration` with readiness dispatch, revalidates the
   observer after every earlier callback, holds a surviving Channel tie, and
   contains exceptions under the ChannelEvent callback policy
-- a revoked read/write observer still enters its source-private consumer with
+- a revoked completion observer still enters its source-private consumer with
   `observerCurrent == false` to clear dispatch-terminal state. That path cannot
   call TcpConnection or user code
 - EventLoop retires the last completion wait batch only after its direct notices

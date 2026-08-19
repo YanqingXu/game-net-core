@@ -117,10 +117,10 @@ public:
             throw std::logic_error("I/O Engine wait after shutdown");
         }
 #ifdef _WIN32
+        (void)notices;
         const auto batch = IocpPollerAccess::waitCompletionEngine(
             *this,
-            timeoutMs,
-            notices.readiness_);
+            timeoutMs);
         lastWaitProgress_ = {
             .deliveredNotices = batch.progress.deliveredNotices,
             .staleNotices = batch.progress.invalidPackets,

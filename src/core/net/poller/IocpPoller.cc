@@ -186,7 +186,7 @@ gamenet::base::Timestamp IocpPoller::poll(
     ChannelList* activeChannels) {
     retireCompletionNoticeLeases();
     const auto batch = waitNativeCompletionNotices(timeoutMs);
-    publishCompletionNotices(batch, activeChannels, true);
+    publishCompletionNotices(batch, activeChannels);
     completionState_->directNoticeCursor =
         completionState_->noticeCount;
     lastDeferredCompletionCount_ = 0;
@@ -346,19 +346,13 @@ detail::CompletionWaitResult IocpPoller::waitNativeCompletionNotices(
 
 void IocpPoller::publishCompletionNotices(
     const detail::CompletionWaitResult& batch,
-    ChannelList* activeChannels,
-    bool publishReadWrite) {
+    ChannelList* activeChannels) {
     auto& state = *completionState_;
     std::size_t activeCount = 0;
     for (std::size_t noticeIndex = 0;
          noticeIndex < batch.notices.size();
          ++noticeIndex) {
         const auto& notice = batch.notices[noticeIndex];
-        if (!publishReadWrite &&
-            (notice.kind == detail::CompletionOperationKind::Read ||
-             notice.kind == detail::CompletionOperationKind::Write)) {
-            continue;
-        }
         Channel* channel = notice.observer;
         if (channel == nullptr) {
             continue;
@@ -401,9 +395,7 @@ std::size_t IocpPoller::pendingDirectCompletionNoticeCount() const noexcept {
     for (ULONG index = state.directNoticeCursor;
          index < state.noticeCount;
          ++index) {
-        const auto kind = state.notices[index].kind;
-        if (kind == detail::CompletionOperationKind::Read ||
-            kind == detail::CompletionOperationKind::Write) {
+        if (state.notices[index].consumer != nullptr) {
             ++pending;
         }
     }
@@ -419,8 +411,7 @@ bool IocpPoller::takeNextDirectCompletionNotice(
     while (state.directNoticeCursor < state.noticeCount) {
         const auto& candidate =
             state.notices[state.directNoticeCursor++];
-        if (candidate.kind != detail::CompletionOperationKind::Read &&
-            candidate.kind != detail::CompletionOperationKind::Write) {
+        if (candidate.consumer == nullptr) {
             continue;
         }
         *notice = candidate;

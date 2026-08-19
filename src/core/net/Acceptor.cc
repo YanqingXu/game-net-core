@@ -150,10 +150,12 @@ bool takeInjectedAcceptError(int* error) noexcept {
 
 struct Acceptor::IocpAcceptSlot {
     IocpOperation operation{};
+    IocpAcceptState* state{nullptr};
     SocketFd accepted{kInvalidSocket};
     std::array<char, kAcceptAddressBytes * 2> addresses{};
     std::uint64_t generation{0};
     bool pending{false};
+    bool completionPending{false};
     bool cancelling{false};
 
     IocpAcceptSlot() {
@@ -170,6 +172,54 @@ struct Acceptor::IocpAcceptState {
 
     explicit IocpAcceptState(std::size_t depth)
         : slots(depth) {
+        for (auto& slot : slots) {
+            slot.state = this;
+            slot.operation.terminalContext = &slot;
+            slot.operation.terminalObserver = +[](
+                void* context,
+                IocpOperationKind kind) noexcept {
+                auto& completed =
+                    *static_cast<IocpAcceptSlot*>(context);
+                if (kind != IocpOperationKind::Accept ||
+                    !completed.pending) {
+                    return;
+                }
+                completed.pending = false;
+                completed.completionPending = true;
+            };
+            slot.operation.completionContext = &slot;
+            slot.operation.completionConsumer = +[](
+                void* context,
+                gamenet::base::Timestamp observedAt,
+                bool observerCurrent) {
+                auto& completed =
+                    *static_cast<IocpAcceptSlot*>(context);
+                IocpAcceptState* state = completed.state;
+                if (state == nullptr || !completed.completionPending) {
+                    return;
+                }
+                if (!observerCurrent || state->owner == nullptr) {
+                    completed.completionPending = false;
+                    completed.cancelling = false;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                    observeAcceptCompleted();
+#endif
+                    if (sockets::isValid(completed.accepted)) {
+                        sockets::close(completed.accepted);
+                        completed.accepted = kInvalidSocket;
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+                        observeAcceptedSocketReleased();
+#endif
+                    }
+                    return;
+                }
+                state->directCompletion = &completed.operation;
+                state->owner->handleRead(observedAt);
+                if (state->directCompletion == &completed.operation) {
+                    state->directCompletion = nullptr;
+                }
+            };
+        }
         detail::retainNetworkFixedStorage(
             detail::NetworkFixedStorageCategory::AcceptExFixedPool,
             slots.capacity() * sizeof(IocpAcceptSlot));
@@ -180,11 +230,12 @@ struct Acceptor::IocpAcceptState {
 
     ~IocpAcceptState() {
         for (auto& slot : slots) {
-            if (slot.pending) {
+            if (slot.pending || slot.completionPending) {
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
                 observeAcceptCompleted();
 #endif
                 slot.pending = false;
+                slot.completionPending = false;
             }
             if (sockets::isValid(slot.accepted)) {
                 sockets::close(slot.accepted);
@@ -205,6 +256,8 @@ struct Acceptor::IocpAcceptState {
     std::vector<IocpAcceptSlot> slots;
     LPFN_ACCEPTEX acceptEx{nullptr};
     LPFN_GETACCEPTEXSOCKADDRS getAcceptExSockaddrs{nullptr};
+    Acceptor* owner{nullptr};
+    IocpOperation* directCompletion{nullptr};
     Phase phase{Phase::Accepting};
     bool retryDelayElapsed{false};
 };
@@ -310,6 +363,7 @@ void Acceptor::listen() {
             slot.operation.channel = &acceptChannel_;
         }
     }
+    iocpAccept_->owner = this;
     iocpAccept_->phase = IocpAcceptState::Phase::Accepting;
 #endif
     listening_ = true;
@@ -352,8 +406,17 @@ void Acceptor::handleRead(gamenet::base::Timestamp receiveTime) {
         return;
     }
 
-    while (IocpOperation* completedOperation =
-               acceptChannel_.takeIocpAcceptCompletionOperation()) {
+    while (true) {
+        IocpOperation* completedOperation = state->directCompletion;
+        if (completedOperation != nullptr) {
+            state->directCompletion = nullptr;
+        } else {
+            completedOperation =
+                acceptChannel_.takeIocpAcceptCompletionOperation();
+        }
+        if (completedOperation == nullptr) {
+            break;
+        }
         const auto completedSlot = std::find_if(
             state->slots.begin(),
             state->slots.end(),
@@ -364,12 +427,12 @@ void Acceptor::handleRead(gamenet::base::Timestamp receiveTime) {
             LOG_ERROR << "Acceptor received an unknown AcceptEx completion";
             continue;
         }
-        if (!completedSlot->pending) {
+        if (!completedSlot->completionPending) {
             continue;
         }
 
         IocpAcceptSlot& slot = *completedSlot;
-        slot.pending = false;
+        slot.completionPending = false;
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
         observeAcceptCompleted();
 #endif
@@ -569,7 +632,7 @@ bool Acceptor::postAccept(IocpAcceptSlot& slot) {
     const auto state = iocpAccept_;
     if (!listening_ || !state ||
         state->phase != IocpAcceptState::Phase::Accepting ||
-        slot.pending) {
+        slot.pending || slot.completionPending) {
         return false;
     }
 
@@ -615,6 +678,7 @@ bool Acceptor::postAccept(IocpAcceptSlot& slot) {
     slot.operation.error = 0;
     slot.operation.completionObserved = false;
     slot.operation.nextPublishedCompletion = nullptr;
+    slot.completionPending = false;
     slot.cancelling = false;
     if (!detail::prepareIocpOperationSubmission(slot.operation)) {
         LOG_FATAL << "AcceptEx operation generation conflict";
@@ -669,7 +733,6 @@ void Acceptor::beginAcceptRetry() {
     iocpAccept_->phase = IocpAcceptState::Phase::Retrying;
     iocpAccept_->retryDelayElapsed = false;
     cancelPendingAccepts(false);
-    acceptChannel_.clearIocpAcceptCompletionOperations();
     if (!retryTimer_.valid()) {
         retryTimer_ = loop_->runAfter(
             std::chrono::milliseconds(100),
@@ -688,7 +751,9 @@ void Acceptor::maybeResumeAccept() {
     if (std::any_of(
             state->slots.begin(),
             state->slots.end(),
-            [](const IocpAcceptSlot& slot) { return slot.pending; })) {
+            [](const IocpAcceptSlot& slot) {
+                return slot.pending || slot.completionPending;
+            })) {
         return;
     }
 
@@ -718,24 +783,7 @@ void Acceptor::cancelPendingAccepts(bool shutdown) noexcept {
             continue;
         }
 
-        // The completion can already have been published into the current
-        // EventLoop active batch before another callback stops the listener.
-        // That packet and its leases are already consumed, so tracking it now
-        // would create a phantom final-drain obligation.
-        if (slot.operation.completionObserved) {
-            slot.pending = false;
-            slot.cancelling = false;
-#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
-            observeAcceptCompleted();
-#endif
-            if (sockets::isValid(slot.accepted)) {
-                sockets::close(slot.accepted);
-                slot.accepted = kInvalidSocket;
-#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
-                observeAcceptedSocketReleased();
-#endif
-            }
-        } else if (!slot.cancelling) {
+        if (!slot.cancelling) {
             slot.cancelling = true;
             loop_->trackCompletionOperation(&slot.operation);
 #ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
@@ -766,6 +814,7 @@ void Acceptor::closePendingAccept() noexcept {
     }
     acceptChannel_.clearIocpAcceptCompletionOperations();
     iocpAccept_->phase = IocpAcceptState::Phase::Stopped;
+    iocpAccept_->owner = nullptr;
     cancelPendingAccepts(true);
     iocpAccept_.reset();
 }

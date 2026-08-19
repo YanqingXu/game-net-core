@@ -76,14 +76,14 @@ lease, result, cancellation state, and exactly one terminal retirement. A
 successful submission owns a future kernel completion packet. Cancellation is
 not consumption. IOE-C1 now decodes GQCSEx directly into a fixed typed
 `CompletionNotice` batch and generation-validates terminal retirement. The
-production adapter leaves read/write notices in that batch; EventLoop pulls
-them under its bounded I/O dispatch budget instead of creating fake readiness.
-Accept/Connect and the legacy Poller shell still retain compatibility
-publication until their direct-consumer slices land.
+production adapter leaves every Accept/Connect/Read/Write notice in that batch;
+EventLoop pulls them under its bounded I/O dispatch budget instead of creating
+fake readiness. Only the legacy Poller shell retains compatibility publication.
 
-Read/write storage has two terminal phases. Native dequeue clears the
-kernel-pending bit and establishes consumer-pending; the source-private driver
-clears consumer-pending when EventLoop consumes the notice, including a notice
+Operation storage has two terminal phases. Native dequeue clears the
+kernel-pending bit and establishes consumer-pending; the source-private TCP
+driver, AcceptEx slot, or ConnectEx attempt clears consumer-pending when
+EventLoop consumes the notice, including a notice
 whose observer was revoked. Repost of the same operation is forbidden between
 those phases, so an earlier write completion cannot reuse a read operation whose
 older result still exists later in the same fixed batch.
@@ -144,16 +144,16 @@ budget.
 
 IOE-C1's operation-model slice introduces typed IOCP completion notices,
 submission generations, duplicate/rejected packet filtering, owner-side
-terminal transport bookkeeping, and wait-batch lease retirement. Its next
-vertical slice moves production read/write directly behind EventLoop: notices
-remain distinct, observer source and a process-unique registration generation
-are frozen at accepted submission, source/pointer/generation is revalidated
-after every re-entrant callback, and a Channel tie guards each surviving upper
+terminal transport bookkeeping, and wait-batch lease retirement. Production
+Accept/Connect/Read/Write now all move directly behind EventLoop: notices remain
+distinct, observer source and a process-unique registration generation are
+frozen at accepted submission, source/pointer/generation is revalidated after
+every re-entrant callback, and a Channel tie guards each surviving upper
 callback.
-Only source-private shared driver state is leased through kernel and batch
-retirement; the installed TcpConnection layout remains unchanged. The remaining
-slices move accept/connect consumers behind the Completion Engine, close the
-shutdown escape, then delete the dormant Channel mailbox and legacy fake
+Only source-private shared TCP driver, Accept-pool, or Connect-attempt state is
+leased through kernel and batch retirement; upper application objects and the
+installed TcpConnection layout remain unchanged. The remaining slices close
+the shutdown escape, then delete the dormant Channel mailbox and legacy fake
 translation. Public API changes, if any, require a later additive review after
 both native engines have evidence.
 
@@ -172,9 +172,9 @@ Line numbers refer to the ARCH-G1 runtime checkpoint and may move as slices land
 | EventLoop downcasts to IocpPoller for association cleanup and metrics | `src/core/net/EventLoop.cc:967`, `:1106` | typed Engine capability/progress |
 | Public options contain IOCP batch width | `include/gamenet/core/net/EventLoop.h:124` | compatibility option mapped by adapter; later capability review |
 | Metric vocabulary contains IOCP packets | `src/core/net/EventLoop.cc:1115` | backend event plus neutral wait/dispatch metrics |
-| Channel installed header retains dormant IOCP mailbox ABI and active Accept queue | `include/gamenet/core/net/Channel.h` | delete after accept/connect direct consumers and stable-surface review |
-| Legacy IocpPoller shell maps read/write kinds to fake readiness; production adapter does not | `src/core/net/poller/IocpPoller.cc`, `src/core/net/detail/PollerIoEngineAdapter.cc` | delete legacy translation after compatibility consumers migrate |
-| Acceptor recovers completed accept operations from Channel | `src/core/net/Acceptor.cc:355`, `:762` | accept completion consumer |
+| Channel installed header retains dormant IOCP mailbox ABI and legacy-only Accept queue | `include/gamenet/core/net/Channel.h` | delete with the legacy Poller shell after stable-surface review |
+| Legacy IocpPoller shell maps completion kinds to fake readiness; production adapter does not | `src/core/net/poller/IocpPoller.cc`, `src/core/net/detail/PollerIoEngineAdapter.cc` | delete legacy translation after compatibility review |
+| Acceptor retains a legacy Channel-queue drain beside its production direct consumer | `src/core/net/Acceptor.cc` | delete with the legacy Poller shell |
 | Connector/Acceptor/TCP transport call EventLoop completion hooks | `src/core/net/Connector.cc:285`, `src/core/net/Acceptor.cc:653`, `src/core/net/platform/IocpTcpTransport_win.cc:458` | Completion Engine submission/lease API |
 | TcpClient preserves IOCP socket association through EventLoop | `src/core/net/TcpClient.cc:766` | Completion Engine association lifetime |
 

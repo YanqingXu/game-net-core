@@ -11,7 +11,8 @@ promote_gate: none
 Connector is the active-connect adapter for TcpClient,
 symmetric to Acceptor's role for TcpServer.
 It initiates non-blocking TCP connect, handles EINPROGRESS,
-detects success or failure via writable-event polling,
+detects success or failure through readiness on Linux and a typed ConnectEx
+completion on Windows,
 and delivers the connected fd upward through a narrow callback boundary.
 
 ---
@@ -80,7 +81,8 @@ and delivers the connected fd upward through a narrow callback boundary.
   atomic snapshot; the snapshot is diagnostic and grants no mutation right
 - retryEnabled() is an atomic diagnostic/configuration snapshot; mutation
   remains owner-loop-only
-- handleWrite / handleError (Channel callbacks) run on the owner loop thread
+- handleWrite / handleError (readiness or typed-completion consumers) run on
+  the owner loop thread
 - retry timer callback runs on the owner loop thread
 
 ---
@@ -136,6 +138,9 @@ and delivers the connected fd upward through a narrow callback boundary.
 - Windows cancellation completion remains responsible for releasing its own
   Channel / operation storage even when its generation is stale; generation
   rejection applies to publication and retry, not mandatory cleanup
+- ConnectEx dequeue ends kernel-pending state; its EventLoop direct consumer
+  ends consumer-pending state and only locks the weak Connector observer after
+  source/generation revalidation
 - canceling a successfully submitted pending ConnectEx marks exactly one
   shutdown completion obligation before `CancelIoEx`; `ERROR_NOT_FOUND` means
   the packet may already be queued and does not release that obligation

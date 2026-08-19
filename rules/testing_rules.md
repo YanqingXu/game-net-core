@@ -95,9 +95,10 @@ Contract tests verify:
 - the native Completion Engine contract proves nonzero operation generation,
   one terminal notice per Accepted generation, duplicate/rejected packet
   filtering, terminal status, owner-side transport bookkeeping, observer
-  revocation, batch-owned lease retirement, direct EventLoop consumption without
-  fake Channel read/write callbacks, one-budget continuation, and consumer-side
-  terminal retirement even after observer generation replacement
+  revocation, batch-owned lease retirement, direct EventLoop consumption of all
+  four Accept/Connect/Read/Write kinds without fake Channel callbacks, one-budget
+  continuation, and consumer-side terminal retirement even after observer
+  generation replacement
 - one budgeted Engine notice batch combines callback-local close, stale
   remove/re-register invalidation, callback exception containment, and a later
   continuation round with exact drained/remaining/exhausted metrics

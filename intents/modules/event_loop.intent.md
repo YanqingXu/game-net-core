@@ -200,8 +200,9 @@ EventLoop is the heart of reactor execution in game-net-core.
 ## 6. Main Execution Model
 Default v1 loop direction:
 1. wait for active I/O via Poller
-2. stamp and dispatch one budgeted portion of the unique active-Channel batch,
-   skipping registrations invalidated by earlier or intervening callbacks
+2. stamp and dispatch one budgeted portion of typed completion notices plus the
+   unique active-Channel batch, skipping observers invalidated by earlier or
+   intervening callbacks
 3. dispatch one budgeted portion of expired timers
 4. execute one budgeted round of pending control sources
 5. execute one budgeted round of dirty lifecycle nodes
