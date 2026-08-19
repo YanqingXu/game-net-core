@@ -317,6 +317,15 @@ IOE-X5 shared-Hub capacity/soak decision 立即接续，不等待冻结或 promo
 - [x] 与 epoll production baseline 做同场景方向性比较，不把不同语义伪装成等价结果；
 - [x] 形成 production adapter 的 `PROMOTE` / `DEFER` 决定；决定前不改 public selector 或 production `TcpConnection`。
 
+IOE-X6 source-private adapter contract 立即接续：
+
+- [ ] 用现有 `TcpSendResult` 与 `TcpConnectionCloseInfo` 固化 Hub route 的窄语义映射；
+- [ ] connection-local low/high/hard backpressure 驱动 pause/resume，通知有界且可观测；
+- [ ] message/high-water/write-complete/close callback owner-only、可重入、异常封闭；
+- [ ] adapter observer 可先销毁，Hub 仍完成 socket/operation/future 物理退休；
+- [ ] 同一真实 TCP 场景并排验证 production epoll 与 io_uring adapter 的共同语义；
+- [ ] 保持 non-installed、default-off、无 selector、无 production `TcpConnection` 修改和 API 漂移。
+
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
 

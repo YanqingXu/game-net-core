@@ -132,7 +132,9 @@ public:
     IoUringTcpConnectionHubAddOutcome addConnection(
         gamenet::net::SocketFd establishedSocket,
         IoUringTcpConnectionHub::MessageConsumer messageConsumer,
-        IoUringTcpConnectionHub::CloseConsumer closeConsumer) {
+        IoUringTcpConnectionHub::CloseConsumer closeConsumer,
+        IoUringTcpConnectionHub::OutputProgressConsumer
+            outputProgressConsumer) {
         gamenet::net::Socket transferred(establishedSocket);
         assertOwner();
         if (!gamenet::net::sockets::isValid(establishedSocket) ||
@@ -167,7 +169,8 @@ public:
             identity,
             transferred.releaseFd(),
             std::move(messageConsumer),
-            std::move(closeConsumer));
+            std::move(closeConsumer),
+            std::move(outputProgressConsumer));
         auto future = slot.route->stopFuture;
 
         const auto receiveResult = submitReceive(*slot.route);
@@ -349,17 +352,21 @@ private:
             Identity value,
             gamenet::net::SocketFd socketFd,
             IoUringTcpConnectionHub::MessageConsumer message,
-            IoUringTcpConnectionHub::CloseConsumer close)
+            IoUringTcpConnectionHub::CloseConsumer close,
+            IoUringTcpConnectionHub::OutputProgressConsumer outputProgress)
             : identity(value),
               socket(socketFd),
               messageConsumer(std::move(message)),
               closeConsumer(std::move(close)),
+              outputProgressConsumer(std::move(outputProgress)),
               stopFuture(stopPromise.get_future().share()) {}
 
         Identity identity{};
         gamenet::net::Socket socket;
         IoUringTcpConnectionHub::MessageConsumer messageConsumer;
         IoUringTcpConnectionHub::CloseConsumer closeConsumer;
+        IoUringTcpConnectionHub::OutputProgressConsumer
+            outputProgressConsumer;
         std::promise<IoUringTcpConnectionHubConnectionStopSummary> stopPromise;
         std::shared_future<IoUringTcpConnectionHubConnectionStopSummary>
             stopFuture;
@@ -370,6 +377,7 @@ private:
         RoutePhase phase{RoutePhase::Running};
         IoUringTcpHubCloseReason closeReason{
             IoUringTcpHubCloseReason::Explicit};
+        int closeNativeError{};
         std::size_t pendingSendBytes{};
         bool readDesired{true};
         bool retryReceiveCancel{false};
@@ -517,10 +525,17 @@ private:
     bool beginRouteClose(
         Route& route,
         IoUringTcpHubCloseReason reason,
-        bool requestLocalCancellations) {
-        if (route.phase == RoutePhase::Closing) return false;
+        bool requestLocalCancellations,
+        int nativeError = 0) {
+        if (route.phase == RoutePhase::Closing) {
+            if (route.closeNativeError == 0 && nativeError != 0) {
+                route.closeNativeError = nativeError;
+            }
+            return false;
+        }
         route.phase = RoutePhase::Closing;
         route.closeReason = reason;
+        route.closeNativeError = nativeError;
         route.readDesired = false;
         ++route.metrics.closeRequests;
         discardQueuedSendSegmentsAfterActive(route);
@@ -646,7 +661,8 @@ private:
             (void)beginRouteClose(
                 route,
                 IoUringTcpHubCloseReason::ReceiveFailed,
-                true);
+                true,
+                notice.nativeError());
             return;
         }
         if (notice.bytesTransferred() == 0) {
@@ -713,7 +729,8 @@ private:
                 (void)beginRouteClose(
                     route,
                     IoUringTcpHubCloseReason::SendFailed,
-                    true);
+                    true,
+                    notice.nativeError());
             }
             return;
         }
@@ -725,6 +742,21 @@ private:
         front.erase(0, transferred);
         if (front.empty()) route.sendSegments.pop_front();
         updateRouteQueueMetrics(route);
+
+        if (route.outputProgressConsumer) {
+            try {
+                route.outputProgressConsumer(
+                    route.identity,
+                    route.pendingSendBytes);
+            } catch (...) {
+                ++route.metrics.callbackFailures;
+                ++metrics_.callbackFailures;
+                (void)beginRouteClose(
+                    route,
+                    IoUringTcpHubCloseReason::CallbackFailed,
+                    true);
+            }
+        }
 
         if (route.phase == RoutePhase::Closing) {
             discardAllSendSegments(route);
@@ -837,6 +869,7 @@ private:
         const auto summary = IoUringTcpConnectionHubConnectionStopSummary{
             .identity = route->identity,
             .reason = route->closeReason,
+            .nativeError = route->closeNativeError,
             .connection = route->metrics,
             .socketClosed =
                 !gamenet::net::sockets::isValid(route->socket.fd()),
@@ -987,11 +1020,13 @@ IoUringTcpConnectionHub::~IoUringTcpConnectionHub() = default;
 IoUringTcpConnectionHubAddOutcome IoUringTcpConnectionHub::addConnection(
     gamenet::net::SocketFd establishedSocket,
     MessageConsumer messageConsumer,
-    CloseConsumer closeConsumer) {
+    CloseConsumer closeConsumer,
+    OutputProgressConsumer outputProgressConsumer) {
     return impl_->addConnection(
         establishedSocket,
         std::move(messageConsumer),
-        std::move(closeConsumer));
+        std::move(closeConsumer),
+        std::move(outputProgressConsumer));
 }
 
 IoUringTcpHubSendResult IoUringTcpConnectionHub::send(

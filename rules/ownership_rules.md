@@ -130,6 +130,14 @@ It must not blur these roles.
   transfers exactly 320 established Hub ends across 256 initial plus 64
   replacement admissions. Rejection or route retirement closes each transferred
   end once; the fixture never shares ownership of a Hub end or grows Hub tables
+- the IOE-X6 adapter borrows its EventLoop and Hub and transfers one established
+  socket into exactly one Hub route. A shared internal terminal state, owned by
+  the Hub callbacks and returned future, outlives adapter observer destruction;
+  it owns no socket and cannot release an Engine lease itself
+- Hub route stop publication remains the physical ownership boundary. The
+  adapter publishes its semantic terminal future only after the Hub route
+  future proves socket close, operation retirement, and byte convergence, and
+  before invoking surviving close observers
 
 ## 3. Poller
 - Poller does not own Channel

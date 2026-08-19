@@ -198,6 +198,18 @@ Contract tests verify:
   Its opt-in Release benchmark emits validated structured evidence and remains
   outside CTest; directional epoll comparison cannot by itself promote a public
   selector or production adapter
+- the IOE-X6 cross-backend contract must use two real loopback TCP connections:
+  one production epoll `TcpConnection`, one Hub-backed semantic adapter. Both
+  exceed the same connection-local hard limit, cross high water, stop reading,
+  resume at low water, deliver peer input, and permit callback-reentrant send
+  plus forced close on their one owner EventLoop
+- both paths publish `ForcedShutdown` once, reach `Closed` with zero pending
+  output, and reject post-close send. The adapter future must already be ready
+  and its Hub socket closed when close observers run; Hub stop must leave zero
+  routes, operations, notices, and owned bytes
+- a separate observer-lifetime case destroys the adapter with a real Recv
+  pending. No adapter callback may run afterward, while the retained future
+  must still report forced terminal close and zero physical Hub residue
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

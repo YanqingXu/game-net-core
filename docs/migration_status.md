@@ -353,7 +353,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 67 | 36 | 20 | 11 | 183 |
+| 67 | 36 | 20 | 11 | 184 |
 
 ## Historical Production-Hardening Evidence
 

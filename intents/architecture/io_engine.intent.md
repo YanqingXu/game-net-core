@@ -344,6 +344,38 @@ experimental shared-Pump Hub without expanding its production authority:
   growth, cross-owner migration, multishot, provided buffers, fixed files,
   zero-copy, SQPOLL, TLS, framing in Core, or game/business callbacks.
 
+IOE-X6 authorizes one non-installed TCP semantic adapter over a Hub route. It
+is contract shaping for a future production adapter, not backend selection:
+
+- the adapter and Hub remain owned by one EventLoop. An established socket is
+  transferred exactly once to the Hub; the adapter may be destroyed while a
+  route is closing because observer lifetime is separated from the Hub's
+  socket, operation, byte, and terminal-future obligations;
+- send uses the existing `TcpSendResult` vocabulary. Empty send is accepted
+  only while open, a connection-local hard limit returns `Overloaded`, Hub
+  aggregate pressure returns `LoopOverloaded`, and a closing/stale route
+  returns `Closed`; no rejection creates deferred work or a fallback queue;
+- adapter low/high/hard thresholds are finite. Crossing high pauses the Hub
+  route's Recv and schedules one owner-loop high-water notification; falling
+  to low resumes exactly one Recv. Reaching zero schedules one write-complete
+  notification. Notification admission is bounded and drops are observable;
+- message, high-water, write-complete, close-info, and close callbacks execute
+  only on the owner loop, may re-enter adapter methods, and are exception
+  contained. Callback failure closes that route without escaping Pump dispatch;
+- the first semantic `TcpConnectionCloseInfo` wins. Peer EOF, forced close,
+  callback failure, reset-class native errors, owner quiescence, and internal
+  failure are mapped without erasing the native error. Adapter terminal future
+  publication follows physical Hub socket/operation retirement and precedes
+  close callbacks;
+- one Linux contract drives production epoll `TcpConnection` and this adapter
+  through the same real-TCP saturation, read-pause/resume, callback-reentrant
+  send/force-close, and terminal-observation scenario. It compares the common
+  semantic boundary, not backend-specific scheduling or throughput;
+- IOE-X6 does not add Accept/listen ownership, cross-thread adapter mutation,
+  graceful half-close, public backend selection, installed headers, or change
+  production `TcpConnection`. Missing graceful-drain equivalence remains an
+  explicit later contract rather than being faked as forced close.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -368,7 +400,10 @@ experimental shared-Pump Hub without expanding its production authority:
    isolated close plus aggregate owner shutdown.
 8. IOE-X5 subjects that Hub to fixed 256-route churn, soak, and directional
    measurement before recording a production-adapter promotion decision.
-9. Only proven, cross-backend concepts may later graduate to a narrow public
+9. IOE-X6 shapes a non-installed per-route semantic adapter and proves its
+   common forced-close/backpressure boundary beside production epoll without
+   selecting or replacing a backend.
+10. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -437,6 +472,10 @@ experimental shared-Pump Hub without expanding its production authority:
   verifies one shared Pump holds 256 real TCP routes, generation-replaces 64
   from close callbacks, preserves post-churn progress for the other 192, and
   drains all 320 route lifetimes plus fixed operation/byte state to zero.
+- `tests/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp` drives
+  production epoll TcpConnection and the IOE-X6 adapter through matching real
+  TCP output saturation, read pause/resume, callback re-entry, forced close,
+  first close info, socket-before-future retirement, and post-observer drain.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

@@ -125,6 +125,7 @@ struct IoUringTcpConnectionHubMetrics {
 struct IoUringTcpConnectionHubConnectionStopSummary {
     IoUringTcpConnectionIdentity identity{};
     IoUringTcpHubCloseReason reason{IoUringTcpHubCloseReason::Explicit};
+    int nativeError{};
     IoUringTcpConnectionHubConnectionMetrics connection{};
     bool socketClosed{};
 };
@@ -154,6 +155,9 @@ public:
     using CloseConsumer = std::function<void(
         IoUringTcpConnectionIdentity,
         IoUringTcpHubCloseReason)>;
+    using OutputProgressConsumer = std::function<void(
+        IoUringTcpConnectionIdentity,
+        std::size_t)>;
     using StoppedConsumer =
         std::function<void(const IoUringTcpConnectionHubStopSummary&)>;
 
@@ -169,7 +173,8 @@ public:
     IoUringTcpConnectionHubAddOutcome addConnection(
         gamenet::net::SocketFd establishedSocket,
         MessageConsumer messageConsumer,
-        CloseConsumer closeConsumer = {});
+        CloseConsumer closeConsumer = {},
+        OutputProgressConsumer outputProgressConsumer = {});
     IoUringTcpHubSendResult send(
         IoUringTcpConnectionIdentity connection,
         std::string_view payload);

@@ -269,6 +269,13 @@ No other direct mutation path is allowed for core loop state.
   but they observe no Hub table, identity, queue, metric, or future. All 256
   route admissions, 64 replacements, callbacks, close decisions, and aggregate
   stop transitions remain serialized on the one EventLoop owner
+- the IOE-X6 semantic adapter is configured, established, sent, paused,
+  resumed, and force-closed only on its Hub/EventLoop owner. Its callbacks are
+  owner-loop work and may re-enter adapter methods; queued high-water and
+  write-complete notifications revalidate observer lifetime before invocation
+- destroying an IOE-X6 adapter revokes only its observer. The owner-loop
+  destructor requests route close, while Hub completion dispatch retains and
+  retires the socket/operation obligations without touching the dead adapter
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

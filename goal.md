@@ -298,7 +298,10 @@ Runtime Model
   有限 FIFO send、pause/no-repost、callback re-entry 和 socket-after-terminal 退休；其
   shared-Pump Hub 进一步在一个 owner Engine 上 generation-safe 路由多个真实 TCP route，
   证明 per-route/aggregate 预算、隔离关闭、slot 换代复用和 owner-quit aggregate drain；
-  这些能力仍不安装，生产默认和 fallback 仍是 epoll；
+  固定 256-route/64-churn 容量与结构化 Release 数字又给出受限 adapter `PROMOTE`；
+  source-private semantic adapter 正把稳定 `TcpSendResult`/close info、low/high/hard
+  backpressure、回调重入和可等待终局映射到单个 Hub route。这些能力仍不安装，生产默认
+  和 fallback 仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
   多 I/O owner、独立逻辑 owner、有界合并唤醒和 generation-safe 回送；
@@ -315,10 +318,11 @@ Runtime Model
   后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
   明确审查的 breaking line；
-- IOE-X1/X2/X3/X4 只证明隔离的 one-shot completion capability、EventLoop 驱动方式、
-  单连接机械语义和固定容量 shared-Pump 路由，不自动授权 production TcpConnection
-  集成、公共 backend selector 或 multishot/provided-buffer 等高级能力；共享 Hub 在
-  promotion 讨论前仍需 capacity/soak 和同场景方向性性能证据；
+- IOE-X1/X2/X3/X4/X5/X6 只证明隔离 one-shot completion、EventLoop 驱动、单连接、
+  固定容量 shared-Pump 以及 source-private forced-close/backpressure adapter 语义。
+  capacity/soak 与方向性数字已经允许继续做 adapter contract shaping，但不自动授权
+  production TcpConnection 集成、公共 backend selector、graceful half-close 等价或
+  multishot/provided-buffer 等高级能力；
 - 当前 `LogicLoop` 更接近周期性有界 drain，不应被描述为所有游戏适用的权威
   FixedRate Tick。
 
