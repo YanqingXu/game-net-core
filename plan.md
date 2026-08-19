@@ -298,6 +298,25 @@ IOE-X3 仍不是 production `TcpConnection` backend。每连接一个 Pump/ring 
 载体，不是可推广拓扑；下一步必须先证明一个 owner Pump 对多连接的 generation-safe 路由和
 隔离关闭，才能讨论 production adapter。
 
+IOE-X4 shared-Pump routing 保持 Linux-only、default-off、non-installed：
+
+- [x] 一个 EventLoop/Engine/Pump 固定容量承载至少两个已建立 TCP connection route；
+- [x] connection slot/generation 与 operation slot/generation 双层验证，旧 handle 不命中新 route；
+- [x] per-connection byte/segment 与 Hub aggregate byte 预算分离并精确回滚；
+- [x] 单连接 close 只取消自身 Recv/Send，邻接连接继续收发和 callback；
+- [x] slot 在 close callback re-entry 中复用时 generation 前进且无递归 callback；
+- [x] EventLoop quit 聚合取消全部 route，connection futures 先于 Hub/Shutdown 收敛；
+- [x] 真实双 TCP、focused repeat、ASan/UBSan、TSan、默认跨平台和 stable API 零漂移作为关闭门。
+
+IOE-X5 shared-Hub capacity/soak decision 立即接续，不等待冻结或 promotion：
+
+- [ ] 固定 256 个真实 TCP route 只共享一个 owner Pump/Engine，记录 fd/operation/byte 上界；
+- [ ] 混合小包双向 burst 与局部 close/churn，证明邻接 route 公平进展且 generation 不串线；
+- [ ] Hub aggregate/per-route 饱和恢复与 owner quit 全量 drain 做 focused soak；
+- [ ] Release 数字基准记录吞吐、P50/P99/P999、内存与 shutdown 延迟；
+- [ ] 与 epoll production baseline 做同场景方向性比较，不把不同语义伪装成等价结果；
+- [ ] 形成 production adapter 的 `PROMOTE` / `DEFER` 决定；决定前不改 public selector 或 production `TcpConnection`。
+
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
 
@@ -405,8 +424,14 @@ IOE-X3 已把上述 Pump 组合成一个真实 loopback TCP 单连接垂直切�
 owner、one-recv-in-flight、有限 FIFO send、read-pause=no-repost、close/cancel/terminal
 retirement 和 callback re-entry；它仍不修改 production TcpConnection。
 
-当前下一前沿转为 **IOE-X4 shared-Pump routing contract shaping**：一个 EventLoop/Engine/Pump
-必须 generation-safe 地路由至少两个连接的 Recv/Send terminal notice，证明 per-connection
-byte/segment 隔离、单连接 close 不取消邻接连接、owner quit 聚合 drain，且不采用每连接一个
-ring/Channel 的生产伪拓扑。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X4
-开放 multishot、provided buffers、fixed files、zero-copy、SQPOLL 或公共 backend selector。
+IOE-X4 shared-Pump routing 已以一个 EventLoop/Engine/Pump generation-safe 路由 A/B/C
+真实 TCP route，关闭 A 后 B 继续收发，A slot 以新 generation 复用给 C；per-route/Hub
+预算、callback failure、owner quit 和全部 futures/bytes/operation drain 均已闭环。Engine
+operation slot 也改为保留到对应 terminal notice 被取走，消除了 decoded-but-undispatched
+notice 与新 generation 共槽的歧义。
+
+当前下一前沿转为 **IOE-X5 shared-Hub capacity/soak decision**：用固定 256 route、burst、
+局部 churn、aggregate saturation、Release latency/throughput/memory 和 shutdown latency 判断
+共享 completion data path 是否具备 production adapter 的证据基础。ARCH-G1 独立 review 继续
+并行且不形成冻结点；不得借 IOE-X5 开放 multishot、provided buffers、fixed files、zero-copy、
+SQPOLL、公共 backend selector 或直接修改 production `TcpConnection`。

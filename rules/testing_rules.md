@@ -169,6 +169,23 @@ Contract tests verify:
   and converge active operations, notices, owned bytes, and pending send bytes
   to zero. Foreign-thread mutation and throwing message callbacks are rejected
   or contained without callback-after-stop
+- the IOE-X4 contract must use two simultaneous real loopback TCP connections
+  on one Hub/Pump. Both own one Recv, both make send progress, and Pump metrics
+  prove one shared Engine rather than a ring/Channel per connection
+- filling one route's byte/segment budgets must return its exact typed rejection
+  while the neighbor still admits and drains FIFO output; exceeding the separate
+  Hub byte budget rolls back only the rejected call and preserves both routes'
+  exact pending-byte accounting
+- closing the saturated route cancels only its identities. The neighbor must
+  receive and send afterward. The retired slot is then reused with a new
+  generation from a close-callback re-entry; the old identity is stale and can
+  neither send, close, nor hit replacement callbacks
+- a second scenario quits EventLoop with two pending Recvs and accepted sends.
+  Both connection futures must publish `EventLoopQuiescing`, every socket and
+  fixed operation route must retire, aggregate/per-route bytes reach zero, and
+  the Hub future plus Pump summary precede EventLoop Shutdown. Foreign mutation,
+  connection-capacity rejection, and rejected-fd ownership rollback are direct
+  assertions
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

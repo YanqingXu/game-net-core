@@ -88,6 +88,7 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
     "tests/contract/io_engine/test_io_uring_completion_engine.cpp",
     "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp",
     "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp",
+    "tests/contract/io_engine/test_io_uring_tcp_connection_hub.cpp",
 }
 
 ARTIFACT_KINDS = {"installed-library", "example", "benchmark"}

@@ -254,6 +254,17 @@ No other direct mutation path is allowed for core loop state.
   a driver callback. Re-entry may request pause, resume, send, close, or quit,
   but the outer frame revalidates phase/read desire before any repost and may
   never create a second active Recv or recursive callback
+- the IOE-X4 connection Hub, every connection slot, operation-route entry,
+  socket, queue, callback, and lifecycle transition are mutated only by the one
+  EventLoop/Pump owner. Foreign Hub mutation is rejected before route lookup or
+  admission; connection placement never migrates to another owner
+- a routed terminal clears the fixed operation-route entry and the matching
+  connection identity before invoking message code. Connection close callbacks
+  run only after the outer Pump consumer depth returns to zero; callback
+  re-entry may reuse a retired slot only with a new generation
+- the Hub maintenance lifecycle source may only retry SQ-full cancellation and
+  resignal bounded maintenance. It transports no CQE or business data and
+  invokes no user callback; completion and close delivery stay on Pump dispatch
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

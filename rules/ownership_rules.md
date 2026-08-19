@@ -110,6 +110,22 @@ It must not blur these roles.
   counted discarded during close. The driver retains the socket through Pump
   Engine shutdown; only the physical Pump-stopped hook may close it, publish
   the driver stop future, and invoke the close consumer
+- the IOE-X4 Hub uniquely owns one Pump/Engine, one finite connection-slot
+  table, one fixed operation-route table, one maintenance lifecycle source,
+  aggregate byte accounting, and the Hub stop promise. It creates no ring or
+  Channel per connection
+- a Completion Engine operation slot remains owned by its terminal notice
+  generation until `takeNextNotice()` transfers that notice to Pump dispatch;
+  a decoded-but-undispatched notice cannot share its slot with a newer route
+- each admitted Hub route uniquely owns its transferred socket, generation,
+  callbacks, active identities, copied FIFO, first close reason, metrics, and
+  connection stop promise. A route slot is reusable only after both target
+  terminals, all queued bytes, and the old socket are retired; reuse advances
+  generation before any replacement callback can observe the slot
+- connection-local close owns no right to stop the shared Pump or release a
+  neighbor's operation/byte reservation. Hub/EventLoop stop retains every route
+  and operation mapping through aggregate Pump physical shutdown, then closes
+  sockets and publishes all connection futures before the Hub future
 
 ## 3. Poller
 - Poller does not own Channel

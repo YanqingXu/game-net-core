@@ -273,6 +273,48 @@ IOE-X3 authorizes one experimental single-connection Completion TCP driver:
   fallback, unbounded output, multishot, provided buffers, fixed files,
   zero-copy, SQPOLL, TLS, framing, or game/business callbacks in Core.
 
+IOE-X4 authorizes one experimental shared-Pump connection hub:
+
+- `IoUringTcpConnectionHub` remains Linux-only, default-off, non-installed,
+  and source-private. One EventLoop owns exactly one IOE-X2 Pump/Engine and a
+  fixed-capacity set of at least two already-established TCP connections; no
+  connection owns a separate ring, Channel, wait loop, or worker thread;
+- every admitted connection receives a slot plus nonzero generation. Slot
+  reuse advances generation. A fixed operation-route table indexed by Engine
+  operation slot stores the exact operation generation, connection identity,
+  and kind; a stale connection or operation generation invokes no callback and
+  can retire no current route;
+- an Engine operation slot remains reserved while its terminal notice is
+  queued and becomes reusable only when that exact generation is taken for
+  dispatch. This keeps the fixed Hub route entry unambiguous even when one wait
+  decodes more notices than the Pump dispatches in its current turn;
+- each route uniquely owns its transferred socket, callbacks, one Recv and one
+  Send identity, finite FIFO segments/bytes, first close reason, metrics, and
+  stop promise. Per-route byte/segment admission and a separate finite Hub byte
+  budget are checked without overflow; one saturated route cannot consume or
+  cancel another route's reservations;
+- connection-local close revokes that route's admission, discards only its
+  queued suffix, and cancels only its active identities. It never quiesces the
+  shared Pump. The socket/slot generation are released only after both target
+  terminals retire; another route continues to receive, send, and callback;
+- pause/resume and callback re-entry preserve the IOE-X3 one-Recv rule per
+  route. Terminal routing clears operation and route identities before user
+  code. Close callbacks are deferred until the outer completion consumer has
+  returned and may re-enter owner-safe Hub methods without recursive callback;
+- the Hub owns one normal lifecycle maintenance source solely to retry a
+  bounded cancellation that temporarily found the SQ full. Maintenance never
+  carries completion data or invokes user code. It is detached before Hub stop
+  publication;
+- explicit Hub stop or EventLoop Quiescing closes admission, chooses one close
+  reason for every live route, and quiesces the shared Pump exactly once. Hub
+  stop is published only after every connection future, socket, operation
+  route, queued byte, Engine CQE/cancel obligation, Channel, and lifecycle
+  source has converged;
+- IOE-X4 does not authorize Accept/listen ownership, production
+  `TcpConnection` integration, a public backend selector, dynamic/unbounded
+  routing, cross-owner connection migration, multishot, provided buffers,
+  fixed files, zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -292,7 +334,10 @@ IOE-X3 authorizes one experimental single-connection Completion TCP driver:
 6. IOE-X3 proves connection-level one-Recv, bounded FIFO Send, pause/resume,
    re-entry, and close retirement over that Pump for one established socket,
    still without changing production TCP or exposing backend selection.
-7. Only proven, cross-backend concepts may later graduate to a narrow public
+7. IOE-X4 replaces the proof-only per-connection Pump topology with one finite
+   owner Hub that generation-routes multiple connection operations and proves
+   isolated close plus aggregate owner shutdown.
+8. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -351,6 +396,12 @@ IOE-X3 authorizes one experimental single-connection Completion TCP driver:
   resume-after-terminal behavior, finite FIFO Send admission, callback
   re-entry, pending-Recv cancellation, first-close-reason, socket release only
   after physical Pump stop, foreign-thread rejection, and zero residual state.
+- `tests/contract/io_engine/test_io_uring_tcp_connection_hub.cpp` verifies one
+  Pump routes two concurrent real TCP connections, per-route and Hub budgets,
+  isolated connection close, slot-generation reuse with stale-handle rejection,
+  continued neighbor progress, callback-safe replacement, explicit Hub stop,
+  EventLoop-quit aggregate cancellation, and zero connection/operation/byte
+  residue before Hub stop publication.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

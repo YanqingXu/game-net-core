@@ -270,6 +270,61 @@ void testSlotGenerationRejectsStaleCancel() {
         notice->status() == uring::IoUringCompletionStatus::Cancelled);
 }
 
+void testTerminalNoticeRetainsOperationSlotGeneration() {
+    gamenet::net::EventLoop loop;
+    uring::IoUringCompletionEngine engine(
+        &loop,
+        uring::IoUringCompletionEngineOptions{
+            .entries = 8,
+            .maxOperations = 3,
+            .maxCompletionsPerWait = 1,
+            .maxBytesPerOperation = 4,
+            .maxOwnedBytes = 12,
+        });
+    std::array<int, 2> pairA{};
+    std::array<int, 2> pairB{};
+    GAMENET_TEST_ASSERT(
+        ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pairA.data()) == 0);
+    GAMENET_TEST_ASSERT(
+        ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pairB.data()) == 0);
+    OwnedFd readerA(pairA[0]);
+    OwnedFd writerA(pairA[1]);
+    OwnedFd readerB(pairB[0]);
+    OwnedFd writerB(pairB[1]);
+
+    const auto first = engine.enqueueRecv(readerA.get(), 1);
+    const auto second = engine.enqueueRecv(readerB.get(), 1);
+    GAMENET_TEST_ASSERT(first.result == uring::IoUringSubmissionResult::Accepted);
+    GAMENET_TEST_ASSERT(second.result == uring::IoUringSubmissionResult::Accepted);
+    GAMENET_TEST_ASSERT(engine.flush().nativeError == 0);
+    const char incoming = 'A';
+    GAMENET_TEST_ASSERT(
+        ::send(writerA.get(), &incoming, 1, MSG_NOSIGNAL) == 1);
+
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    while (engine.metrics().readyNotices == 0 &&
+           std::chrono::steady_clock::now() < deadline) {
+        (void)engine.wait(50ms);
+    }
+    GAMENET_TEST_ASSERT(engine.metrics().readyNotices == 1);
+
+    const auto third = engine.enqueueSend(writerB.get(), "B");
+    GAMENET_TEST_ASSERT(third.result == uring::IoUringSubmissionResult::Accepted);
+    GAMENET_TEST_ASSERT(third.identity.slot != first.identity.slot);
+    auto firstNotice = engine.takeNextNotice();
+    GAMENET_TEST_ASSERT(firstNotice.has_value());
+    GAMENET_TEST_ASSERT(firstNotice->identity() == first.identity);
+    GAMENET_TEST_ASSERT(firstNotice->payload() == "A");
+
+    GAMENET_TEST_ASSERT(
+        engine.shutdown(2s) == uring::IoUringShutdownResult::Drained);
+    while (engine.takeNextNotice()) {
+    }
+    GAMENET_TEST_ASSERT(engine.metrics().activeOperations == 0);
+    GAMENET_TEST_ASSERT(engine.metrics().readyNotices == 0);
+    GAMENET_TEST_ASSERT(engine.metrics().ownedBytes == 0);
+}
+
 void testCancelLeaseAndFinalDrain() {
     gamenet::net::EventLoop loop;
     uring::IoUringCompletionEngine engine(
@@ -328,6 +383,7 @@ int main() {
     testFiniteSqRejectsWithoutFallback();
     testOneShotAcceptRecvSend();
     testSlotGenerationRejectsStaleCancel();
+    testTerminalNoticeRetainsOperationSlotGeneration();
     testCancelLeaseAndFinalDrain();
     return 0;
 }

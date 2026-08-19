@@ -89,6 +89,7 @@ public:
     struct OperationSlot {
         std::uint32_t generation{};
         bool active{};
+        bool noticePending{};
         bool submitted{};
         bool cancelQueued{};
         IoUringOperationKind kind{IoUringOperationKind::Receive};
@@ -271,6 +272,14 @@ public:
         if (readyNotices_.empty()) return std::nullopt;
         auto notice = std::move(readyNotices_.front());
         readyNotices_.pop_front();
+        const auto identity = notice.identity();
+        if (!identity.valid() || identity.slot >= slots_.size() ||
+            slots_[identity.slot].generation != identity.generation ||
+            !slots_[identity.slot].noticePending) {
+            throw std::logic_error(
+                "io_uring terminal notice lost its reserved operation slot");
+        }
+        slots_[identity.slot].noticePending = false;
         if (notice.reservedBytes_ > ownedBytes_) {
             throw std::logic_error("io_uring owned-byte accounting underflow");
         }
@@ -478,6 +487,7 @@ private:
             : slot.generation + 1U;
         if (slot.generation == 0) slot.generation = 1;
         slot.active = true;
+        slot.noticePending = false;
         slot.submitted = false;
         slot.cancelQueued = false;
         slot.kind = kind;
@@ -676,6 +686,7 @@ private:
             std::move(slot.lease),
             slot.reservedBytes));
         slot.active = false;
+        slot.noticePending = true;
         slot.submitted = false;
         slot.cancelQueued = false;
         slot.socket = gamenet::net::kInvalidSocket;
@@ -709,7 +720,9 @@ private:
 
     std::optional<std::size_t> findFreeSlot() const noexcept {
         for (std::size_t index = 0; index < slots_.size(); ++index) {
-            if (!slots_[index].active) return index;
+            if (!slots_[index].active && !slots_[index].noticePending) {
+                return index;
+            }
         }
         return std::nullopt;
     }
@@ -723,6 +736,7 @@ private:
 
     static void resetSlot(OperationSlot& slot) noexcept {
         slot.active = false;
+        slot.noticePending = false;
         slot.submitted = false;
         slot.cancelQueued = false;
         slot.socket = gamenet::net::kInvalidSocket;
