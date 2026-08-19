@@ -224,25 +224,25 @@ determinism。因此任一早期检查点的 CI、性能、容量或 endurance �
 
 | 项目 | 当前事实 |
 | --- | ---: |
-| 正式 intent | 64 |
-| active intent | 33 |
+| 正式 intent | 65 |
+| active intent | 34 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 164 |
+| intent 显式 verification paths | 168 |
 | public headers | 55 |
-| `.cc` sources | 44 |
-| CTest tests | 125 |
+| `.cc` sources | 45 |
+| CTest tests | 126 |
 
 测试分区：
 
 - unit：8；
-- contract：104；
+- contract：105；
 - integration：13。
 
 交叉标签中包括：
 
-- threading：98；
-- lifecycle：103；
+- threading：99；
+- lifecycle：104；
 - game pipeline：7；
 - broadcast：5。
 

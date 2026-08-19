@@ -46,6 +46,26 @@ No other direct mutation path is allowed for core loop state.
 - Profile start, stop, configuration, metrics observation, and destruction are
   owner-thread-only; cross-thread callers marshal through EventLoop first
 
+## 3.2 Runtime Profile B
+- `MultiIoQueuedEvent` uses one base accept EventLoop, at least two TcpServer
+  worker EventLoops for connection ownership, and one distinct caller-owned
+  logic EventLoop
+- framing, TcpConnection state, endpoint send/close, and route revocation stay
+  on the selected network owner; the logic handler never mutates transport
+- network producers submit immutable GameCommand values to the bounded shared
+  queue and schedule logic drain only through the logic EventLoopExecutor
+- one atomic scheduled-drain gate coalesces producers: the first unscheduled
+  Accepted command posts, later commands merge, and a bounded drain queues at
+  most one continuation without inline recursion
+- logic output posts through the route's captured connection owner executor;
+  that callback revalidates route generation before endpoint mutation
+- queue saturation closes only the affected route; logic executor rejection is
+  a Profile-terminal admission failure because already Accepted queue work may
+  not be stranded
+- Profile lifecycle/configuration remains base-loop-owner-only; metrics are an
+  explicitly synchronized cross-thread snapshot, and the separate logic stop
+  future must converge before the caller destroys the logic EventLoop
+
 ## 4. runInLoop
 - If current thread == owner thread: execute immediately
 - Else: enqueue and wakeup loop if needed

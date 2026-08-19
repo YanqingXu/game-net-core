@@ -37,6 +37,10 @@ CONCRETE_ACTIVE_ARTIFACTS = {
         "example",
         "gamenet_single_loop_inline_echo",
     ),
+    "intents/usecases/multi_io_queued_event_profile.intent.md": (
+        "example",
+        "gamenet_multi_io_queued_echo",
+    ),
     "intents/usecases/core_performance_baseline.intent.md": (
         "benchmark",
         "gamenet_core_benchmark",

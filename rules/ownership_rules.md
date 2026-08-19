@@ -361,6 +361,27 @@ It must not blur these roles.
   accepted callback frames finish or become terminal, never move to another
   owner and never survive as an unbounded queue
 
+## 11.3 Runtime Profile B Ownership
+- the caller owns the base accept EventLoop, distinct logic EventLoop, and
+  non-installed `MultiIoQueuedEvent`; both loops outlive Profile stop and
+  destruction
+- each TcpConnection context owns one network-owner PacketFramer and shares one
+  finite route record containing an immutable endpoint/executor plus atomic
+  current generation; disconnect revokes generation before releasing context
+- the Profile shared state owns GameCommandQueue, handler, fixed metric
+  histograms, route registry, drain gate, and logic-stop promise; queued
+  callbacks retain shared state but no Profile object or raw EventLoop pointer
+- GameCommand values own copied immutable payload and route identity/generation;
+  they own no TcpConnection, EventLoop, endpoint, or mutable game state
+- route registry lookup temporarily shares the route only long enough to
+  revalidate before/after logic callback and again on the connection owner
+- stop first revokes Profile admission and route generations, then closes and
+  discards the bounded queue, requests route close, and delegates TcpServer
+  drain; the logic-stop promise is fulfilled only after scheduled/in-flight
+  drain callbacks can no longer invoke the handler
+- an accepted owner-output post temporarily retains route plus encoded bytes;
+  generation failure drops output without reaching a replacement connection
+
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists

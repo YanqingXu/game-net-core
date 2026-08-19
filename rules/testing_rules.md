@@ -144,6 +144,25 @@ Contract tests verify:
   TcpServer completion future becomes ready after EventLoop final drain
 - the Profile support/example targets remain non-installed and the same-line
   stable API manifest remains unchanged
+- Profile B uses one real TcpServer with at least two network workers plus a
+  distinct logic EventLoop and observes two connection-owner executor ids,
+  exactly one logic handler owner, and zero owner violations
+- while the logic owner is deliberately occupied, ten accepted commands must
+  create one producer wake post and nine merged wake requests; a two-command
+  drain budget processes the backlog through bounded continuations and preserves
+  per-connection reply order
+- queue saturation during a slow logic handler closes the affected connection,
+  stale queued/output generations are dropped, the queue returns to zero, and
+  a fresh connection subsequently completes without inline fallback
+- QueueFull, PayloadTooLarge, Stopped, logic post rejection, endpoint post
+  rejection, and endpoint overload have distinct metrics/terminal policies;
+  Accepted queue work is executed, generation-dropped, or counted at stop
+- Profile B metrics expose network-to-logic and logic-to-network P99/P999,
+  maximum observed queue age, queue high-water marks, coalescing, continuations,
+  stale drops, and cross-domain handoff counts with fixed/bounded storage
+- callback-active stop leaves the logic future pending until the handler
+  returns, revokes its output, discards bounded backlog, and converges together
+  with TcpServer's network future before either caller-owned loop is destroyed
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents

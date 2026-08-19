@@ -161,6 +161,7 @@ jobs:
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_runtime_profile_contract.py
+          python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -183,8 +184,8 @@ jobs:
           set -euo pipefail
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-long-soak \
-            --expected-total 125 \
-            --expect-label threading=98 \
+            --expected-total 126 \
+            --expect-label threading=99 \
             --expect-label game_pipeline=7 \
             --expect-label broadcast=5 \
             --output long-soak-evidence/ctest-inventory.json
@@ -214,7 +215,7 @@ jobs:
             --inventory long-soak-evidence/ctest-inventory.json \
             --log long-soak-evidence/threading-repeat.log \
             --selection-label threading \
-            --expected-selected 98 \
+            --expected-selected 99 \
             --repeat "${GAMENET_SOAK_REPEAT}" \
             --timeout-seconds "${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
@@ -244,7 +245,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-long-soak -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-long-soak --parallel 1' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 125 --expect-label threading=98 --expect-label game_pipeline=7 --expect-label broadcast=5 --output long-soak-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 126 --expect-label threading=99 --expect-label game_pipeline=7 --expect-label broadcast=5 --output long-soak-evidence/ctest-inventory.json' \
             --command "ctest --test-dir build-long-soak --output-on-failure -L threading --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}" \
             --command "ctest --test-dir build-long-soak --output-on-failure -L game_pipeline|broadcast --repeat until-fail:${GAMENET_SOAK_REPEAT} --timeout ${GAMENET_SOAK_TIMEOUT_SECONDS}"
 
@@ -411,6 +412,7 @@ jobs:
           python3 tests/cmake/test_windows_iocp_milestone_contract.py
           python3 tests/cmake/test_windows_iocp_data_path_contract.py
           python3 tests/cmake/test_runtime_profile_contract.py
+          python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -438,11 +440,11 @@ jobs:
           inventory=(
             python3 tools/verify_ctest_inventory.py
             --test-dir "${GAMENET_BUILD_DIR}"
-            --expected-total 125
+            --expected-total 126
             --output ci-evidence/ctest-inventory.json
           )
           if [[ "${GAMENET_PROFILE}" == "tsan" ]]; then
-            inventory+=(--expect-label threading=98)
+            inventory+=(--expect-label threading=99)
           fi
           "${inventory[@]}"
 
@@ -650,6 +652,7 @@ jobs:
           python3 tools/verify_migration_provenance.py
           python3 tests/scope/test_intent_semantics.py
           python3 tests/cmake/test_runtime_profile_contract.py
+          python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tests/ci/test_performance_regression.py
@@ -674,8 +677,8 @@ jobs:
           set -euo pipefail
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-production-endurance \
-            --expected-total 125 \
-            --expect-label threading=98 \
+            --expected-total 126 \
+            --expect-label threading=99 \
             --expect-label fault_injection=1 \
             --expect-label endurance=1 \
             --output endurance-evidence/ctest-inventory.json

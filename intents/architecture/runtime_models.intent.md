@@ -50,7 +50,19 @@ a stable public Profile API.
 An accept/base loop places each connection on a network EventLoop. Parsed
 messages are handed to a separately selected LogicLoop through bounded
 admission. Logic results return through the owning connection EventLoop. This
-profile prioritizes clear ownership and isolation.
+profile prioritizes clear ownership and isolation. RTM-R1 names the runnable
+composition `MultiIoQueuedEvent`: TcpServer uses at least two worker EventLoops,
+while one distinct caller-owned logic EventLoop drains the existing bounded
+GameCommandQueue. The first accepted command while no drain is scheduled posts
+one logic-owner drain; later producers merge behind that scheduled drain.
+Each drain processes at most the configured command budget and queues one
+continuation if backlog remains. Queue/admission rejection is typed and closes
+the affected route; a logic wake/continuation rejection fail-stops Profile
+admission and discards the bounded backlog rather than stranding Accepted work.
+Every command and response carries one route generation. Logic output returns
+only through the captured connection owner executor and revalidates generation
+on that owner before send/close. This composition is non-installed until at
+least two Profiles prove a common reusable API.
 
 ### Profile C: Hybrid
 
@@ -122,6 +134,14 @@ Each Profile must state and test:
   cross-domain handoff, overload closure, and shutdown convergence.
 - `tests/cmake/test_runtime_profile_contract.py` guards the non-installed
   Profile A topology and contract registration.
+- `tests/contract/runtime_model/test_network_logic_split_profile.cpp` verifies
+  Profile B multi-owner placement, bounded/coalesced handoff, generation-safe
+  output, slow-consumer saturation/recovery, and two-domain shutdown.
+- `tests/cmake/test_multi_io_queued_profile_contract.py` guards Profile B's
+  non-installed topology, use of GameCommandQueue, bounded drain, typed failure
+  handling, and owner-executor return path.
+- `examples/runtime_profiles/multi_io_queued_echo.cpp` is the runnable Profile B
+  TCP echo composition.
 
 RTM-R1 adds Profile-specific contracts before exposing runtime Profile types.
 Existing tests are the regression anchors, not a claim that all three Profiles

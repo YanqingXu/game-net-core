@@ -292,14 +292,16 @@ Runtime Model
   Channel readiness 兼容路径已退役；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff 的首个非安装 Runtime
-  Profile，`LogicLoop`、Pipeline 示例和 Broadcast 则展示跨执行域组合与有界背压。
+  Profile；`MultiIoQueuedEvent` 已证明多 I/O owner、独立逻辑 owner、有界合并唤醒和
+  generation-safe 回送的第二个非安装 Profile；`LogicLoop`、Pipeline 示例和 Broadcast
+  则展示其他跨执行域组合与有界背压。
 
 当前张力也已经明确：
 
-- 仍只有一个 TCP Runtime Profile 完成垂直验证，queued-event 与 fixed-tick
-  Profile 尚未形成同等级合同和数字证据；
-- Profile A 的组合接口仍故意留在非安装 example/support 层，至少两个 Profile
-  证明共同需求前不能提升公共抽象；
+- 已有两个 TCP Runtime Profile 完成垂直验证，但 fixed-tick Profile 尚未形成同等级
+  合同和数字证据；
+- Profile A/B 的组合接口仍故意留在非安装 example/support 层；两个 Profile 只触发
+  后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
   明确审查的 breaking line；
 - 当前 `LogicLoop` 更接近周期性有界 drain，不应被描述为所有游戏适用的权威
