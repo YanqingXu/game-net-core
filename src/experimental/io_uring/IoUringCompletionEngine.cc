@@ -164,6 +164,10 @@ public:
         };
     }
 
+    gamenet::net::SocketFd completionDescriptor() const noexcept {
+        return ringFd_;
+    }
+
     IoUringSubmissionOutcome enqueueAccept(
         gamenet::net::SocketFd listenSocket,
         std::shared_ptr<void> lease) {
@@ -883,6 +887,11 @@ IoUringPhase IoUringCompletionEngine::phase() const noexcept {
 
 IoUringCompletionEngineMetrics IoUringCompletionEngine::metrics() const noexcept {
     return impl_->metrics();
+}
+
+gamenet::net::SocketFd
+IoUringCompletionEngine::completionDescriptor() const noexcept {
+    return impl_->completionDescriptor();
 }
 
 IoUringSubmissionOutcome IoUringCompletionEngine::enqueueAccept(

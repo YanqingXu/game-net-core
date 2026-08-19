@@ -99,6 +99,30 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         contract.io_engine.test_io_uring_completion_engine
         PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle"
     )
+    add_executable(
+        gamenet_io_uring_event_loop_pump_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_uring_event_loop_pump.cpp
+    )
+    target_include_directories(
+        gamenet_io_uring_event_loop_pump_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_io_uring_event_loop_pump_contract
+        PRIVATE GameNet::experimental
+    )
+    add_test(
+        NAME contract.io_engine.test_io_uring_event_loop_pump
+        COMMAND gamenet_io_uring_event_loop_pump_contract
+    )
+    set_tests_properties(
+        contract.io_engine.test_io_uring_event_loop_pump
+        PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle"
+    )
+    add_custom_target(gamenet_io_uring_contracts DEPENDS
+        gamenet_io_uring_contract
+        gamenet_io_uring_event_loop_pump_contract
+    )
 endif()
 add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp threading lifecycle)

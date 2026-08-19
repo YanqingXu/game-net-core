@@ -8,11 +8,12 @@ promote_gate: none
 # Module Intent: EventLoop
 
 ## 1. Intent
-EventLoop is the core event-dispatch engine bound to one thread.
+EventLoop is the owner-thread scheduler and event pump bound to one thread.
 It waits for active I/O, dispatches Channel callbacks, executes queued tasks,
 and serves as the central scheduling point for timer and coroutine extensions.
 
-EventLoop is the heart of reactor execution in game-net-core.
+Readiness and Completion capabilities may both be driven by this scheduler;
+EventLoop is not itself limited to, or synonymous with, an epoll-style Reactor.
 
 ---
 
@@ -30,6 +31,8 @@ EventLoop is the heart of reactor execution in game-net-core.
 - own one dynamic lifecycle hub for runtime-created reactor participants;
   lifecycle nodes attach/detach on the owner thread while cross-thread signals
   use an intrusive dirty set and allocate no queue node
+- let source-private completion participants opt into one automatic,
+  generation-safe callback committed by the first transition to Quiescing
 - drive the explicit loop shutdown state machine
   `Running -> Quiescing -> FinalDraining -> Shutdown`
 - during Windows quiescing, continue zero-timeout IOCP polling until both
@@ -134,6 +137,10 @@ EventLoop is the heart of reactor execution in game-net-core.
 - quit first publishes Quiescing and seals new external executor/control/
   lifecycle admission while preserving signals committed before the
   transition
+- that same transition marks every attached source-private quit participant
+  dirty under the lifecycle lock; the callback is therefore committed before
+  lifecycle silence can be observed, including when quit is cross-thread or
+  re-entered from the participant's own active frame
 - Quiescing continues I/O completion consumption and lifecycle draining;
   FinalDraining begins only after no backend completion obligation and no
   lifecycle dirty/detaching node remains
@@ -238,6 +245,9 @@ Typical API direction:
 - EventLoopControlSource::notify() -> PostResult
 - source-private detail::EventLoopLifecycleRegistry::attach(Functor)
   -> EventLoopLifecycleSource
+- source-private
+  detail::EventLoopLifecycleRegistry::attachQuiesceParticipant(Functor)
+  -> EventLoopLifecycleSource
 - source-private detail::EventLoopLifecycleRegistry::detach(
   EventLoopLifecycleSource)
 - EventLoopLifecycleSource::signal() -> PostResult
@@ -293,6 +303,9 @@ Additional APIs can be added later for richer timer and coroutine features.
   routed through this internal lifecycle facility
 - lifecycle callbacks execute only on the owner thread; callback targets are
   retained by hub-owned node storage until detach reclamation
+- quit-participant attachment is owner-thread-only and consumes the same finite
+  lifecycle-node capacity; its automatic quit notification allocates no node,
+  queue entry, or functor and follows the same self-signal/reclamation rules
 - cross-thread enqueue must ensure wakeup when loop may be blocked
 - pending functor queue flush occurs on owner thread only
 - cross-thread-observed pending functor execution state is atomic or synchronized
@@ -440,6 +453,9 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   after its active frame returns
 - quit racing committed lifecycle work either drains Accepted work or rejects
   it before commitment; no accepted generation is stranded
+- a source-private quit participant receives exactly one committed callback
+  after Running becomes Quiescing even without an external signal; re-entrant
+  quit from its active callback cannot lose the required later drain turn
 - Windows cancel plus quit continues polling until the real
   `ERROR_OPERATION_ABORTED` completion is consumed and the lifecycle node
   becomes silent

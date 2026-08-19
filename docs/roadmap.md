@@ -69,8 +69,11 @@ See `migration_status.md` for the current checked state of these phases.
   default/fallback. The cross-Profile real-TCP integration contract now drives
   the same echo/stop lifecycle through A/B/C/D and closes the common-capability
   review as `NO-PROMOTION`; it also closes a Profile C cadence-stop summary
-  publication race. The active implementation front is IOE-X2 contract shaping,
-  while ARCH-G1 independent review proceeds in parallel.
+  publication race. IOE-X2 now adds a non-installed EventLoop-driven one-shot
+  completion pump with ring-fd scheduling, an independent dispatch budget,
+  automatic quit cancellation, and fail-closed terminal retirement. The active
+  implementation front is IOE-X3 single-connection Completion-driver contract
+  shaping, while ARCH-G1 independent review proceeds in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 

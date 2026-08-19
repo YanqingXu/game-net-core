@@ -26,6 +26,14 @@ public:
         return loop.attachLifecycleNode(std::move(callback));
     }
 
+    // Attaches one source-private participant whose callback is committed by
+    // the first Running -> Quiescing transition even without an external
+    // signal. The participant consumes normal lifecycle-node capacity and
+    // follows the same generation, self-signal, and detach rules.
+    static EventLoopLifecycleSource attachQuiesceParticipant(
+        EventLoop& loop,
+        EventLoop::Functor callback);
+
     static void detach(
         EventLoop& loop,
         const EventLoopLifecycleSource& source) {

@@ -876,24 +876,25 @@ def main() -> None:
     require(workflow, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF")
     linux_io_uring = step_block(
         job_block(workflow, "linux-cmake"),
-        "Build and test experimental IOE-X1 io_uring",
+        "Build and test experimental IOE-X1/X2 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
-    require(linux_io_uring, "--expected-total 130")
-    require(linux_io_uring, "--expect-label experimental=1")
-    require(linux_io_uring, "--target gamenet_io_uring_contract")
+    require(linux_io_uring, "--expected-total 131")
+    require(linux_io_uring, "--expect-label experimental=2")
+    require(linux_io_uring, "--target gamenet_io_uring_contracts")
     require(
         linux_io_uring,
-        "contract.io_engine.test_io_uring_completion_engine",
+        "contract.io_engine.test_io_uring_",
     )
+    require(linux_io_uring, "event_loop_pump")
     linux_io_uring_asan = step_block(
         job_block(workflow, "linux-asan-ubsan"),
-        "Build and test experimental IOE-X1 io_uring with ASan/UBSan",
+        "Build and test experimental IOE-X1/X2 io_uring with ASan/UBSan",
     )
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
     require(linux_io_uring_asan, "detect_leaks=1:halt_on_error=1")
-    require(linux_io_uring_asan, "--target gamenet_io_uring_contract")
+    require(linux_io_uring_asan, "--target gamenet_io_uring_contracts")
     require(workflow, "cmake --install build --prefix \"$PWD/build/_install\"")
     require(workflow, "cmake -S tests/cmake/install_consumer")
     require(workflow, "-DCMAKE_PREFIX_PATH=\"$PWD/build/_install\"")

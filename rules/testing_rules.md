@@ -142,6 +142,20 @@ Contract tests verify:
   accepted and terminal one-shot operations per round trip, zero fallback,
   zero residual active operation/notice/owned-byte state, ordered percentile
   output, and a drained shutdown
+- the IOE-X2 contract must use the real ring descriptor as a borrowed Channel
+  source and complete one Recv/Send chain through EventLoop without directly
+  calling Engine wait from the test
+- the same contract leaves a second Recv pending, calls EventLoop quit from a
+  completion consumer, and proves the automatically committed lifecycle
+  participant cancels and terminally consumes it before Pump stop and
+  EventLoop Shutdown; its lease remains live through that consumer frame
+- dispatch capacity and CQ capacity are configured independently. More ready
+  terminal notices than one pump turn must continue through the lifecycle lane
+  without recursive consumer entry, pending-functor use, or lost completion
+- injected/transient drive or consumer failure must be observable and may
+  converge only as drained-after-failure; no failure path may detach the ring
+  Channel, release an operation lease, or publish a drained future while any
+  Engine obligation or decoded notice remains
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

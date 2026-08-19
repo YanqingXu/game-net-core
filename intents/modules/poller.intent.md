@@ -146,6 +146,10 @@ without forcing upper layers to change semantic assumptions.
 IOE-X1 does not make Poller completion-shaped and does not replace Linux's
 production `EpollReadinessPort`. Its raw io_uring Engine owns independent
 one-shot completion slots and is built only by the Linux experimental target.
+IOE-X2 may register the experimental ring descriptor as one ordinary borrowed
+readiness source so EventLoop knows when to run the source-private pump. That
+registration is only a scheduling trigger: Poller/Channel never carries or
+decodes a completion identity, result, byte count, error, generation, or lease.
 
 Windows WinSock `select()` is not an acceptable performance target for the
 current migration. It may remain only as deleted legacy context or local

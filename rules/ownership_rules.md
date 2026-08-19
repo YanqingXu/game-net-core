@@ -92,6 +92,15 @@ It must not blur these roles.
 - quiesce retains every active slot and lease through target cancellation
   completion. Closing the ring is destructor fallback, not evidence of an
   orderly final drain; the contract requires explicit bounded Shutdown first
+- the IOE-X2 pump owns its IOE-X1 Engine, borrowed-fd Channel registration,
+  lifecycle-participant handle, finite dispatch state, and stop promise. The
+  caller owns and outlives the pump and EventLoop; neither the Channel nor the
+  lifecycle handle owns the ring fd or extends EventLoop lifetime
+- an Accepted pump operation retains storage and its optional lease through
+  the matching terminal CQE and source-private consumer frame. Pump stop may
+  remove its Channel and detach its lifecycle node only after every decoded
+  notice and active consumer frame is retired; a failed drive owns no right to
+  release or transfer a still-kernel-referenced slot
 
 ## 3. Poller
 - Poller does not own Channel

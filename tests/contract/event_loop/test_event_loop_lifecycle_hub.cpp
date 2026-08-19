@@ -231,6 +231,49 @@ void testLifecycleNotifyQuitLinearization() {
     }
 }
 
+void testQuiesceParticipantIsCommittedByFirstQuit() {
+    gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
+        .maxPendingFunctors = 1,
+        .reservedPendingFunctors = 0,
+        .maxFunctorsPerIteration = 1,
+        .maxControlSources = 0,
+        .maxLifecycleNodes = 1,
+        .maxLifecycleCallbacksPerIteration = 1,
+    });
+
+    gamenet::net::EventLoopLifecycleSource source;
+    int callbackCalls = 0;
+    std::vector<gamenet::net::EventLoopPhase> callbackPhases;
+    source = LifecycleRegistry::attachQuiesceParticipant(loop, [&] {
+        ++callbackCalls;
+        callbackPhases.push_back(loop.phase());
+        GAMENET_TEST_ASSERT(
+            loop.phase() == gamenet::net::EventLoopPhase::Quiescing ||
+            loop.phase() == gamenet::net::EventLoopPhase::FinalDraining);
+        if (callbackCalls == 1) {
+            // Repeated quit cannot commit a second automatic notification,
+            // while the active participant may explicitly continue its
+            // already committed final-drain work in a later round.
+            loop.quit();
+            GAMENET_TEST_ASSERT(
+                source.signal() == gamenet::net::PostResult::Accepted);
+        }
+    });
+
+    GAMENET_TEST_ASSERT(loop.pendingLifecycleNodeCount() == 0);
+    std::thread quitter([&] { loop.quit(); });
+    loop.loop();
+    quitter.join();
+
+    GAMENET_TEST_ASSERT(callbackCalls == 2);
+    GAMENET_TEST_ASSERT(callbackPhases.size() == 2);
+    GAMENET_TEST_ASSERT(loop.pendingLifecycleNodeCount() == 0);
+    GAMENET_TEST_ASSERT(
+        loop.phase() == gamenet::net::EventLoopPhase::Shutdown);
+    LifecycleRegistry::detach(loop, source);
+    GAMENET_TEST_ASSERT(loop.attachedLifecycleNodeCount() == 0);
+}
+
 }  // namespace
 
 int main() {
@@ -238,5 +281,6 @@ int main() {
     testCommittedNotifySurvivesDetachAndSaturation();
     testLifecycleCapacityGenerationAndBudgetedSelfSignal();
     testLifecycleNotifyQuitLinearization();
+    testQuiesceParticipantIsCommittedByFirstQuit();
     return 0;
 }

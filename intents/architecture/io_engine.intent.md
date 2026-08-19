@@ -199,6 +199,46 @@ IOE-X1 authorizes one experimental Linux completion vertical slice:
   or fixed file, zero-copy Send, SQPOLL, linked operation graph, public backend
   selector, or production TcpConnection integration is authorized in IOE-X1.
 
+IOE-X2 authorizes one source-private EventLoop-driven completion pump:
+
+- the pump remains inside the Linux-only, default-off, non-installed
+  `GameNet::experimental` target. It does not enter the production Poller,
+  TcpConnection, package export, or backend-selection surface;
+- one EventLoop owner constructs, submits through, cancels through, drives, and
+  destroys the pump. The pump owns one IOE-X1 Engine, one borrowed-fd Channel
+  registration for the io_uring completion descriptor, and one source-private
+  lifecycle participant; the caller owns and outlives both pump and EventLoop;
+- normal progress is readiness-triggered by the ring descriptor, but each CQE
+  remains a typed completion operation result. The Channel carries no
+  operation identity, bytes, error, generation, lease, or terminal result;
+- Engine wait is always nonblocking under EventLoop. One pump turn dispatches
+  at most its validated `maxNoticesPerTurn`, independently from ring/CQ batch
+  capacity, and commits a lifecycle continuation when decoded notices remain;
+- `Accepted` submission retains its finite slot, generation, payload/address,
+  and optional lease through exactly one terminal notice and source-private
+  consumer return. Consumer code runs only on the owner and may re-enter
+  owner-safe pump stop/cancel/submission APIs; admission is revalidated after
+  every consumer return;
+- a source-private quit participant is attached on the owner thread. The first
+  EventLoop transition to Quiescing commits that participant callback without
+  cross-thread allocation, even when `quit()` races or is called re-entrantly;
+  this callback seals pump admission and begins cancellation before EventLoop
+  may establish lifecycle silence;
+- explicit quiesce and EventLoop quit share one idempotent path. SQ-full during
+  final cancellation is flushed and retried only within the existing finite
+  ring; ASYNC_CANCEL remains bookkeeping and the target CQE alone retires the
+  lease. Every cancellation terminal notice is still delivered to the
+  source-private consumer;
+- physical pump stop, Channel removal, lifecycle detach, and stop-future
+  publication occur only after active operations, staged submissions, cancel
+  CQEs, decoded notices, and callback frames are all silent. A wait/flush or
+  consumer failure is counted and fails closed: the pump continues bounded
+  nonblocking final-drain turns and cannot publish a false drained result or
+  permit EventLoop Shutdown while a kernel obligation remains;
+- IOE-X2 does not authorize blocking owner waits, a second worker thread,
+  per-operation functor posts, fake readiness results, multishot, provided
+  buffers, fixed files, zero-copy, SQPOLL, or production TCP integration.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -212,7 +252,10 @@ IOE-X1 authorizes one experimental Linux completion vertical slice:
 4. IOE-X1 proves the same terminal-operation and final-drain invariants through
    a default-off, non-installed real io_uring path while epoll stays production
    default/fallback.
-5. Only proven, cross-backend concepts may later graduate to a narrow public
+5. IOE-X2 proves that the isolated one-shot Engine can participate in the
+   existing EventLoop owner/fairness/final-drain lifecycle without becoming a
+   Poller backend or changing production TCP.
+6. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -260,6 +303,16 @@ IOE-X1 authorizes one experimental Linux completion vertical slice:
   real Linux one-shot Accept/Recv/Send round trip, finite-SQ rejection,
   owner-thread enforcement, operation generation, cancellation CQE separation,
   lease retention, and bounded final-drain convergence.
+- `tests/contract/io_engine/test_io_uring_event_loop_pump.cpp` verifies that a
+  real ring descriptor drives typed Recv/Send completions without manual wait,
+  that EventLoop quit automatically seals and cancels a pending operation,
+  that its lease survives through the cancellation consumer, and that pump
+  retirement precedes EventLoop Shutdown with bounded dispatch and zero
+  residual operation/notice state.
+- `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
+  source-private quit participant is committed exactly once on the first
+  Running-to-Quiescing transition, can self-signal during final drain, and is
+  not activated by repeated quit after Shutdown.
 - `tests/cmake/test_io_uring_completion_engine_contract.py` guards the
   default-off/non-installed Linux target, epoll fallback, raw-kernel operation
   allowlist, explicit finite budgets, CI execution, and rejection of multishot,

@@ -14,7 +14,8 @@ non-installed sharded Hybrid vertical slice 已在 `b3b184b1` 关闭。跨 Profi
 已通过同一真实 TCP echo/stop 合同形成 `NO-PROMOTION` 决定，四个 Profile 继续非安装；
 高重复验证同时关闭了 Profile C cadence-stop summary 早于结果发布的生命周期竞态。
 IOE-X1 已在 `a39b702` 建立真实内核闭环并在 `d3b31c5` 补齐结构化方向性基准和精确证据；
-ARCH-G1 独立 review 继续推进。
+IOE-X2 已完成 source-private EventLoop completion pump、quit participant、真实 ring-fd
+调度和 fail-closed final drain 合同；ARCH-G1 独立 review 继续推进。
 
 ## 1. 执行结论
 
@@ -234,7 +235,7 @@ determinism。因此任一早期检查点的 CI、性能、容量或 endurance �
 | active intent | 36 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 179 |
+| intent 显式 verification paths | 180 |
 | public headers | 55 |
 | `.cc` sources | 46 |
 | CTest tests | 129 |
@@ -652,11 +653,11 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 目标形成连续可运行切片：
 
 1. 保持跨 Profile 真实 TCP 组合合同全绿，并执行共同能力审查的 `NO-PROMOTION` 决定；
-2. 进入 IOE-X2 contract shaping，在 active intent 中先固定 EventLoop completion pump 的
-   owner、operation retention、取消与 final-drain 失败语义；
+2. 进入 IOE-X3 contract shaping，在 active intent 中先固定实验单连接 Completion TCP
+   driver 的 owner、one-recv-in-flight、有限 send bytes、read pause 和 close retirement；
 3. 并行完成 ARCH-G1 独立 review，并保持 RTM-R2 的分片、顺序和生命周期合同全绿；
-4. IOE-X1 保持 experimental/default-off；新的最小 source-private 集成不借机开放
-   production TcpConnection 或高级 io_uring 能力；
+4. IOE-X1/X2 保持 experimental/default-off；IOE-X3 不借机修改 production
+   TcpConnection 或开放高级 io_uring 能力；
 5. 把 CI、benchmark、capacity 作为伴随证据；只有准备 promotion 时才执行 endurance、
    许可证和 REL-D1。
 

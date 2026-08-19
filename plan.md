@@ -272,6 +272,18 @@ IOE-X1 在实现提交 `a39b7022a05cd0ff373334933bf670451d73269e` 建立真实�
 并在数字证据提交 `d3b31c5c4e7966553094f7e42cf74f1b49a11077` 关闭；精确门禁、
 sanitizer 和 benchmark 结果见 `docs/development/commit_bound_evidence_ledger.md`。
 
+IOE-X2 继续保持 Linux-only、default-off、non-installed：
+
+- [x] source-private lifecycle participant 在首次 EventLoop Quiescing 时自动提交；
+- [x] 真实 io_uring descriptor 仅作为 borrowed Channel 调度触发，不携带 completion 数据；
+- [x] EventLoop 内只执行零超时 Engine wait，CQ capacity 与 `maxNoticesPerTurn` 分离；
+- [x] quit 自动 seal admission、取消 pending one-shot、消费 target/cancel CQE 并退休 lease；
+- [x] consumer/drive failure 可观察且 fail-closed，未清空义务时不得发布 drained/Shutdown；
+- [x] Windows Debug/Release、Linux ASan/UBSan、TSan threading 与 stable API 零漂移作为关闭门。
+
+IOE-X2 不进入 production Poller/TcpConnection，也不创建公共 backend selector。它只证明
+现有 owner-loop 生命周期能够驱动真实 Completion Engine。
+
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
 
@@ -370,9 +382,14 @@ planned -> contract-ready -> implemented -> verified -> integrated
 > 组合验证 Profile A/B/C/D，并形成 `NO-PROMOTION` 决定。四个 Profile 继续显式、
 > provisional、非安装；归一化 observation 只属于测试词汇，不提升为 runtime API。**
 
-重复合同同时发现并关闭 Profile C 的 cadence-stop summary 发布竞态：logic future 必须等待
-取消结果发布，owner Tick 抢先退休 timer 时记录收敛的 Accepted 结果。当前下一前沿转为
-**IOE-X2 contract shaping**：先在 active intent 中明确 EventLoop 驱动的一次性 Completion
-pump 的 owner、operation retention、取消与 final-drain 失败语义，再实现最小 source-private
-集成合同。ARCH-G1 独立 review 继续并行且不形成冻结点；IOE-X1 不顺带开放 production
-TcpConnection 集成、multishot、provided buffers、fixed files、zero-copy 或 SQPOLL。
+重复合同同时发现并关闭 Profile C 的 cadence-stop summary 发布竞态。IOE-X2 又完成
+EventLoop 驱动的真实 one-shot completion pump：ring fd 只负责唤醒调度，typed CQE、
+generation、lease、取消与 final drain 继续由 Engine/Pump 持有；首次 Quiescing 会自动提交
+source-private participant，未清空义务时 EventLoop 不得越过 Shutdown。
+
+当前下一前沿转为 **IOE-X3 contract shaping**：先在 active intent 中定义一个仍然
+Linux-only、non-installed 的单连接 Completion TCP driver，固定 socket/operation owner、
+one-recv-in-flight、有限 send bytes、read-pause=no-repost、close/cancel/terminal retirement
+和 re-entry 规则，再决定是否值得形成更接近 TcpConnection 的实验垂直切片。ARCH-G1 独立
+review 继续并行且不形成冻结点；不得借 IOE-X3 修改 production TcpConnection，或开放
+multishot、provided buffers、fixed files、zero-copy、SQPOLL 和公共 backend selector。

@@ -193,6 +193,18 @@ finite Send/Recv pipeline and residual-state convergence. Production Linux
 continues to select epoll; no public selector, TcpConnection integration,
 multishot, registered resources, zero-copy, or SQPOLL is implied.
 
+IOE-X2 adds a source-private `IoUringEventLoopPump` in the same experimental
+target. It borrows the ring descriptor through one ordinary Channel so epoll
+can wake the owner EventLoop, but Channel carries no CQE data. The pump performs
+only zero-timeout Engine waits, dispatches at most `maxNoticesPerTurn`, and uses
+the lifecycle hub for bounded decoded-notice continuation. A new source-private
+quit participant is committed by the first Running-to-Quiescing transition;
+it seals pump admission, requests cancellation, consumes cancel and target
+CQEs, retires leases, removes the Channel, and detaches only after physical
+silence. Drive or consumer failure is observable and fail-closed: it cannot
+publish a false drained future or let EventLoop Shutdown overtake a kernel
+obligation. This still adds no production TCP path or installed surface.
+
 ## Current Coupling Inventory
 
 The locations below are the implementation checklist, not merely examples.
@@ -224,6 +236,7 @@ slice. It will be added with the slice rather than as an empty placeholder.
 | IOE-R1 | `tests/contract/io_engine/test_io_engine_poller_adapter.cpp` | Poller, EventLoop, fair-budget, Channel active-batch tests | adapter rejects non-owner mutation and preserves shutdown drain |
 | IOE-R2 | `tests/contract/io_engine/test_readiness_engine.cpp` | Poller and Channel lifetime tests | stale registration generation after remove/re-register |
 | IOE-C1 | `tests/contract/io_engine/test_completion_engine.cpp` | IOCP sync-error, partial/segmented write, high-water resume and completion-drain tests | cancel-before-dequeue retains lease; direct dispatch is budgeted; observer replacement retires driver state without upper callback |
+| IOE-X2 | `tests/contract/io_engine/test_io_uring_event_loop_pump.cpp` | EventLoop lifecycle-hub and IOE-X1 Engine contracts | ring-fd-only scheduling, independent dispatch budget, quit-auto-cancel, consumer failure, and terminal lease retirement before Shutdown |
 | Network-only | `tests/contract/runtime_model/test_network_only_profile.cpp` | TcpServer/TcpConnection lifecycle and memory tests | callback/thread mismatch and bounded shutdown |
 | Network/logic split | `tests/contract/runtime_model/test_network_logic_split_profile.cpp` | LogicLoop and pipeline handoff/saturation/shutdown tests | saturated handoff, stale binding, close race |
 | Sharded Hybrid | `tests/contract/runtime_model/test_sharded_hybrid_profile.cpp` | Profiles B/C, broadcast multi-loop, and pipeline Tick tests | coupled placement, owner migration, cell saturation bleed, event/tick overtaking, or stale output |

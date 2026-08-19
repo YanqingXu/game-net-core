@@ -5,6 +5,7 @@
 #include "gamenet/core/net/SocketsOps.h"
 #include "gamenet/core/net/TimerQueue.h"
 #include "gamenet/core/net/platform/Wakeup.h"
+#include "detail/EventLoopLifecycleRegistry.h"
 #include "detail/IoEngine.h"
 
 #include "gamenet/core/base/Logger.h"
@@ -27,6 +28,7 @@ namespace gamenet::net {
 namespace {
 
 thread_local EventLoop* t_loopInThisThread = nullptr;
+thread_local bool t_attachQuiesceParticipant = false;
 std::atomic<std::uint64_t> nextExecutorId{1};
 constexpr std::size_t kMaxControlSources = 65536;
 constexpr std::size_t kMaxIocpCompletionBatchSize = 64;
@@ -67,6 +69,25 @@ bool ioEngineAcceptedOrUnsupported(
 }  // namespace
 
 namespace detail {
+
+EventLoopLifecycleSource
+EventLoopLifecycleRegistry::attachQuiesceParticipant(
+    EventLoop& loop,
+    EventLoop::Functor callback) {
+    if (t_attachQuiesceParticipant) {
+        throw std::logic_error(
+            "nested EventLoop quiesce-participant attachment is forbidden");
+    }
+    t_attachQuiesceParticipant = true;
+    try {
+        auto source = loop.attachLifecycleNode(std::move(callback));
+        t_attachQuiesceParticipant = false;
+        return source;
+    } catch (...) {
+        t_attachQuiesceParticipant = false;
+        throw;
+    }
+}
 
 #ifdef GAMENET_INTERNAL_TEST_HOOKS
 void setEventLoopPhaseObserverForTesting(
@@ -129,12 +150,15 @@ struct EventLoopLifecycleSource::Node {
     std::shared_ptr<EventLoop::Functor> callback;
     gamenet::base::Timestamp pendingSince{};
     Node* dirtyNext{nullptr};
+    Node* quiescePrevious{nullptr};
+    Node* quiesceNext{nullptr};
     std::uint64_t id{0};
     std::uint64_t generation{1};
     std::uint64_t pendingGeneration{0};
     bool attached{true};
     bool dirty{false};
     bool active{false};
+    bool notifyOnQuiesce{false};
 };
 
 struct EventLoopLifecycleSource::State {
@@ -150,6 +174,8 @@ struct EventLoopLifecycleSource::State {
     Node* dirtyHead{nullptr};
     Node* dirtyTail{nullptr};
     Node* activeNode{nullptr};
+    Node* quiesceHead{nullptr};
+    Node* quiesceTail{nullptr};
     std::uint64_t activeGeneration{0};
     std::size_t attachedCount{0};
     std::size_t pendingCount{0};
@@ -599,6 +625,31 @@ void EventLoop::quit() {
         executorState_->drainingAccepted = true;
         controlState_->phase = EventLoopControlSource::State::Phase::Draining;
         lifecycleState_->phase = EventLoopPhase::Quiescing;
+        for (auto* node = lifecycleState_->quiesceHead;
+             node != nullptr;
+             node = node->quiesceNext) {
+            if (!node->attached) {
+                continue;
+            }
+            lifecycleState_->signals.fetch_add(1, std::memory_order_relaxed);
+            if (node->dirty) {
+                lifecycleState_->mergedSignals.fetch_add(
+                    1,
+                    std::memory_order_relaxed);
+                continue;
+            }
+            node->dirty = true;
+            node->pendingSince = gamenet::base::now();
+            node->pendingGeneration = node->generation;
+            node->dirtyNext = nullptr;
+            if (lifecycleState_->dirtyTail == nullptr) {
+                lifecycleState_->dirtyHead = node;
+            } else {
+                lifecycleState_->dirtyTail->dirtyNext = node;
+            }
+            lifecycleState_->dirtyTail = node;
+            ++lifecycleState_->pendingCount;
+        }
         phase_.store(EventLoopPhase::Quiescing, std::memory_order_release);
         quit_.store(true, std::memory_order_relaxed);
         if (crossThread) {
@@ -809,6 +860,7 @@ EventLoopLifecycleSource EventLoop::attachLifecycleNode(Functor cb) {
     auto callback = std::make_shared<Functor>(std::move(cb));
     auto node = std::make_shared<EventLoopLifecycleSource::Node>();
     node->callback = std::move(callback);
+    node->notifyOnQuiesce = t_attachQuiesceParticipant;
 
     std::lock_guard lock(lifecycleState_->mutex);
     if (lifecycleState_->phase != EventLoopPhase::Running ||
@@ -827,6 +879,15 @@ EventLoopLifecycleSource EventLoop::attachLifecycleNode(Functor cb) {
 
     node->id = lifecycleState_->nextNodeId++;
     lifecycleState_->nodes.emplace(node->id, node);
+    if (node->notifyOnQuiesce) {
+        node->quiescePrevious = lifecycleState_->quiesceTail;
+        if (lifecycleState_->quiesceTail == nullptr) {
+            lifecycleState_->quiesceHead = node.get();
+        } else {
+            lifecycleState_->quiesceTail->quiesceNext = node.get();
+        }
+        lifecycleState_->quiesceTail = node.get();
+    }
     ++lifecycleState_->attachedCount;
     return EventLoopLifecycleSource(
         lifecycleState_,
@@ -852,6 +913,20 @@ void EventLoop::detachLifecycleNode(
 
         node->attached = false;
         --state->attachedCount;
+        if (node->notifyOnQuiesce) {
+            if (node->quiescePrevious == nullptr) {
+                state->quiesceHead = node->quiesceNext;
+            } else {
+                node->quiescePrevious->quiesceNext = node->quiesceNext;
+            }
+            if (node->quiesceNext == nullptr) {
+                state->quiesceTail = node->quiescePrevious;
+            } else {
+                node->quiesceNext->quiescePrevious = node->quiescePrevious;
+            }
+            node->quiescePrevious = nullptr;
+            node->quiesceNext = nullptr;
+        }
         ++node->generation;
         if (node->generation == 0) {
             ++node->generation;

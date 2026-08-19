@@ -235,6 +235,17 @@ No other direct mutation path is allowed for core loop state.
   slot-plus-generation target CQE may publish and retire the terminal notice
 - SQ exhaustion returns `SubmissionQueueFull` synchronously. It may not block,
   invoke inline work, switch to epoll, or append to an overflow queue
+- IOE-X2's non-installed completion pump is constructed, submitted, cancelled,
+  driven, quiesced, and destroyed only on its EventLoop owner. The ring-fd
+  Channel schedules nonblocking pump turns; it transports no completion data
+- the pump's source-private quit participant is committed automatically by the
+  first EventLoop transition to Quiescing. It may self-signal only to continue
+  an already committed bounded final drain and may not execute business/user
+  work through the lifecycle lane
+- one pump turn consumes at most `maxNoticesPerTurn`; decoded remainder uses a
+  lifecycle continuation and never a pending functor, recursive callback, or
+  blocking wait. A drive failure remains observable and keeps final drain open
+  until kernel, cancellation, notice, and callback obligations are silent
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

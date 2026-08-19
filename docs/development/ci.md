@@ -47,7 +47,8 @@ The `ci` workflow validates:
 - Build-governance guard for the Linux/Windows target-system allow-list,
   explicit static installed targets, rejected shared-library builds, and
   configure-time failure for unimplemented TLS and unsupported Windows
-  experimental options, plus a separate default-off Linux IOE-X1 gate.
+  experimental options, plus a separate default-off Linux IOE-X1/X2 Engine and
+  EventLoop-pump gate.
 - Public API manifest v2 verification for classified exported targets and
   headers, plus a deterministic diff against the immutable 0.2 preview
   snapshot. Producer checkouts fetch full history so the snapshot inventory
@@ -113,11 +114,13 @@ The `ci` workflow validates:
 - Windows MSVC Release build and CTest suite as a required main-CI job.
 
 Ordinary production builds keep optional modules disabled. A separate Linux
-job slice enables only the non-installed IOE-X1 io_uring contract. Still
+job slice enables only the two non-installed IOE-X1/X2 io_uring contracts. Its
+inventory is exactly 131 tests with 2 experimental entries. Still
 disabled are:
 
 - TLS
-- experimental transport other than the isolated IOE-X1 Engine
+- experimental transport other than the isolated IOE-X1 Engine and IOE-X2
+  EventLoop pump
 - HTTP, WebSocket, RPC, UDP, KCP, PMTU/FEC, metrics, coroutine, and a formal
   all-in-one game pipeline library
 

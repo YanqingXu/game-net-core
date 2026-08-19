@@ -13,10 +13,19 @@ def main() -> None:
     experimental_cmake = repo_root / "src/experimental/io_uring/CMakeLists.txt"
     engine_header = repo_root / "src/experimental/io_uring/IoUringCompletionEngine.h"
     engine_source = repo_root / "src/experimental/io_uring/IoUringCompletionEngine.cc"
+    pump_header = repo_root / "src/experimental/io_uring/IoUringEventLoopPump.h"
+    pump_source = repo_root / "src/experimental/io_uring/IoUringEventLoopPump.cc"
+    lifecycle_registry = (
+        repo_root / "src/core/net/detail/EventLoopLifecycleRegistry.h"
+    )
+    event_loop_source = repo_root / "src/core/net/EventLoop.cc"
     core_cmake = repo_root / "src/core/CMakeLists.txt"
     adapter = repo_root / "src/core/net/detail/PollerIoEngineAdapter.cc"
     tests_cmake = repo_root / "tests/CMakeLists.txt"
     contract = repo_root / "tests/contract/io_engine/test_io_uring_completion_engine.cpp"
+    pump_contract = (
+        repo_root / "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp"
+    )
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     benchmark = repo_root / "benchmarks" / "io_uring" / "one_shot.cpp"
     benchmark_validator = repo_root / "tools" / "validate_io_uring_benchmark.py"
@@ -32,7 +41,10 @@ def main() -> None:
         experimental_cmake,
         engine_header,
         engine_source,
+        pump_header,
+        pump_source,
         contract,
+        pump_contract,
         benchmark,
         benchmark_validator,
         benchmark_docs,
@@ -90,9 +102,41 @@ def main() -> None:
     assert "IoUring" not in adapter_text
     require(adapter_text, '#include "EpollReadinessPort.h"', adapter)
 
+    pump_text = pump_header.read_text(encoding="utf-8") + pump_source.read_text(
+        encoding="utf-8"
+    )
+    for fragment in (
+        "IoUringEventLoopPump",
+        "completionDescriptor",
+        "maxNoticesPerTurn",
+        "attachQuiesceParticipant",
+        "engine_.wait(std::chrono::milliseconds::zero())",
+        "IoUringEventLoopPumpStopResult::DrainedAfterFailure",
+        "consumerFailures",
+    ):
+        require(pump_text, fragment, pump_source)
+    for forbidden in (
+        "TcpConnection",
+        "queueInLoop",
+        "runInLoop",
+        "std::thread",
+        "IORING_RECV_MULTISHOT",
+        "IORING_OP_SEND_ZC",
+    ):
+        assert forbidden not in pump_text, f"IOE-X2 scope escape: {forbidden}"
+
+    registry_text = lifecycle_registry.read_text(encoding="utf-8")
+    event_loop_text = event_loop_source.read_text(encoding="utf-8")
+    require(registry_text, "attachQuiesceParticipant", lifecycle_registry)
+    require(event_loop_text, "notifyOnQuiesce", event_loop_source)
+    require(event_loop_text, "quiesceHead", event_loop_source)
+
     tests_text = tests_cmake.read_text(encoding="utf-8")
     require(tests_text, "if(GAMENET_ENABLE_EXPERIMENTAL)", tests_cmake)
     require(tests_text, "gamenet_io_uring_contract", tests_cmake)
+    require(tests_text, "gamenet_io_uring_event_loop_pump_contract", tests_cmake)
+    require(tests_text, "gamenet_io_uring_contracts", tests_cmake)
+    require(tests_text, "test_io_uring_event_loop_pump.cpp", tests_cmake)
     require(tests_text, "contract.io_engine.test_io_uring_completion_engine", tests_cmake)
     require(tests_text, "GameNet::experimental", tests_cmake)
     require(tests_text, "experimental;threading;lifecycle", tests_cmake)
@@ -108,6 +152,19 @@ def main() -> None:
         "crossDomain",
     ):
         require(contract_text, fragment, contract)
+
+    pump_contract_text = pump_contract.read_text(encoding="utf-8")
+    for fragment in (
+        "int main()",
+        "maxNoticesPerTurn = 1",
+        "loop.quit()",
+        "IoUringCompletionStatus::Cancelled",
+        "DrainedAfterFailure",
+        "observedPendingLease.expired()",
+        "continuationSignals",
+        "pendingCancelCompletions",
+    ):
+        require(pump_contract_text, fragment, pump_contract)
 
     benchmark_cmake_text = benchmark_cmake.read_text(encoding="utf-8")
     require(benchmark_cmake_text, "if(GAMENET_ENABLE_EXPERIMENTAL)", benchmark_cmake)
@@ -198,18 +255,24 @@ def main() -> None:
 
     intent_text = intent.read_text(encoding="utf-8")
     require(intent_text, "IOE-X1 authorizes one experimental Linux completion vertical slice", intent)
+    require(intent_text, "IOE-X2 authorizes one source-private EventLoop-driven completion pump", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_completion_engine.cpp", intent)
+    require(intent_text, "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp", intent)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X1's raw io_uring Engine", thread_rules)
+    require(thread_rules.read_text(encoding="utf-8"), "IOE-X2's non-installed completion pump", thread_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X1 experimental target owns", ownership_rules)
+    require(ownership_rules.read_text(encoding="utf-8"), "IOE-X2 pump owns", ownership_rules)
     require(testing_rules.read_text(encoding="utf-8"), "real Linux io_uring fd", testing_rules)
+    require(testing_rules.read_text(encoding="utf-8"), "IOE-X2 contract", testing_rules)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "test_io_uring_completion_engine_contract.py", workflow)
     require(workflow_text, "GAMENET_ENABLE_EXPERIMENTAL=ON", workflow)
-    require(workflow_text, "contract.io_engine.test_io_uring_completion_engine", workflow)
+    require(workflow_text, "contract.io_engine.test_io_uring_", workflow)
+    require(workflow_text, "event_loop_pump", workflow)
     require(platform_docs.read_text(encoding="utf-8"), "IOE-X1 io_uring", platform_docs)
 
-    print("IOE-X1 real one-shot io_uring build, scope, and lifecycle contracts verified")
+    print("IOE-X1/X2 real one-shot Engine and EventLoop pump contracts verified")
 
 
 if __name__ == "__main__":

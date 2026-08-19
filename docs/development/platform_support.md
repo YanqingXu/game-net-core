@@ -97,16 +97,17 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
-The dedicated IOE-X1 contract configuration is Linux-only:
+The dedicated IOE-X1/X2 Engine and EventLoop-pump contract configuration is
+Linux-only:
 
 ```bash
 cmake -S . -B build-io-uring \
   -DCMAKE_BUILD_TYPE=Debug \
   -DGAMENET_BUILD_TESTING=ON \
   -DGAMENET_ENABLE_EXPERIMENTAL=ON
-cmake --build build-io-uring --target gamenet_io_uring_contract --parallel
+cmake --build build-io-uring --target gamenet_io_uring_contracts --parallel
 ctest --test-dir build-io-uring \
-  -R '^contract.io_engine.test_io_uring_completion_engine$' \
+  -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump)$' \
   --output-on-failure
 ```
 

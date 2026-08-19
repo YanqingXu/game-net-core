@@ -176,6 +176,7 @@ public:
     IoUringCompletionEngineOptions options() const noexcept;
     IoUringPhase phase() const noexcept;
     IoUringCompletionEngineMetrics metrics() const noexcept;
+    gamenet::net::SocketFd completionDescriptor() const noexcept;
 
     IoUringSubmissionOutcome enqueueAccept(
         gamenet::net::SocketFd listenSocket,
