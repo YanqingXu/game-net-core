@@ -362,7 +362,9 @@ planned -> contract-ready -> implemented -> verified -> integrated
 > **IOE-X1 one-shot completion contract：RTM-R2 Profile D
 > `MultiIoShardedHybrid` 已完成独立 connection placement / logic sharding、至少两个
 > 有界 cell、cell 内严格顺序、event/tick 无超越、generation-safe owner 回送和隔离式
-> 饱和处理。下一切片直接在 experimental、default-off 边界定义 io_uring one-shot
+> 饱和处理，精确实现检查点为
+> `b3b184b1cd8d28a256cffc60679ab832373dcfef`。下一切片直接在
+> experimental、default-off 边界定义 io_uring one-shot
 > accept/recv/send、SQ-full rejection、cancel/terminal lease 与 epoll fallback 合同。**
 
 ARCH-G1 独立 review 与跨 Profile 共同能力审查继续并行，不形成冻结点。Profile A/B/C/D

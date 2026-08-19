@@ -60,7 +60,7 @@ See `migration_status.md` for the current checked state of these phases.
   `da57edc887421503e93ca743afb8a3373642c878` with authoritative fixed-rate
   cadence, bounded catch-up/skip, bounded tick drain, generation-safe owner
   return, and dual-platform directional numbers. RTM-R2 Profile D is closed in
-  the current implementation tree with independent placement/sharding, bounded
+  at `b3b184b1cd8d28a256cffc60679ab832373dcfef` with independent placement/sharding, bounded
   cell-local Hybrid ordering, isolated saturation, and no installed API.
   IOE-X1 one-shot contracts are now the active front while ARCH-G1 and
   cross-Profile capability review proceed in parallel.

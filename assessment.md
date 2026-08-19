@@ -10,7 +10,7 @@
 Profile 工作。当前执行前沿以 `plan.md` 为准：IOE-R1 已在 `8bb14e72` 关闭，IOE-R2
 已在 `6f45aa6e` 关闭，IOE-C1 已在 `c2d7e9d6` 关闭，RTM-R1 Profile A/B 分别在
 `adb8b483`/`633d613` 关闭，Profile C 已在 `da57edc` 关闭；RTM-R2 Profile D 的
-non-installed sharded Hybrid vertical slice 已在当前实现树关闭。ARCH-G1 独立 review、
+non-installed sharded Hybrid vertical slice 已在 `b3b184b1` 关闭。ARCH-G1 独立 review、
 跨 Profile 共同能力审查与 IOE-X1 one-shot 合同并行推进。
 
 ## 1. 执行结论

@@ -173,7 +173,8 @@ failure, or output overload terminates the connection. The runnable echo and
 contract establish the zero-cross-domain-handoff baseline without publishing a
 new stable Profile API. Profiles B and C subsequently established bounded
 queued-event and authoritative fixed-tick vertical slices. Profile D now
-establishes independent connection placement and stable player/room/scene
+establishes at `b3b184b1cd8d28a256cffc60679ab832373dcfef` independent
+connection placement and stable player/room/scene
 sharding across bounded logic cells; its event and fixed-tick lanes preserve
 cell-local FIFO without promising cross-cell global order. All four remain
 non-installed while common capability review is pending.

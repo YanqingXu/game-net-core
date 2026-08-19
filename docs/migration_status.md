@@ -31,6 +31,9 @@ Current M3-R2 committed contract checkpoint: `12adb00` (2026-08-05)
 Current post-review TCP establishment-remediation checkpoint: `9d2a5be`
 (2026-08-11)
 
+Current RTM-R2 Profile D MultiIoShardedHybrid checkpoint:
+`b3b184b1cd8d28a256cffc60679ab832373dcfef` (2026-08-20)
+
 Current API-R1 surface decision: `APPROVE` (2026-08-05); reviewed snapshot is
 bound to annotated tag `api-r1-approved-surface` and peeled commit
 `9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
@@ -101,7 +104,7 @@ is closed at `da57edc`: its non-installed `MultiIoDedicatedFixedTick`
 composition uses two network owners, one distinct logic/tick owner,
 authoritative fixed-rate skip/bounded-catch-up cadence, bounded per-tick queue
 drain, generation-safe owner return, and separate network/logic stop futures.
-Profile D is now closed in the current implementation tree: its non-installed
+Profile D is closed at `b3b184b1`: its non-installed
 `MultiIoShardedHybrid` composition separates connection placement from stable
 player/room/scene sharding across at least two bounded logic cells, preserves
 cell-local order across event and fixed-tick lanes, keeps established network
@@ -324,7 +327,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. RTM-R2 Profile D is closed in the current implementation tree with independent connection placement, stable bounded logic sharding, cell-local Hybrid ordering, and no installed API. All four Profiles remain non-installed. IOE-X1 one-shot contracts are the active front. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. RTM-R2 Profile D is closed at `b3b184b1` with independent connection placement, stable bounded logic sharding, cell-local Hybrid ordering, and no installed API. All four Profiles remain non-installed. IOE-X1 one-shot contracts are the active front. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 
