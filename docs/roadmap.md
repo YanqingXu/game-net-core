@@ -53,7 +53,10 @@ See `migration_status.md` for the current checked state of these phases.
   and dual-platform/API/sanitizer/performance plus exact-commit evidence passes.
   RTM-R1 Profile A (`SingleLoopInlineEvent`) is integrated at
   `adb8b483d9b00ed0e9723321f2d7438e43a5e478` as a runnable, non-installed
-  zero-worker composition. Profile B is now the active contract front while
+  zero-worker composition. Profile B (`MultiIoQueuedEvent`) is integrated at
+  `633d61315a9e28db643ee91214dc2f26a9b64630` with bounded coalesced handoff,
+  generation-safe owner return, typed recovery, and directional numbers.
+  Profile C is now the active contract front while
   ARCH-G1 independent review proceeds in parallel. CI/performance evidence
   stays commit-bound and continuous; endurance and licensing move to promotion
   time.
@@ -298,7 +301,10 @@ Active execution front:
     `adb8b483d9b00ed0e9723321f2d7438e43a5e478` with bounded inline dispatch,
     terminal overload/overrun handling, zero cross-domain handoff, runnable
     echo, dual-platform full gates, and no installed API.
-  - [ ] Profile B `MultiIoQueuedEvent`: active contract front.
-  - [ ] Profile C `MultiIoDedicatedFixedTick`: follows Profile B evidence.
+  - [x] Profile B `MultiIoQueuedEvent`: integrated at
+    `633d61315a9e28db643ee91214dc2f26a9b64630` with two network owners, one
+    logic owner, bounded queue/drain, exact producer coalescing metrics,
+    dual-platform full gates, and a non-installed benchmark/example.
+  - [ ] Profile C `MultiIoDedicatedFixedTick`: active contract front.
 - [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at
   least two Profiles have contract and performance evidence.

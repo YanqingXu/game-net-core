@@ -231,10 +231,10 @@ capability Engine。IOE-R1 在精确提交
 
 ### 9.2 Profile B：MultiIoQueuedEvent
 
-- [ ] 使用已有 TransportEndpoint 和有界 queue；
-- [ ] empty-to-non-empty 合并 wakeup；
-- [ ] typed overload、generation-safe endpoint 和 owner executor 回送；
-- [ ] 测量 P99/P999 handoff、队列 oldest age 和慢消费者恢复。
+- [x] 使用已有 TransportEndpoint 和有界 queue；
+- [x] empty-to-non-empty 合并 wakeup；
+- [x] typed overload、generation-safe endpoint 和 owner executor 回送；
+- [x] 测量 P99/P999 handoff、队列 oldest age 和慢消费者恢复。
 
 ### 9.3 Profile C：MultiIoDedicatedFixedTick
 
@@ -359,12 +359,12 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **RTM-R1 Profile B：Profile A `SingleLoopInlineEvent` 已于
-> `adb8b483d9b00ed0e9723321f2d7438e43a5e478` 形成首个可运行、非安装的
-> TCP-only 垂直切片；立即建立 `MultiIoQueuedEvent` 的有界 handoff、
-> empty-to-non-empty wakeup 合并、generation-safe endpoint 回送、typed overload
-> 与慢消费者恢复合同。**
+> **RTM-R1 Profile C：Profile B `MultiIoQueuedEvent` 已于
+> `633d61315a9e28db643ee91214dc2f26a9b64630` 完成多 I/O owner 到独立逻辑 owner
+> 的有界合并 handoff、generation-safe 回送、typed overload/恢复、双阶段停止和
+> 定向数字基线；立即定义 `MultiIoDedicatedFixedTick` 的权威 cadence、jitter、
+> overrun、skip/catch-up 与 bounded shutdown 合同。**
 
 ARCH-G1 独立 review 与后续 Profile contract 继续并行，不形成冻结点。下一个可运行目标
-不是新发布 tag，而是直接交付 RTM-R1 Profile B 合同和实现；Profile A 保持 provisional、
-非安装，Linux/epoll 与 stable public surface 持续全绿。
+不是新发布 tag，而是直接交付 RTM-R1 Profile C 合同和实现；Profile A/B 保持
+provisional、非安装，Linux/epoll 与 stable public surface 持续全绿。
