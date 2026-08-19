@@ -212,18 +212,36 @@ def run_matrix(args: argparse.Namespace) -> dict[str, Any]:
             completed = subprocess.run(
                 command,
                 capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="strict",
                 timeout=args.process_timeout_seconds,
                 check=False,
             )
+            stderr = (
+                completed.stderr
+                if isinstance(completed.stderr, str)
+                else completed.stderr.decode(
+                    "utf-8",
+                    errors="backslashreplace",
+                )
+            )
             require(
                 completed.returncode == 0,
-                f"{scenario.key} repetition {repetition} failed: {completed.stderr.strip()}",
+                f"{scenario.key} repetition {repetition} failed: {stderr.strip() or '<empty>'}",
             )
             try:
-                document = json.loads(completed.stdout.lstrip("\ufeff"))
+                stdout = (
+                    completed.stdout
+                    if isinstance(completed.stdout, str)
+                    else completed.stdout.decode(
+                        "utf-8",
+                        errors="strict",
+                    )
+                )
+            except UnicodeDecodeError as error:
+                raise MatrixError(
+                    f"{scenario.key} emitted non-UTF-8 stdout: {error}"
+                ) from error
+            try:
+                document = json.loads(stdout.lstrip("\ufeff"))
             except json.JSONDecodeError as error:
                 raise MatrixError(f"{scenario.key} emitted invalid JSON: {error}") from error
             validated = validate_document(

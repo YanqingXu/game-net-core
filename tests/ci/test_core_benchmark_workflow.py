@@ -81,10 +81,11 @@ def main() -> None:
     assert text.count("--expected-slow-bytes 33554432") == 2
     assert text.count("--require-overload") >= 4
     assert text.count("Checkout Core capacity baseline") == 2
-    assert text.count("Run candidate Core capacity matrix") == 2
-    assert text.count("Run baseline Core capacity matrix") == 2
+    assert text.count("Run paired interleaved performance matrix") == 2
+    assert text.count("Run paired interleaved Core capacity matrix") == 2
+    assert text.count("tools/run_paired_performance_matrix.py") >= 8
     assert text.count("Enforce same-runner Core capacity budgets") == 2
-    assert text.count("--matrix-profile core-capacity") >= 6
+    assert text.count("--matrix-profile core-capacity") >= 4
     assert text.count("core_capacity_regression_budgets.json") >= 4
     assert text.count("core-capacity-regression.json") == 2
     assert text.count("Evaluate Linux accept topology") == 1

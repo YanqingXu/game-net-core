@@ -55,6 +55,45 @@ def finite_number(value: Any, label: str) -> float:
     return numeric
 
 
+def comparable_parameters(
+    baseline_item: dict[str, Any],
+    candidate_item: dict[str, Any],
+    key: str,
+) -> dict[str, Any]:
+    baseline_parameters = baseline_item.get("parameters")
+    candidate_parameters = candidate_item.get("parameters")
+    require(
+        isinstance(baseline_parameters, dict)
+        and isinstance(candidate_parameters, dict),
+        f"{key}: baseline/candidate parameters missing",
+    )
+    baseline_schema = baseline_item.get("schema")
+    candidate_schema = candidate_item.get("schema")
+    if baseline_schema == candidate_schema:
+        require(
+            baseline_parameters == candidate_parameters,
+            f"{key}: baseline/candidate parameters differ",
+        )
+        return candidate_parameters
+
+    require(
+        key.startswith("core.")
+        and baseline_schema == "gamenet.core_benchmark.v1"
+        and candidate_schema == "gamenet.core_benchmark.v2",
+        f"{key}: unsupported baseline/candidate schema transition",
+    )
+    for name, baseline_value in baseline_parameters.items():
+        require(
+            name in candidate_parameters,
+            f"{key}: candidate is missing legacy parameter {name}",
+        )
+        require(
+            candidate_parameters[name] == baseline_value,
+            f"{key}: legacy parameter {name} differs",
+        )
+    return candidate_parameters
+
+
 def load_matrix(
     root: Path,
     expected_sha: str,
@@ -143,7 +182,11 @@ def compare(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
         key = scenario_budget["key"]
         baseline_item, baseline_documents = baseline[key]
         candidate_item, candidate_documents = candidate[key]
-        require(baseline_item.get("parameters") == candidate_item.get("parameters"), f"{key}: baseline/candidate parameters differ")
+        parameters = comparable_parameters(
+            baseline_item,
+            candidate_item,
+            key,
+        )
         metric_budgets = scenario_budget.get("metrics")
         require(isinstance(metric_budgets, list) and metric_budgets, f"{key}: metric budgets missing")
         metric_results = []
@@ -187,7 +230,9 @@ def compare(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
             })
         comparisons.append({
             "key": key,
-            "parameters": baseline_item["parameters"],
+            "baseline_schema": baseline_item["schema"],
+            "candidate_schema": candidate_item["schema"],
+            "parameters": parameters,
             "metrics": metric_results,
             "result": "pass" if all(item["result"] == "pass" for item in metric_results) else "fail",
         })

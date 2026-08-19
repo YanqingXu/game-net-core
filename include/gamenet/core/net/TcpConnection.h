@@ -93,6 +93,9 @@ public:
     // state. Configure callbacks before connectEstablished(); only teardown
     // code running on the owner loop may replace a callback afterward.
     void setTcpNoDelay(bool on);
+    // Owner-loop-only setup operation. The operating system may round the
+    // requested value; zero and values outside the native int range fail.
+    void setSendBufferSize(std::size_t bytes);
     // Owner-loop setup operation; configure before connectEstablished().
     void setBackpressureOptions(TcpConnectionBackpressureOptions options);
 

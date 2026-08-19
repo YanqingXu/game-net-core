@@ -4,19 +4,25 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-08-17
+Current production-roadmap audit: 2026-08-18
 
 Current implementation checkpoint carried by the candidate:
-`68b444dd109562d3d69c2b377c3bec90dcd15779` (2026-08-17)
+`669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
 
-Superseded REL-C1 candidate: `v0.3.0-rel-c1-freeze` peeled to
-`d3137f9298b47474ea96dc694d44c5c026710039`. Its six producers succeeded in
-run `31992899968` attempt 1, but the aggregate verifier rejected the two
-install-consumer tests because it still expected one.
+Superseded PERF-R1 candidate: `v0.3.0-rel-c1-refreeze-4` peeled to
+`c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. Its detached REL-V1, REL-V2 run
+`32043448820`, and paired Core benchmark run `32043874669` passed. Capacity run
+`32043877128` failed twice on hosted Windows: one probe in attempts 1 and 2
+closed on its client I/O deadline before the corresponding server accept was
+published, so exact accept accounting could no longer converge. Both raw
+failure documents remain historical evidence.
 
 Current final v0.3 production candidate: the commit peeled from annotated tag
-`v0.3.0-rel-c1-refreeze-1`; the tag object and remote ref record the
-authoritative full `CANDIDATE_SHA`
+`v0.3.0-rel-c1-refreeze-5`; the tag object and remote ref record the
+authoritative full `CANDIDATE_SHA`. In PR validation and allowlisted post-freeze
+governance updates, the candidate tag remains an ancestor of the checked-out
+commit rather than matching GitHub's temporary merge commit. The existing
+post-checkpoint path allowlist continues to reject runtime/source drift.
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
 
@@ -29,6 +35,11 @@ Current API-R1 surface decision: `APPROVE` (2026-08-05); reviewed snapshot is
 bound to annotated tag `api-r1-approved-surface` and peeled commit
 `9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
 
+Current PERF-R1 additive stable-surface decision:
+`approved-additive-source-compatible` (2026-08-17); reviewed snapshot is bound
+to annotated tag `api-r1-perf-r1-reviewed-surface` and peeled commit
+`6b292156e3e94d3389e9f3b8513445e7eb4ab541`
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -39,20 +50,23 @@ protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
-The authoritative current implementation checkpoint is `68b444d`. M3-R1 is
+The authoritative current implementation checkpoint is `669ebb0`. M3-R1 is
 closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
 `12adb00`; API-R1 remediation is committed at `7fa6922`; post-review TCP
-establishment rollback remains at `9d2a5be`. The current checkpoint fixes only
-the CI aggregate verifier's stale one-consumer expectation and does not change
-the reviewed stable API or runtime implementation. The inventory is 120
-configured CTest tests: 8 unit tests, 99 contract tests, and 13 integration
-tests, with 93 threading and 98 lifecycle labels. The previous `d3137f9`
-candidate proved all six producer jobs, install consumers 2/2/2, TSan 93, and
-libFuzzer 1000 in run `31992899968`, but its aggregate job failed and therefore
-is not REL-V2 evidence. REL-C1 refreezes the repaired candidate through
-`v0.3.0-rel-c1-refreeze-1`. This is not remote release evidence: the replacement
-candidate has no same-SHA REL-V2, benchmark, capacity, or endurance result yet.
-REL-V1 candidate clean validation is the next roadmap task.
+establishment rollback remains at `9d2a5be`. PERF-R1 retains its reviewed
+owner-loop-only send-buffer request and fail-closed v1-to-v2 bridge, then adds
+annotated-tag checkout, warm paired/interleaved collection, one retention
+snapshot batch per owner loop, complete JSON flush, byte-preserving stderr
+diagnostics, and a connect/accept/echo/close batch barrier that leaves the
+reviewed two-second probe deadline unchanged. The
+inventory is 121 configured CTest tests: 8 unit tests, 100 contract tests, and
+13 integration tests, with 94 threading and 99 lifecycle labels. Complete local
+`candidate-10k` preflight for the barrier passed nine times on Windows and
+three times on Linux with identical profile parameters; local Windows
+regression/Core-capacity paired matrices pass their original budgets. None is
+immutable refreeze-5 evidence. REL-C1 refreezes the remediation through
+`v0.3.0-rel-c1-refreeze-5`; REL-V1 candidate clean validation is the next
+roadmap task, followed by fresh REL-V2 and PERF-R1 runs.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
@@ -61,7 +75,7 @@ Direct closure contracts are
 and [`test_tcp_server_contract.cpp`](../tests/contract/tcp_server/test_tcp_server_contract.cpp).
 
 All candidate, benchmark, capacity, and endurance records below that name
-`be749ad`, `5f926f3`, or `b344318` are historical evidence. They validate the
+`be749ad`, `5f926f3`, `b344318`, or `944f722` are historical evidence. They validate the
 tooling or an earlier code checkpoint, not the current refrozen candidate;
 final promotion requires complete same-SHA evidence.
 
@@ -179,6 +193,11 @@ the 72-hour run to consume same-SHA 24-hour evidence. Infrastructure snapshot
 `29984629032` (220,851 cycles). Its cross-platform performance run
 `29808395220` passed at earlier SHA `5f926f3`; these are historical
 infrastructure-validation records, not evidence for later runtime changes.
+For owner-authorized omission of long-duration evidence, the manual workflow
+now also exposes `candidate-waiver` and `release-waiver` paths. They revalidate
+the same frozen commit's 10k or dedicated 100k capacity pair on a hosted runner
+and record owner/reason metadata with `status: waived`; neither is represented
+as a passing 24/72-hour result.
 
 ## Phase Status
 
@@ -188,8 +207,8 @@ infrastructure-validation records, not evidence for later runtime changes.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
-| 5 | Production hardening | Current planned runtime scope includes M3-R1/M3-R2, API-R1 remediation, and the post-review TCP establishment rollback at `9d2a5be`; the earlier frozen candidate `be749ad` is historical because later runtime changes superseded its evidence. Full same-SHA requalification remains open |
-| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-1`, replacing `v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039` after run `31992899968` exposed its aggregate verifier mismatch. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all replacement-candidate same-SHA release evidence remain open |
+| 5 | Production hardening | Current runtime scope includes M3-R1/M3-R2, API-R1 remediation, post-review TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0`. Earlier frozen candidates remain historical because later runtime/evidence changes superseded their results. Full same-SHA requalification remains open |
+| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-5`, replacing `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` after capacity run `32043877128` twice proved exact lifecycle accounting could become unreachable. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all new-candidate same-SHA release evidence remain open |
 
 ## Current Intent Inventory
 
@@ -200,7 +219,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 61 | 30 | 20 | 11 | 139 |
+| 61 | 30 | 20 | 11 | 141 |
 
 ## Historical Production-Hardening Evidence
 
@@ -378,13 +397,13 @@ names the same SHA as the authoritative checkpoint above.
 
 ## Verification State
 
-The `9d2a5be` implementation checkpoint has 120 configured CTest tests: 8 unit
-tests, 99 contract tests, and 13 integration tests. Its labels include 93
-threading, 98 lifecycle, 7 game-pipeline, and 5 broadcast tests. Windows/IOCP
-Release passed 120/120 in 59.03 seconds, all 36 repository/API/CI guards passed,
-stable/provisional install consumers passed 2/2, and the API-R1 same-line diff
-remained strictly empty. This was a local Release gate; it does not substitute
-for clean Debug, Linux/epoll, sanitizer, or remote same-SHA qualification.
+The `6b29215` implementation checkpoint has 121 configured CTest tests: 8 unit
+tests, 100 contract tests, and 13 integration tests. Its labels include 94
+threading, 99 lifecycle, 7 game-pipeline, and 5 broadcast tests. The new direct
+socket-option contract and capacity/performance/API repository guards pass on
+Windows and WSL Linux; the new reviewed-surface diff is strictly empty. Full
+local clean Debug/Release and remote same-SHA qualification belong to the new
+candidate tag and are not inferred from these implementation-tree checks.
 
 Phase 4 coverage includes bounded
 PacketFramer/real-fuzz contracts, transport/session/logic lifecycle and race

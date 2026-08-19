@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 93
+EXPECTED_THREADING_TESTS = 94
 EXPECTED_PHASE4_SOAK_TESTS = 12
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -127,9 +127,21 @@ def main() -> None:
     assert workflow.exists(), f"missing non-default long-soak workflow: {workflow}"
 
     workflow_text = workflow.read_text(encoding="utf-8")
+    assert workflow_text.count("fetch-tags: true") == 4, (
+        "every full-history soak checkout must materialize annotated tags"
+    )
+    assert workflow_text.count("- name: Restore annotated candidate tag object") == 4
+    assert workflow_text.count("if: github.ref_type == 'tag'") == 4
+    assert workflow_text.count("git fetch --force --no-tags origin") == 4
+    assert workflow_text.count(
+        "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+    ) == 4
     require(workflow_text, "name: long-soak", workflow)
     require(workflow_text, "workflow_dispatch:", workflow)
     require(workflow_text, "          - ci", workflow)
+    require(workflow_text, "          - candidate-waiver", workflow)
+    require(workflow_text, "          - release-waiver", workflow)
+    require(workflow_text, "      endurance_waiver_reason:", workflow)
     require(workflow_text, 'default: "50"', workflow)
     require(workflow_text, 'default: "60"', workflow)
     require(workflow_text, "      ci_artifact_policy:", workflow)
@@ -176,6 +188,16 @@ def main() -> None:
     checkout = step_block(job, "Checkout")
     require(checkout, "uses: actions/checkout@v4", workflow)
     require(checkout, "fetch-depth: 0", workflow)
+    require(checkout, "fetch-tags: true", workflow)
+
+    tag_restore = step_block(job, "Restore annotated candidate tag object")
+    require(tag_restore, "if: github.ref_type == 'tag'", workflow)
+    require(tag_restore, "git fetch --force --no-tags origin", workflow)
+    require(
+        tag_restore,
+        "+refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}",
+        workflow,
+    )
 
     source_checkout = step_block(job, "Checkout migration provenance source")
     require(source_checkout, "uses: actions/checkout@v4", workflow)
@@ -196,6 +218,9 @@ def main() -> None:
     assert job.index(source_checkout) < job.index(guards), (
         "long-soak must checkout migration provenance before repository guards"
     )
+    assert job.index(tag_restore) < job.index(source_checkout), (
+        "long-soak must restore the annotated tag before provenance checkout"
+    )
 
     validation = step_block(job, "Validate long-soak inputs")
     require(validation, 'GAMENET_SOAK_REPEAT_INPUT: "${{ inputs.repeat }}"', workflow)
@@ -215,7 +240,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 120", workflow)
+    require(inventory, "--expected-total 121", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=7", workflow)
     require(inventory, "--expect-label broadcast=5", workflow)
@@ -268,7 +293,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 120",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 121",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -343,6 +368,13 @@ def main() -> None:
         workflow,
     )
     require(self_hosted_ci, 'test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', workflow)
+    self_hosted_tag_restore = step_block(
+        self_hosted_ci, "Restore annotated candidate tag object"
+    )
+    require(self_hosted_tag_restore, "if: github.ref_type == 'tag'", workflow)
+    require(
+        self_hosted_tag_restore, "git fetch --force --no-tags origin", workflow
+    )
     self_hosted_sanitizer_preflight = step_block(
         self_hosted_ci, "Verify ASan/UBSan runner environment"
     )
@@ -385,15 +417,15 @@ def main() -> None:
     assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
         "      - name: Check repository guards"
     ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
-    require(self_hosted_ci, "--expected-total 120", workflow)
-    require(self_hosted_ci, "inventory+=(--expect-label threading=93)", workflow)
+    require(self_hosted_ci, "--expected-total 121", workflow)
+    require(self_hosted_ci, "inventory+=(--expect-label threading=94)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
     require(self_hosted_ci, "--expected-total 2", workflow)
     require(self_hosted_ci, "python3 tools/compare_public_api_manifest.py", workflow)
     require(
         self_hosted_ci,
-        "--compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json",
+        "--compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json",
         workflow,
     )
     require(self_hosted_ci, "--fail-on-compatibility-decision", workflow)
@@ -484,7 +516,16 @@ def main() -> None:
     )
     require(production_checkout, "uses: actions/checkout@v4", workflow)
     require(production_checkout, "fetch-depth: 0", workflow)
+    require(production_checkout, "fetch-tags: true", workflow)
     require(production_checkout, "persist-credentials: false", workflow)
+
+    production_tag_restore = step_block(
+        production_job, "Restore annotated candidate tag object"
+    )
+    require(production_tag_restore, "if: github.ref_type == 'tag'", workflow)
+    require(
+        production_tag_restore, "git fetch --force --no-tags origin", workflow
+    )
 
     production_source_checkout = step_block(
         production_job, "Checkout migration provenance source"
@@ -506,6 +547,9 @@ def main() -> None:
     assert production_job.index(production_source_checkout) < production_job.index(
         production_guards
     ), "production endurance must checkout migration provenance before repository guards"
+    assert production_job.index(production_tag_restore) < production_job.index(
+        production_source_checkout
+    ), "production endurance must restore annotated tag before provenance checkout"
 
     production_build = step_block(production_job, "Build Release endurance target")
     require(
@@ -589,6 +633,72 @@ def main() -> None:
         endurance_run
     ), "capacity evidence must fail before the expensive endurance process starts"
 
+    waiver_job = job_block(workflow_text, "production-endurance-waiver")
+    require(
+        waiver_job,
+        "if: inputs.mode == 'candidate-waiver' || inputs.mode == 'release-waiver'",
+        workflow,
+    )
+    require(waiver_job, "runs-on: ubuntu-24.04", workflow)
+    assert "tools/run_endurance_gate.py" not in waiver_job, (
+        "waiver job must not launch a long-duration endurance process"
+    )
+    waiver_source_checkout = step_block(
+        waiver_job, "Checkout migration provenance source"
+    )
+    waiver_guards = step_block(waiver_job, "Check repository guards")
+    require(waiver_source_checkout, f"repository: {SOURCE_REPOSITORY}", workflow)
+    require(waiver_source_checkout, f"ref: {SOURCE_COMMIT}", workflow)
+    require(waiver_guards, verifier, workflow)
+    require(waiver_guards, semantic_guard, workflow)
+    assert waiver_guards.index(verifier) < waiver_guards.index(semantic_guard)
+    assert waiver_job.index(waiver_source_checkout) < waiver_job.index(waiver_guards)
+
+    waiver_validation = step_block(
+        waiver_job, "Validate production endurance waiver inputs"
+    )
+    require(waiver_validation, "endurance waiver must not name endurance evidence", workflow)
+    require(waiver_validation, "endurance waiver requires exact capacity run/attempt", workflow)
+    require(waiver_validation, "12-500 character single line", workflow)
+    waiver_download = step_block(
+        waiver_job, "Download exact paired waiver capacity evidence"
+    )
+    require(
+        waiver_download,
+        "inputs.mode == 'candidate-waiver' && 'candidate-10k' || 'dedicated-100k'",
+        workflow,
+    )
+    waiver_revalidation = step_block(
+        waiver_job, "Revalidate exact paired waiver capacity source"
+    )
+    require(waiver_revalidation, "--retained-pair-manifest capacity-evidence/pair-manifest.json", workflow)
+    waiver_record = step_block(
+        waiver_job, "Record owner-approved production endurance waiver"
+    )
+    require(waiver_record, "--waive-endurance", workflow)
+    require(waiver_record, "--waiver-reason", workflow)
+    require(waiver_record, "--waiver-approved-by '${{ github.actor }}'", workflow)
+    require(
+        waiver_record,
+        "inputs.mode == 'candidate-waiver' && 'candidate' || 'release'",
+        workflow,
+    )
+    assert waiver_job.index(waiver_revalidation) < waiver_job.index(waiver_record)
+    waiver_manifest = step_block(
+        waiver_job, "Write production endurance waiver manifest"
+    )
+    waiver_artifact_name = (
+        "production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-"
+        "${{ github.run_id }}-${{ github.run_attempt }}"
+    )
+    require(waiver_manifest, f"--artifact-name '{waiver_artifact_name}'", workflow)
+    require(waiver_manifest, "--require-canonical-artifact-name", workflow)
+    waiver_upload = step_block(
+        waiver_job, "Upload production endurance waiver evidence"
+    )
+    require(waiver_upload, f"name: {waiver_artifact_name}", workflow)
+    require(waiver_upload, "if-no-files-found: error", workflow)
+
     cmake_calls = re.findall(
         r"^add_gamenet_(?:component_)?test\(([^\n]*)\)$",
         tests_cmake.read_text(encoding="utf-8"),
@@ -624,7 +734,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "93 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "94 threading-labeled tests", ci_docs)
     require(ci_docs_text, "12 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "`ci_artifact_policy`", ci_docs)
     require(ci_docs_text, "defaults to `best-effort`", ci_docs)
@@ -638,9 +748,10 @@ def main() -> None:
     require(ci_docs_text, "does not provide retained artifact\nevidence", ci_docs)
     require(
         ci_docs_text,
-        "Repeat-soak and 24/72-hour production-endurance uploads remain\nstrict",
+        "Repeat-soak and actual 24/72-hour production-endurance uploads",
         ci_docs,
     )
+    require(ci_docs_text, "`candidate-waiver` and `release-waiver`", ci_docs)
     require(ci_docs_text, "kernel.yama.ptrace_scope=0", ci_docs)
     require(ci_docs_text, "/etc/sysctl.d/99-gamenet-lsan.conf", ci_docs)
     require(ci_docs_text, "ci-evidence/asan-ubsan-runner.txt", ci_docs)

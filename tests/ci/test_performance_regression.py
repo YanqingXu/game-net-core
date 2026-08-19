@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 
 BASELINE_SHA = "2b1be4343f7c478eb40542451f30aad8ca474003"
@@ -26,13 +27,30 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_matrix(root: Path, sha: str, runner, budgets, scale: float = 1.0) -> None:
+def write_matrix(
+    root: Path,
+    sha: str,
+    runner,
+    budgets,
+    scale: float = 1.0,
+    *,
+    legacy_core_v1: bool = False,
+    legacy_parameter_drift: bool = False,
+) -> None:
     root.mkdir()
     scenarios = []
     budget_by_key = {item["key"]: item for item in budgets["scenarios"]}
     for scenario in runner.SCENARIOS:
         key = f"{scenario.group}.{scenario.key}"
         parameters = {"fixture_key": key}
+        schema = scenario.schema
+        if scenario.group == "core":
+            if legacy_core_v1:
+                schema = "gamenet.core_benchmark.v1"
+            else:
+                parameters["v2_only_default"] = 1
+                if legacy_parameter_drift:
+                    parameters["fixture_key"] += "-drift"
         samples = []
         for repetition in range(1, budgets["repetitions"] + 1):
             measurements = {
@@ -40,7 +58,7 @@ def write_matrix(root: Path, sha: str, runner, budgets, scale: float = 1.0) -> N
                 for metric in budget_by_key[key]["metrics"]
             }
             document = {
-                "schema": scenario.schema,
+                "schema": schema,
                 "status": "ok",
                 "error": None,
                 "scenario": scenario.reported_scenario,
@@ -59,7 +77,7 @@ def write_matrix(root: Path, sha: str, runner, budgets, scale: float = 1.0) -> N
             "key": key,
             "group": scenario.group,
             "reported_scenario": scenario.reported_scenario,
-            "schema": scenario.schema,
+            "schema": schema,
             "parameters": parameters,
             "samples": samples,
         })
@@ -86,6 +104,10 @@ def main() -> None:
     budget_path = repo_root / "benchmarks" / "performance_regression_budgets.json"
     workflow = repo_root / ".github" / "workflows" / "core-benchmark.yml"
     runner = load_module(runner_path, "gamenet_performance_matrix_runner")
+    paired_runner = load_module(
+        repo_root / "tools" / "run_paired_performance_matrix.py",
+        "gamenet_paired_performance_matrix_runner",
+    )
     budgets = json.loads(budget_path.read_text(encoding="utf-8"))
 
     assert budgets["schema"] == "gamenet.performance_regression_budget.v1"
@@ -95,6 +117,98 @@ def main() -> None:
     budget_keys = {scenario["key"] for scenario in budgets["scenarios"]}
     assert runner_keys == budget_keys
     assert len(runner_keys) == 12
+    paired_source = (
+        repo_root / "tools" / "run_paired_performance_matrix.py"
+    ).read_text(encoding="utf-8")
+    assert 'errors="backslashreplace"' in paired_source
+    assert 'decode("utf-8", errors="strict")' in paired_source
+
+    with tempfile.TemporaryDirectory(prefix="gamenet-paired-sampling-") as directory:
+        root = Path(directory)
+        candidate_executable = root / "candidate-core"
+        baseline_executable = root / "baseline-core"
+        candidate_executable.write_bytes(b"candidate")
+        baseline_executable.write_bytes(b"baseline")
+        fixture_scenario = runner.Scenario(
+            "core",
+            "fixture",
+            "echo",
+            "gamenet.core_benchmark.v2",
+            ("--scenario", "echo"),
+            True,
+        )
+        paired_runner.SCENARIO_PROFILES = {"regression": (fixture_scenario,)}
+        calls: list[str] = []
+
+        def fake_run(command, **_kwargs):
+            identity = Path(command[0]).name.split("-")[0]
+            calls.append(identity)
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "schema": "gamenet.core_benchmark.v2",
+                        "status": "ok",
+                        "error": None,
+                        "scenario": "echo",
+                        "platform": "windows",
+                        "backend": "iocp",
+                        "build_type": "Release",
+                        "parameters": {"fixture": identity},
+                        "measurements": {"fixture": 1.0},
+                    }
+                ),
+                stderr="",
+            )
+
+        real_subprocess_run = subprocess.run
+        paired_runner.subprocess.run = fake_run
+        paired_runner.validate_document = (
+            lambda document, *_args, **_kwargs: document
+        )
+        arguments = SimpleNamespace(
+            repetitions=3,
+            candidate_sha=CANDIDATE_SHA,
+            baseline_sha=BASELINE_SHA,
+            matrix_profile="regression",
+            candidate_core_executable=candidate_executable,
+            candidate_phase4_executable=None,
+            baseline_core_executable=baseline_executable,
+            baseline_phase4_executable=None,
+            candidate_output_root=root / "candidate-output",
+            baseline_output_root=root / "baseline-output",
+            candidate_canonical_core_dir=root / "canonical-core",
+            candidate_canonical_phase4_dir=None,
+            platform="windows",
+            backend="iocp",
+            build_type="Release",
+            process_timeout_seconds=10,
+        )
+        candidate_manifest, baseline_manifest = (
+            paired_runner.run_paired_matrix(arguments)
+        )
+        assert calls == [
+            "candidate",
+            "baseline",
+            "candidate",
+            "baseline",
+            "baseline",
+            "candidate",
+            "candidate",
+            "baseline",
+        ]
+        assert candidate_manifest["sampling"] == {
+            "schema": "gamenet.paired_interleaved.v1",
+            "pair_role": "candidate",
+            "peer_commit_sha": BASELINE_SHA,
+            "warmups_per_scenario": 1,
+            "order_rule": "scenario-and-repetition-parity",
+        }
+        assert baseline_manifest["sampling"]["pair_role"] == "baseline"
+        assert len(candidate_manifest["scenarios"][0]["samples"]) == 3
+        assert (root / "canonical-core" / "fixture.json").is_file()
+        paired_runner.subprocess.run = real_subprocess_run
 
     slow_scenario = next(
         scenario for scenario in runner.SCENARIOS
@@ -216,7 +330,13 @@ def main() -> None:
         baseline = root / "baseline"
         candidate = root / "candidate"
         output = root / "regression.json"
-        write_matrix(baseline, BASELINE_SHA, runner, budgets)
+        write_matrix(
+            baseline,
+            BASELINE_SHA,
+            runner,
+            budgets,
+            legacy_core_v1=True,
+        )
         write_matrix(candidate, CANDIDATE_SHA, runner, budgets)
         command = [
             sys.executable,
@@ -238,6 +358,32 @@ def main() -> None:
         assert len(evidence["comparisons"]) == 12
         assert all(len(metric["candidate_samples"]) == 3
                    for scenario in evidence["comparisons"] for metric in scenario["metrics"])
+        core_comparison = next(
+            item for item in evidence["comparisons"]
+            if item["key"].startswith("core.")
+        )
+        assert core_comparison["baseline_schema"] == "gamenet.core_benchmark.v1"
+        assert core_comparison["candidate_schema"] == "gamenet.core_benchmark.v2"
+        assert core_comparison["parameters"]["v2_only_default"] == 1
+
+        candidate_drift = root / "candidate-drift"
+        write_matrix(
+            candidate_drift,
+            CANDIDATE_SHA,
+            runner,
+            budgets,
+            legacy_parameter_drift=True,
+        )
+        drift_command = list(command)
+        drift_command[drift_command.index(str(candidate))] = str(candidate_drift)
+        drift = subprocess.run(
+            drift_command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert drift.returncode == 2, drift.stderr
+        assert "legacy parameter fixture_key differs" in drift.stderr
 
         first_budget = budgets["scenarios"][0]
         first_metric = first_budget["metrics"][0]
@@ -255,7 +401,7 @@ def main() -> None:
     workflow_text = workflow.read_text(encoding="utf-8")
     assert workflow_text.count("Checkout performance baseline") == 2
     assert workflow_text.count(BASELINE_SHA) >= 2
-    assert workflow_text.count("tools/run_performance_matrix.py") >= 4
+    assert workflow_text.count("tools/run_paired_performance_matrix.py") >= 4
     assert workflow_text.count("tools/compare_performance_regression.py") >= 2
     assert workflow_text.count("performance-regression.json") >= 2
 

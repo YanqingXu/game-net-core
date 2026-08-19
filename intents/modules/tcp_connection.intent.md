@@ -50,6 +50,9 @@ inline inside TcpConnection.
   application callback leaves the input buffer at its configured hard limit
 - expose force-close style teardown entry that still converges on the same close path
 - expose connection context as loop-owned mutable state, not cross-thread storage
+- allow an owner-loop setup path to request a finite native TCP send-buffer
+  size; operating-system rounding remains observable platform behavior and the
+  request does not replace application-level output admission
 - dispatch user-visible connection/message/write-complete/high-water/close callbacks
 - count optional high-water/write-complete notifications that cannot be
   admitted to the owner-loop normal queue without allowing that diagnostic
@@ -83,6 +86,9 @@ inline inside TcpConnection.
 - channel registration is removed before effective destruction
 - helper component state that mutates connection behavior is still owned by the same loop
 - backpressure-driven read suspend/resume only changes Channel interest on owner loop thread
+- send-buffer configuration accepts only a positive value representable by the
+  native `int` socket option, executes on the owner loop, and reports
+  `setsockopt(SO_SNDBUF)` failure instead of silently claiming configuration
 - every accepted output byte is reserved exactly once and released exactly once
   after write completion or close-time discard; the configured hard limit is
   never exceeded even by concurrent cross-thread send admission
@@ -191,6 +197,9 @@ inline inside TcpConnection.
   point-in-time cumulative snapshot
 - socket-option mutation, connection context access, callback replacement,
   `connectEstablished()`, and `connectDestroyed()` are owner-loop-only
+- `setSendBufferSize()` may run during the established callback before any
+  application send; it changes kernel queue capacity only and does not change
+  connection ownership, callback ordering, or the output-budget hard limit
 - callback setters are setup-time configuration before establishment; the
   close callback may only be replaced later on the owner loop during teardown
 - setContext/getContext are owner-loop-only; cross-thread users must marshal
@@ -300,6 +309,9 @@ inline inside TcpConnection.
 - cross-thread send executes on owner loop thread
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_state.cpp`
   verifies non-owner-thread state observation across connect and close transitions
+- `tests/contract/tcp_connection/test_tcp_connection_socket_options.cpp`
+  verifies positive send-buffer configuration, native effective bounds, invalid
+  range rejection, and wrong-thread rejection
 - the TcpConnection thread-contract guard verifies state storage is atomic and
   owner-loop-only mutators assert their thread affinity
 - read/write error path converges on safe close handling

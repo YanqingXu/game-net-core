@@ -1,19 +1,10 @@
 {
-  "schema": "gamenet.public_api_manifest.v2",
+  "schema": "gamenet.public_api_snapshot.v1",
   "package_version": "0.3.0",
   "compatibility_line": "0.3",
-  "release_label": "v0.3.0-production-candidate",
-  "historical_baseline": {
-    "tag": "v0.2.0-phase4-preview",
-    "commit": "7668d6b82a0d815ccd79f83c572bc0a36bcceea0",
-    "path": "api/baselines/v0.2.0-phase4-preview.json",
-    "snapshot_sha256": "eefcf74df5ba0096d6e2cc7dd115afda03a5d8af2baa6cd310161013d6d219c9"
-  },
-  "policy": {
-    "stable_core_source_compatibility": "required-within-compatibility-line",
-    "abi_compatibility": "not-guaranteed-before-1.0",
-    "provisional_source_compatibility": "not-guaranteed",
-    "platform_backend_headers": "unsupported-internal"
+  "source": {
+    "tag": "api-r1-perf-r1-reviewed-surface",
+    "commit": "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
   },
   "targets": {
     "platform_internal": [],
@@ -126,5 +117,11 @@
     "include/gamenet/core/net/TimerId.h": "fae430a027e854081bc498551e5fdec8dfbc767c60092758a675043a0aee4315",
     "include/gamenet/core/net/TimerOptions.h": "6e16268a780dfc436d426b4d49e3d2b4b3f72ab45cfcf14e747652a07f63fbc0",
     "include/gamenet/core/net/TimerQueue.h": "9074a693720f979f062dd1069aed04de19e0cb9e7c41d7aeee109a057081b00d"
+  },
+  "policy": {
+    "stable_core_source_compatibility": "required-within-compatibility-line",
+    "abi_compatibility": "not-guaranteed-before-1.0",
+    "provisional_source_compatibility": "not-guaranteed",
+    "platform_backend_headers": "unsupported-internal"
   }
 }

@@ -197,6 +197,8 @@ def main() -> None:
 
     for fragment in (
         "candidate-24h",
+        "candidate-waiver",
+        "release-waiver",
         "release-72h",
         "86,400 seconds",
         "259,200",
@@ -220,8 +222,8 @@ def main() -> None:
     for fragment in (
         "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
         "timeout-minutes: 4620",
-        "--expected-total 120",
-        "--expect-label threading=93",
+        "--expected-total 121",
+        "--expect-label threading=94",
         "--expect-label fault_injection=1",
         "--expect-label endurance=1",
         "tools/run_endurance_gate.py",
@@ -233,16 +235,23 @@ def main() -> None:
         "capacity_run_attempt",
         "tools/verify_production_promotion_evidence.py",
         "actions/download-artifact@v4",
+        "endurance_waiver_reason",
+        "runs-on: ubuntu-24.04",
+        "--waive-endurance",
+        "--waiver-approved-by '${{ github.actor }}'",
     ):
         require(workflow_text, fragment, workflow)
     promotion_text = promotion_verifier.read_text(encoding="utf-8")
     for fragment in (
         "gamenet.production_promotion_evidence.v1",
+        "gamenet.production_promotion_waiver.v1",
         '"candidate": "candidate-10k"',
         '"release": "dedicated-100k"',
         "verify_evidence_set",
         "candidate-24h",
         "release-72h",
+        '"owner-waived"',
+        '"owner_authorized_promotion"',
         "capacity pair manifest does not match revalidated raw evidence",
     ):
         require(promotion_text, fragment, promotion_verifier)

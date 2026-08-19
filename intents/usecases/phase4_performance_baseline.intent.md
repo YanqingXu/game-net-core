@@ -127,9 +127,10 @@ installed library API.
   commit, platform/backend, compiler, parameters, and command match.
 - Working-set high water is process-level sampled RSS, not allocator accounting
   and not a claim that broadcast has a hard memory cap.
-- The manual benchmark workflow runs framing plus two Logic and two Broadcast
-  scales three times for both the fixed baseline and candidate on each Linux
-  epoll and Windows IOCP runner.
+- The manual benchmark workflow warms framing plus each Logic and Broadcast
+  scale once per revision, then records three adjacent baseline/candidate
+  pairs with alternating first-run order on each Linux epoll and Windows IOCP
+  runner.
 - A shared cross-platform validator rejects missing/non-finite required
   measurements (allowing valid zero latency/RSS delta) and inconsistent
   operation, accepted, rejected, batching, timer-drain, or working-set counts.
@@ -142,7 +143,8 @@ installed library API.
 - A final workflow job downloads both platform artifacts and independently
   verifies their common identity, successful job status, file hashes, exact
   Linux/epoll plus Windows/IOCP pair, fixed scenario set, and identical
-  parameters. It emits one paired evidence manifest. These checks prove
+  parameters. It also rejects missing warmup count, pair role, peer commit, or
+  interleaving-order metadata. It emits one paired evidence manifest. These checks prove
   provenance, semantic consistency, matrix sample hashes, and separate
   same-runner performance-budget success; it never compares Linux scores with
   Windows scores.

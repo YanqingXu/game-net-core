@@ -31,17 +31,25 @@ snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
 72-hour Linux endurance runs, but those runs predate the current implementation
 checkpoint. M3-R1 is independently closed at `95a6ab5`, and M3-R2 is committed
 at `12adb00`. API-R1 independently approved the remediated 0.3 stable Core
-surface after closing its initial blockers. The reviewed runtime checkpoint is
-`9d2a5be`; the current implementation checkpoint is `68b444d`, which preserves
-that API/runtime tree while fixing the aggregate evidence contract for the two
-installed-package consumers. The first frozen candidate `d3137f9` produced six
-successful CI producers in run `31992899968`, but its stale one-consumer
-aggregate verifier failed, so `v0.3.0-rel-c1-freeze` is superseded. REL-C1 now
-refreezes the unique v0.3 candidate through annotated tag
-`v0.3.0-rel-c1-refreeze-1`; its peeled commit is the authoritative
-`CANDIDATE_SHA`. The tag is an engineering freeze reference, not a release tag
-or REL-D1 decision. The replacement candidate still requires clean same-SHA
-CI, performance, capacity, and endurance evidence; REL-V1 is the next task.
+surface after closing its initial blockers. PERF-R1 first exposed deterministic
+comparator, high-fd client, and Linux overload-profile defects in
+`refreeze-1`; the first `refreeze-2` remote captures then exposed missing tag
+checkout, revision-wide benchmark order bias, capacity snapshot queue
+interference, incomplete stdout flushing, and hidden localized diagnostics.
+The current implementation checkpoint is
+`669ebb0a7c5c475dea74b12275c66a2ce1876804` (`669ebb0`). Its stable API remains
+the single source-compatible addition bound to reviewed-surface tag
+`api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`.
+REL-C1 now refreezes the unique v0.3 candidate through annotated tag
+`v0.3.0-rel-c1-refreeze-5`, superseding
+`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` after
+two hosted Windows capacity attempts proved that one probe could close on its
+I/O deadline before the server published the corresponding accept. The new
+batch lifecycle keeps connected sockets open through accept convergence before
+exact echo and abortive close; it does not relax the two-second deadline.
+The tag is an engineering freeze reference, not a release tag or REL-D1
+decision. The new candidate requires fresh clean same-SHA CI, performance,
+capacity, and endurance evidence; REL-V1 is the next task.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 

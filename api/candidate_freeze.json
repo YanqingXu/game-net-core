@@ -1,27 +1,27 @@
 {
   "schema": "gamenet.candidate_freeze.v1",
   "release_label": "v0.3.0-production-candidate",
-  "stage": "rel-c1-refrozen",
-  "freeze_date": "2026-08-17",
+  "stage": "rel-c1-refrozen-perf-r1-probe-lifecycle-remediation",
+  "freeze_date": "2026-08-18",
   "candidate": {
-    "branch": "main",
-    "ref": "refs/tags/v0.3.0-rel-c1-refreeze-1",
+    "branch": "perf-r1-deterministic-capacity",
+    "ref": "refs/tags/v0.3.0-rel-c1-refreeze-5",
     "object_type": "annotated-tag",
-    "commit_resolution": "refs/tags/v0.3.0-rel-c1-refreeze-1^{commit}",
+    "commit_resolution": "refs/tags/v0.3.0-rel-c1-refreeze-5^{commit}",
     "sha_record": "annotated-tag-target-and-remote-ref"
   },
-  "implementation_checkpoint": "68b444dd109562d3d69c2b377c3bec90dcd15779",
+  "implementation_checkpoint": "669ebb0a7c5c475dea74b12275c66a2ce1876804",
   "supersedes": {
-    "candidate_ref": "refs/tags/v0.3.0-rel-c1-freeze",
-    "candidate_commit": "d3137f9298b47474ea96dc694d44c5c026710039",
-    "rel_v2_run_id": "31992899968",
+    "candidate_ref": "refs/tags/v0.3.0-rel-c1-refreeze-4",
+    "candidate_commit": "c061f9967b9481b70b2faf9a8fee24f5a3e72ffc",
+    "rel_v2_run_id": "32043448820",
     "rel_v2_run_attempt": 1,
-    "reason": "aggregate-verifier-install-consumer-count-mismatch"
+    "reason": "capacity-probe-lifecycle-barrier"
   },
   "reviewed_surface": {
-    "tag": "api-r1-approved-surface",
-    "commit": "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0",
-    "snapshot": "api/baselines/v0.3.0-api-r1-reviewed.json"
+    "tag": "api-r1-perf-r1-reviewed-surface",
+    "commit": "6b292156e3e94d3389e9f3b8513445e7eb4ab541",
+    "snapshot": "api/baselines/v0.3.0-perf-r1-reviewed.json"
   },
   "policy": {
     "candidate_sha_is_not_duplicated_in_candidate_tree": true,

@@ -26,12 +26,19 @@ matrix, and immutable evidence are explicit and machine checked.
 - expose bounded, non-owning observability through a provisional exporter
   contract without freezing the current hot-path API
 - compare fixed benchmark scenarios against same-platform baselines with
-  explicit regression budgets
+  explicit regression budgets and warm, adjacent, alternating-order sample
+  pairs so revision-wide collection order cannot manufacture a regression
 - retain paired Linux/Windows 10k mixed slow-reader/Broadcast capacity evidence
-  with exact healthy-probe and bounded recovery-reader lifecycle accounting
+  with exact healthy-probe and bounded recovery-reader lifecycle accounting;
+  freeze the same finite server send-buffer request on both platforms so typed
+  application overload does not depend on each host's kernel default
 - keep the 100k endpoint-attempt profile on explicitly labeled dedicated
   capacity runners; it is not an ordinary hosted-CI or cross-host score gate
-- retain structured 24-hour candidate and 72-hour release endurance evidence
+- retain structured 24-hour candidate and 72-hour release endurance evidence;
+  when the project owner elects not to provide either long-duration runner,
+  permit explicit candidate or release waivers that record the owner, reason,
+  immutable commit, and stage-appropriate revalidated capacity evidence
+  without claiming that the waived endurance durations passed
 - emit one promotion manifest that revalidates the retained raw capacity and
   endurance inputs, binds their exact workflow run/attempt identities to the
   same immutable commit, and distinguishes candidate from release requirements
@@ -45,8 +52,9 @@ matrix, and immutable evidence are explicit and machine checked.
 - no stability promise for provisional upper-layer or platform-backend headers
 - no HTTP, RPC, TLS, UDP, KCP, coroutine, or business-logic expansion
 - no cross-host comparison of raw benchmark scores
-- no release claim based only on a local run, shortened endurance run, or
-  documentation assertion
+- no claim that a waived duration passed based on a local run, shortened run,
+  or documentation assertion; an owner-authorized waived promotion must remain
+  visibly distinct from complete production endurance evidence
 
 ## 4. Compatibility Contract
 - the frozen candidate declares package version `0.3.0`; the CMake package,
@@ -84,6 +92,8 @@ matrix, and immutable evidence are explicit and machine checked.
   server mutation through the existing owner-loop APIs
 - release automation owns evidence files only; it does not own runtime network
   objects or alter callback affinity
+- the capacity server applies its finite send-buffer request inside each
+  connection's established callback on that connection's owner loop
 - this intent adds no re-entrant runtime callback before the metrics exporter
   contract is promoted and tested
 
@@ -95,13 +105,23 @@ matrix, and immutable evidence are explicit and machine checked.
    capacity evidence; 100k endpoint-attempt evidence, when claimed, comes from
    the dedicated capacity lane with the same immutable identity
 5. fault-injection contracts pass on Linux and Windows
-6. one frozen commit completes the 24-hour candidate endurance gate
-7. the same frozen commit completes the 72-hour release endurance gate
-8. candidate promotion revalidates the 10k pair plus 24-hour evidence; release
-   promotion revalidates the dedicated 100k pair plus both 24/72-hour results,
-   with exact source run/attempt identities and the same frozen commit
-9. all supported platform, sanitizer, package, benchmark, and evidence gates
-   are green and retained
+6. one frozen commit completes the 24-hour candidate endurance gate, or the
+   project owner explicitly waives it; the waiver must revalidate same-commit
+   10k capacity evidence and must not be represented as a successful endurance
+   result
+7. the same frozen commit completes the 72-hour release endurance gate, or the
+   project owner explicitly waives both missing candidate/release durations
+   while revalidating same-commit dedicated 100k capacity evidence
+8. candidate promotion revalidates the 10k pair plus either 24-hour evidence
+   or an explicit owner-approved waiver; release promotion revalidates the
+   dedicated 100k pair plus either both 24/72-hour results or an explicit
+   owner-approved waiver, with exact source run/attempt identities and the same
+   frozen commit
+9. all supported platform, sanitizer, package, benchmark, and non-waived
+   evidence gates are green and retained
+   - a failed capacity executable must retain its structured stdout sample and
+     surface its reported error/check failures; toolchain-only failure artifacts
+     are insufficient for remediation review
 10. any release offered for external adoption has an explicit owner-approved
    license; otherwise artifacts remain engineering previews with no use grant
 
@@ -112,8 +132,9 @@ matrix, and immutable evidence are explicit and machine checked.
   declarations are rejected; and exercises deterministic historical API diff
   and compatibility-decision semantics
 - `tests/ci/test_performance_regression.py` verifies the fixed 12-scenario,
-  three-repetition baseline/candidate matrix, reviewed budgets, same-runner
-  workflow wiring, retained evidence, and a real failing-regression fixture
+  three-pair warm/interleaved baseline/candidate matrix, reviewed budgets,
+  same-runner workflow wiring, retained evidence, and a real failing-regression
+  fixture
 - `tests/ci/test_core_capacity_matrix.py` verifies the independent 12-scenario
   Core capacity baseline/candidate profile, matching Linux/Windows parameters,
   reviewed budgets, and the evidence-only Linux accept-topology decision
@@ -125,11 +146,14 @@ matrix, and immutable evidence are explicit and machine checked.
   reset, callback, overload, recovery, and forced-shutdown profiles
 - `tests/ci/test_endurance_gate.py` verifies the uninterrupted-process 24/72-
   hour duration contract, heartbeat/checkpoint evidence, exact source-attempt
-  wiring, and the candidate/release promotion manifest
+  wiring, and the explicit candidate/release waiver workflow boundaries
+- `tests/cmake/test_capacity_profile_contract.py` verifies that each waiver
+  revalidates its stage-appropriate capacity pair and records its approval
 
 ## 8. Review Checklist
 - Is every release claim backed by structured same-commit evidence?
 - Did a stable declaration change without an explicit compatibility decision?
 - Are platform and compiler support boundaries stated precisely?
 - Can any metrics, fault, or endurance path block or mutate a non-owner loop?
-- Are 24-hour and 72-hour results real durations rather than scaled substitutes?
+- Are claimed 24-hour and 72-hour results real durations rather than scaled
+  substitutes, and is every waiver visibly marked as missing evidence?

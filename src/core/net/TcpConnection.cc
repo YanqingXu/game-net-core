@@ -17,8 +17,10 @@
 
 #include <cerrno>
 #include <exception>
+#include <limits>
 #include <new>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 namespace gamenet::net {
@@ -330,6 +332,38 @@ PostResult TcpConnection::tryForceClose() {
 void TcpConnection::setTcpNoDelay(bool on) {
     loop_->assertInLoopThread();
     socket_->setTcpNoDelay(on);
+}
+
+void TcpConnection::setSendBufferSize(std::size_t bytes) {
+    loop_->assertInLoopThread();
+    if (bytes == 0 ||
+        bytes > static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
+        throw std::invalid_argument(
+            "socket send buffer size must fit a positive native int");
+    }
+
+    const int value = static_cast<int>(bytes);
+#ifdef _WIN32
+    const int result = ::setsockopt(
+        socket_->fd(),
+        SOL_SOCKET,
+        SO_SNDBUF,
+        reinterpret_cast<const char*>(&value),
+        static_cast<socklen_t>(sizeof(value)));
+#else
+    const int result = ::setsockopt(
+        socket_->fd(),
+        SOL_SOCKET,
+        SO_SNDBUF,
+        &value,
+        static_cast<socklen_t>(sizeof(value)));
+#endif
+    if (result != 0) {
+        const int error = sockets::lastError();
+        throw std::system_error(
+            std::error_code(error, std::system_category()),
+            "setsockopt(SO_SNDBUF): " + sockets::errorMessage(error));
+    }
 }
 
 void TcpConnection::setContext(std::any context) {

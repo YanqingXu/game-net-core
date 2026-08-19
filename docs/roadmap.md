@@ -5,33 +5,42 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-17
+## Current Roadmap Checkpoint — 2026-08-18
 
 - The current implementation checkpoint is
-  `68b444dd109562d3d69c2b377c3bec90dcd15779`. The REL-C1 candidate is the
-  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-1`; the tag object
+  `669ebb0a7c5c475dea74b12275c66a2ce1876804`. REL-C1 is frozen through the
+  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-5`; the tag object
   and remote ref are the authoritative full-SHA record. It supersedes
-  `v0.3.0-rel-c1-freeze@d3137f9298b47474ea96dc694d44c5c026710039`.
+  `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 120 CTest tests: 8 unit, 99 contract, and 13
-  integration, with 93 threading and 98 lifecycle labels. The `9d2a5be` runtime
-  tree passed a fresh local Windows/IOCP Release 120/120 gate, all 36 repository/
-  API/CI guards, and stable/provisional install consumers 2/2; its API-R1
-  reviewed-surface diff is strictly empty. `68b444d` changes only the aggregate
-  evidence verifier, its regression contract, and CI documentation.
+- The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
+  integration, with 94 threading and 99 lifecycle labels. The new direct
+  socket-option contract and all repository/API/CI guards pass on Windows/IOCP
+  and Linux/epoll; the PERF-R1 reviewed-surface diff is strictly empty.
 - `9d2a5be` closes the post-review TcpServer owner-establishment bookkeeping
   leak and TcpClient construction-failure request wedge with deterministic
   recovery contracts and remains the immutable reviewed-surface checkpoint.
-- REL-C1 is frozen again after run `31992899968` attempt 1 proved all six
-  `d3137f9` producers, consumers 2/2/2, TSan 93, and libFuzzer 1000, but exposed
-  the old aggregate verifier's one-consumer mismatch. No same-SHA remote
-  validation, benchmark, capacity, or endurance result is promoted for the
-  replacement candidate yet.
+- The superseded `refreeze-1` candidate passed REL-V1 and REL-V2 before PERF-R1
+  exposed comparator/high-fd/profile defects. `refreeze-2` passed local REL-V1,
+  but remote runs exposed tag checkout, revision-wide sample-order bias,
+  capacity snapshot interference, stdout flush, and diagnostic decoding gaps.
+  `3d54c08` closes those evidence-tool defects without changing the reviewed
+  stable API. Its local Windows paired regression/Core-capacity matrices and
+  cross-platform candidate-10k repeats pass, but are not release evidence.
+  `refreeze-3` then passed local REL-V1, while REL-V2 run `32039657783` proved
+  that `actions/checkout@v4` flattened the local annotated tag after fetching
+  it. The refreeze-4 workflows restore the exact remote tag object before all
+  repository guards without changing any remote tag. Refreeze-4 then completed
+  REL-V1, REL-V2, and its paired Core benchmark, but capacity run
+  `32043877128` failed twice on Windows when a client I/O deadline made exact
+  accept accounting unreachable. Implementation checkpoint `669ebb0` adds the
+  missing connect/accept/echo/close phase barrier without relaxing that
+  deadline; 9 Windows and 3 Linux local candidate samples pass.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
-  returned `APPROVE`; historical and strict same-line zero-diff artifacts are
-  archived. REL-V1 candidate clean validation is next, followed by same-SHA
-  remote evidence.
+  returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
+  as source-compatible at `api-r1-perf-r1-reviewed-surface`. Fresh REL-V1
+  validation of refreeze-5 is next, followed by same-SHA remote evidence.
 
 ## Phase 1: Project Skeleton
 
@@ -237,6 +246,9 @@ In progress after production hardening:
   evidence for the fixed Core and Phase 4 Release scenarios.
 - [x] Add structured fault-injection coverage and validate the real 24-hour
   candidate plus 72-hour paired Linux endurance infrastructure at `b344318`.
+- [x] Add explicit owner-approved candidate and release endurance waivers for
+  environments that omit long-duration evidence while preserving visible
+  missing-evidence metadata.
 - [x] Synchronize roadmap, assessment, plan, README, and migration status at
   GOV-R2 without promoting historical evidence to the current checkpoint.
 - [x] Complete independent stable Core API review, archive the historical and

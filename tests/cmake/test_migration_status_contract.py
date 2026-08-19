@@ -32,6 +32,39 @@ def git(repo_root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def git_is_ancestor(
+    repo_root: Path,
+    ancestor: str,
+    descendant: str,
+) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    assert result.returncode in {0, 1}, (
+        "git merge-base --is-ancestor failed with "
+        f"{result.returncode}:\n{result.stderr}"
+    )
+    return result.returncode == 0
+
+
+def verify_post_checkpoint_allowlist(
+    changed_paths: set[str],
+    allowed_paths: set[str],
+) -> None:
+    unexpected_checkpoint_drift = changed_paths - allowed_paths
+    assert not unexpected_checkpoint_drift, (
+        "current implementation checkpoint is stale; non-governance paths "
+        "changed after it: "
+        + ", ".join(sorted(unexpected_checkpoint_drift))
+    )
+
+
 def verify_current_intent_inventory(
     status_text: str,
     inventory: IntentInventory,
@@ -119,9 +152,15 @@ def main() -> None:
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     ci_contract = repo_root / "tests" / "ci" / "test_workflow_jobs.py"
     api_review = repo_root / "docs" / "reviews" / "api-r1-stable-core-review.md"
+    perf_api_review = (
+        repo_root / "docs" / "reviews" / "perf-r1-stable-core-additive-review.md"
+    )
     historical_api_diff = repo_root / "docs" / "reviews" / "api-r1-public-api-diff.json"
     compatibility_api_diff = (
-        repo_root / "docs" / "reviews" / "api-r1-public-api-compatibility-diff.json"
+        repo_root / "docs" / "reviews" / "perf-r1-public-api-compatibility-diff.json"
+    )
+    perf_additive_api_diff = (
+        repo_root / "docs" / "reviews" / "perf-r1-public-api-additive-diff.json"
     )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
@@ -143,6 +182,7 @@ def main() -> None:
     goal_text = goal.read_text(encoding="utf-8")
     readme_text = readme.read_text(encoding="utf-8")
     api_review_text = api_review.read_text(encoding="utf-8")
+    perf_api_review_text = perf_api_review.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
@@ -151,13 +191,13 @@ def main() -> None:
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-08-17", migration_status)
-    implementation_checkpoint = "68b444dd109562d3d69c2b377c3bec90dcd15779"
-    superseded_candidate = "d3137f9298b47474ea96dc694d44c5c026710039"
-    superseded_candidate_tag = "v0.3.0-rel-c1-freeze"
-    candidate_tag = "v0.3.0-rel-c1-refreeze-1"
-    reviewed_surface_tag = "api-r1-approved-surface"
-    reviewed_surface_commit = "9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0"
+    require(status_text, "Current production-roadmap audit: 2026-08-18", migration_status)
+    implementation_checkpoint = "669ebb0a7c5c475dea74b12275c66a2ce1876804"
+    superseded_candidate = "c061f9967b9481b70b2faf9a8fee24f5a3e72ffc"
+    superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-4"
+    candidate_tag = "v0.3.0-rel-c1-refreeze-5"
+    reviewed_surface_tag = "api-r1-perf-r1-reviewed-surface"
+    reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -166,10 +206,10 @@ def main() -> None:
     assert freeze_record == {
         "schema": "gamenet.candidate_freeze.v1",
         "release_label": "v0.3.0-production-candidate",
-        "stage": "rel-c1-refrozen",
-        "freeze_date": "2026-08-17",
+        "stage": "rel-c1-refrozen-perf-r1-probe-lifecycle-remediation",
+        "freeze_date": "2026-08-18",
         "candidate": {
-            "branch": "main",
+            "branch": "perf-r1-deterministic-capacity",
             "ref": f"refs/tags/{candidate_tag}",
             "object_type": "annotated-tag",
             "commit_resolution": f"refs/tags/{candidate_tag}^{{commit}}",
@@ -179,14 +219,14 @@ def main() -> None:
         "supersedes": {
             "candidate_ref": f"refs/tags/{superseded_candidate_tag}",
             "candidate_commit": superseded_candidate,
-            "rel_v2_run_id": "31992899968",
+            "rel_v2_run_id": "32043448820",
             "rel_v2_run_attempt": 1,
-            "reason": "aggregate-verifier-install-consumer-count-mismatch",
+            "reason": "capacity-probe-lifecycle-barrier",
         },
         "reviewed_surface": {
             "tag": reviewed_surface_tag,
             "commit": reviewed_surface_commit,
-            "snapshot": "api/baselines/v0.3.0-api-r1-reviewed.json",
+            "snapshot": "api/baselines/v0.3.0-perf-r1-reviewed.json",
         },
         "policy": {
             "candidate_sha_is_not_duplicated_in_candidate_tree": True,
@@ -198,8 +238,13 @@ def main() -> None:
     assert git(repo_root, "cat-file", "-t", f"refs/tags/{candidate_tag}") == "tag"
     candidate_sha = git(repo_root, "rev-parse", f"refs/tags/{candidate_tag}^{{commit}}")
     assert re.fullmatch(r"[0-9a-f]{40}", candidate_sha), candidate_sha
-    assert candidate_sha == git(repo_root, "rev-parse", "HEAD"), (
-        "REL-C1 candidate tag must peel to the exact checked-out commit"
+    assert git_is_ancestor(repo_root, candidate_sha, "HEAD"), (
+        "REL-C1 candidate tag must be an ancestor of the checked-out commit"
+    )
+    require(
+        normalized_status_text,
+        "candidate tag remains an ancestor of the checked-out commit",
+        migration_status,
     )
     assert git(repo_root, "cat-file", "-t", f"refs/tags/{reviewed_surface_tag}") == "tag"
     assert (
@@ -222,11 +267,28 @@ def main() -> None:
         "ideas/idea3.md",
         "plan.md",
         "api/candidate_freeze.json",
-        "api/baselines/v0.3.0-api-r1-reviewed.json",
+        "api/baselines/v0.3.0-perf-r1-reviewed.json",
+        ".github/workflows/ci.yml",
+        ".github/workflows/long-soak.yml",
+        ".github/workflows/windows-self-hosted-ci.yml",
         "docs/development/api_compatibility.md",
-        "docs/reviews/api-r1-public-api-compatibility-diff.json",
-        "docs/reviews/api-r1-stable-core-review.md",
+        "docs/development/capacity_profile.md",
+        "docs/development/ci.md",
+        "docs/development/production_endurance.md",
+        "docs/reviews/perf-r1-public-api-additive-diff.json",
+        "docs/reviews/perf-r1-public-api-compatibility-diff.json",
+        "docs/reviews/perf-r1-stable-core-additive-review.md",
+        "intents/usecases/production_candidate_release.intent.md",
+        "intents/usecases/production_endurance.intent.md",
+        "rules/testing_rules.md",
         "tests/api/test_public_api_manifest.py",
+        "tests/ci/test_long_soak_workflow.py",
+        "tests/ci/test_workflow_jobs.py",
+        "tests/ci/test_endurance_gate.py",
+        "tests/cmake/test_capacity_profile_contract.py",
+        "tests/cmake/test_threading_gate_contracts.py",
+        "tools/verify_production_promotion_evidence.py",
+        "tools/verify_ci_evidence_set.py",
         "tests/cmake/test_migration_status_contract.py",
     }
     changed_since_checkpoint = {
@@ -240,13 +302,22 @@ def main() -> None:
         ).splitlines()
         if path
     }
-    unexpected_checkpoint_drift = (
-        changed_since_checkpoint - allowed_post_checkpoint_paths
+    verify_post_checkpoint_allowlist(
+        changed_since_checkpoint,
+        allowed_post_checkpoint_paths,
     )
-    assert not unexpected_checkpoint_drift, (
-        "current implementation checkpoint is stale; non-governance paths "
-        "changed after it: " + ", ".join(sorted(unexpected_checkpoint_drift))
-    )
+    synthetic_runtime_drift = "src/core/net/unreviewed_runtime_drift.cc"
+    try:
+        verify_post_checkpoint_allowlist(
+            changed_since_checkpoint | {synthetic_runtime_drift},
+            allowed_post_checkpoint_paths,
+        )
+    except AssertionError as error:
+        assert synthetic_runtime_drift in str(error), error
+    else:
+        raise AssertionError(
+            "post-checkpoint allowlist accepted synthetic runtime drift"
+        )
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
@@ -266,8 +337,9 @@ def main() -> None:
     ):
         require(text, superseded_candidate, source)
         require(text, superseded_candidate_tag, source)
-    require(readme_text, "68b444d", readme)
-    require(readme_text, "d3137f9", readme)
+    require(readme_text, "669ebb0", readme)
+    require(readme_text, superseded_candidate, readme)
+    require(readme_text, superseded_candidate_tag, readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
     require(readme_text, "REL-V1", readme)
@@ -301,7 +373,7 @@ def main() -> None:
     require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
-        "The authoritative current implementation checkpoint is `68b444d`",
+        "The authoritative current implementation checkpoint is `669ebb0`",
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)
@@ -327,8 +399,20 @@ def main() -> None:
     require(api_review_text, "Status: `approved-for-candidate-freeze`", api_review)
     require(api_review_text, "/root/api_r1_independent_review", api_review)
     require(api_review_text, "Changed stable-header fingerprints | 19", api_review)
+    require(
+        perf_api_review_text,
+        "Status: `approved-additive-source-compatible`",
+        perf_api_review,
+    )
+    require(perf_api_review_text, reviewed_surface_tag, perf_api_review)
+    require(
+        perf_api_review_text,
+        "TcpConnection::setSendBufferSize",
+        perf_api_review,
+    )
     assert historical_api_diff.exists(), historical_api_diff
     assert compatibility_api_diff.exists(), compatibility_api_diff
+    assert perf_additive_api_diff.exists(), perf_additive_api_diff
     assert "API-R1 stable-surface review is the next" not in readme_text
     assert "API-R1 is next" not in status_text
     require(

@@ -31,6 +31,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -40,6 +41,7 @@
 #else
 #include <fcntl.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <unistd.h>
 #endif
 
@@ -61,6 +63,7 @@ struct Config {
     std::size_t lowWaterBytes{256U * 1024U};
     std::size_t highWaterBytes{512U * 1024U};
     std::size_t hardLimitBytes{2U * 1024U * 1024U};
+    std::size_t serverSendBufferBytes{0};
     std::size_t recoveryThresholdBytes{0};
     std::size_t iocpAcceptDepth{8};
     std::chrono::milliseconds pressureSettle{500};
@@ -289,6 +292,7 @@ void printUsage(std::ostream& output) {
         << "  --low-water-bytes N      connection recovery watermark\n"
         << "  --high-water-bytes N     connection read-pause watermark\n"
         << "  --hard-limit-bytes N     connection pending-output limit\n"
+        << "  --server-send-buffer-bytes N (0 keeps the OS default)\n"
         << "  --recovery-threshold-bytes N\n"
         << "  --pressure-settle-ms N\n"
         << "  --recovery-stable-ms N\n"
@@ -336,6 +340,14 @@ Config parseArgs(int argc, char* argv[]) {
         } else if (option == "--hard-limit-bytes") {
             config.hardLimitBytes =
                 parseSize(value, option, 1, 1024U * 1024U * 1024U);
+        } else if (option == "--server-send-buffer-bytes") {
+            config.serverSendBufferBytes =
+                parseSize(
+                    value,
+                    option,
+                    0,
+                    static_cast<std::size_t>(
+                        (std::numeric_limits<int>::max)()));
         } else if (option == "--recovery-threshold-bytes") {
             config.recoveryThresholdBytes =
                 parseSize(value, option, 0, 1024U * 1024U * 1024U);
@@ -771,6 +783,7 @@ private:
                 throw std::runtime_error(
                     "connect: deadline expired");
             }
+#ifdef _WIN32
             const auto remainingMicroseconds =
                 std::chrono::duration_cast<
                     std::chrono::microseconds>(remaining);
@@ -787,18 +800,39 @@ private:
             FD_ZERO(&failed);
             FD_SET(fd_, &writable);
             FD_SET(fd_, &failed);
-#ifdef _WIN32
             constexpr int descriptorCount = 0;
-#else
-            const int descriptorCount = fd_ + 1;
-#endif
             const int ready = ::select(
                 descriptorCount,
                 nullptr,
                 &writable,
                 &failed,
                 &timeoutValue);
+#else
+            const auto remainingMilliseconds =
+                std::chrono::ceil<std::chrono::milliseconds>(
+                    remaining);
+            const auto boundedTimeout = std::min(
+                remainingMilliseconds.count(),
+                static_cast<decltype(
+                    remainingMilliseconds.count())>(
+                    std::numeric_limits<int>::max()));
+            pollfd descriptor{
+                .fd = fd_,
+                .events = POLLOUT,
+                .revents = 0,
+            };
+            const int ready = ::poll(
+                &descriptor,
+                1,
+                static_cast<int>(boundedTimeout));
+#endif
             if (ready > 0) {
+#ifndef _WIN32
+                if ((descriptor.revents & POLLNVAL) != 0) {
+                    throw std::runtime_error(
+                        "poll(connect): invalid socket");
+                }
+#endif
                 const int socketError =
                     gamenet::net::sockets::getSocketError(fd_);
                 if (socketError != 0) {
@@ -813,14 +847,18 @@ private:
                 throw std::runtime_error(
                     "connect: deadline expired");
             }
-            const int selectError =
+            const int waitError =
                 gamenet::net::sockets::lastError();
             if (!gamenet::net::sockets::isInterrupted(
-                    selectError)) {
+                    waitError)) {
                 throw std::runtime_error(
+#ifdef _WIN32
                     "select(connect): " +
+#else
+                    "poll(connect): " +
+#endif
                     gamenet::net::sockets::errorMessage(
-                        selectError));
+                        waitError));
             }
         }
     }
@@ -932,6 +970,11 @@ struct ProbeAttempt {
     double probeUs{};
 };
 
+struct ProbeSlot {
+    ProbeAttempt attempt;
+    ClientSocket socket;
+};
+
 class HealthyProbePool {
 public:
     HealthyProbePool(
@@ -974,14 +1017,40 @@ public:
         for (auto& worker : workers_) {
             worker.join();
         }
+        for (auto& slot : slots_) {
+            slot.socket.closeAbortively();
+        }
     }
 
-    std::vector<ProbeAttempt> runBatch(
+    std::vector<ProbeAttempt> connectBatch(
         std::size_t attemptCount) {
         {
             std::lock_guard lock(mutex_);
-            slots_.assign(attemptCount, {});
-            attemptCount_ = attemptCount;
+            for (auto& slot : slots_) {
+                slot.socket.closeAbortively();
+            }
+            slots_.clear();
+            slots_.resize(attemptCount);
+        }
+        runPhase(Phase::Connect);
+        return attempts();
+    }
+
+    std::vector<ProbeAttempt> exchangeAndCloseBatch() {
+        runPhase(Phase::Exchange);
+        return attempts();
+    }
+
+private:
+    enum class Phase {
+        Connect,
+        Exchange,
+    };
+
+    void runPhase(Phase phase) {
+        {
+            std::lock_guard lock(mutex_);
+            phase_ = phase;
             nextIndex_.store(0, std::memory_order_relaxed);
             completedWorkers_ = 0;
             ++generation_;
@@ -993,13 +1062,21 @@ public:
                 return completedWorkers_ == workerCount_;
             });
         }
-        return slots_;
     }
 
-private:
+    std::vector<ProbeAttempt> attempts() const {
+        std::vector<ProbeAttempt> result;
+        result.reserve(slots_.size());
+        for (const auto& slot : slots_) {
+            result.push_back(slot.attempt);
+        }
+        return result;
+    }
+
     void workerMain() {
         std::uint64_t observedGeneration = 0;
         while (true) {
+            Phase phase;
             {
                 std::unique_lock lock(mutex_);
                 workAvailable_.wait(lock, [&] {
@@ -1010,6 +1087,7 @@ private:
                     return;
                 }
                 observedGeneration = generation_;
+                phase = phase_;
             }
 
             while (true) {
@@ -1017,51 +1095,59 @@ private:
                     nextIndex_.fetch_add(
                         1,
                         std::memory_order_relaxed);
-                if (index >= attemptCount_) {
+                if (index >= slots_.size()) {
                     break;
                 }
 
-                ProbeAttempt attempt;
-                ProbeFailure stage = ProbeFailure::Connect;
-                ClientSocket socket;
-                try {
+                auto& slot = slots_[index];
+                if (phase == Phase::Connect) {
                     const auto connectStarted = Clock::now();
-                    socket = ClientSocket::connectToWithDeadline(
-                        address_,
-                        connectTimeout_);
-                    const auto connectFinished = Clock::now();
-                    attempt.clientConnected = true;
-                    attempt.connectUs =
-                        std::chrono::duration<
-                            double,
-                            std::micro>(
-                                connectFinished -
-                                connectStarted)
-                            .count();
+                    try {
+                        slot.socket =
+                            ClientSocket::connectToWithDeadline(
+                                address_,
+                                connectTimeout_);
+                        const auto connectFinished = Clock::now();
+                        slot.attempt.clientConnected = true;
+                        slot.attempt.connectUs =
+                            std::chrono::duration<
+                                double,
+                                std::micro>(
+                                    connectFinished -
+                                    connectStarted)
+                                .count();
+                    } catch (const std::exception&) {
+                        slot.attempt.failure = ProbeFailure::Connect;
+                    }
+                    continue;
+                }
 
-                    stage = ProbeFailure::Send;
+                if (!slot.attempt.clientConnected) {
+                    continue;
+                }
+                ProbeFailure stage = ProbeFailure::Send;
+                try {
                     const auto probeStarted = Clock::now();
-                    socket.sendAll(payload_);
+                    slot.socket.sendAll(payload_);
                     stage = ProbeFailure::Receive;
                     std::string response(payload_.size(), '\0');
-                    socket.receiveExact(response);
-                    attempt.probeUs =
+                    slot.socket.receiveExact(response);
+                    slot.attempt.probeUs =
                         std::chrono::duration<
                             double,
                             std::micro>(
                                 Clock::now() - probeStarted)
                             .count();
                     if (response != payload_) {
-                        attempt.failure =
+                        slot.attempt.failure =
                             ProbeFailure::PayloadMismatch;
                     } else {
-                        attempt.succeeded = true;
+                        slot.attempt.succeeded = true;
                     }
                 } catch (const std::exception&) {
-                    attempt.failure = stage;
+                    slot.attempt.failure = stage;
                 }
-                socket.closeAbortively();
-                slots_[index] = attempt;
+                slot.socket.closeAbortively();
             }
 
             {
@@ -1078,15 +1164,15 @@ private:
     std::chrono::milliseconds connectTimeout_;
     std::string payload_;
     std::size_t workerCount_;
-    std::vector<ProbeAttempt> slots_;
+    std::vector<ProbeSlot> slots_;
     std::vector<std::thread> workers_;
     std::atomic<std::size_t> nextIndex_{0};
     std::mutex mutex_;
     std::condition_variable workAvailable_;
     std::condition_variable batchComplete_;
-    std::size_t attemptCount_{0};
     std::size_t completedWorkers_{0};
     std::uint64_t generation_{0};
+    Phase phase_{Phase::Connect};
     bool stopping_{false};
 };
 
@@ -1284,7 +1370,7 @@ void runHealthyProbes(
                             scheduleFraction));
             std::this_thread::sleep_until(scheduledAt);
 
-            auto attempts = pool.runBatch(batchSize);
+            auto attempts = pool.connectBatch(batchSize);
             result.healthyProbe.attempted =
                 scheduledAttempts;
             ++result.healthyProbe.batches;
@@ -1293,6 +1379,23 @@ void runHealthyProbes(
                     ++result.healthyProbe.clientConnected;
                     connectSamples.push_back(
                         attempt.connectUs);
+                } else {
+                    ++result.healthyProbe.connectFailures;
+                }
+            }
+
+            if (!state.waitForProbeAccepted(
+                    static_cast<std::size_t>(
+                        result.healthyProbe.clientConnected),
+                    config.timeout)) {
+                throw std::runtime_error(
+                    "timed out waiting for healthy probe accepts");
+            }
+
+            attempts = pool.exchangeAndCloseBatch();
+            for (const auto& attempt : attempts) {
+                if (!attempt.clientConnected) {
+                    continue;
                 }
                 if (attempt.succeeded) {
                     ++result.healthyProbe.probeSucceeded;
@@ -1316,14 +1419,6 @@ void runHealthyProbes(
                     ++result.healthyProbe.receiveFailures;
                     break;
                 }
-            }
-
-            if (!state.waitForProbeAccepted(
-                    static_cast<std::size_t>(
-                        result.healthyProbe.clientConnected),
-                    config.timeout)) {
-                throw std::runtime_error(
-                    "timed out waiting for healthy probe accepts");
             }
             if (!state.waitForProbeClosed(
                     static_cast<std::size_t>(
@@ -1387,29 +1482,66 @@ AggregateOutputSnapshot aggregateOutput(
 AggregateRetentionSnapshot aggregateRetention(
     const std::vector<ConnectionHandle>& handles,
     std::chrono::milliseconds timeout) {
-    std::vector<std::future<
-        gamenet::net::TcpConnectionMemoryRetentionSnapshot>>
-        futures;
-    futures.reserve(handles.size());
+    struct OwnerBatch {
+        gamenet::net::EventLoopExecutor executor;
+        std::vector<gamenet::net::TcpConnectionPtr> connections;
+    };
+
+    std::unordered_map<std::uint64_t, std::size_t> batchIndexes;
+    std::vector<OwnerBatch> batches;
     for (const auto& handle : handles) {
-        auto promise = std::make_shared<std::promise<
-            gamenet::net::TcpConnectionMemoryRetentionSnapshot>>();
+        const auto executor = handle.endpoint->ownerExecutor();
+        const auto [found, inserted] = batchIndexes.try_emplace(
+            executor.id(),
+            batches.size());
+        if (inserted) {
+            batches.push_back({.executor = executor});
+        }
+        batches[found->second].connections.push_back(
+            handle.connection);
+    }
+
+    std::vector<std::future<AggregateRetentionSnapshot>> futures;
+    futures.reserve(batches.size());
+    for (auto& batch : batches) {
+        auto promise = std::make_shared<
+            std::promise<AggregateRetentionSnapshot>>();
         futures.push_back(promise->get_future());
-        const auto connection = handle.connection;
-        const auto posted =
-            handle.endpoint->ownerExecutor().post(
-                [connection, promise] {
-                    try {
-                        promise->set_value(
-                            connection->memoryRetentionSnapshot());
-                    } catch (...) {
-                        promise->set_exception(
-                            std::current_exception());
+        const auto posted = batch.executor.post(
+            [connections = std::move(batch.connections), promise] {
+                AggregateRetentionSnapshot aggregate;
+                try {
+                    for (const auto& connection : connections) {
+                        const auto snapshot =
+                            connection->memoryRetentionSnapshot();
+                        aggregate.inputBufferBytes +=
+                            snapshot.inputBuffer.retainedCapacityBytes;
+                        aggregate.outputBufferBytes +=
+                            snapshot.outputBuffer.retainedCapacityBytes;
+                        aggregate.transportReadStorageBytes +=
+                            snapshot.transportReadStorageBytes;
+                        aggregate.totalConnectionBytes +=
+                            snapshot.totalRetainedBytes;
+                        aggregate.peakInputBufferBytes +=
+                            snapshot.inputBuffer.peakRetainedCapacityBytes;
+                        aggregate.peakOutputBufferBytes +=
+                            snapshot.outputBuffer.peakRetainedCapacityBytes;
+                        aggregate.peakTransportReadStorageBytes +=
+                            snapshot.peakTransportReadStorageBytes;
+                        aggregate.inputTrimCount +=
+                            snapshot.inputBuffer.trimCount;
+                        aggregate.outputTrimCount +=
+                            snapshot.outputBuffer.trimCount;
                     }
-                });
+                    promise->set_value(aggregate);
+                } catch (...) {
+                    promise->set_exception(
+                        std::current_exception());
+                }
+            });
         if (posted != gamenet::net::PostResult::Accepted) {
             throw std::runtime_error(
-                "owner rejected retained-memory snapshot");
+                "owner rejected retained-memory snapshot batch");
         }
     }
 
@@ -1421,24 +1553,20 @@ AggregateRetentionSnapshot aggregateRetention(
                 "timed out waiting for retained-memory snapshot");
         }
         const auto snapshot = future.get();
-        aggregate.inputBufferBytes +=
-            snapshot.inputBuffer.retainedCapacityBytes;
-        aggregate.outputBufferBytes +=
-            snapshot.outputBuffer.retainedCapacityBytes;
+        aggregate.inputBufferBytes += snapshot.inputBufferBytes;
+        aggregate.outputBufferBytes += snapshot.outputBufferBytes;
         aggregate.transportReadStorageBytes +=
             snapshot.transportReadStorageBytes;
         aggregate.totalConnectionBytes +=
-            snapshot.totalRetainedBytes;
+            snapshot.totalConnectionBytes;
         aggregate.peakInputBufferBytes +=
-            snapshot.inputBuffer.peakRetainedCapacityBytes;
+            snapshot.peakInputBufferBytes;
         aggregate.peakOutputBufferBytes +=
-            snapshot.outputBuffer.peakRetainedCapacityBytes;
+            snapshot.peakOutputBufferBytes;
         aggregate.peakTransportReadStorageBytes +=
             snapshot.peakTransportReadStorageBytes;
-        aggregate.inputTrimCount +=
-            snapshot.inputBuffer.trimCount;
-        aggregate.outputTrimCount +=
-            snapshot.outputBuffer.trimCount;
+        aggregate.inputTrimCount += snapshot.inputTrimCount;
+        aggregate.outputTrimCount += snapshot.outputTrimCount;
     }
     return aggregate;
 }
@@ -1844,6 +1972,8 @@ void printDocument(
         << "    \"threads\": " << config.threads << ",\n"
         << "    \"messages\": " << config.messages << ",\n"
         << "    \"payload_bytes\": " << config.payloadBytes << ",\n"
+        << "    \"server_send_buffer_bytes\": "
+        << config.serverSendBufferBytes << ",\n"
         << "    \"pressure_settle_ms\": "
         << config.pressureSettle.count() << ",\n"
         << "    \"recovery_stable_ms\": "
@@ -2117,6 +2247,11 @@ void printDocument(
         << (result.passed() ? "true" : "false") << "\n"
         << "  }\n"
         << "}\n";
+    std::cout.flush();
+    if (!std::cout) {
+        throw std::runtime_error(
+            "failed to flush capacity profile JSON");
+    }
 }
 
 int run(const Config& config) {
@@ -2236,12 +2371,16 @@ int run(const Config& config) {
                     state.markDisconnected(connection.get());
                     return;
                 }
-                if (state.classifyConnected(
-                        connection.get(),
-                        config.connections)) {
-                    return;
-                }
                 try {
+                    if (config.serverSendBufferBytes != 0) {
+                        connection->setSendBufferSize(
+                            config.serverSendBufferBytes);
+                    }
+                    if (state.classifyConnected(
+                            connection.get(),
+                            config.connections)) {
+                        return;
+                    }
                     auto endpoint = std::make_shared<
                         gamenet::transport::TcpTransportEndpoint>(
                         gamenet::transport::TransportSessionId{

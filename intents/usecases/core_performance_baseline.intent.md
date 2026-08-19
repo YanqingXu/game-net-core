@@ -37,16 +37,23 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - report connection count, EventLoop worker count, backend, completion mode,
   build type, IOCP accept depth, parameters, and measurements as one versioned
   JSON document
-- provide a manual-only workflow that runs a 1/2/4-worker, 256/1,024-connection,
-  and 4/16-slow-client Release matrix three times for both baseline and candidate
+- compare a frozen Core v1 baseline with a Core v2 candidate by requiring every
+  legacy parameter to remain present and equal while allowing only candidate
+  v2 additions; any shared-parameter drift remains a fail-closed evidence error
+- provide a manual-only workflow that warms each baseline/candidate scenario
+  once, then runs a 1/2/4-worker, 256/1,024-connection, and 4/16-slow-client
+  Release matrix as three adjacent, alternating-order sample pairs
 - keep that reviewed 12-scenario release-regression inventory frozen while a
   separate Core capacity profile runs matching 1k/10k idle, 64/256/1,024-byte
-  small-echo at 1/2/4 workers, and 1k/s sustained-churn scenarios three times
-  for both the reviewed capacity baseline and candidate on the same runner
+  small-echo at 1/2/4 workers, and 1k/s sustained-churn scenarios with the same
+  warm paired/interleaved sampling on the same runner
 - retain a structured Linux accept-topology decision that can trigger a
   `SO_REUSEPORT` experiment only when sustained rate misses target and the
   isolated ready-accept phase is both dominant and saturated
 - return a non-zero exit code when setup, I/O, timeout, or schema production fails
+- decode benchmark stdout as strict UTF-8 JSON while retaining non-UTF-8
+  platform diagnostics from stderr with escaped bytes, so localized failure
+  text cannot hide the child exit status
 
 ---
 
@@ -200,7 +207,9 @@ applies reviewed same-runner relative regression budgets outside the executable.
 - compare runs only when scenario parameters, build type, backend/completion mode,
   host context, and command are recorded
 - production-candidate regression compares baseline and candidate only on the
-  same runner, uses three-sample medians, and retains both raw sample sets
+  same runner, warms both executables per scenario, alternates which revision
+  runs first in each adjacent pair, uses three-sample medians, and retains both
+  raw sample sets plus fail-closed paired-sampling metadata
 - the frozen 12-scenario release-regression matrix and its historical baseline
   remain unchanged; the Core capacity matrix has its own reviewed baseline,
   budget, scenario inventory, and artifact roots

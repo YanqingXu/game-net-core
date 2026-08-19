@@ -222,6 +222,13 @@ For lifecycle-sensitive modules, tests should include:
   its final shared lease is released, one connection contributes no bytes
   before the first read and at most 4 KiB afterward, category/total peaks are
   monotonic, and every current category returns to zero after teardown
+- same-runner performance regression must validate one unrecorded warmup per
+  revision and scenario, record three adjacent baseline/candidate pairs with
+  alternating first-run order, and fail closed when pair role, peer commit,
+  warmup count, order rule, raw sample, or sample hash metadata drifts
+- performance runners decode stdout as strict UTF-8 evidence but preserve
+  localized/non-UTF-8 stderr with byte escapes; a diagnostic decoder failure
+  cannot replace the benchmark process's real nonzero result
 - the slow-broadcast-recovery capacity profile must use real TCP endpoints,
   hold reads during pressure, keep aggregate connection pending bytes within
   the configured connection hard-limit sum, keep dispatcher outstanding bytes
@@ -231,14 +238,34 @@ For lifecycle-sensitive modules, tests should include:
   before reporting recovery
 - the scale-ready mixed capacity profile must recover slow clients through a
   fixed-size nonblocking reader pool with stable disjoint socket ownership;
-  exact worker/assigned/closed counts must converge before teardown, and 10k
-  candidate versus 100k dedicated endpoint-attempt parameter drift must be
-  rejected by structured evidence guards
+  exact worker/assigned/closed counts must converge before teardown; candidate
+  and dedicated runs must record the same reviewed finite server send-buffer
+  request so Linux and Windows typed overload is independent of OS defaults;
+  each healthy-probe batch must keep successfully connected sockets open until
+  the cumulative server-accept count converges, then run exact echo/abortive
+  close and wait for cumulative server-close convergence, so a client I/O
+  deadline cannot make exact lifecycle accounting unreachable;
+  retained-memory sampling must group connections by owner and enqueue exactly
+  one owner-affine snapshot batch per loop so evidence collection does not
+  starve the concurrent healthy probes;
+  and 10k candidate versus 100k dedicated endpoint-attempt parameter drift
+  must be rejected by structured evidence guards
 - a production promotion artifact must revalidate retained raw capacity and
   endurance evidence rather than trusting a copied summary; candidate mode
-  requires 10k plus 24h, release mode requires dedicated 100k plus same-SHA
-  24h/72h, and SHA, workflow run, rerun attempt, stage, profile, duration, hash,
-  or source-inventory drift must fail closed
+  requires 10k plus 24h unless the project owner records an explicit candidate
+  waiver, in which case the exact 10k pair is still required; release mode
+  requires dedicated 100k plus same-SHA 24h/72h unless the owner records an
+  explicit release waiver, in which case the exact dedicated 100k pair is still
+  required; waiver artifacts must use status `waived`, and SHA, workflow run,
+  rerun attempt, stage, profile, duration, hash, waiver approval, or source-
+  inventory drift must fail closed
+- a nonzero or invalid-JSON capacity-profile sample must retain its raw stdout
+  under the run artifact; structured failures report the document error plus
+  false checks, and stderr-only or toolchain-only evidence cannot support
+  capacity remediation
+- a capacity-profile success explicitly flushes and checks the complete stdout
+  document before returning zero; a single stdio-buffer prefix is invalid
+  evidence even when the child process otherwise reports success
 
 ## 9. AI-Specific Requirement
 When generating code, generate tests in the same change set.
@@ -274,3 +301,6 @@ for executing these runtime contracts on Linux and Windows.
   corresponding cycle
 - shortened smoke runs and combined shards are orchestration evidence only and
   cannot substitute for the fixed 24-hour or 72-hour gate
+- an owner-approved candidate or release waiver is missing-evidence metadata,
+  not a shortened substitute or a successful endurance result; it authorizes
+  only its named promotion stage

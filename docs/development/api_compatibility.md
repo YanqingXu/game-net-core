@@ -45,7 +45,7 @@ Run the verifier and emit the deterministic historical diff:
 ```text
 python tests/api/test_public_api_manifest.py
 python tools/compare_public_api_manifest.py \
-  --compatibility-baseline api/baselines/v0.3.0-api-r1-reviewed.json \
+  --compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json \
   --fail-on-compatibility-decision \
   --fail-on-stable-surface-review \
   --compatibility-output public-api-compatibility-diff.json \
@@ -307,3 +307,35 @@ cross-thread diagnostics must post through the connection owner executor.
 The direct compatibility and lifecycle evidence is
 `tests/contract/tcp_connection/test_tcp_connection_lifecycle.cpp` and
 `tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp`.
+
+## PERF-R1 Send-Buffer Additive Review
+
+PERF-R1 adds `TcpConnection::setSendBufferSize(std::size_t)` to the stable Core
+source surface. The addition does not remove or change an existing declaration,
+constructor, default, enum value, ownership rule, or callback order. Existing
+callers remain source compatible. ABI remains outside the pre-1.0 policy.
+
+The method is an explicit owner-loop-only socket-option mutation. It accepts a
+positive value representable by the native `int`, requests `SO_SNDBUF`, and
+reports invalid range or system-call failure. Operating-system rounding is not
+presented as an exact effective-size guarantee, and the setting does not replace
+the application output-memory hard limit. The capacity harness invokes it only
+from the established callback before application sends.
+
+Direct evidence is
+`tests/contract/tcp_connection/test_tcp_connection_socket_options.cpp`; the
+thread contract also requires the owner-loop assertion. The PERF-R1 capacity
+contract freezes one 4 KiB request for Linux and Windows and separately checks
+typed overload, recovery, probe health, and teardown.
+
+The focused decision record is
+[`perf-r1-stable-core-additive-review.md`](../reviews/perf-r1-stable-core-additive-review.md).
+Annotated tag `api-r1-perf-r1-reviewed-surface` binds the reviewed implementation
+to `6b292156e3e94d3389e9f3b8513445e7eb4ab541`; the matching snapshot is
+`api/baselines/v0.3.0-perf-r1-reviewed.json`. The archived prior-to-new diff
+contains exactly the `TcpConnection.h` fingerprint decision, and the blocking
+comparison from the new snapshot is zero. This remains non-self-referential to
+the separate current candidate tag `v0.3.0-rel-c1-refreeze-5`. Evidence-tool
+remediation after the reviewed API checkpoint changes no installed header or
+target fingerprint; the candidate implementation checkpoint is
+`669ebb0a7c5c475dea74b12275c66a2ce1876804`.

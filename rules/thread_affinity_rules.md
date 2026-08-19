@@ -157,6 +157,9 @@ No other direct mutation path is allowed for core loop state.
   server-map state
 - Socket-option mutation, context access, callback replacement, connection
   establishment, and connection destruction are owning-EventLoop-thread only
+- `TcpConnection::setSendBufferSize()` follows that socket-option rule. A
+  capacity driver may invoke it from the established callback before sending,
+  but never from its client/management thread
 - Mandatory output-buffer, backpressure, write-interest, and disconnecting
   half-close transitions occur before optional high-water/write-complete
   callback submission

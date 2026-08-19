@@ -123,8 +123,17 @@ state.
 - Mixed-profile client workers own only distinct attempt slots and sockets.
   Server connection/message callbacks remain owner-loop-affine; benchmark
   coordination classifies post-publication connections as probes under one
-  benchmark mutex and waits for cumulative server accept/close convergence
-  before reusing the next batch.
+  benchmark mutex. Each live batch completes its client connects, waits for
+  cumulative server-accept convergence while those sockets remain open, then
+  performs the exact echo and abortive close, and finally waits for cumulative
+  server-close convergence before reusing the next batch. A client-side I/O
+  deadline therefore cannot close an established-but-not-yet-published probe
+  and make the exact accept accounting permanently unreachable.
+- Retained-memory sampling groups the slow connections by owner identity and
+  posts exactly one batch callback per owner loop. Each callback reads all of
+  its connections on that owner, so the observational pressure/recovery sample
+  cannot manufacture a thousand-item normal-queue burst that delays the
+  concurrent healthy probes.
 - The mixed profile reserves explicit loop/server output headroom for at most
   one configured probe batch without changing slow connections' per-connection
   hard limit or Broadcast admission limits. Its v2 evidence requires exact
@@ -132,6 +141,10 @@ state.
   server-close, zero-failure healthy probes, a common paced interval, and
   internally consistent connect/probe P99 and attempt-rate measurements before
   the slow/Broadcast recovery result can pass.
+- Candidate and dedicated mixed profiles request the same finite server
+  `SO_SNDBUF` in each owner-loop established callback. This keeps the 32 KiB
+  payload/eight-payload application limit while making typed overload
+  independent of the host kernel's default send-buffer capacity.
 - The scale-ready mixed profile hands every slow client socket to exactly one
   member of a fixed-size recovery-reader pool after the pressure sample. Each
   worker owns a stable disjoint socket shard, uses nonblocking bounded reads,
@@ -143,6 +156,9 @@ state.
   terminal client-side close, and the actual worker count equals the smaller
   of the configured ceiling and slow-client population. Historical v1
   slow-only and v2 mixed artifacts retain their original validation contracts.
+- The capacity executable explicitly flushes and checks its complete stdout
+  JSON before a successful exit; process-teardown buffering is not accepted as
+  evidence publication.
 
 ## Migration Provenance
 

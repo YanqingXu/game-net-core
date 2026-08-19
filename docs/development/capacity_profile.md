@@ -18,7 +18,8 @@ recovery-reader contract uses `gamenet.capacity_profile.v3`.
 One run has three phases:
 
 1. Connect the configured number of real TCP clients, set each receive buffer
-   to 4 KiB, and do not read.
+   to 4 KiB, request the configured finite server send buffer from each
+   connection's owner-loop established callback, and do not read.
 2. Route and dispatch all shared payloads. Wait for every endpoint to publish
    one terminal result, then sample pending, retained, fixed-storage, and RSS
    peaks while the readers remain stalled.
@@ -47,8 +48,18 @@ baseline, pressure, recovery, and post-teardown sample. A short phase sample
 therefore cannot exceed the reported peak merely because the sampler missed it.
 
 `TcpConnection::memoryRetentionSnapshot()` is owner-loop-only. The profile
-posts each low-frequency sample through the endpoint owner executor; it never
-reads connection-owned Buffer state directly from its driver thread.
+groups connections by executor identity and posts one low-frequency batch per
+owner loop; that callback samples all of its local connections. It never reads
+connection-owned Buffer state directly from its driver thread, and the sample
+does not inject one normal-queue task per connection while healthy probes are
+running.
+`TcpConnection::setSendBufferSize()` is also owner-loop-only. A zero profile
+value preserves the operating-system default; a positive value is a requested
+native `SO_SNDBUF` size and the operating system may round the effective size.
+Historical documents that predate this parameter are interpreted as the zero
+default, while the fixed candidate gate requires the field and exact value.
+The fixed candidate/dedicated value is an evidence parameter, not a replacement
+for the application-level pending-output hard limit.
 
 ## Mixed pressure contract
 
@@ -60,10 +71,16 @@ connect deadline, sends one fixed small payload, requires its exact echo, and
 closes abortively. Post-publication probe connections are classified under the
 benchmark coordination mutex and never become Broadcast targets.
 
-At most one probe batch is live. The next batch is not released until the
-server's cumulative accepted and closed counts have converged. Loop/server
-output budgets reserve headroom for that one batch; the per-connection slow
-client limit and Broadcast routing/dispatch limits do not change.
+At most one probe batch is live. Its persistent workers first establish every
+client socket in the batch and keep successful connects open until the server's
+cumulative accepted count converges. Only then do they send the payload,
+require the exact echo, and close abortively; the next batch is not released
+until the cumulative closed count also converges. This ordering keeps the
+existing client I/O deadline strict without letting it close a TCP-established
+probe before the owner-loop connection callback can publish that accept.
+Loop/server output budgets reserve headroom for that one batch; the
+per-connection slow client limit and Broadcast routing/dispatch limits do not
+change.
 
 After the pressure sample, v3 hands each slow socket to exactly one member of a
 fixed-size recovery-reader pool. Each worker owns a stable disjoint shard,
@@ -124,6 +141,7 @@ build-capacity\benchmarks\Release\gamenet_capacity_profile.exe `
   --low-water-bytes 32768 `
   --high-water-bytes 65536 `
   --hard-limit-bytes 262144 `
+  --server-send-buffer-bytes 4096 `
   --recovery-threshold-bytes 0 `
   --pressure-settle-ms 500 `
   --recovery-stable-ms 250 `
@@ -145,9 +163,9 @@ build-capacity\benchmarks\Release\gamenet_capacity_profile.exe `
 
 ## 2026-07-30 local M3-P1 seed
 
-The first Windows MSVC Release run used the command above. It is a local
-capacity-matrix seed, not candidate/release evidence and not a regression
-threshold.
+The first Windows MSVC Release run used the original slow-only command above
+with the operating-system send-buffer default. It is a local capacity-matrix
+seed, not candidate/release evidence and not a regression threshold.
 
 | Observation | Result | Bound |
 | --- | ---: | ---: |
@@ -234,9 +252,12 @@ capacity tests:
 | `candidate-10k` | 1,000 | 10,000 | 500 | 16 | 3 | hosted Linux and Windows |
 | `dedicated-100k` | 10,000 | 100,000 | 10,000 | 64 | 1 | dedicated Linux and Windows |
 
-Both profiles keep the reviewed 32 KiB payload, 32/64/256 KiB watermarks, and
-the same typed overload, recovery, healthy-probe lifecycle, fixed-storage, and
-RSS contracts. The dedicated profile therefore admits an aggregate pending
+Both profiles keep the reviewed 32 KiB payload, 32/64/256 KiB watermarks, and a
+4 KiB server `SO_SNDBUF` request. The finite request makes the typed application
+overload phase reproducible on both Linux/epoll and Windows/IOCP without
+increasing logical traffic or changing the eight-payload application hard
+limit. They retain the same recovery, healthy-probe lifecycle, fixed-storage,
+and RSS contracts. The dedicated profile therefore admits an aggregate pending
 ceiling of 2,621,440,000 bytes and requires both provisioned runner labels and
 the explicit `RUN_DEDICATED_100K` acknowledgement.
 
@@ -250,17 +271,38 @@ throughput, and RSS values remain observational; the pair gate compares
 contract identity and pass/fail evidence rather than treating unlike hosts as
 a performance contest.
 
+If the executable returns nonzero or emits invalid JSON, the runner retains its
+raw stdout as `sample-N-failure.json`. Structured failures also report the
+document's `error` plus false checks in the workflow log. This keeps a failed
+hosted-runner invariant diagnosable; the retained failure remains negative
+evidence and never produces a passing gate manifest.
+
+The executable explicitly flushes and checks stdout after the closing JSON
+delimiter and before returning success. This prevents an otherwise successful
+process from publishing only the first buffered prefix of the document.
+
 A local Windows Release orchestration preflight completed all three
 `candidate-10k` repetitions with exact 10,000 endpoint attempts, 500/500
 healthy probes, and 16 workers accounting for all 1,000 recovery sockets in
 each repetition. This is implementation evidence, not an immutable
 cross-platform release artifact.
 
+The 2026-08-17 PERF-R1 remediation preflight repeated the complete
+`candidate-10k` profile three times on each local platform with the fixed 4 KiB
+server send-buffer request. Windows produced 8,252 accepted plus 1,748 typed
+overload results in every repetition; WSL Linux produced 8,000 plus 2,000.
+Every sample completed 500/500 healthy probes, accounted all 1,000 recovery
+sockets, converged pending output to zero, and passed the v3 validator. These
+precommit results establish profile feasibility only; release evidence must be
+regenerated from the immutable candidate tag on the workflow runners.
+
 The mixed capacity gate complements rather than replaces the one-process
-long-soak lane. Candidate promotion still requires the capacity pair and the
-24-hour endurance artifact from the same frozen commit; the 72-hour soak and
-the dedicated 100k pair remain production-readiness evidence on provisioned
-hosts. The long-soak workflow consumes exact capacity and endurance
-run/attempt identities and uses
+long-soak lane. Candidate promotion normally requires the capacity pair and
+the 24-hour endurance artifact from the same frozen commit. An explicit
+owner-approved `candidate-waiver` may omit the 24-hour artifact while retaining
+exact paired 10k validation; `release-waiver` may omit both 24/72-hour artifacts
+while retaining the exact dedicated 100k pair. Both carry visible `waived`
+status instead of a duration pass. The long-soak workflow consumes exact capacity
+and endurance run/attempt identities and uses
 `tools/verify_production_promotion_evidence.py` to revalidate their raw inputs
 before emitting the candidate/release promotion manifest.

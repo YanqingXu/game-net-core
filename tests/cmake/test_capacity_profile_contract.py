@@ -74,6 +74,7 @@ def valid_document() -> dict[str, object]:
             "threads": 2,
             "messages": 64,
             "payload_bytes": 262144,
+            "server_send_buffer_bytes": 0,
             "pressure_settle_ms": 500,
             "recovery_stable_ms": 250,
             "timeout_ms": 30000,
@@ -232,6 +233,7 @@ def capacity_gate_document(
             "threads",
             "messages",
             "payload_bytes",
+            "server_send_buffer_bytes",
             "pressure_settle_ms",
             "recovery_stable_ms",
             "timeout_ms",
@@ -404,6 +406,9 @@ def main() -> None:
     source = repo_root / "benchmarks" / "capacity" / "main.cpp"
     validator = repo_root / "tools" / "validate_capacity_profile.py"
     intent = repo_root / "intents" / "modules" / "broadcast.intent.md"
+    tcp_intent = (
+        repo_root / "intents" / "modules" / "tcp_connection.intent.md"
+    )
     release_intent = (
         repo_root
         / "intents"
@@ -411,6 +416,7 @@ def main() -> None:
         / "production_candidate_release.intent.md"
     )
     testing_rules = repo_root / "rules" / "testing_rules.md"
+    thread_rules = repo_root / "rules" / "thread_affinity_rules.md"
     docs = repo_root / "docs" / "development" / "capacity_profile.md"
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     capacity_workflow = (
@@ -428,8 +434,10 @@ def main() -> None:
     source_text = source.read_text(encoding="utf-8")
     validator_text = validator.read_text(encoding="utf-8")
     intent_text = intent.read_text(encoding="utf-8")
+    tcp_intent_text = tcp_intent.read_text(encoding="utf-8")
     release_intent_text = release_intent.read_text(encoding="utf-8")
     rules_text = testing_rules.read_text(encoding="utf-8")
+    thread_rules_text = thread_rules.read_text(encoding="utf-8")
     docs_text = docs.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     capacity_workflow_text = capacity_workflow.read_text(
@@ -459,7 +467,13 @@ def main() -> None:
         "mixed-pressure-recovery",
         "TcpTransportEndpoint",
         "SO_RCVBUF",
+        "connectBatch",
+        "exchangeAndCloseBatch",
         "aggregateRetention",
+        "batchIndexes.try_emplace",
+        "executor.id()",
+        "std::promise<AggregateRetentionSnapshot>",
+        "owner rejected retained-memory snapshot batch",
         "memoryRetentionSnapshot",
         "networkFixedStorageRetentionSnapshot",
         "EndpointOverloaded",
@@ -468,12 +482,27 @@ def main() -> None:
         "sampledWorkingSetPeak",
         "HealthyProbePool",
         "connectToWithDeadline",
+        "#include <poll.h>",
+        "pollfd descriptor{",
+        "::poll(",
+        "poll(connect): invalid socket",
+        "--server-send-buffer-bytes",
+        "setSendBufferSize",
         "healthyProbeAccounted",
         "drainAvailable",
         "readerClosedSockets",
         "recoveryReaderPoolAccounted",
+        "failed to flush capacity profile JSON",
     ):
         require(source_text, fragment, source)
+    healthy_probe_body = source_text.split("void runHealthyProbes(", 1)[1]
+    connect_batch = healthy_probe_body.index("pool.connectBatch(batchSize)")
+    accepted_barrier = healthy_probe_body.index("state.waitForProbeAccepted(")
+    exchange_batch = healthy_probe_body.index("pool.exchangeAndCloseBatch()")
+    closed_barrier = healthy_probe_body.index("state.waitForProbeClosed(")
+    assert (
+        connect_batch < accepted_barrier < exchange_batch < closed_barrier
+    ), "healthy probe lifecycle barriers are out of order"
     for fragment in (
         "gamenet.capacity_profile.v1",
         "gamenet.capacity_profile.v2",
@@ -483,6 +512,7 @@ def main() -> None:
         "healthy probe accounting is inconsistent",
         "recovery reader accounting is inconsistent",
         "RSS is deliberately observational",
+        "server send buffer exceeds the native int range",
     ):
         require(validator_text, fragment, validator)
     require(intent_text, "gamenet_capacity_profile --scenario slow-broadcast-recovery", intent)
@@ -491,6 +521,16 @@ def main() -> None:
         intent_text,
         "fixed-size recovery-reader pool",
         intent,
+    )
+    require(
+        intent_text,
+        "`SO_SNDBUF`",
+        intent,
+    )
+    require(
+        tcp_intent_text,
+        "test_tcp_connection_socket_options.cpp",
+        tcp_intent,
     )
     require(
         release_intent_text,
@@ -509,6 +549,36 @@ def main() -> None:
     )
     require(
         rules_text,
+        "reviewed finite server send-buffer",
+        testing_rules,
+    )
+    require(
+        rules_text,
+        "one owner-affine snapshot batch per loop",
+        testing_rules,
+    )
+    require(
+        rules_text,
+        "keep successfully connected sockets open",
+        testing_rules,
+    )
+    require(
+        intent_text,
+        "cumulative server-accept convergence",
+        intent,
+    )
+    require(
+        intent_text,
+        "exactly one batch callback per owner loop",
+        intent,
+    )
+    require(
+        thread_rules_text,
+        "TcpConnection::setSendBufferSize()",
+        thread_rules,
+    )
+    require(
+        rules_text,
         "a production promotion artifact must revalidate",
         testing_rules,
     )
@@ -522,6 +592,8 @@ def main() -> None:
         "M3-P1-D scale seed",
         "gamenet.capacity_profile.v3",
         "fixed-size recovery-reader pool",
+        "4 KiB server `SO_SNDBUF` request",
+        "2026-08-17 PERF-R1 remediation preflight",
     ):
         require(docs_text, fragment, docs)
     require(
@@ -551,8 +623,12 @@ def main() -> None:
         '"dedicated-100k"',
         "connections=1000",
         "connections=10000",
+        '"server_send_buffer_bytes": 4096',
         "validate_gate_document",
         "capacity gate requires the scale-ready v3 schema",
+        "sample-{repetition}-failure.json",
+        "reported error:",
+        "failed checks:",
     ):
         require(gate_runner_text, fragment, gate_runner)
     for fragment in (
@@ -564,9 +640,12 @@ def main() -> None:
         require(pair_verifier_text, fragment, pair_verifier)
     for fragment in (
         "gamenet.production_promotion_evidence.v1",
+        "gamenet.production_promotion_waiver.v1",
         "capacity pair manifest does not match revalidated raw evidence",
         "capacity profile does not satisfy the promotion stage",
         "release promotion requires candidate-24h evidence",
+        '"owner-waived"',
+        '"owner_authorized_promotion"',
     ):
         require(
             promotion_verifier_text,
@@ -587,6 +666,12 @@ def main() -> None:
         expected_backend="iocp",
         expected_build_type="Release",
         expected_connections=4,
+    )
+    legacy_v1_document = copy.deepcopy(document)
+    legacy_v1_document["parameters"].pop("server_send_buffer_bytes")  # type: ignore[union-attr]
+    capacity_validator.validate_document(
+        legacy_v1_document,
+        label="legacy v1 without send-buffer evidence",
     )
     mixed_document = valid_mixed_document()
     capacity_validator.validate_document(
@@ -617,6 +702,11 @@ def main() -> None:
         ("fixed-storage leak", ("process", "fixed_storage_after_teardown", "total_retained_bytes"), 1),
         ("incoherent RSS peak", ("process", "working_set_peak_bytes"), 14999999),
         ("false producer check", ("checks", "passed"), False),
+        (
+            "server send buffer native overflow",
+            ("parameters", "server_send_buffer_bytes"),
+            2_147_483_648,
+        ),
     )
     for label, path, value in mutations:
         mutated = copy.deepcopy(document)
@@ -728,11 +818,59 @@ def main() -> None:
     assert candidate_profile.endpoint_attempts == 10_000
     assert candidate_profile.repetitions == 3
     assert candidate_profile.parameters["connections"] == 1_000
+    assert candidate_profile.parameters["server_send_buffer_bytes"] == 4_096
     assert candidate_profile.parameters["reader_concurrency_limit"] == 16
     assert dedicated_profile.endpoint_attempts == 100_000
     assert dedicated_profile.repetitions == 1
     assert dedicated_profile.parameters["connections"] == 10_000
+    assert dedicated_profile.parameters["server_send_buffer_bytes"] == 4_096
     assert dedicated_profile.parameters["reader_concurrency_limit"] == 64
+
+    with tempfile.TemporaryDirectory(
+        prefix="gamenet-capacity-failed-sample-"
+    ) as directory:
+        failure_root = Path(directory)
+        failure_document = {
+            "error": "pending output did not recover",
+            "checks": {
+                "pending_within_limit": True,
+                "recovery_stable": False,
+                "passed": False,
+            },
+        }
+        failure_stdout = json.dumps(failure_document) + "\n"
+        failure_detail = capacity_gate.retain_failed_sample(
+            failure_root,
+            2,
+            failure_stdout,
+        )
+        assert (failure_root / "sample-2-failure.json").read_text(
+            encoding="utf-8"
+        ) == failure_stdout
+        assert (
+            "reported error: pending output did not recover"
+            in failure_detail
+        )
+        assert "failed checks: passed, recovery_stable" in failure_detail
+        assert capacity_gate.retain_failed_sample(
+            failure_root,
+            3,
+            "",
+        ) == "sample emitted no stdout"
+
+        invalid_stdout = '{"schema": invalid\n'
+        invalid_detail = capacity_gate.retain_failed_sample(
+            failure_root,
+            4,
+            invalid_stdout,
+        )
+        assert (failure_root / "sample-4-failure.json").read_text(
+            encoding="utf-8"
+        ) == invalid_stdout
+        assert invalid_detail.startswith(
+            "stdout retained as sample-4-failure.json; "
+            "stdout JSON parse failed:"
+        )
 
     with tempfile.TemporaryDirectory(
         prefix="gamenet-capacity-pair-"
@@ -885,6 +1023,34 @@ def main() -> None:
         )
         assert len(candidate_promotion["endurance"]) == 1
 
+        waiver_reason = (
+            "Owner hardware cannot remain online for long-duration evidence"
+        )
+        candidate_waiver = promotion.verify_promotion(
+            stage="candidate",
+            capacity_root=candidate_capacity_root,
+            endurance_evidence=None,
+            candidate_sha=candidate_sha,
+            capacity_run_id=run_id,
+            capacity_run_attempt=run_attempt,
+            promotion_run_id="54322",
+            promotion_run_attempt=1,
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by="YanqingXu",
+        )
+        assert candidate_waiver["schema"] == promotion.WAIVER_SCHEMA
+        assert candidate_waiver["status"] == "waived"
+        assert candidate_waiver["endurance_policy"] == "owner-waived"
+        assert candidate_waiver["endurance"] == []
+        assert candidate_waiver["waiver"] == {
+            "scope": "candidate-24h",
+            "approved_by": "YanqingXu",
+            "reason": waiver_reason,
+            "duration_evidence_complete": False,
+            "owner_authorized_promotion": True,
+        }
+
         dedicated_capacity_root = (
             evidence_root / "dedicated-capacity"
         )
@@ -995,6 +1161,28 @@ def main() -> None:
             for item in release_promotion["endurance"]
         ] == ["candidate-24h", "release-72h"]
 
+        release_waiver = promotion.verify_promotion(
+            stage="release",
+            capacity_root=dedicated_capacity_root,
+            endurance_evidence=None,
+            candidate_sha=candidate_sha,
+            capacity_run_id=dedicated_run_id,
+            capacity_run_attempt=dedicated_run_attempt,
+            promotion_run_id="60003",
+            promotion_run_attempt=1,
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by="YanqingXu",
+        )
+        assert release_waiver["status"] == "waived"
+        assert release_waiver["capacity"]["profile"] == "dedicated-100k"
+        assert release_waiver["endurance"] == []
+        assert (
+            release_waiver["waiver"]["scope"]
+            == "candidate-24h+release-72h"
+        )
+        assert release_waiver["waiver"]["owner_authorized_promotion"] is True
+
         def expect_promotion_failure(
             label: str,
             **overrides: object,
@@ -1030,6 +1218,26 @@ def main() -> None:
         expect_promotion_failure(
             "endurance source attempt drift",
             promotion_run_attempt=2,
+        )
+        expect_promotion_failure(
+            "waiver with current endurance evidence",
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by="YanqingXu",
+        )
+        expect_promotion_failure(
+            "waiver without a meaningful reason",
+            endurance_evidence=None,
+            waive_endurance=True,
+            waiver_reason="too short",
+            waiver_approved_by="YanqingXu",
+        )
+        expect_promotion_failure(
+            "waiver without an approver",
+            endurance_evidence=None,
+            waive_endurance=True,
+            waiver_reason=waiver_reason,
+            waiver_approved_by=None,
         )
         expect_promotion_failure(
             "candidate capacity used for release",
