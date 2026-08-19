@@ -31,6 +31,7 @@ ALLOWED_TARGETS = {
     "gamenet_single_loop_inline_echo",
     "gamenet_multi_io_queued_echo",
     "gamenet_multi_io_fixed_tick_echo",
+    "gamenet_multi_io_sharded_hybrid_echo",
     "gamenet_core_benchmark",
     "gamenet_game_server_pipeline_demo",
     "gamenet_phase4_benchmark",
@@ -86,6 +87,10 @@ CONCRETE_ACTIVE_ARTIFACTS = {
     "intents/usecases/multi_io_dedicated_fixed_tick_profile.intent.md": (
         "example",
         "gamenet_multi_io_fixed_tick_echo",
+    ),
+    "intents/usecases/multi_io_sharded_hybrid_profile.intent.md": (
+        "example",
+        "gamenet_multi_io_sharded_hybrid_echo",
     ),
     "intents/usecases/core_performance_baseline.intent.md": (
         "benchmark",

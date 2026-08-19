@@ -400,6 +400,26 @@ It must not blur these roles.
 - accepted owner-output posts own encoded bytes and route temporarily; stop or
   disconnect generation revocation makes them stale before endpoint mutation
 
+## 11.5 Runtime Profile D Ownership
+- the caller owns and outlives the base EventLoop, every logic EventLoop, and
+  non-installed `MultiIoShardedHybrid`; each unique logic loop owns exactly one
+  cell for the immutable Profile lifetime
+- TcpConnection context owns one network-owner PacketFramer and shares one
+  generation-revocable route containing endpoint plus owner executor; selecting
+  another cell transfers no transport ownership
+- Profile shared state owns immutable policies/router/handler, route registry,
+  aggregate metrics/logic-stop promise, and a finite vector of cells; each cell
+  owns its bounded FIFO, sequence counter, executor, timer, and callback state
+- queued commands own copied payload and shard key plus route identity/
+  generation; they own no endpoint, TcpConnection, EventLoop, or mutable game
+  state
+- accepted cell callbacks retain shared Profile/cell state only through their
+  committed frame; owner-output posts temporarily retain route plus encoded
+  bytes and become stale after stop/disconnect revocation
+- stop revokes Profile/routes before closing every cell queue, requests timer
+  retirement on each cell owner, waits for committed drains/ticks, and fulfills
+  one aggregate logic future only after all cells are retired
+
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists

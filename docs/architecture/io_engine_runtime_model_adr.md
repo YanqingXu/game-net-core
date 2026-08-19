@@ -96,10 +96,11 @@ Runtime composition uses two independent decisions:
 - `ConnectionPlacementPolicy`: selects the EventLoop that owns a connection;
 - `LogicShardPolicy`: selects the LogicLoop that owns session/game-state work.
 
-RTM-R1 will specify three TCP-only Profiles: Network-only, Network/logic split,
-and provisional Hybrid. Every handoff is bounded and generation-checked. Hybrid
-runtime code waits until at least two simpler Profiles have contract and
-performance evidence.
+RTM-R1 specifies three TCP-only Profiles: single-loop inline event,
+multi-I/O queued event, and multi-I/O dedicated fixed tick. RTM-R2 adds the
+fourth, sharded Hybrid composition only after the three simpler Profiles have
+contract and performance evidence. Every cross-domain handoff is bounded and
+generation-checked.
 
 ## Ownership, Re-entry, and Shutdown
 
@@ -170,9 +171,12 @@ count/byte budgets bound each dispatch, the normal EventLoop queue is the only
 continuation path, and queue rejection, handler overrun/exception, protocol
 failure, or output overload terminates the connection. The runnable echo and
 contract establish the zero-cross-domain-handoff baseline without publishing a
-new stable Profile API. Profile B `MultiIoQueuedEvent` is the next delivery
-slice; common installed abstractions remain deferred until at least two
-Profiles produce matching contract and performance evidence.
+new stable Profile API. Profiles B and C subsequently established bounded
+queued-event and authoritative fixed-tick vertical slices. Profile D now
+establishes independent connection placement and stable player/room/scene
+sharding across bounded logic cells; its event and fixed-tick lanes preserve
+cell-local FIFO without promising cross-cell global order. All four remain
+non-installed while common capability review is pending.
 
 ## Current Coupling Inventory
 
@@ -207,7 +211,7 @@ slice. It will be added with the slice rather than as an empty placeholder.
 | IOE-C1 | `tests/contract/io_engine/test_completion_engine.cpp` | IOCP sync-error, partial/segmented write, high-water resume and completion-drain tests | cancel-before-dequeue retains lease; direct dispatch is budgeted; observer replacement retires driver state without upper callback |
 | Network-only | `tests/contract/runtime_model/test_network_only_profile.cpp` | TcpServer/TcpConnection lifecycle and memory tests | callback/thread mismatch and bounded shutdown |
 | Network/logic split | `tests/contract/runtime_model/test_network_logic_split_profile.cpp` | LogicLoop and pipeline handoff/saturation/shutdown tests | saturated handoff, stale binding, close race |
-| Hybrid contract | `tests/contract/runtime_model/test_hybrid_profile_contract.cpp` | broadcast multi-loop and pipeline Tick tests | forbidden inline fallback and Tick starvation |
+| Sharded Hybrid | `tests/contract/runtime_model/test_sharded_hybrid_profile.cpp` | Profiles B/C, broadcast multi-loop, and pipeline Tick tests | coupled placement, owner migration, cell saturation bleed, event/tick overtaking, or stale output |
 | Cross-platform profiles | `tests/integration/runtime_model/test_tcp_runtime_profiles.cpp` | pipeline and broadcast integration tests | identical lifecycle result on epoll and IOCP |
 
 For every Profile, the focused contracts cover lifecycle, saturation, handoff,

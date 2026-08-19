@@ -105,6 +105,7 @@ jobs:
           python3 tests/cmake/test_runtime_profile_contract.py
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
+          python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -123,7 +124,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build \
-            --expected-total 127 \
+            --expected-total 128 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -165,7 +166,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'python3 tools/compare_public_api_manifest.py --compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json --fail-on-compatibility-decision --fail-on-stable-surface-review --compatibility-output ci-evidence/public-api-compatibility-diff.json --output ci-evidence/public-api-diff.json' \
             --command 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 127 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 128 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build --parallel' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
@@ -311,6 +312,7 @@ jobs:
           python3 tests/cmake/test_runtime_profile_contract.py
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
+          python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -328,7 +330,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-asan \
-            --expected-total 127 \
+            --expected-total 128 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -388,7 +390,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 127 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 128 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-asan --parallel' \
             --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
@@ -507,6 +509,7 @@ jobs:
           python3 tests/cmake/test_runtime_profile_contract.py
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
+          python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -524,8 +527,8 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-tsan \
-            --expected-total 127 \
-            --expect-label threading=100 \
+            --expected-total 128 \
+            --expect-label threading=101 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -551,7 +554,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 127 --expect-label threading=100 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 128 --expect-label threading=101 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-tsan --parallel' \
             --command 'ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
@@ -663,6 +666,7 @@ jobs:
           python3 tests/cmake/test_runtime_profile_contract.py
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
+          python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -679,7 +683,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-release \
-            --expected-total 127 \
+            --expected-total 128 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -705,7 +709,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 127 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 128 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-release --parallel' \
             --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
@@ -853,6 +857,7 @@ jobs:
           python tests/cmake/test_runtime_profile_contract.py
           python tests/cmake/test_multi_io_queued_profile_contract.py
           python tests/cmake/test_dedicated_fixed_tick_profile_contract.py
+          python tests/cmake/test_sharded_hybrid_profile_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py
@@ -875,7 +880,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows `
             --config Debug `
-            --expected-total 127 `
+            --expected-total 128 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -922,7 +927,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 127 --output ci-evidence/ctest-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 128 --output ci-evidence/ctest-inventory.json' `
             --command 'cmake --build build-windows --config Debug --parallel' `
             --command 'ctest --test-dir build-windows -C Debug --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows --config Debug --prefix $pwd/build-windows/_install' `
@@ -1076,6 +1081,7 @@ jobs:
           python tests/cmake/test_runtime_profile_contract.py
           python tests/cmake/test_multi_io_queued_profile_contract.py
           python tests/cmake/test_dedicated_fixed_tick_profile_contract.py
+          python tests/cmake/test_sharded_hybrid_profile_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py
@@ -1098,7 +1104,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows-release `
             --config Release `
-            --expected-total 127 `
+            --expected-total 128 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build Release
@@ -1145,7 +1151,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows-release -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 127 --output ci-evidence/ctest-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 128 --output ci-evidence/ctest-inventory.json' `
             --command 'cmake --build build-windows-release --config Release --parallel' `
             --command 'ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows-release --config Release --prefix $pwd/build-windows-release/_install' `

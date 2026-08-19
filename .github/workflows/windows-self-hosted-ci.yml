@@ -129,6 +129,7 @@ jobs:
             "tests/cmake/test_runtime_profile_contract.py"
             "tests/cmake/test_multi_io_queued_profile_contract.py"
             "tests/cmake/test_dedicated_fixed_tick_profile_contract.py"
+            "tests/cmake/test_sharded_hybrid_profile_contract.py"
             "tests/cmake/test_release_safe_tests.py"
             "tests/ci/test_workflow_jobs.py"
             "tests/ci/test_long_soak_workflow.py"
@@ -168,7 +169,7 @@ jobs:
           py -3 tools/verify_ctest_inventory.py `
             --test-dir "$env:GAMENET_BUILD_DIR" `
             --config "$env:GAMENET_CONFIGURATION" `
-            --expected-total 127 `
+            --expected-total 128 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build

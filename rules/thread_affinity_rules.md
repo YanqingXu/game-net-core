@@ -87,6 +87,26 @@ No other direct mutation path is allowed for core loop state.
   future stays pending until cadence setup/retirement plus an in-flight tick can
   no longer invoke a handler
 
+## 3.4 Runtime Profile D
+- `MultiIoShardedHybrid` uses at least two TcpServer connection-owner workers
+  and at least two distinct caller-owned logic EventLoops; one logic loop owns
+  one cell, its FIFO, event drain, fixed-rate timer, and handler execution
+- connection placement is configured only on TcpServer; stable key hashing
+  independently selects a logic cell and never moves an established connection
+- network owners run only bounded routing/framing and submit copied immutable
+  commands; they never infer a cell from their worker index or mutate logic
+- an event command posts one coalesced bounded cell drain; a fixed command posts
+  no immediate logic work. Event drains stop at a fixed head, and the cell's
+  fixed-rate tick releases the ordered prefix under one total budget
+- handler output posts only through the captured connection owner executor and
+  revalidates generation before endpoint mutation
+- lifecycle/configuration is base-owner-only; each cell's timer/drain/handler
+  callbacks are its logic-owner-only; synchronized metrics may be read from any
+  thread
+- stop revokes all routes, discards bounded queues, and keeps the aggregate
+  logic future pending until every timer is retired and every committed cell
+  callback returns
+
 ## 4. runInLoop
 - If current thread == owner thread: execute immediately
 - Else: enqueue and wakeup loop if needed

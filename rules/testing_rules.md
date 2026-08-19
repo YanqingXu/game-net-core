@@ -181,6 +181,22 @@ Contract tests verify:
 - Profile C metrics expose fixed-storage tick jitter P50/P99/P999, duration and
   queue-age P99/P999, max queue age/commands per tick, catch-up/skip/overrun,
   typed failures, owner violations, and exact cross-domain handoffs
+- Profile D uses two real network owners and two distinct logic cell owners;
+  metrics and handler observations prove the policies are independent
+- one connection submits stable player/room/scene keys that select two cells
+  without changing its captured network owner; two connections on different
+  network owners using one key select the same logic cell
+- each cell assigns a strict monotonic sequence. An event command behind a
+  fixed-tick command cannot overtake it, while an event-only command on another
+  cell progresses before that tick; cross-cell global ordering is not asserted
+- per-cell saturation closes only the affected route and leaves a different
+  cell able to accept/process work; key, router, queue, post, handler, output,
+  and stopped failures remain distinguishable
+- callback-active stop closes/discards every bounded cell queue, revokes active
+  output, keeps the aggregate logic future pending through committed work and
+  all timer retirements, then reports exact per-cell/aggregate drops
+- Profile D support/example/benchmark targets remain non-installed and the
+  structured stable public API diff remains empty
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents

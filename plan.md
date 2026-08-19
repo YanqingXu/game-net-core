@@ -10,7 +10,7 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：127（8/106/13；threading 100、lifecycle 105）。API-R1 已完成，
+当前测试基线：128（8/107/13；threading 101、lifecycle 106）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -250,12 +250,12 @@ capability Engine。IOE-R1 在精确提交
 
 启动条件：RTM-R1 至少两个 Profile 有完整合同和数字证据。
 
-- [ ] 分离 `ConnectionPlacementPolicy` 与 `LogicShardPolicy`；
-- [ ] 已建立 TCP 连接不迁移 owner loop；
-- [ ] 命令按 player/room/scene key 进入有界逻辑 cell；
-- [ ] cell 内有序，跨 cell 不承诺全局顺序；
-- [ ] event-driven 事务路径与 FixedTick 模拟路径可以并存；
-- [ ] Actor、AOI、Room、World、脚本和业务状态继续位于 Core 外。
+- [x] 分离 `ConnectionPlacementPolicy` 与 `LogicShardPolicy`；
+- [x] 已建立 TCP 连接不迁移 owner loop；
+- [x] 命令按 player/room/scene key 进入有界逻辑 cell；
+- [x] cell 内有序，跨 cell 不承诺全局顺序；
+- [x] event-driven 事务路径与 FixedTick 模拟路径可以并存；
+- [x] Actor、AOI、Room、World、脚本和业务状态继续位于 Core 外。
 
 ## 11. IOE-X1 与后续 Transport
 
@@ -359,13 +359,13 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **RTM-R2 sharding contract：RTM-R1 Profile C `MultiIoDedicatedFixedTick` 已于
-> `da57edc887421503e93ca743afb8a3373642c878` 完成权威 fixed-rate cadence、两种
-> skip/bounded-catch-up 策略、有界 tick drain、generation-safe owner 回送、双阶段
-> 停止和双平台定向数字基线。立即从三个已验证 Profile 提取最小共同能力审查输入，
-> 先定义 `ConnectionPlacementPolicy` 与 `LogicShardPolicy` 的失败合同。**
+> **IOE-X1 one-shot completion contract：RTM-R2 Profile D
+> `MultiIoShardedHybrid` 已完成独立 connection placement / logic sharding、至少两个
+> 有界 cell、cell 内严格顺序、event/tick 无超越、generation-safe owner 回送和隔离式
+> 饱和处理。下一切片直接在 experimental、default-off 边界定义 io_uring one-shot
+> accept/recv/send、SQ-full rejection、cancel/terminal lease 与 epoll fallback 合同。**
 
-ARCH-G1 独立 review 与 RTM-R2 contract 继续并行，不形成冻结点。下一个可运行目标不是
-新发布 tag，也不是立即安装三个 Profile 的组合接口，而是直接交付 RTM-R2 首个有界
-sharding 合同；Profile A/B/C 保持 provisional、非安装，Linux/epoll 与 stable public
-surface 持续全绿。
+ARCH-G1 独立 review 与跨 Profile 共同能力审查继续并行，不形成冻结点。Profile A/B/C/D
+保持 provisional、非安装；在共同能力审查形成明确兼容性决定前不提升 installed runtime
+surface。IOE-X1 先交付失败合同和最小 one-shot vertical slice，不顺带开放 multishot、
+provided buffers、fixed files、zero-copy 或 SQPOLL。

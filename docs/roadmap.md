@@ -15,8 +15,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 127 CTest tests: 8 unit, 106 contract, and 13
-  integration, with 100 threading and 105 lifecycle labels. The IOE-R2
+- The current inventory is 128 CTest tests: 8 unit, 107 contract, and 13
+  integration, with 101 threading and 106 lifecycle labels. The IOE-R2
   Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
   and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
   the PERF-R1 reviewed-surface diff remains strictly empty.
@@ -59,8 +59,11 @@ See `migration_status.md` for the current checked state of these phases.
   Profile C (`MultiIoDedicatedFixedTick`) is integrated at
   `da57edc887421503e93ca743afb8a3373642c878` with authoritative fixed-rate
   cadence, bounded catch-up/skip, bounded tick drain, generation-safe owner
-  return, and dual-platform directional numbers. RTM-R2 sharding contracts are
-  now the active front while ARCH-G1 independent review proceeds in parallel.
+  return, and dual-platform directional numbers. RTM-R2 Profile D is closed in
+  the current implementation tree with independent placement/sharding, bounded
+  cell-local Hybrid ordering, isolated saturation, and no installed API.
+  IOE-X1 one-shot contracts are now the active front while ARCH-G1 and
+  cross-Profile capability review proceed in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 
@@ -312,5 +315,6 @@ Active execution front:
     `da57edc887421503e93ca743afb8a3373642c878` with authoritative fixed-rate
     cadence, bounded catch-up/skip, bounded tick drain, dual-platform full
     gates, and a non-installed benchmark/example.
-- [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at
-  least two Profiles have contract and performance evidence.
+- [x] RTM-R2: bounded logic sharding and Hybrid execution are integrated as the
+  non-installed Profile D vertical slice after Profiles A/B/C established
+  contract and performance evidence.

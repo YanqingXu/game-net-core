@@ -84,14 +84,22 @@ queued cancellation, waits for any committed current tick, retires the cadence,
 and exposes separate network and logic completion futures. This composition is
 non-installed and does not change the installed LogicLoop contract.
 
-### Profile D: Sharded Hybrid (deferred)
+### Profile D: Sharded Hybrid
 
 Connection callbacks stay on their network EventLoop, while selected stateful
 or tick-driven work is sent to a bounded logic shard. Inline work is allowed
 only for operations declared safe by the Profile contract; overload must not
-silently switch execution domains. Hybrid remains deferred until the three
-simpler Profiles have contract/performance evidence and a separate RTM-R2
-intent authorizes sharding.
+silently switch execution domains. The three simpler Profiles now have
+contract/performance evidence, and RTM-R2 authorizes the non-installed
+`MultiIoShardedHybrid` composition.
+
+At least two distinct caller-owned logic EventLoops each own one cell. Stable
+hashing of an immutable player/room/scene key selects a cell independently of
+TcpServer's connection placement. One connection may submit to multiple cells
+without moving its network owner. Each cell owns one bounded FIFO and preserves
+its sequence. Event-driven drains stop at an earlier fixed-tick head; the fixed-
+rate tick releases the ordered prefix under a total budget, so hybrid lanes
+coexist without overtaking. Different cells make no global-order promise.
 
 ## 4. Ownership and Thread Affinity
 
@@ -171,10 +179,18 @@ Each Profile must state and test:
   typed failures, and owner-executor return path.
 - `examples/runtime_profiles/multi_io_fixed_tick_echo.cpp` is the runnable
   Profile C TCP echo composition.
+- `tests/contract/runtime_model/test_sharded_hybrid_profile.cpp` verifies
+  Profile D independent placement, stable sharding, cell ordering, event/tick
+  coexistence, saturation isolation, generation-safe output, and shutdown.
+- `tests/cmake/test_sharded_hybrid_profile_contract.py` guards Profile D's
+  non-installed topology, per-cell bounds, stable hash, fixed-rate cadence,
+  no-overtake rule, and owner-executor return path.
+- `examples/runtime_profiles/multi_io_sharded_hybrid_echo.cpp` is the runnable
+  Profile D TCP echo composition.
 
-RTM-R1 adds Profile-specific contracts before exposing runtime Profile types.
-Existing tests are the regression anchors, not a claim that all three Profiles
-already exist.
+RTM-R1 and RTM-R2 add Profile-specific contracts before exposing runtime
+Profile types. All four vertical slices now exist as non-installed compositions;
+their tests are regression anchors, not authorization for a stable Profile API.
 
 ## 8. Non-Goals
 
@@ -182,7 +198,8 @@ already exist.
 - no work stealing across EventLoop owners;
 - no protocol or experimental transport promotion;
 - no hidden global executor or shared mutable game state;
-- no Hybrid runtime implementation in RTM-R1.
+- no installed Hybrid runtime API, connection migration, or shared mutable game
+  state in RTM-R2.
 
 ## 9. Review Questions
 

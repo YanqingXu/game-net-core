@@ -294,14 +294,15 @@ Runtime Model
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
   多 I/O owner、独立逻辑 owner、有界合并唤醒和 generation-safe 回送；
   `MultiIoDedicatedFixedTick` 已证明权威 fixed-rate tick、skip/bounded catch-up、有界
-  tick drain 和双阶段停止；三个 Runtime Profile 都保持非安装。`LogicLoop`、Pipeline
-  示例和 Broadcast 则展示其他跨执行域组合与有界背压。
+  tick drain 和双阶段停止；`MultiIoShardedHybrid` 已证明连接放置与逻辑分片独立、
+  多 cell 有界隔离、cell 内顺序以及 event/tick 共存。四个 Runtime Profile 都保持
+  非安装。`LogicLoop`、Pipeline 示例和 Broadcast 则展示其他跨执行域组合与有界背压。
 
 当前张力也已经明确：
 
-- 三个 TCP Runtime Profile 已完成垂直合同和定向数字验证，但尚未完成跨 Profile 的
-  共同能力审查、logic sharding 与 Hybrid 合同；
-- Profile A/B/C 的组合接口仍故意留在非安装 example/support 层；三个 Profile 只触发
+- 四个 TCP Runtime Profile 已完成垂直合同，跨 Profile 的共同能力审查仍未完成；
+  Profile D 的 logic sharding 与 Hybrid 合同不自动授权公共抽象；
+- Profile A/B/C/D 的组合接口仍故意留在非安装 example/support 层；四个 Profile 只触发
   后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
   明确审查的 breaking line；
