@@ -264,6 +264,13 @@ IOE-X1 authorizes one experimental Linux completion vertical slice:
   default-off/non-installed Linux target, epoll fallback, raw-kernel operation
   allowlist, explicit finite budgets, CI execution, and rejection of multishot,
   provided buffers, fixed files, zero-copy, and SQPOLL.
+- `benchmarks/io_uring/one_shot.cpp` is an opt-in, non-CTest directional
+  benchmark. It keeps a finite number of one-shot Send/Recv operations in
+  flight over a real socket, validates every terminal notice, and reports
+  message/operation throughput, P50/P99/P999 latency, owned-byte convergence,
+  shutdown latency, SQ-full rejection, and cross-domain fallback counts. It is
+  evidence for the isolated experimental Engine, not permission to replace the
+  production epoll path.
 
 Every Engine implementation slice adds a focused contract before replacing a
 backend path. Cross-platform full CTest and the core benchmark are required for

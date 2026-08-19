@@ -19,6 +19,8 @@ SKIP_FILES = {
 }
 ACTIVE_EXPERIMENTAL_SOURCE_PREFIX = "src/experimental/io_uring/"
 ACTIVE_EXPERIMENTAL_TEST_PATHS = {
+    "benchmarks/CMakeLists.txt",
+    "benchmarks/io_uring/one_shot.cpp",
     "tests/CMakeLists.txt",
     "tests/cmake/test_io_uring_completion_engine_contract.py",
     "tests/contract/io_engine/test_io_uring_completion_engine.cpp",

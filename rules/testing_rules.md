@@ -137,6 +137,11 @@ Contract tests verify:
 - static governance keeps epoll as the normal Linux Core path and rejects
   multishot, provided-buffer selection, registered/fixed files, zero-copy Send,
   SQPOLL, install/export, or a Windows experimental fallback in IOE-X1
+- the IOE-X1 directional benchmark is opt-in, Linux-only, non-installed, and
+  absent from CTest; each successful sample must account for exactly two
+  accepted and terminal one-shot operations per round trip, zero fallback,
+  zero residual active operation/notice/owned-byte state, ordered percentile
+  output, and a drained shutdown
 
 ## 5.1 Runtime Profile Required Test Examples
 - Profile A uses one real TcpServer with zero worker loops and proves accept,

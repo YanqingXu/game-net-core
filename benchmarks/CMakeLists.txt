@@ -22,6 +22,18 @@ add_executable(gamenet_multi_io_sharded_hybrid_benchmark
     runtime_profiles/multi_io_sharded_hybrid.cpp
 )
 
+if(GAMENET_ENABLE_EXPERIMENTAL)
+    add_executable(gamenet_io_uring_one_shot_benchmark
+        io_uring/one_shot.cpp
+    )
+    target_link_libraries(gamenet_io_uring_one_shot_benchmark PRIVATE
+        GameNet::experimental
+    )
+    target_compile_definitions(gamenet_io_uring_one_shot_benchmark PRIVATE
+        GAMENET_BENCHMARK_BUILD_TYPE="$<CONFIG>"
+    )
+endif()
+
 target_link_libraries(gamenet_core_benchmark PRIVATE GameNet::core)
 target_link_libraries(gamenet_phase4_benchmark PRIVATE
     GameNet::protocol

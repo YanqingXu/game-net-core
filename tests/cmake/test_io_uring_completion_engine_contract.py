@@ -1,3 +1,5 @@
+import json
+import sys
 from pathlib import Path
 
 
@@ -15,6 +17,10 @@ def main() -> None:
     adapter = repo_root / "src/core/net/detail/PollerIoEngineAdapter.cc"
     tests_cmake = repo_root / "tests/CMakeLists.txt"
     contract = repo_root / "tests/contract/io_engine/test_io_uring_completion_engine.cpp"
+    benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
+    benchmark = repo_root / "benchmarks" / "io_uring" / "one_shot.cpp"
+    benchmark_validator = repo_root / "tools" / "validate_io_uring_benchmark.py"
+    benchmark_docs = repo_root / "docs" / "development" / "io_uring_benchmark.md"
     intent = repo_root / "intents/architecture/io_engine.intent.md"
     thread_rules = repo_root / "rules/thread_affinity_rules.md"
     ownership_rules = repo_root / "rules/ownership_rules.md"
@@ -27,6 +33,9 @@ def main() -> None:
         engine_header,
         engine_source,
         contract,
+        benchmark,
+        benchmark_validator,
+        benchmark_docs,
     ):
         assert path.is_file(), f"missing IOE-X1 artifact: {path}"
 
@@ -99,6 +108,93 @@ def main() -> None:
         "crossDomain",
     ):
         require(contract_text, fragment, contract)
+
+    benchmark_cmake_text = benchmark_cmake.read_text(encoding="utf-8")
+    require(benchmark_cmake_text, "if(GAMENET_ENABLE_EXPERIMENTAL)", benchmark_cmake)
+    require(
+        benchmark_cmake_text,
+        "add_executable(gamenet_io_uring_one_shot_benchmark",
+        benchmark_cmake,
+    )
+    require(benchmark_cmake_text, "GameNet::experimental", benchmark_cmake)
+    assert "add_test(" not in benchmark_cmake_text
+    assert "install(" not in benchmark_cmake_text
+
+    benchmark_text = benchmark.read_text(encoding="utf-8")
+    for fragment in (
+        "gamenet.io_uring_one_shot_benchmark.v1",
+        "IoUringOperationKind::Send",
+        "IoUringOperationKind::Receive",
+        "operations_accepted",
+        "terminal_notices",
+        "cross_domain_fallbacks",
+        "owned_bytes",
+        "p999_latency_us",
+        "IoUringShutdownResult::Drained",
+    ):
+        require(benchmark_text, fragment, benchmark)
+
+    validator_text = benchmark_validator.read_text(encoding="utf-8")
+    require(
+        validator_text,
+        'SCHEMA = "gamenet.io_uring_one_shot_benchmark.v1"',
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "operations accepted must equal twice round trips",
+        benchmark_validator,
+    )
+    require(
+        validator_text,
+        "io_uring benchmark retained residual state",
+        benchmark_validator,
+    )
+    require(validator_text, "io_uring benchmark used a fallback", benchmark_validator)
+
+    sys.path.insert(0, str(repo_root / "tools"))
+    import validate_io_uring_benchmark as benchmark_contract
+
+    document = {
+        "schema": "gamenet.io_uring_one_shot_benchmark.v1",
+        "status": "ok",
+        "build_type": "Release",
+        "parameters": {"round_trips": 1000, "payload_bytes": 256, "depth": 32},
+        "measurements": {
+            "elapsed_seconds": 0.01,
+            "messages_per_second": 100000.0,
+            "operations_per_second": 200000.0,
+            "throughput_mib_per_second": 48.828125,
+            "p50_latency_us": 10,
+            "p99_latency_us": 20,
+            "p999_latency_us": 30,
+            "working_set_before_bytes": 1000000,
+            "working_set_after_bytes": 1004096,
+            "working_set_delta_bytes": 4096,
+            "shutdown_milliseconds": 0.1,
+            "operations_accepted": 2000,
+            "terminal_notices": 2000,
+            "sq_full_rejections": 0,
+            "cross_domain_fallbacks": 0,
+            "active_operations": 0,
+            "ready_notices": 0,
+            "owned_bytes": 0,
+        },
+    }
+    benchmark_contract.validate_document(document, require_release=True)
+    invalid = json.loads(json.dumps(document))
+    invalid["measurements"]["terminal_notices"] = 1999
+    try:
+        benchmark_contract.validate_document(invalid, require_release=True)
+    except benchmark_contract.IoUringBenchmarkValidationError:
+        pass
+    else:
+        raise AssertionError("io_uring validator accepted missing terminal notice")
+
+    docs_text = benchmark_docs.read_text(encoding="utf-8")
+    require(docs_text, "gamenet_io_uring_one_shot_benchmark", benchmark_docs)
+    require(docs_text, "validate_io_uring_benchmark.py", benchmark_docs)
+    require(docs_text, "directional", benchmark_docs)
 
     intent_text = intent.read_text(encoding="utf-8")
     require(intent_text, "IOE-X1 authorizes one experimental Linux completion vertical slice", intent)
