@@ -43,6 +43,25 @@ The shared Engine contract is deliberately small:
 Readiness and Completion remain separate native vocabularies behind that
 contract. They do not inherit from a fake common event type.
 
+IOE-R1 makes the failure vocabulary concrete. `IoEngineAdmissionResult`
+describes whether brand-new work may enter Running, Quiescing, or Shutdown.
+`IoEngineOperationResult` describes an already-marshaled owner operation:
+Accepted, invalid identity, missing registration, conflict, unsupported native
+capability, or physical Shutdown. Quiescing seals new external admission but
+does not reject cleanup for work EventLoop already accepted before quit.
+
+EventLoop owns dispatch and callback containment; Engine wait never invokes
+user code. This is intentional separation, not a missing virtual `dispatch()`.
+The Engine produces a bounded notice batch. EventLoop generation-checks and
+dispatches it under `maxActiveChannelsPerIteration`, contains callback failure,
+and retains any remainder for the next scheduler round.
+
+Backend capacity is also separate from scheduler policy. IOE-R1 maps the legacy
+`EventLoopOptions::maxIocpCompletionsPerPoll` field once into
+`IoEngineOptions::maxCompletionNoticesPerWait`. Native IOCP construction consumes
+that Engine option; EventLoop's active-channel, timer, control, lifecycle, and
+functor budgets remain outside the Engine.
+
 ### Readiness registration
 
 Channel remains the callback binding for a readiness registration. A

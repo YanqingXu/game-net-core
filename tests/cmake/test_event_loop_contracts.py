@@ -47,6 +47,32 @@ def main() -> None:
         repo_root / "include" / "gamenet" / "core" / "net" / "PostResult.h"
     )
     event_loop_source = repo_root / "src" / "core" / "net" / "EventLoop.cc"
+    io_engine_header = (
+        repo_root / "src" / "core" / "net" / "detail" / "IoEngine.h"
+    )
+    io_engine_adapter = (
+        repo_root
+        / "src"
+        / "core"
+        / "net"
+        / "detail"
+        / "PollerIoEngineAdapter.cc"
+    )
+    iocp_poller_access = (
+        repo_root
+        / "src"
+        / "core"
+        / "net"
+        / "detail"
+        / "IocpPollerAccess.h"
+    )
+    io_engine_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "io_engine"
+        / "test_io_engine_poller_adapter.cpp"
+    )
     control_registry = (
         repo_root / "src" / "core" / "net" / "detail" / "EventLoopControlRegistry.h"
     )
@@ -96,6 +122,12 @@ def main() -> None:
     assert control_registry.exists(), (
         f"missing source-private EventLoop control registry: {control_registry}"
     )
+    assert io_engine_header.exists(), f"missing source-private Engine: {io_engine_header}"
+    assert io_engine_adapter.exists(), f"missing Poller Engine adapter: {io_engine_adapter}"
+    assert iocp_poller_access.exists(), (
+        f"missing source-private IOCP production access seam: {iocp_poller_access}"
+    )
+    assert io_engine_test.exists(), f"missing I/O Engine contract: {io_engine_test}"
     assert active_batch_harness.exists(), (
         f"missing source-private active Channel batch harness: {active_batch_harness}"
     )
@@ -116,6 +148,10 @@ def main() -> None:
     event_loop_header_text = event_loop_header.read_text(encoding="utf-8")
     post_result_header_text = post_result_header.read_text(encoding="utf-8")
     event_loop_source_text = event_loop_source.read_text(encoding="utf-8")
+    io_engine_header_text = io_engine_header.read_text(encoding="utf-8")
+    io_engine_adapter_text = io_engine_adapter.read_text(encoding="utf-8")
+    iocp_poller_access_text = iocp_poller_access.read_text(encoding="utf-8")
+    io_engine_test_text = io_engine_test.read_text(encoding="utf-8")
     control_registry_text = control_registry.read_text(encoding="utf-8")
     active_batch_harness_text = active_batch_harness.read_text(encoding="utf-8")
     iocp_association_harness_text = iocp_association_harness.read_text(
@@ -151,6 +187,38 @@ def main() -> None:
     require(event_loop_thread_intent_text, "explicit stop drains accepted work", event_loop_thread_intent)
     require(event_loop_intent_text, "asynchronous callback exceptions are counted", event_loop_intent)
     require(event_loop_thread_intent_text, "must not call `std::terminate`", event_loop_thread_intent)
+
+    require(io_engine_header_text, "enum class IoEngineAdmissionResult", io_engine_header)
+    require(io_engine_header_text, "enum class IoEngineOperationResult", io_engine_header)
+    require(io_engine_header_text, "registerOrUpdateReadiness", io_engine_header)
+    require(io_engine_header_text, "commitCompletionSubmission", io_engine_header)
+    require(io_engine_header_text, "commitCompletionCancellation", io_engine_header)
+    require(io_engine_header_text, "maxCompletionNoticesPerWait", io_engine_header)
+    require(
+        event_loop_source_text,
+        ".maxCompletionNoticesPerWait =",
+        event_loop_source,
+    )
+    require(io_engine_adapter_text, '#include "IocpPollerAccess.h"', io_engine_adapter)
+    assert "EventLoopIocpAssociationHarness" not in io_engine_adapter_text, (
+        "production Engine adapter must not depend on a repository-test harness"
+    )
+    require(iocp_poller_access_text, "class IocpPollerAccess final", iocp_poller_access)
+    require(
+        io_engine_test_text,
+        "testMutationRejectsForeignThreadAndInvalidIdentity",
+        io_engine_test,
+    )
+    require(
+        io_engine_test_text,
+        "testCompletionCommitDrainsBeforeQuiesceReturns",
+        io_engine_test,
+    )
+    require(
+        io_engine_test_text,
+        "testBudgetedDispatchContainsCloseAndStaleNotice",
+        io_engine_test,
+    )
 
     require(event_loop_test_text, '#include "support/FutureTest.h"', event_loop_test)
     require(event_loop_test_text, "gamenet::test::waitUntilReady", event_loop_test)

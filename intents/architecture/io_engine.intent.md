@@ -77,7 +77,9 @@ prevent the loop from observing completion retirement.
 ## 6. Lifecycle and Failure Results
 
 The Engine follows `Running -> Quiescing -> FinalDraining -> Shutdown` with the
-owning EventLoop.
+owning EventLoop. The source-private Engine state represents both EventLoop
+Quiescing and FinalDraining as `IoEnginePhase::Quiescing`; EventLoop remains the
+authority for the finer scheduler phase.
 
 - Running admits normal registrations and operations.
 - Quiescing rejects new external work while still observing accepted work.
@@ -89,6 +91,24 @@ Submission and registration failures remain explicit and synchronous when no
 kernel obligation was created. Once a completion operation was successfully
 submitted, every outcome is delivered as exactly one terminal notice, including
 cancellation and failure.
+
+IOE-R1 names those source-private contracts directly:
+
+- `IoEngineAdmissionResult` distinguishes Accepted, RejectedQuiescing, and
+  RejectedShutdown for brand-new external work;
+- `IoEngineOperationResult` distinguishes Accepted, invalid identity, missing
+  registration, conflict, unsupported capability, and physical Shutdown;
+- `registerOrUpdateReadiness` and `cancelReadiness` are owner-thread-only;
+- `commitCompletionSubmission` is legal only after kernel acceptance and may
+  acquire a storage lease;
+- `commitCompletionCancellation` creates a drain obligation but never consumes
+  the terminal packet;
+- already-admitted owner work may clean up during Quiescing even though new
+  external admission is sealed.
+
+`IoEngineOptions::maxCompletionNoticesPerWait` is backend capacity. The IOE-R1
+adapter compatibility-maps the stable `EventLoopOptions` IOCP field into it;
+EventLoop callback/timer/control/functor budgets remain scheduler policy.
 
 ## 7. Compatibility Sequence
 
@@ -105,8 +125,11 @@ cancellation and failure.
 ## 8. Test Contracts
 
 - `tests/contract/io_engine/test_io_engine_poller_adapter.cpp` verifies that the
-  source-private adapter reports native backend capabilities, follows the
-  EventLoop lifecycle, and dispatches a cross-thread wakeup on the owner loop.
+  source-private adapter reports native backend capabilities and capacity,
+  rejects foreign-thread and invalid mutation, seals new admission, drains a
+  committed completion cancellation, contains callback failure, invalidates a
+  stale remove/re-register notice, continues a budgeted batch, follows the
+  EventLoop lifecycle, and dispatches cross-thread wakeup on the owner loop.
 - `tests/contract/poller/test_poller_contract.cpp` verifies bounded backend
   waiting and backend-neutral Poller behavior during the adapter slice.
 - `tests/contract/event_loop/test_event_loop.cpp` verifies owner-thread dispatch,

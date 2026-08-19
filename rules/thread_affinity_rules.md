@@ -84,6 +84,7 @@ No other direct mutation path is allowed for core loop state.
 - FinalDraining runs already-accepted functors and committed internal work to a
   fixed point; only then may EventLoop publish Shutdown
 - User/data callbacks may not use lifecycle nodes as a priority queue
+
 - Partial active-Channel batches, ready timers beyond the current budget, and
   undrained control mailbox bits remain owner-loop/source-owned; continuation
   never transfers their callback targets through the pending-functor queue
@@ -102,6 +103,27 @@ No other direct mutation path is allowed for core loop state.
 - DeadlineQueue is owner-loop-only. A driver may be one TimerQueue timer, but
   logical targets never receive one timer callback each; expiration policy runs
   after a budgeted advance returns generation-tagged values to the owner
+
+## 5.3 Source-Private I/O Engine
+
+- One EventLoop owner thread owns every Engine mutation: readiness
+  register/update/cancel, accepted completion-submission commit, completion-
+  cancellation commit, wait, phase transition, and notice dispatch state
+- `IoEngine::wakeup()` is the only Engine method callable across threads; it
+  interrupts the owner wait but grants no registration or operation admission
+- Logical Engine mutations return `IoEngineOperationResult`; invalid identity,
+  missing registration, conflict, unsupported capability, and physical
+  Shutdown are distinct from Accepted. The stable EventLoop compatibility
+  wrappers may map a rejection back to their historical exception contract
+- `IoEngineAdmissionResult` applies to brand-new external work. Running accepts;
+  Quiescing and Shutdown reject. Work already admitted by EventLoop before quit
+  may still perform owner-thread cleanup and cancellation during final drain
+- Engine wait only publishes notices. EventLoop alone invokes user callbacks,
+  contains callback exceptions, invalidates stale active-batch slots, and
+  continues budgeted dispatch in a later scheduler round
+- `IoEngineOptions::maxCompletionNoticesPerWait` is backend capacity. It is
+  compatibility-mapped from the legacy public IOCP option and is not an
+  EventLoop scheduling/fairness budget
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

@@ -53,6 +53,25 @@ It must not blur these roles.
   from participant-owned handles back into the participant are forbidden
 - A stale source owns nothing and cannot address reused node storage
 
+## 2.3 Source-Private I/O Engine
+
+- EventLoop uniquely owns one dual-interface adapter object. The byte-stable
+  `unique_ptr<Poller>` member is only IOE-R1 storage compatibility; production
+  EventLoop calls use the source-private Engine interface
+- Engine readiness state borrows Channel. Accepted cancellation removes the
+  exact registration; EventLoop invalidates the active-batch generation before
+  the higher layer may release Channel ownership
+- `commitCompletionSubmission` is called only after the kernel accepted an
+  operation. A supplied lease then owns operation storage until terminal packet
+  dequeue; synchronous submission rejection creates no Engine ownership
+- `commitCompletionCancellation` adds a final-drain obligation but does not
+  consume a packet or release its storage. Repeated cancellation commit is
+  idempotent at the current IOCP backend
+- EventLoop owns callback dispatch and containment. Engine owns no user callback
+  and may not extend a callback target beyond its registration/operation lease
+- The Engine remains Quiescing through EventLoop FinalDraining. Physical
+  Shutdown and backend release occur during owner-thread EventLoop destruction
+
 ## 3. Poller
 - Poller does not own Channel
 - Poller only maintains registration/mapping relationship

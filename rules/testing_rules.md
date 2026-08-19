@@ -86,6 +86,18 @@ Contract tests verify:
   clears IOCP wakeup-pending; accepted work must execute in both cases
 - Windows wakeup self-rearm plus quit must drain accepted work and leave no
   pending physical packet before Shutdown
+- the source-private Engine contract rejects foreign-thread mutation, reports
+  Running/Quiescing admission distinctly, and preserves cross-thread wakeup as
+  its only direct producer operation
+- a committed completion submission plus cancellation retains its lease until
+  an actual terminal packet is drained during quit; a backend without
+  Completion capability returns RejectedUnsupported without acquiring a lease
+- one budgeted Engine notice batch combines callback-local close, stale
+  remove/re-register invalidation, callback exception containment, and a later
+  continuation round with exact drained/remaining/exhausted metrics
+- the legacy public IOCP dequeue option maps to source-private Engine backend
+  capacity while `maxActiveChannelsPerIteration` remains the independent
+  EventLoop dispatch budget
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents

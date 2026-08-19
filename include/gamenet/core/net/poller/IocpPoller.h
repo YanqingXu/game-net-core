@@ -13,17 +13,20 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <unordered_set>
 
 namespace gamenet::net {
 
 namespace detail {
 class EventLoopIocpAssociationHarness;
+class IocpPollerAccess;
 }
 
 class IocpPoller : public Poller {
 public:
     explicit IocpPoller(EventLoop* loop);
+    IocpPoller(EventLoop* loop, std::size_t completionBatchSize);
     ~IocpPoller() override;
 
     gamenet::base::Timestamp poll(int timeoutMs, ChannelList* activeChannels) override;
@@ -39,6 +42,7 @@ public:
 private:
     friend class EventLoop;
     friend class detail::EventLoopIocpAssociationHarness;
+    friend class detail::IocpPollerAccess;
 
     static constexpr int kNew = -1;
     static constexpr int kAdded = 1;

@@ -32,12 +32,53 @@ public:
         return ioEngineFromPoller(*loop.poller_).capabilities();
     }
 
+    static IoEngineOptions ioEngineOptions(
+        const EventLoop& loop) noexcept {
+        return ioEngineFromPoller(*loop.poller_).options();
+    }
+
     static IoEnginePhase ioEnginePhase(const EventLoop& loop) noexcept {
         return ioEngineFromPoller(*loop.poller_).phase();
     }
 
+    static IoEngineAdmissionResult ioEngineAdmission(
+        const EventLoop& loop) noexcept {
+        return ioEngineFromPoller(*loop.poller_).admission();
+    }
+
     static bool ioEngineQuiescent(const EventLoop& loop) noexcept {
         return ioEngineFromPoller(*loop.poller_).quiescent();
+    }
+
+    static IoEngineOperationResult updateIoEngineReadiness(
+        EventLoop& loop,
+        Channel* channel) {
+        return ioEngineFromPoller(*loop.poller_).
+            registerOrUpdateReadiness(channel);
+    }
+
+    static IoEngineOperationResult cancelIoEngineReadiness(
+        EventLoop& loop,
+        Channel* channel) {
+        return ioEngineFromPoller(*loop.poller_).
+            cancelReadiness(channel);
+    }
+
+    static IoEngineOperationResult commitIoEngineCompletionSubmission(
+        EventLoop& loop,
+        void* operation,
+        std::shared_ptr<void> lifetime) {
+        return ioEngineFromPoller(*loop.poller_).
+            commitCompletionSubmission(
+                operation,
+                std::move(lifetime));
+    }
+
+    static IoEngineOperationResult commitIoEngineCompletionCancellation(
+        EventLoop& loop,
+        void* operation) {
+        return ioEngineFromPoller(*loop.poller_).
+            commitCompletionCancellation(operation);
     }
 };
 

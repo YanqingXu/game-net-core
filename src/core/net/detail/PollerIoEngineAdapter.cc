@@ -4,7 +4,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/Poller.h"
 #ifdef _WIN32
-#include "EventLoopIocpAssociationHarness.h"
+#include "IocpPollerAccess.h"
 #include "gamenet/core/net/poller/IocpPoller.h"
 #else
 #include "gamenet/core/net/poller/EPollPoller.h"
@@ -27,11 +27,22 @@ using NativePoller = EPollPoller;
 // call surface used by EventLoop.cc during IOE-R1.
 class PollerIoEngineAdapter final : public NativePoller, public IoEngine {
 public:
-    explicit PollerIoEngineAdapter(EventLoop* loop)
-        : NativePoller(loop), ownerLoop_(loop) {
+    PollerIoEngineAdapter(EventLoop* loop, IoEngineOptions options)
+#ifdef _WIN32
+        : NativePoller(loop, options.maxCompletionNoticesPerWait),
+#else
+        : NativePoller(loop),
+#endif
+          ownerLoop_(loop),
+          options_(options) {
         if (ownerLoop_ == nullptr) {
             throw std::invalid_argument(
                 "PollerIoEngineAdapter requires an owning EventLoop");
+        }
+        if (options_.maxCompletionNoticesPerWait == 0 ||
+            options_.maxCompletionNoticesPerWait > 64) {
+            throw std::invalid_argument(
+                "I/O Engine completion capacity must be in [1, 64]");
         }
     }
 
@@ -44,8 +55,24 @@ public:
 #endif
     }
 
+    IoEngineOptions options() const noexcept override {
+        return options_;
+    }
+
     IoEnginePhase phase() const noexcept override {
         return phase_;
+    }
+
+    IoEngineAdmissionResult admission() const noexcept override {
+        switch (phase_) {
+            case IoEnginePhase::Running:
+                return IoEngineAdmissionResult::Accepted;
+            case IoEnginePhase::Quiescing:
+                return IoEngineAdmissionResult::RejectedQuiescing;
+            case IoEnginePhase::Shutdown:
+                return IoEngineAdmissionResult::RejectedShutdown;
+        }
+        std::terminate();
     }
 
     gamenet::base::Timestamp wait(
@@ -58,23 +85,42 @@ public:
         return NativePoller::poll(timeoutMs, notices.readiness_);
     }
 
-    void updateReadiness(Channel* channel) override {
+    IoEngineOperationResult registerOrUpdateReadiness(
+        Channel* channel) override {
         assertOwnerThread();
+        if (channel == nullptr) {
+            return IoEngineOperationResult::RejectedInvalid;
+        }
         if (phase_ == IoEnginePhase::Shutdown &&
             !NativePoller::hasChannel(channel)) {
-            throw std::logic_error("I/O Engine admission is sealed");
+            return IoEngineOperationResult::RejectedShutdown;
         }
-        NativePoller::updateChannel(channel);
+        try {
+            NativePoller::updateChannel(channel);
+        } catch (const std::logic_error&) {
+            return IoEngineOperationResult::RejectedConflict;
+        }
+        return IoEngineOperationResult::Accepted;
     }
 
-    void removeReadiness(Channel* channel) override {
+    IoEngineOperationResult cancelReadiness(Channel* channel) override {
         assertOwnerThread();
+        if (channel == nullptr) {
+            return IoEngineOperationResult::RejectedInvalid;
+        }
+        if (phase_ == IoEnginePhase::Shutdown) {
+            return IoEngineOperationResult::RejectedShutdown;
+        }
+        if (!NativePoller::hasChannel(channel)) {
+            return IoEngineOperationResult::RejectedNotRegistered;
+        }
         NativePoller::removeChannel(channel);
+        return IoEngineOperationResult::Accepted;
     }
 
     bool hasReadiness(Channel* channel) const override {
         assertOwnerThread();
-        return NativePoller::hasChannel(channel);
+        return channel != nullptr && NativePoller::hasChannel(channel);
     }
 
     bool wakeup() override {
@@ -87,50 +133,81 @@ public:
 #endif
     }
 
-    void preserveSocketAssociation(SocketFd sockfd) override {
-        assertAvailableOwnerThread();
+    IoEngineOperationResult commitSocketAssociationPreservation(
+        SocketFd sockfd) override {
+        assertOwnerThread();
+        if (sockfd == kInvalidSocket) {
+            return IoEngineOperationResult::RejectedInvalid;
+        }
+        if (phase_ == IoEnginePhase::Shutdown) {
+            return IoEngineOperationResult::RejectedShutdown;
+        }
 #ifdef _WIN32
         NativePoller::preserveSocketAssociation(sockfd);
+        return IoEngineOperationResult::Accepted;
 #else
         (void)sockfd;
+        return IoEngineOperationResult::RejectedUnsupported;
 #endif
     }
 
-    void forgetSocketAssociation(SocketFd sockfd) noexcept override {
+    IoEngineOperationResult commitSocketAssociationForget(
+        SocketFd sockfd) noexcept override {
         if (!ownerLoop_->isInLoopThread()) {
             std::terminate();
         }
+        if (sockfd == kInvalidSocket) {
+            return IoEngineOperationResult::RejectedInvalid;
+        }
+        if (phase_ == IoEnginePhase::Shutdown) {
+            return IoEngineOperationResult::RejectedShutdown;
+        }
 #ifdef _WIN32
         NativePoller::forgetSocketAssociation(sockfd);
+        return IoEngineOperationResult::Accepted;
 #else
         (void)sockfd;
+        return IoEngineOperationResult::RejectedUnsupported;
 #endif
     }
 
-    void retainCompletionOperation(
+    IoEngineOperationResult commitCompletionSubmission(
         void* operation,
         std::shared_ptr<void> lifetime) override {
-        assertAvailableOwnerThread();
+        assertOwnerThread();
+        if (operation == nullptr || !lifetime) {
+            return IoEngineOperationResult::RejectedInvalid;
+        }
+        if (phase_ == IoEnginePhase::Shutdown) {
+            return IoEngineOperationResult::RejectedShutdown;
+        }
 #ifdef _WIN32
         NativePoller::retainCompletionOperation(
             operation,
             std::move(lifetime));
+        return IoEngineOperationResult::Accepted;
 #else
         (void)operation;
         (void)lifetime;
+        return IoEngineOperationResult::RejectedUnsupported;
 #endif
     }
 
-    void trackCompletionOperation(void* operation) override {
+    IoEngineOperationResult commitCompletionCancellation(
+        void* operation) override {
         assertOwnerThread();
+        if (operation == nullptr) {
+            return IoEngineOperationResult::RejectedInvalid;
+        }
         if (phase_ == IoEnginePhase::Shutdown) {
-            throw std::logic_error(
-                "I/O Engine completion tracking after shutdown");
+            return IoEngineOperationResult::RejectedShutdown;
         }
 #ifdef _WIN32
         NativePoller::trackCompletionOperation(operation);
+        return IoEngineOperationResult::Accepted;
 #else
         (void)operation;
+        return IoEngineOperationResult::RejectedUnsupported;
 #endif
     }
 
@@ -163,8 +240,7 @@ public:
 
     IoCompletionProgress completionProgress() const noexcept override {
 #ifdef _WIN32
-        return EventLoopIocpAssociationHarness::completionProgress(
-            *ownerLoop_);
+        return IocpPollerAccess::completionProgress(*this);
 #else
         return {};
 #endif
@@ -175,19 +251,15 @@ private:
         ownerLoop_->assertInLoopThread();
     }
 
-    void assertAvailableOwnerThread() const {
-        assertOwnerThread();
-        if (phase_ == IoEnginePhase::Shutdown) {
-            throw std::logic_error("I/O Engine admission is sealed");
-        }
-    }
-
     EventLoop* ownerLoop_;
+    IoEngineOptions options_;
     IoEnginePhase phase_{IoEnginePhase::Running};
 };
 
-std::unique_ptr<Poller> makePollerIoEngineAdapter(EventLoop* loop) {
-    return std::make_unique<PollerIoEngineAdapter>(loop);
+std::unique_ptr<Poller> makePollerIoEngineAdapter(
+    EventLoop* loop,
+    IoEngineOptions options) {
+    return std::make_unique<PollerIoEngineAdapter>(loop, options);
 }
 
 IoEngine& ioEngineFromPoller(Poller& poller) noexcept {

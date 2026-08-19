@@ -36,6 +36,12 @@ EventLoopOptions validatedEventLoopOptions(EventLoopOptions options) {
     return options;
 }
 
+bool ioEngineAcceptedOrUnsupported(
+    detail::IoEngineOperationResult result) noexcept {
+    return detail::accepted(result) ||
+        result == detail::IoEngineOperationResult::RejectedUnsupported;
+}
+
 }  // namespace
 
 struct EventLoopExecutor::State {
@@ -333,7 +339,12 @@ EventLoop::EventLoop(EventLoopOptions options)
               this,
               options_.maxLifecycleNodes)),
       controlDrainWords_(controlState_->pendingWords.size(), 0),
-      poller_(detail::makePollerIoEngineAdapter(this)),
+      poller_(detail::makePollerIoEngineAdapter(
+          this,
+          detail::IoEngineOptions{
+              .maxCompletionNoticesPerWait =
+                  options_.maxIocpCompletionsPerPoll,
+          })),
       timerQueue_(std::unique_ptr<TimerQueue>(new TimerQueue(this))),
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
@@ -920,7 +931,12 @@ void EventLoop::updateChannel(Channel* channel) {
             "EventLoop::updateChannel requires a Channel owned by this loop");
     }
     const bool newRegistration = !channel->addedToLoop_;
-    detail::ioEngineFromPoller(*poller_).updateReadiness(channel);
+    const auto result = detail::ioEngineFromPoller(*poller_).
+        registerOrUpdateReadiness(channel);
+    if (!detail::accepted(result)) {
+        throw std::logic_error(
+            "EventLoop::updateChannel I/O Engine rejected registration");
+    }
     if (newRegistration) {
         channel->addedToLoop_ = true;
         channel->advanceRegistrationGeneration();
@@ -946,7 +962,12 @@ void EventLoop::removeChannel(Channel* channel) {
             "EventLoop::removeChannel registration identity mismatch");
     }
 
-    detail::ioEngineFromPoller(*poller_).removeReadiness(channel);
+    const auto result =
+        detail::ioEngineFromPoller(*poller_).cancelReadiness(channel);
+    if (!detail::accepted(result)) {
+        throw std::logic_error(
+            "EventLoop::removeChannel I/O Engine rejected cancellation");
+    }
 
     if (channel->activeBatchEpoch_ == activeBatchEpoch_) {
         const std::size_t index = channel->activeBatchIndex_;
@@ -963,26 +984,45 @@ void EventLoop::removeChannel(Channel* channel) {
 
 void EventLoop::preserveSocketAssociation(SocketFd sockfd) {
     assertInLoopThread();
-    detail::ioEngineFromPoller(*poller_).preserveSocketAssociation(sockfd);
+    const auto result = detail::ioEngineFromPoller(*poller_).
+        commitSocketAssociationPreservation(sockfd);
+    if (!ioEngineAcceptedOrUnsupported(result)) {
+        throw std::logic_error(
+            "EventLoop I/O Engine rejected socket association");
+    }
 }
 
 void EventLoop::forgetSocketAssociation(SocketFd sockfd) noexcept {
     if (!isInLoopThread()) {
         LOG_FATAL << "EventLoop socket association rollback used from a different thread";
     }
-    detail::ioEngineFromPoller(*poller_).forgetSocketAssociation(sockfd);
+    const auto result = detail::ioEngineFromPoller(*poller_).
+        commitSocketAssociationForget(sockfd);
+    if (!ioEngineAcceptedOrUnsupported(result)) {
+        LOG_FATAL << "EventLoop I/O Engine rejected socket association rollback";
+    }
 }
 
 void EventLoop::retainCompletionOperation(void* operation, std::shared_ptr<void> lifetime) {
     assertInLoopThread();
-    detail::ioEngineFromPoller(*poller_).retainCompletionOperation(
-        operation,
-        std::move(lifetime));
+    const auto result = detail::ioEngineFromPoller(*poller_).
+        commitCompletionSubmission(
+            operation,
+            std::move(lifetime));
+    if (!ioEngineAcceptedOrUnsupported(result)) {
+        throw std::logic_error(
+            "EventLoop I/O Engine rejected completion submission commit");
+    }
 }
 
 void EventLoop::trackCompletionOperation(void* operation) {
     assertInLoopThread();
-    detail::ioEngineFromPoller(*poller_).trackCompletionOperation(operation);
+    const auto result = detail::ioEngineFromPoller(*poller_).
+        commitCompletionCancellation(operation);
+    if (!ioEngineAcceptedOrUnsupported(result)) {
+        throw std::logic_error(
+            "EventLoop I/O Engine rejected completion cancellation commit");
+    }
 }
 
 bool EventLoop::hasPendingCompletionOperations() const noexcept {

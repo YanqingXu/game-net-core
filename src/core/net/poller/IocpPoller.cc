@@ -100,11 +100,23 @@ std::atomic<std::uint64_t> wakeupPacketsConsumed{0};
 }  // namespace
 
 IocpPoller::IocpPoller(EventLoop* loop)
+    : IocpPoller(
+          loop,
+          loop->options_.maxIocpCompletionsPerPoll) {}
+
+IocpPoller::IocpPoller(
+    EventLoop* loop,
+    std::size_t completionBatchSize)
     : Poller(loop),
       iocp_(createCompletionPortOrDie()),
-      completionBatchSize_(
-          static_cast<ULONG>(
-              loop->options_.maxIocpCompletionsPerPoll)) {
+      completionBatchSize_(static_cast<ULONG>(completionBatchSize)) {
+    if (completionBatchSize == 0 ||
+        completionBatchSize > kCompletionBatchSize) {
+        ::CloseHandle(iocp_);
+        iocp_ = nullptr;
+        throw std::invalid_argument(
+            "IOCP completion batch size must be in [1, 64]");
+    }
     detail::retainNetworkFixedStorage(
         detail::NetworkFixedStorageCategory::IocpCompletionBatch,
         sizeof(completionEntries_) +
