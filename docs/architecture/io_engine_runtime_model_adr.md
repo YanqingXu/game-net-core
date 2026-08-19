@@ -179,6 +179,16 @@ sharding across bounded logic cells; its event and fixed-tick lanes preserve
 cell-local FIFO without promising cross-cell global order. All four remain
 non-installed while common capability review is pending.
 
+IOE-X1 is integrated at
+`d3b31c5c4e7966553094f7e42cf74f1b49a11077` as a Linux-only,
+default-off, non-installed raw-syscall io_uring Completion Engine. It proves
+finite one-shot Accept/Recv/Send, typed SQ saturation, generation-safe
+cancellation, terminal lease retirement, and bounded final drain without user
+callbacks or readiness fallback. Its opt-in structured benchmark validates a
+finite Send/Recv pipeline and residual-state convergence. Production Linux
+continues to select epoll; no public selector, TcpConnection integration,
+multishot, registered resources, zero-copy, or SQPOLL is implied.
+
 ## Current Coupling Inventory
 
 The locations below are the implementation checklist, not merely examples.

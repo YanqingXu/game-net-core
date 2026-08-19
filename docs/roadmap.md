@@ -59,11 +59,16 @@ See `migration_status.md` for the current checked state of these phases.
   Profile C (`MultiIoDedicatedFixedTick`) is integrated at
   `da57edc887421503e93ca743afb8a3373642c878` with authoritative fixed-rate
   cadence, bounded catch-up/skip, bounded tick drain, generation-safe owner
-  return, and dual-platform directional numbers. RTM-R2 Profile D is closed in
+  return, and dual-platform directional numbers. RTM-R2 Profile D is closed
   at `b3b184b1cd8d28a256cffc60679ab832373dcfef` with independent placement/sharding, bounded
   cell-local Hybrid ordering, isolated saturation, and no installed API.
-  IOE-X1 one-shot contracts are now the active front while ARCH-G1 and
-  cross-Profile capability review proceed in parallel.
+  IOE-X1 is closed at `d3b31c5c4e7966553094f7e42cf74f1b49a11077`: the
+  Linux-only non-installed Engine has real one-shot Accept/Recv/Send,
+  SQ-full/cancel/lease/final-drain contracts, ASan/UBSan coverage, and a
+  structured opt-in directional benchmark while epoll remains production
+  default/fallback. The active front is now the cross-Profile real-TCP
+  integration contract and common-capability decision; ARCH-G1 independent
+  review proceeds in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 

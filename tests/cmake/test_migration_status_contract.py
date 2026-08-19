@@ -292,7 +292,7 @@ def main() -> None:
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
     require(
         plan_text,
-        "IOE-X1 one-shot completion contract：RTM-R2 Profile D",
+        "Cross-Profile common-capability review：IOE-X1",
         plan,
     )
     require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
@@ -325,7 +325,7 @@ def main() -> None:
     )
     require(
         normalized_roadmap_text,
-        "IOE-X1 one-shot contracts are now the active front",
+        "IOE-X1 is closed at `d3b31c5c4e7966553094f7e42cf74f1b49a11077`",
         roadmap,
     )
     require(status_text, "kernel-terminal and consumer-terminal", migration_status)

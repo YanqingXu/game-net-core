@@ -27,8 +27,8 @@ M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查�
 4. 每份验证证据仍绑定精确 commit，不允许把旧证据提升为新提交的结论；
 5. 24/72 小时 endurance、许可证和发布包装只阻塞对外推广，不阻塞架构演进；
 6. endurance waiver 只能表达缺失证据，不能表达 endurance 通过；
-7. ARCH-G1 合同资产、IOE-R1 与 IOE-R2 已落地；当前连续进入 IOE-C1，不等待候选冻结或独立
-   review 排期；
+7. ARCH-G1 合同资产、IOE-R1/R2、IOE-C1 与 IOE-X1 已落地；当前连续进入跨 Profile
+   共同能力审查及其组合集成合同，不等待候选冻结或独立 review 排期；
 8. IOE 与 Runtime Model 是两条并行实现线，持续证据是第三条伴随线。
 
 ## 2. 不可放宽的工程约束
@@ -261,11 +261,16 @@ capability Engine。IOE-R1 在精确提交
 
 IOE-X1 只有在 IOE-C1 的通用 Completion contract 稳定后启动：
 
-- one-shot accept/recv/send；
-- typed SQ-full rejection；
-- cancel、terminal completion、lease 和 final drain；
-- epoll 继续作为默认/fallback；
-- multishot、provided buffers、fixed files、zero-copy、SQPOLL 全部后置。
+- [x] one-shot accept/recv/send；
+- [x] typed SQ-full rejection；
+- [x] cancel、terminal completion、lease 和 final drain；
+- [x] epoll 继续作为默认/fallback；
+- [x] multishot、provided buffers、fixed files、zero-copy、SQPOLL 全部后置；
+- [x] opt-in、non-CTest、non-installed 的真实 one-shot 管线 benchmark 与结构化校验。
+
+IOE-X1 在实现提交 `a39b7022a05cd0ff373334933bf670451d73269e` 建立真实内核闭环，
+并在数字证据提交 `d3b31c5c4e7966553094f7e42cf74f1b49a11077` 关闭；精确门禁、
+sanitizer 和 benchmark 结果见 `docs/development/commit_bound_evidence_ledger.md`。
 
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
@@ -359,15 +364,15 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **IOE-X1 one-shot completion contract：RTM-R2 Profile D
-> `MultiIoShardedHybrid` 已完成独立 connection placement / logic sharding、至少两个
-> 有界 cell、cell 内严格顺序、event/tick 无超越、generation-safe owner 回送和隔离式
-> 饱和处理，精确实现检查点为
-> `b3b184b1cd8d28a256cffc60679ab832373dcfef`。下一切片直接在
-> experimental、default-off 边界定义 io_uring one-shot
-> accept/recv/send、SQ-full rejection、cancel/terminal lease 与 epoll fallback 合同。**
+> **Cross-Profile common-capability review：IOE-X1 已在
+> `d3b31c5c4e7966553094f7e42cf74f1b49a11077` 完成真实 one-shot、typed SQ-full、
+> cancel/terminal lease、final drain、epoll fallback 与结构化方向性基准。下一切片直接
+> 补齐 ADR 已指定但尚不存在的
+> `tests/integration/runtime_model/test_tcp_runtime_profiles.cpp`，在同一真实 TCP 生命周期
+> 场景中组合验证 Profile A/B/C/D，并据此形成 installed runtime surface 的明确决定。**
 
 ARCH-G1 独立 review 与跨 Profile 共同能力审查继续并行，不形成冻结点。Profile A/B/C/D
 保持 provisional、非安装；在共同能力审查形成明确兼容性决定前不提升 installed runtime
-surface。IOE-X1 先交付失败合同和最小 one-shot vertical slice，不顺带开放 multishot、
-provided buffers、fixed files、zero-copy 或 SQPOLL。
+surface。下一 IOE completion 集成切片必须先由新的 active contract 授权；IOE-X1 不顺带
+开放 production TcpConnection 集成、multishot、provided buffers、fixed files、zero-copy
+或 SQPOLL。
