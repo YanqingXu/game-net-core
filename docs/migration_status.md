@@ -64,6 +64,9 @@ Current RTM-R1 Profile A SingleLoopInlineEvent checkpoint:
 Current RTM-R1 Profile B MultiIoQueuedEvent checkpoint:
 `633d61315a9e28db643ee91214dc2f26a9b64630` (2026-08-20)
 
+Current RTM-R1 Profile C MultiIoDedicatedFixedTick checkpoint:
+`da57edc887421503e93ca743afb8a3373642c878` (2026-08-20)
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -94,9 +97,13 @@ Profile B is closed at `633d613`: its non-installed `MultiIoQueuedEvent`
 composition uses two network owners, a distinct logic owner, bounded
 GameCommandQueue handoff/drain, generation-safe owner return, typed saturation
 recovery, and separate network/logic stop futures. Profile C
-`MultiIoDedicatedFixedTick` contracts are now the active execution front
-while independent ARCH-G1 review proceeds in parallel. Candidate freeze,
-REL-V1 and release packaging are not development prerequisites.
+is closed at `da57edc`: its non-installed `MultiIoDedicatedFixedTick`
+composition uses two network owners, one distinct logic/tick owner,
+authoritative fixed-rate skip/bounded-catch-up cadence, bounded per-tick queue
+drain, generation-safe owner return, and separate network/logic stop futures.
+RTM-R2 sharding contracts are now the active execution front while independent
+ARCH-G1 review proceeds in parallel. Candidate freeze, REL-V1 and release
+packaging are not development prerequisites.
 
 The IOE-C1 closure checkpoint's directional Windows Release echo check used
 4 connections, one
@@ -131,6 +138,21 @@ P99/P999 was 64/128 us, maximum queue age was 162 us, queue-depth high-water was
 sample reported exactly 40,000 cross-domain handoffs and producer wake posts
 plus merges equal to the 20,000 accepted commands. These are directional local
 numbers, not promotion evidence.
+
+The Profile C directional baseline uses 4 clients, 2 network owners, 1 logic
+loop, 2,000 messages per client, 256-byte payloads, a 1 ms fixed-rate cadence,
+bounded catch-up of 1, and at most 1,024 commands per tick. Ten serialized
+Windows Release samples all reported `status: ok`; medians were 127,956.083
+messages/s (31.2395 MiB/s), 1,024 us tick-jitter P999, 256 us tick-duration
+P999, 1,024 us queue-age P999, 0 skipped ticks, 29.5 catch-up ticks, queue-depth
+high-water 256, 1,353,728 bytes working-set delta, and 1.939 ms shutdown. Ten
+serialized WSL Ubuntu Release samples also all reported `status: ok`; medians
+were 5,643.996 messages/s (1.378 MiB/s), the same three histogram buckets,
+0 skipped ticks, 168 catch-up ticks, queue-depth high-water 256, 1,366,016
+bytes working-set delta, and 1.3665 ms shutdown. Every sample reported exactly
+16,000 cross-domain handoffs. The Windows/WSL throughput difference is a
+directional IOCP-versus-WSL/DrvFS epoll observation, not a native-platform
+regression decision or promotion threshold.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
@@ -297,7 +319,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, RTM-R1 Profile A at `adb8b483`, and Profile B at `633d613`. Profile A is the non-installed zero-worker model; Profile B is the non-installed bounded queued model with two network owners and one logic owner. Profile C is the active contract front. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. All three Profiles remain non-installed; Profile A is zero-worker inline, Profile B is bounded queued-event, and Profile C is authoritative fixed-rate bounded-tick. RTM-R2 sharding contracts are the active front. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 

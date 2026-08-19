@@ -56,10 +56,13 @@ See `migration_status.md` for the current checked state of these phases.
   zero-worker composition. Profile B (`MultiIoQueuedEvent`) is integrated at
   `633d61315a9e28db643ee91214dc2f26a9b64630` with bounded coalesced handoff,
   generation-safe owner return, typed recovery, and directional numbers.
-  Profile C is now the active contract front while
-  ARCH-G1 independent review proceeds in parallel. CI/performance evidence
-  stays commit-bound and continuous; endurance and licensing move to promotion
-  time.
+  Profile C (`MultiIoDedicatedFixedTick`) is integrated at
+  `da57edc887421503e93ca743afb8a3373642c878` with authoritative fixed-rate
+  cadence, bounded catch-up/skip, bounded tick drain, generation-safe owner
+  return, and dual-platform directional numbers. RTM-R2 sharding contracts are
+  now the active front while ARCH-G1 independent review proceeds in parallel.
+  CI/performance evidence stays commit-bound and continuous; endurance and
+  licensing move to promotion time.
 
 ## Phase 1: Project Skeleton
 
@@ -295,7 +298,7 @@ Active execution front:
   legacy fake translation/runtime Channel storage, and monotonic shutdown are
   integrated at `c2d7e9d65dab8b110b58c20594b0cebd5199cf26` with
   dual-platform/API/sanitizer/performance and exact-commit evidence.
-- [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
+- [x] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
   Engine line.
   - [x] Profile A `SingleLoopInlineEvent`: integrated at
     `adb8b483d9b00ed0e9723321f2d7438e43a5e478` with bounded inline dispatch,
@@ -305,6 +308,9 @@ Active execution front:
     `633d61315a9e28db643ee91214dc2f26a9b64630` with two network owners, one
     logic owner, bounded queue/drain, exact producer coalescing metrics,
     dual-platform full gates, and a non-installed benchmark/example.
-  - [ ] Profile C `MultiIoDedicatedFixedTick`: active contract front.
+  - [x] Profile C `MultiIoDedicatedFixedTick`: integrated at
+    `da57edc887421503e93ca743afb8a3373642c878` with authoritative fixed-rate
+    cadence, bounded catch-up/skip, bounded tick drain, dual-platform full
+    gates, and a non-installed benchmark/example.
 - [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at
   least two Profiles have contract and performance evidence.

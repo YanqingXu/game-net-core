@@ -9,7 +9,8 @@
 和 END-R1 继续作为历史/持续证据名称，但不再串行阻塞 ARCH-G1、IOE 或 Runtime
 Profile 工作。当前执行前沿以 `plan.md` 为准：IOE-R1 已在 `8bb14e72` 关闭，IOE-R2
 已在 `6f45aa6e` 关闭，IOE-C1 已在 `c2d7e9d6` 关闭，RTM-R1 Profile A/B 分别在
-`adb8b483`/`633d613` 关闭；ARCH-G1 独立 review 与 Profile C 合同并行推进。
+`adb8b483`/`633d613` 关闭，Profile C 已在 `da57edc` 关闭；ARCH-G1 独立 review 与
+RTM-R2 sharding 合同并行推进。
 
 ## 1. 执行结论
 
@@ -646,10 +647,10 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 当前最重要的事情不是继续扩展协议或 Gateway，也不是再次冻结候选，而是向长期架构
 目标形成连续可运行切片：
 
-1. 直接用失败合同定义 Profile C 的权威 fixed-tick cadence、jitter、overrun、
-   skip/catch-up 和 bounded shutdown；
-2. 保持 Profile A/B 非安装，仅从两个已验证垂直切片提取共同能力审查输入；
-3. 并行完成 ARCH-G1 独立 review，并完成第三个 TCP-only provisional Profile；
+1. 直接用失败合同分离 `ConnectionPlacementPolicy` 与 `LogicShardPolicy`，并证明已建立
+   TCP 连接不迁移 owner loop；
+2. 保持 Profile A/B/C 非安装，仅从三个已验证垂直切片提取共同能力审查输入；
+3. 并行完成 ARCH-G1 独立 review，并推进有界 logic cell 与 Hybrid execution 合同；
 4. 把 CI、benchmark、capacity 作为伴随证据；只有准备 promotion 时才执行 endurance、
    许可证和 REL-D1。
 

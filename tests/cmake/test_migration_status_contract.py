@@ -292,7 +292,7 @@ def main() -> None:
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
     require(
         plan_text,
-        "RTM-R1 Profile C：Profile B `MultiIoQueuedEvent` 已于",
+        "RTM-R2 sharding contract：RTM-R1 Profile C `MultiIoDedicatedFixedTick` 已于",
         plan,
     )
     require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
@@ -315,12 +315,17 @@ def main() -> None:
     )
     require(
         status_text,
+        "Current RTM-R1 Profile C MultiIoDedicatedFixedTick checkpoint",
+        migration_status,
+    )
+    require(
+        status_text,
         "`adb8b483d9b00ed0e9723321f2d7438e43a5e478`",
         migration_status,
     )
     require(
         normalized_roadmap_text,
-        "Profile C is now the active contract front",
+        "RTM-R2 sharding contracts are now the active front",
         roadmap,
     )
     require(status_text, "kernel-terminal and consumer-terminal", migration_status)

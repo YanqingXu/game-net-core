@@ -238,10 +238,10 @@ capability Engine。IOE-R1 在精确提交
 
 ### 9.3 Profile C：MultiIoDedicatedFixedTick
 
-- [ ] 明确 FixedDelay、FixedRateSkipMissed 或 FixedRateBoundedCatchUp；
-- [ ] 不再把普通周期性 drain 描述为权威 fixed tick；
-- [ ] 测量 Tick jitter、overrun、skip、catch-up 和 shutdown drain；
-- [ ] 逻辑输出只通过 endpoint owner executor 返回连接 owner。
+- [x] 明确 FixedRateSkipMissed 与 FixedRateBoundedCatchUp，排除 FixedDelay；
+- [x] 不再把普通周期性 drain 描述为权威 fixed tick；
+- [x] 测量 Tick jitter、overrun、skip、catch-up 和 shutdown drain；
+- [x] 逻辑输出只通过 endpoint owner executor 返回连接 owner。
 
 三个 Profile 全部保持 provisional。只有至少两个垂直切片证明共同需要时，才提升新的
 安装接口；不得为每个组合创建一个 Server 类。
@@ -359,12 +359,13 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **RTM-R1 Profile C：Profile B `MultiIoQueuedEvent` 已于
-> `633d61315a9e28db643ee91214dc2f26a9b64630` 完成多 I/O owner 到独立逻辑 owner
-> 的有界合并 handoff、generation-safe 回送、typed overload/恢复、双阶段停止和
-> 定向数字基线；立即定义 `MultiIoDedicatedFixedTick` 的权威 cadence、jitter、
-> overrun、skip/catch-up 与 bounded shutdown 合同。**
+> **RTM-R2 sharding contract：RTM-R1 Profile C `MultiIoDedicatedFixedTick` 已于
+> `da57edc887421503e93ca743afb8a3373642c878` 完成权威 fixed-rate cadence、两种
+> skip/bounded-catch-up 策略、有界 tick drain、generation-safe owner 回送、双阶段
+> 停止和双平台定向数字基线。立即从三个已验证 Profile 提取最小共同能力审查输入，
+> 先定义 `ConnectionPlacementPolicy` 与 `LogicShardPolicy` 的失败合同。**
 
-ARCH-G1 独立 review 与后续 Profile contract 继续并行，不形成冻结点。下一个可运行目标
-不是新发布 tag，而是直接交付 RTM-R1 Profile C 合同和实现；Profile A/B 保持
-provisional、非安装，Linux/epoll 与 stable public surface 持续全绿。
+ARCH-G1 独立 review 与 RTM-R2 contract 继续并行，不形成冻结点。下一个可运行目标不是
+新发布 tag，也不是立即安装三个 Profile 的组合接口，而是直接交付 RTM-R2 首个有界
+sharding 合同；Profile A/B/C 保持 provisional、非安装，Linux/epoll 与 stable public
+surface 持续全绿。
