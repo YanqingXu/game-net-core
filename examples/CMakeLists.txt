@@ -35,6 +35,7 @@ target_link_libraries(gamenet_game_server_pipeline_demo PRIVATE gamenet_pipeline
 set_target_properties(gamenet_game_server_pipeline_demo PROPERTIES OUTPUT_NAME game_server_pipeline_demo)
 
 add_library(gamenet_runtime_profile_demo_support STATIC
+    runtime_profiles/MultiIoDedicatedFixedTick.cc
     runtime_profiles/MultiIoQueuedEvent.cc
     runtime_profiles/SingleLoopInlineEvent.cc
 )
@@ -75,4 +76,16 @@ target_link_libraries(
 set_target_properties(
     gamenet_multi_io_queued_echo
     PROPERTIES OUTPUT_NAME multi_io_queued_echo
+)
+
+add_executable(gamenet_multi_io_fixed_tick_echo
+    runtime_profiles/multi_io_fixed_tick_echo.cpp
+)
+target_link_libraries(
+    gamenet_multi_io_fixed_tick_echo
+    PRIVATE gamenet_runtime_profile_demo_support
+)
+set_target_properties(
+    gamenet_multi_io_fixed_tick_echo
+    PROPERTIES OUTPUT_NAME multi_io_fixed_tick_echo
 )

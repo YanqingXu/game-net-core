@@ -41,6 +41,10 @@ CONCRETE_ACTIVE_ARTIFACTS = {
         "example",
         "gamenet_multi_io_queued_echo",
     ),
+    "intents/usecases/multi_io_dedicated_fixed_tick_profile.intent.md": (
+        "example",
+        "gamenet_multi_io_fixed_tick_echo",
+    ),
     "intents/usecases/core_performance_baseline.intent.md": (
         "benchmark",
         "gamenet_core_benchmark",

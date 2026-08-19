@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 99
+EXPECTED_THREADING_TESTS = 100
 EXPECTED_PHASE4_SOAK_TESTS = 12
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -212,10 +212,14 @@ def main() -> None:
     semantic_guard = "python3 tests/scope/test_intent_semantics.py"
     runtime_profile_guard = "python3 tests/cmake/test_runtime_profile_contract.py"
     queued_profile_guard = "python3 tests/cmake/test_multi_io_queued_profile_contract.py"
+    fixed_tick_profile_guard = (
+        "python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py"
+    )
     require(guards, verifier, workflow)
     require(guards, semantic_guard, workflow)
     require(guards, runtime_profile_guard, workflow)
     require(guards, queued_profile_guard, workflow)
+    require(guards, fixed_tick_profile_guard, workflow)
     assert guards.index(verifier) < guards.index(semantic_guard), (
         "long-soak must verify immutable migration provenance before intent semantics"
     )
@@ -244,7 +248,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 126", workflow)
+    require(inventory, "--expected-total 127", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=7", workflow)
     require(inventory, "--expect-label broadcast=5", workflow)
@@ -297,7 +301,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 126",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 127",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -421,8 +425,8 @@ def main() -> None:
     assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
         "      - name: Check repository guards"
     ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
-    require(self_hosted_ci, "--expected-total 126", workflow)
-    require(self_hosted_ci, "inventory+=(--expect-label threading=99)", workflow)
+    require(self_hosted_ci, "--expected-total 127", workflow)
+    require(self_hosted_ci, "inventory+=(--expect-label threading=100)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
     require(self_hosted_ci, "--expected-total 2", workflow)
@@ -740,7 +744,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "99 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "100 threading-labeled tests", ci_docs)
     require(ci_docs_text, "12 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "`ci_artifact_policy`", ci_docs)
     require(ci_docs_text, "defaults to `best-effort`", ci_docs)

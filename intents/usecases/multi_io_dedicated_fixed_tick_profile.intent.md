@@ -19,7 +19,7 @@ two TcpServer worker EventLoops own connections, and one distinct caller-owned
 logic EventLoop owns the authoritative fixed-rate tick. Network input enters the
 existing bounded GameCommandQueue and is handled only by tick callbacks.
 
-The support target, header, echo, and benchmark remain non-installed. This
+The support target, header, echo, and benchmark remain non-installed (not installed). This
 slice does not modify or relabel the installed LogicLoop, whose compatibility
 timer remains fixed-delay periodic drain rather than this Profile's cadence.
 
@@ -64,8 +64,8 @@ Owner-output rejection or endpoint overload closes only that route.
 The caller starts/stops/destroys the Profile on the base owner and keeps the
 logic EventLoop alive through Profile destruction. `stopGracefully()` revokes
 admission and route generations, closes/discards and counts queued work, begins
-TcpServer drain, and retires the repeating timer on the logic owner. The logic
-future remains pending while cadence setup/retirement or a committed tick may
+TcpServer drain, and retires the repeating timer on the logic owner. The
+separate logic future remains pending while cadence setup/retirement or a committed tick may
 still invoke the handler. A callback already inside the handler may finish, but
 its output is stale after revocation. Rejected normal cancellation admission is
 recovered by the next timer callback; shutdown never needs a business control
