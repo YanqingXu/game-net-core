@@ -66,6 +66,27 @@ No other direct mutation path is allowed for core loop state.
   explicitly synchronized cross-thread snapshot, and the separate logic stop
   future must converge before the caller destroys the logic EventLoop
 
+## 3.3 Runtime Profile C
+- `MultiIoDedicatedFixedTick` uses one base accept EventLoop, at least two
+  TcpServer connection-owner workers, and one distinct caller-owned tick
+  EventLoop
+- network owners only frame and submit immutable GameCommand values; command
+  submission never posts, wakes, or directly invokes logic work
+- the logic owner uses TimerQueue fixed-rate repeating cadence with explicit
+  skip-missed or bounded-catch-up policy; fixed delay, busy wait, inline
+  recursion, and unbounded replay are forbidden
+- every tick drains at most `maxCommandsPerTick`; all handlers in that batch
+  receive the same immutable tick sequence/cadence context and execute only on
+  the tick owner
+- output returns through the captured connection owner executor and revalidates
+  route generation before endpoint mutation
+- lifecycle/configuration is base-owner-only; timer setup/retirement and tick
+  callbacks are logic-owner-only; synchronized metrics may be observed from any
+  thread
+- stop revokes handler admission before route/network teardown, and its logic
+  future stays pending until cadence setup/retirement plus an in-flight tick can
+  no longer invoke a handler
+
 ## 4. runInLoop
 - If current thread == owner thread: execute immediately
 - Else: enqueue and wakeup loop if needed

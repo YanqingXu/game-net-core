@@ -163,6 +163,24 @@ Contract tests verify:
 - callback-active stop leaves the logic future pending until the handler
   returns, revokes its output, discards bounded backlog, and converges together
   with TcpServer's network future before either caller-owned loop is destroyed
+- Profile C uses two real network owners plus one distinct tick owner and proves
+  commands admitted before the first fixed-rate deadline invoke no handler
+- five queued commands with `maxCommandsPerTick == 2` advance in 2/2/1 tick
+  batches, preserve per-route output order, and never create a per-command logic
+  wake or inline drain
+- a deterministic tick overrun under `FixedRateBoundedCatchUp` executes no more
+  than the configured consecutive catch-up count, records the replay, then
+  records skipped cadence points and returns to a future deadline
+- skip-missed mode records zero catch-up ticks; invalid skip/catch-up option
+  combinations are rejected before TcpServer start
+- Profile C queue saturation closes one route, queued generations become stale,
+  later ticks return queue depth to zero, and a fresh route succeeds
+- callback-active stop cancels/counts queued backlog, keeps the logic future
+  pending through the committed tick and cadence retirement, revokes output,
+  and publishes bounded shutdown convergence time
+- Profile C metrics expose fixed-storage tick jitter P50/P99/P999, duration and
+  queue-age P99/P999, max queue age/commands per tick, catch-up/skip/overrun,
+  typed failures, owner violations, and exact cross-domain handoffs
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents

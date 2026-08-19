@@ -382,6 +382,24 @@ It must not blur these roles.
 - an accepted owner-output post temporarily retains route plus encoded bytes;
   generation failure drops output without reaching a replacement connection
 
+## 11.4 Runtime Profile C Ownership
+- the caller owns and outlives the base EventLoop, logic EventLoop, and
+  non-installed `MultiIoDedicatedFixedTick`; the logic loop remains alive until
+  Profile destruction retires its cadence
+- TcpConnection context owns the network-owner PacketFramer and shares one
+  generation-revocable route containing endpoint plus owner executor
+- Profile shared state owns GameCommandQueue, immutable options/handler, route
+  registry, fixed histograms, cadence accounting, and logic-stop promise; the
+  logic EventLoop owns TimerQueue metadata and callback execution
+- the repeating timer callback may retain shared state only until stop cancels
+  the timer or an inactive callback self-retires after rejected cancellation
+  admission; neither TimerId nor shared state owns the caller's EventLoop
+- each drained GameCommand is committed to the current tick; stop cancels and
+  counts queued backlog, waits for the committed callback frame, and never
+  transfers that frame to another owner
+- accepted owner-output posts own encoded bytes and route temporarily; stop or
+  disconnect generation revocation makes them stale before endpoint mutation
+
 ## 12. Destruction Rule
 - Destruction of lifecycle-sensitive objects must not violate owner-thread assumptions
 - “remove before destroy” must be enforced where registration exists

@@ -64,13 +64,34 @@ only through the captured connection owner executor and revalidates generation
 on that owner before send/close. This composition is non-installed until at
 least two Profiles prove a common reusable API.
 
-### Profile C: Hybrid
+### Profile C: Multi-I/O Dedicated Fixed Tick
+
+An accept/base loop places connections on at least two network EventLoops. A
+distinct caller-owned logic EventLoop owns one fixed-rate cadence and drains the
+existing bounded GameCommandQueue only at tick callbacks. RTM-R1 names the
+runnable composition `MultiIoDedicatedFixedTick`.
+
+The cadence is explicitly either `FixedRateSkipMissed` or
+`FixedRateBoundedCatchUp`; it is never the compatibility fixed-delay
+`LogicLoop::runEvery` behavior. The Profile delegates cadence scheduling to
+TimerQueue's fixed-rate repeating-timer contract, bounds consecutive catch-up,
+records every skipped cadence point, and never recursively invokes a tick.
+Each tick drains at most `maxCommandsPerTick`. Queue rejection closes only the
+affected route; timer setup/cancellation failure is observable and cannot
+silently switch to event-driven drain. Logic output returns only through the
+generation-checked connection owner executor. Stop revokes new work, counts
+queued cancellation, waits for any committed current tick, retires the cadence,
+and exposes separate network and logic completion futures. This composition is
+non-installed and does not change the installed LogicLoop contract.
+
+### Profile D: Sharded Hybrid (deferred)
 
 Connection callbacks stay on their network EventLoop, while selected stateful
 or tick-driven work is sent to a bounded logic shard. Inline work is allowed
 only for operations declared safe by the Profile contract; overload must not
-silently switch execution domains. Hybrid is provisional until at least two
-simpler Profiles have contract and performance evidence.
+silently switch execution domains. Hybrid remains deferred until the three
+simpler Profiles have contract/performance evidence and a separate RTM-R2
+intent authorizes sharding.
 
 ## 4. Ownership and Thread Affinity
 
@@ -142,6 +163,14 @@ Each Profile must state and test:
   handling, and owner-executor return path.
 - `examples/runtime_profiles/multi_io_queued_echo.cpp` is the runnable Profile B
   TCP echo composition.
+- `tests/contract/runtime_model/test_dedicated_fixed_tick_profile.cpp` verifies
+  Profile C fixed-rate cadence, bounded per-tick drain, catch-up/skip,
+  generation-safe output, saturation recovery, and shutdown convergence.
+- `tests/cmake/test_dedicated_fixed_tick_profile_contract.py` guards Profile C's
+  non-installed topology, explicit cadence, TimerQueue use, bounded work,
+  typed failures, and owner-executor return path.
+- `examples/runtime_profiles/multi_io_fixed_tick_echo.cpp` is the runnable
+  Profile C TCP echo composition.
 
 RTM-R1 adds Profile-specific contracts before exposing runtime Profile types.
 Existing tests are the regression anchors, not a claim that all three Profiles
@@ -153,7 +182,7 @@ already exist.
 - no work stealing across EventLoop owners;
 - no protocol or experimental transport promotion;
 - no hidden global executor or shared mutable game state;
-- no Hybrid runtime implementation before the simpler Profile evidence exists.
+- no Hybrid runtime implementation in RTM-R1.
 
 ## 9. Review Questions
 
