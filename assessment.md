@@ -1,9 +1,14 @@
 # game-net-core 当前项目审计报告
 
-审计日期：2026-08-18
+审计日期：2026-08-18；执行策略更新：2026-08-19
 受审实现检查点：`669ebb0a7c5c475dea74b12275c66a2ce1876804`
 被替代 REL-C1 候选：`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`
-报告性质：PERF-R1 probe-lifecycle remediation 与 REL-C1 再冻结事实同步；历史证据与当前候选状态分区记录
+报告性质：PERF-R1 probe-lifecycle remediation 审计及后续 continuous-execution 策略；历史证据与当前开发状态分区记录
+
+2026-08-19 的执行决策废止候选冻结作为开发门。REL-C1、REL-V1、REL-V2、PERF-R1
+和 END-R1 继续作为历史/持续证据名称，但不再串行阻塞 ARCH-G1、IOE 或 Runtime
+Profile 工作。当前执行前沿以 `plan.md` 为准：ARCH-G1 完成后直接进入 IOE-R1，
+RTM-R1 合同并行准备。
 
 ## 1. 执行结论
 
@@ -18,7 +23,7 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 | ID | 级别 | 结论 | 性质 |
 | --- | --- | --- | --- |
 | P1-01 | P1（已关闭） | M3-R1 检查点 `95a6ab5` 已修复构造失败 fd 双重所有权，并通过 clean 独立全矩阵审查与同 SHA 六 producer CI | 核心线程/生命周期正确性 |
-| P1-02 | P1 | `refreeze-4` 已完成 REL-V1、REL-V2 run `32043448820` 与 paired Core run `32043874669`；capacity run `32043877128` 的两个 Windows attempts 均证明旧探针可在服务端 accept 发布前因 I/O deadline 关闭，使 exact accounting 永久不可达。`669ebb0` 已实现并跨平台本地验证 connect → accept → echo/abortive-close → close barrier；`refreeze-5` 仍须重新生成同 SHA REL-V1/REL-V2/PERF-R1 和 endurance 证据 | 发布证据 |
+| P1-02 | P1 | `refreeze-4` 的历史 REL-V1/REL-V2/Core 证据和失败 capacity 样本继续保留；`669ebb0` 已修复 probe lifecycle。当前 main 尚无可推广的完整同提交 CI/performance/capacity/endurance 证据，但该缺口只阻塞 promotion，不阻塞 ARCH-G1/IOE/RTM 开发 | 推广证据 |
 | P1-03 | P1 | 顶层许可证没有授予使用、复制、修改或分发许可 | 对外采用阻塞 |
 | P1-04 | P1（已关闭） | API-R1 首次拒绝后的八组 blocker 已关闭，独立终审 `APPROVE`，0.3 reviewed surface 有严格 zero-diff gate | API 发布阻塞已解除 |
 | P1-05 | P1（本地关闭） | TcpServer owner establishment 抛出时先在 owner 关闭，再经 base lifecycle 回滚 map/load/admission，最终引用回到 owner 释放 | 核心线程/生命周期正确性 |
@@ -28,16 +33,17 @@ P2-02 已关闭；2026-08-11 复审新增 P1-05/P1-06，均已在 `9d2a5be`
 
 因此：
 
-- 可以从新候选重新执行 REL-V1/REL-V2 以及同 SHA 性能、容量和 endurance 验证。
-- REL-C1 替代候选由 annotated tag `v0.3.0-rel-c1-refreeze-5` 唯一标识；这不是
-  REL-D1 发布决定。
+- 可以继续在任意明确 promotion commit 上执行同提交 CI、性能、容量和 endurance
+  验证，但无需提前冻结开发。
+- REL-C1 历史候选由 annotated tag `v0.3.0-rel-c1-refreeze-5` 标识；它不是当前
+  开发基线或 REL-D1 发布决定。
 - 不应宣称 Linux/Windows 双平台已经在当前 SHA 通过发布门。
 - 不应宣称已有当前 SHA 的容量上限、性能无回归或 24/72 小时稳定性结论。
 - P1-01 已在 `95a6ab5` 关闭；`446f86d` 的拒绝结论保留为历史证据。
 - `9d2a5be` 仍是最初 API-R1 不可变 reviewed-surface 检查点；PERF-R1 的单一
   additive stable API 由 `api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`
-  记录为 source-compatible。完整 `CANDIDATE_SHA` 由新 freeze tag object 与远端
-  ref 记录。
+  记录为 source-compatible。历史 `CANDIDATE_SHA` 由 freeze tag object 与远端
+  ref 记录；未来 evidence 直接绑定被验证的 commit。
 - API-R1 只批准 stable surface；它本身不替代
   同 SHA 远端、性能、容量或 endurance 证据。
 
@@ -180,8 +186,8 @@ GOV-R2 只同步治理文档和对应静态守卫，没有修改运行时代码�
 - 实现检查点位于该标签之后 78 个提交
 - CMake package version：`0.3.0`
 - 语言标准：C++23，关闭 compiler extensions
-- 当前冻结的 v0.3 最终候选：annotated tag
-  `v0.3.0-rel-c1-refreeze-5` peeled commit；完整 SHA 由 tag object 与远端 ref 记录
+- 历史 v0.3 工程候选：annotated tag `v0.3.0-rel-c1-refreeze-5` peeled commit；
+  完整 SHA 由 tag object 与远端 ref 记录，但不再冻结当前开发
 
 本报告原始审计基线 `7a56132d6ea60346ec06c108cd627b7b4cd5a04f` 到
 受审实现检查点：
@@ -327,12 +333,12 @@ ctest --test-dir build-perf-r1-fix -C Release --output-on-failure
 | Intent/规则治理 | 强；清单、语义、依赖与 provenance 已有自动守卫 |
 | Reactor/TCP 核心 | 强 preview；状态机、owner-loop 和 shutdown 合同密度高 |
 | Windows IOCP | 已完成关键正确性和性能底座切片，本地 Release 合同通过 |
-| Linux epoll | PERF-R1 remediation 已完成 Release 构建、直接合同、owner-batched/probe-barrier capacity 与 candidate-10k 三重复 preflight；fresh REL-V1/REL-V2 仍待执行 |
+| Linux epoll | PERF-R1 remediation 已完成 Release 构建、直接合同、owner-batched/probe-barrier capacity 与 candidate-10k 三重复 preflight；后续按每个里程碑生成 exact-commit CI/性能证据 |
 | 公平性/容量 | 已有显式批次、队列、deadline、内存预算和 retention 边界 |
 | 上层 foundation | Protocol/Transport/Session/Logic/Broadcast 可测试，但仍是 foundation |
 | Metrics | 有结构化接口和测试，明确为 provisional、非生产热路径实现 |
 | API/安装 | 0.3 manifest 和 diff 完整；API-R1 已批准，`9d2a5be` 同线 diff 严格为空；PERF-R1 additive surface 已记录 source-compatible |
-| 发布可采用性 | 已冻结工程候选 `refreeze-5`；仍被 fresh same-SHA 证据和许可证阻塞 |
+| 发布可采用性 | `refreeze-5` 只保留为历史工程候选；promotion 仍被完整同提交证据和许可证阻塞，开发不受阻塞 |
 
 ## 5. 已确认的强项
 
@@ -569,7 +575,8 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 - `be749ad`、`5f926f3`、`b344318` 的 benchmark/capacity/endurance 结果只在
   historical evidence 范围出现；
 - P1-01/P2-01 的关闭证据链接到具体合同；GOV-R2 当时将 API-R1 设为下一
-  任务，本次 API-R1 关闭后唯一下一任务已推进为 REL-C1；
+  任务；当时 API-R1 关闭后曾把 REL-C1 作为唯一下一任务，该顺序已被 2026-08-19
+  continuous-execution 决策替代；
 - migration-status guard 同时检查四份治理文档与 README 的检查点和候选边界。
 
 关闭门：
@@ -634,10 +641,14 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 
 项目已跨过“功能样例库”阶段，核心设计、规则、测试与容量治理具有真实工程深度。过去一轮 M3 工作有效关闭了多个旧风险，尤其是 IOCP final drain、公平性、稳定写所有权、按需读内存和全局内存治理。
 
-当前最重要的事情不是继续扩展协议或 Gateway，而是按以下顺序收口：
+当前最重要的事情不是继续扩展协议或 Gateway，也不是再次冻结候选，而是向长期架构
+目标形成连续可运行切片：
 
-1. 完成 REL-V1：在 `refreeze-5` 冻结候选 SHA 上执行本地 clean gate；
-2. 重新跑通同 SHA REL-V2、PERF-R1 与 endurance；
-3. 由项目所有者完成许可证决定。
+1. 在两个工作日内完成 ARCH-G1 的 active architecture intents、ADR、耦合清单、
+   基线和具体测试地图；
+2. 直接实现 IOE-R1 source-private Engine seam 与最小 Poller adapter；
+3. 并行准备 RTM-R1 三个 TCP-only provisional Profile 的合同；
+4. 把 CI、benchmark、capacity 作为伴随证据；只有准备 promotion 时才执行 endurance、
+   许可证和 REL-D1。
 
 具体执行拆分、依赖和关闭门记录在新的 `plan.md`。

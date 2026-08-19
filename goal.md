@@ -1,15 +1,16 @@
 # game-net-core 长期目标
 
-更新日期：2026-08-18
+更新日期：2026-08-19
 
 形成本文时参考的治理提交：`1daa649`
 
 该治理提交绑定的实现检查点：`9d2a5be0eb5439399f27c2f53ec1bf985c7de1d0`
 
-当前发布治理绑定的实现检查点：`669ebb0a7c5c475dea74b12275c66a2ce1876804`。
-重新冻结候选 `v0.3.0-rel-c1-refreeze-5` 替代
-`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`；这只记录
-当前 v0.3 候选冻结、验证和发布决定，不改变本文的长期架构授权边界。
+历史发布治理绑定的实现检查点：`669ebb0a7c5c475dea74b12275c66a2ce1876804`。
+历史候选 `v0.3.0-rel-c1-refreeze-5` 替代
+`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`；这些引用只记录
+不可变历史证据。从 2026-08-19 起，候选冻结不再是架构开发前置条件，当前执行改为
+main 持续前进、每提交精确留证、需要推广时再选择 promotion commit。
 
 ## 1. 文档定位
 
@@ -304,7 +305,8 @@ Runtime Model
 
 长期演进必须遵循：
 
-1. 先完成当前 v0.3 候选冻结、验证和发布决定；
+1. 不把候选冻结或发布决定作为架构演进前置条件；main 持续前进，证据绑定精确
+   commit，需要推广时再选择 promotion commit；
 2. 先写 active intent、rules 和 contract，再改核心实现；
 3. 先建立不改变行为的 source-private adapter；
 4. 先用 epoll 证明 Readiness 热路径无明显回归；
@@ -312,7 +314,8 @@ Runtime Model
 6. io_uring 只作为实验性真实 completion data path，从 one-shot 闭环开始；
 7. TCP-only Runtime Profiles 可在 provisional 层验证，不反向污染 stable Core；
 8. UDP、可靠数据报、双通道 Session 等必须在各自 intent 被正式提升后推进；
-9. 每个阶段只提升经过 Linux/Windows、饱和、关闭和性能证据验证的组合。
+9. 每个阶段只提升经过 Linux/Windows、饱和、关闭和性能证据验证的组合；开发集成与
+   对外推广分离，缺少 endurance 或许可证只阻塞推广，不阻塞下一能力切片。
 
 ## 12. 目标验收标准
 

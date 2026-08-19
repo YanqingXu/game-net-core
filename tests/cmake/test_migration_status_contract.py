@@ -53,18 +53,6 @@ def git_is_ancestor(
     return result.returncode == 0
 
 
-def verify_post_checkpoint_allowlist(
-    changed_paths: set[str],
-    allowed_paths: set[str],
-) -> None:
-    unexpected_checkpoint_drift = changed_paths - allowed_paths
-    assert not unexpected_checkpoint_drift, (
-        "current implementation checkpoint is stale; non-governance paths "
-        "changed after it: "
-        + ", ".join(sorted(unexpected_checkpoint_drift))
-    )
-
-
 def verify_current_intent_inventory(
     status_text: str,
     inventory: IntentInventory,
@@ -191,7 +179,7 @@ def main() -> None:
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-08-18", migration_status)
+    require(status_text, "Current production-roadmap audit: 2026-08-19", migration_status)
     implementation_checkpoint = "669ebb0a7c5c475dea74b12275c66a2ce1876804"
     superseded_candidate = "c061f9967b9481b70b2faf9a8fee24f5a3e72ffc"
     superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-4"
@@ -239,11 +227,11 @@ def main() -> None:
     candidate_sha = git(repo_root, "rev-parse", f"refs/tags/{candidate_tag}^{{commit}}")
     assert re.fullmatch(r"[0-9a-f]{40}", candidate_sha), candidate_sha
     assert git_is_ancestor(repo_root, candidate_sha, "HEAD"), (
-        "REL-C1 candidate tag must be an ancestor of the checked-out commit"
+        "historical REL-C1 tag must remain an ancestor of the checked-out commit"
     )
     require(
         normalized_status_text,
-        "candidate tag remains an ancestor of the checked-out commit",
+        "tag remains an ancestor of the checked-out commit",
         migration_status,
     )
     assert git(repo_root, "cat-file", "-t", f"refs/tags/{reviewed_surface_tag}") == "tag"
@@ -252,72 +240,9 @@ def main() -> None:
         == reviewed_surface_commit
     )
 
-    # Governance evidence may follow an immutable implementation checkpoint,
-    # but only the exact allowlist below may change without advancing that
-    # checkpoint. Compare the complete index/worktree as well as committed
-    # history so this contract catches local pre-commit drift too.
-    allowed_post_checkpoint_paths = {
-        "README.md",
-        "assessment.md",
-        "docs/migration_status.md",
-        "docs/roadmap.md",
-        "goal.md",
-        "ideas/idea1.md",
-        "ideas/idea2.md",
-        "ideas/idea3.md",
-        "plan.md",
-        "api/candidate_freeze.json",
-        "api/baselines/v0.3.0-perf-r1-reviewed.json",
-        ".github/workflows/ci.yml",
-        ".github/workflows/long-soak.yml",
-        ".github/workflows/windows-self-hosted-ci.yml",
-        "docs/development/api_compatibility.md",
-        "docs/development/capacity_profile.md",
-        "docs/development/ci.md",
-        "docs/development/production_endurance.md",
-        "docs/reviews/perf-r1-public-api-additive-diff.json",
-        "docs/reviews/perf-r1-public-api-compatibility-diff.json",
-        "docs/reviews/perf-r1-stable-core-additive-review.md",
-        "intents/usecases/production_candidate_release.intent.md",
-        "intents/usecases/production_endurance.intent.md",
-        "rules/testing_rules.md",
-        "tests/api/test_public_api_manifest.py",
-        "tests/ci/test_long_soak_workflow.py",
-        "tests/ci/test_workflow_jobs.py",
-        "tests/ci/test_endurance_gate.py",
-        "tests/cmake/test_capacity_profile_contract.py",
-        "tests/cmake/test_threading_gate_contracts.py",
-        "tools/verify_production_promotion_evidence.py",
-        "tools/verify_ci_evidence_set.py",
-        "tests/cmake/test_migration_status_contract.py",
-    }
-    changed_since_checkpoint = {
-        path
-        for path in git(
-            repo_root,
-            "diff",
-            "--name-only",
-            implementation_checkpoint,
-            "--",
-        ).splitlines()
-        if path
-    }
-    verify_post_checkpoint_allowlist(
-        changed_since_checkpoint,
-        allowed_post_checkpoint_paths,
-    )
-    synthetic_runtime_drift = "src/core/net/unreviewed_runtime_drift.cc"
-    try:
-        verify_post_checkpoint_allowlist(
-            changed_since_checkpoint | {synthetic_runtime_drift},
-            allowed_post_checkpoint_paths,
-        )
-    except AssertionError as error:
-        assert synthetic_runtime_drift in str(error), error
-    else:
-        raise AssertionError(
-            "post-checkpoint allowlist accepted synthetic runtime drift"
-        )
+    # The historical candidate remains immutable, but current development may
+    # advance past it. New runtime changes are governed by intent/rules/tests
+    # and exact-commit evidence rather than a post-checkpoint path allowlist.
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
@@ -342,47 +267,46 @@ def main() -> None:
     require(readme_text, superseded_candidate_tag, readme)
     require(readme_text, "API-R1", readme)
     require(readme_text, "REL-C1", readme)
-    require(readme_text, "REL-V1", readme)
     require(readme_text, candidate_tag, readme)
     require(
         status_text,
-        "Current final v0.3 production candidate: the commit peeled from annotated tag",
+        "Historical v0.3 engineering candidate: the commit peeled from annotated tag",
         migration_status,
     )
     require(
         normalized_roadmap_text,
-        "REL-C1 is frozen",
+        "Candidate freeze is retired as a development gate",
         roadmap,
     )
     require(
         assessment_text,
-        "当前冻结的 v0.3 最终候选：annotated tag",
+        "历史 v0.3 工程候选：annotated tag",
         assessment,
     )
     require(
         normalized_plan_text,
-        "REL-C1 已以 annotated reviewed-surface tag",
+        "main 持续前进 + 小步纵向切片 + 每提交精确留证 + 里程碑按需推广",
         plan,
     )
     require(assessment_text, "P2-02 | P2（已关闭）", assessment)
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
-    require(plan_text, "**REL-V1：在唯一 v0.3 候选 SHA 上执行本地 clean gate。**", plan)
+    require(plan_text, "ARCH-G1：在两个工作日内完成 I/O Engine", plan)
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
     require(plan_text, "P1-04 | API-R1（已关闭）", plan)
     require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)
     require(status_text, reviewed_surface_tag, migration_status)
     require(
         status_text,
-        "The authoritative current implementation checkpoint is `669ebb0`",
+        "The historical implementation checkpoint is `669ebb0`",
         migration_status,
     )
     require(plan_text, "M3-R3（本地关闭）", plan)
-    require(plan_text, "长期方向见 `goal.md`", plan)
+    require(plan_text, "长期方向：`goal.md`", plan)
     require(goal_text, implementation_checkpoint, goal)
     require(goal_text, "本文不是当前实现授权，也不是发布证据", goal)
     require(goal_text, "owner-loop 并发与生命周期内核", goal)
     require(goal_text, "Readiness 与 Completion", goal)
-    require(goal_text, "当前 v0.3 候选冻结、验证和发布决定", goal)
+    require(goal_text, "不把候选冻结或发布决定作为架构演进前置条件", goal)
     require(assessment_text, "P1-05 | P1（本地关闭）", assessment)
     require(assessment_text, "P1-06 | P1（本地关闭）", assessment)
     require(
@@ -428,7 +352,7 @@ def main() -> None:
     )
     require(
         normalized_plan_text,
-        f"测试清单统一为 {configured_test_count}（{unit_count}/{contract_count}/{integration_count}",
+        f"当前测试基线：{configured_test_count}（{unit_count}/{contract_count}/{integration_count}",
         plan,
     )
     require(status_text, "gamenet.core_benchmark.v2", migration_status)

@@ -4,9 +4,9 @@ Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
 
-Current production-roadmap audit: 2026-08-18
+Current production-roadmap audit: 2026-08-19
 
-Current implementation checkpoint carried by the candidate:
+Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
 
 Superseded PERF-R1 candidate: `v0.3.0-rel-c1-refreeze-4` peeled to
@@ -17,12 +17,12 @@ closed on its client I/O deadline before the corresponding server accept was
 published, so exact accept accounting could no longer converge. Both raw
 failure documents remain historical evidence.
 
-Current final v0.3 production candidate: the commit peeled from annotated tag
+Historical v0.3 engineering candidate: the commit peeled from annotated tag
 `v0.3.0-rel-c1-refreeze-5`; the tag object and remote ref record the
-authoritative full `CANDIDATE_SHA`. In PR validation and allowlisted post-freeze
-governance updates, the candidate tag remains an ancestor of the checked-out
-commit rather than matching GitHub's temporary merge commit. The existing
-post-checkpoint path allowlist continues to reject runtime/source drift.
+immutable historical `CANDIDATE_SHA`. The tag remains an ancestor of the
+checked-out commit, but it is no longer a development freeze point and current
+runtime/source progress is allowed to advance beyond it. New evidence binds the
+exact commit it validates; the historical tag is never moved or reused.
 
 Current M3-R1 independent-review checkpoint: `95a6ab5` (2026-08-03)
 
@@ -43,14 +43,16 @@ to annotated tag `api-r1-perf-r1-reviewed-surface` and peeled commit
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
-`mini_trantor` project.
+`mini_trantor` project. The active execution front is now ARCH-G1, followed
+directly by IOE-R1; RTM-R1 Profile contracts are prepared in parallel. Candidate
+freeze, REL-V1 and release packaging are not development prerequisites.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
 UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
 
-The authoritative current implementation checkpoint is `669ebb0`. M3-R1 is
+The historical implementation checkpoint is `669ebb0`. M3-R1 is
 closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
 `12adb00`; API-R1 remediation is committed at `7fa6922`; post-review TCP
 establishment rollback remains at `9d2a5be`. PERF-R1 retains its reviewed
@@ -64,9 +66,10 @@ inventory is 121 configured CTest tests: 8 unit tests, 100 contract tests, and
 `candidate-10k` preflight for the barrier passed nine times on Windows and
 three times on Linux with identical profile parameters; local Windows
 regression/Core-capacity paired matrices pass their original budgets. None is
-immutable refreeze-5 evidence. REL-C1 refreezes the remediation through
-`v0.3.0-rel-c1-refreeze-5`; REL-V1 candidate clean validation is the next
-roadmap task, followed by fresh REL-V2 and PERF-R1 runs.
+immutable refreeze-5 evidence. REL-C1 historically recorded the remediation
+through `v0.3.0-rel-c1-refreeze-5`; it no longer defines the next roadmap task.
+Local/remote tests and PERF-R1-style measurements now run continuously against
+the commit under review, while endurance remains a promotion-only gate.
 
 Direct closure contracts are
 [`test_tcp_server_establishment_saturation.cpp`](../tests/contract/tcp_server/test_tcp_server_establishment_saturation.cpp),
@@ -207,8 +210,9 @@ as a passing 24/72-hour result.
 | 2 | Migrate Reactor / TCP core | Present: base utilities, socket helpers, Channel/Poller/EventLoop/TimerQueue, Acceptor/Connector, TcpConnection/TcpServer/TcpClient |
 | 3 | Split CMake targets and test structure | Present: `gamenet_core`, `GameNet::core`, install/export package config, echo examples, unit/contract/integration test directories, scope/intent/documentation guards, install consumer fixture, an opt-in core benchmark target, and Acceptor/Buffer/Channel/Connector/InetAddress/Poller/Socket/TcpClient/TcpServer/TcpConnection/EventLoopThread/EventLoopThreadPool contract tests |
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
-| 5 | Production hardening | Current runtime scope includes M3-R1/M3-R2, API-R1 remediation, post-review TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0`. Earlier frozen candidates remain historical because later runtime/evidence changes superseded their results. Full same-SHA requalification remains open |
-| 6 | Production candidate | REL-C1 is refrozen through annotated tag `v0.3.0-rel-c1-refreeze-5`, replacing `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` after capacity run `32043877128` twice proved exact lifecycle accounting could become unreachable. Infrastructure exists for API diff, provisional metrics, regression, capacity, fault injection, and endurance; REL-V1 and all new-candidate same-SHA release evidence remain open |
+| 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
+| 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 → IOE-R1 → IOE-R2 → IOE-C1, with RTM-R1 proceeding in parallel after ARCH-G1. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 

@@ -5,13 +5,14 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-18
+## Current Roadmap Checkpoint — 2026-08-19
 
-- The current implementation checkpoint is
-  `669ebb0a7c5c475dea74b12275c66a2ce1876804`. REL-C1 is frozen through the
-  commit peeled from annotated tag `v0.3.0-rel-c1-refreeze-5`; the tag object
-  and remote ref are the authoritative full-SHA record. It supersedes
+- Historical REL-C1 implementation checkpoint
+  `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled
+  from annotated tag `v0.3.0-rel-c1-refreeze-5`; the tag object and remote ref
+  remain immutable evidence. It supersedes
   `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`.
+  It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
 - The current inventory is 121 CTest tests: 8 unit, 100 contract, and 13
@@ -39,8 +40,11 @@ See `migration_status.md` for the current checked state of these phases.
   deadline; 9 Windows and 3 Linux local candidate samples pass.
 - API-R1 is complete: the independent reviewer closed all initial blockers and
   returned `APPROVE`; PERF-R1's additive `setSendBufferSize` surface is recorded
-  as source-compatible at `api-r1-perf-r1-reviewed-surface`. Fresh REL-V1
-  validation of refreeze-5 is next, followed by same-SHA remote evidence.
+  as source-compatible at `api-r1-perf-r1-reviewed-surface`.
+- Candidate freeze is retired as a development gate. The active front is
+  ARCH-G1 followed immediately by the source-private IOE-R1 Engine seam, with
+  RTM-R1 Profile contracts prepared in parallel. CI/performance evidence stays
+  commit-bound and continuous; endurance and licensing move to promotion time.
 
 ## Phase 1: Project Skeleton
 
@@ -230,8 +234,8 @@ Implementation hardening after the Phase 4 Preview:
   independently reviewed checkpoint `95a6ab5`.
 - [x] Close M3-R2 EventLoopThreadPool configuration/state rejection locally at
   committed implementation checkpoint `12adb00`.
-- [ ] Freeze the post-M3-R2 candidate and regenerate clean, same-SHA platform,
-  sanitizer, package, performance, capacity, and endurance evidence.
+- [x] Retire candidate freeze as a development gate; retain old tags and runs as
+  immutable history while moving validation to continuous exact-commit gates.
 
 ## Phase 6: Production Candidate
 
@@ -253,7 +257,26 @@ In progress after production hardening:
   GOV-R2 without promoting historical evidence to the current checkpoint.
 - [x] Complete independent stable Core API review, archive the historical and
   same-line diffs, and enforce zero stable-surface drift (API-R1).
-- [ ] Requalify performance validators/budgets and release/endurance tooling on
-  the single frozen candidate SHA.
-- [ ] Freeze one v0.3.0 production candidate, complete Linux/Windows evidence,
-  publish the release, and merge the validated candidate to `main`.
+- [ ] Keep performance validators, capacity and release/endurance tooling green
+  as a continuous evidence lane rather than a single frozen-candidate project.
+- [ ] When external promotion is desired, select a current-main promotion
+  commit, complete Linux/Windows and endurance evidence, decide licensing, and
+  publish without stopping subsequent main development.
+
+## Phase 7: I/O Engine and Runtime Profiles
+
+Active execution front:
+
+- [ ] ARCH-G1: activate the owner-loop/I/O Engine and Runtime Model architecture
+  intents, publish ADRs, inventory semantic coupling, and freeze numerical
+  behavior/performance baselines within a two-day design timebox.
+- [ ] IOE-R1: introduce a source-private Engine seam and Poller adapter without
+  changing public behavior.
+- [ ] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
+  registrations.
+- [ ] IOE-C1: publish native IOCP Completion notices and retire fake Channel
+  read/write translation.
+- [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
+  Engine line.
+- [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at
+  least two Profiles have contract and performance evidence.
