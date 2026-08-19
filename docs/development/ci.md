@@ -70,6 +70,9 @@ The `ci` workflow validates:
 - Windows IOCP data-path guard for the overlapped operation layer, socket
   extension helpers, completion metadata translation, and atomic wakeup
   coalescing/reset.
+- Runtime Profile guard for the non-installed Profile A composition, zero-worker
+  topology, bounded same-owner continuation, terminal overload paths, and its
+  real TCP contract registration.
 - EventLoop contract guard for owner-thread scheduling, quit, bounded future
   wait helper coverage, and deterministic wakeup reset-race coverage.
 - Logger thread-contract guard for concurrent emission, runtime callback
@@ -148,6 +151,7 @@ python3 tests/cmake/test_timer_queue_contracts.py
 python3 tests/cmake/test_threading_gate_contracts.py
 python3 tests/cmake/test_windows_iocp_milestone_contract.py
 python3 tests/cmake/test_windows_iocp_data_path_contract.py
+python3 tests/cmake/test_runtime_profile_contract.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 python3 tests/ci/test_long_soak_workflow.py
@@ -886,6 +890,7 @@ py -3 tests\cmake\test_timer_queue_contracts.py
 py -3 tests\cmake\test_threading_gate_contracts.py
 py -3 tests\cmake\test_windows_iocp_milestone_contract.py
 py -3 tests\cmake\test_windows_iocp_data_path_contract.py
+py -3 tests\cmake\test_runtime_profile_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 py -3 tests\ci\test_long_soak_workflow.py

@@ -51,9 +51,12 @@ See `migration_status.md` for the current checked state of these phases.
   IOE-C1 is closed at `c2d7e9d65dab8b110b58c20594b0cebd5199cf26`: legacy
   completion translation/storage is retired, shutdown phases are monotonic,
   and dual-platform/API/sanitizer/performance plus exact-commit evidence passes.
-  RTM-R1 Profile A is now the active contract front while ARCH-G1 independent
-  review proceeds in parallel. CI/performance evidence stays commit-bound and
-  continuous; endurance and licensing move to promotion time.
+  RTM-R1 Profile A (`SingleLoopInlineEvent`) is integrated at
+  `adb8b483d9b00ed0e9723321f2d7438e43a5e478` as a runnable, non-installed
+  zero-worker composition. Profile B is now the active contract front while
+  ARCH-G1 independent review proceeds in parallel. CI/performance evidence
+  stays commit-bound and continuous; endurance and licensing move to promotion
+  time.
 
 ## Phase 1: Project Skeleton
 
@@ -291,5 +294,11 @@ Active execution front:
   dual-platform/API/sanitizer/performance and exact-commit evidence.
 - [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
   Engine line.
+  - [x] Profile A `SingleLoopInlineEvent`: integrated at
+    `adb8b483d9b00ed0e9723321f2d7438e43a5e478` with bounded inline dispatch,
+    terminal overload/overrun handling, zero cross-domain handoff, runnable
+    echo, dual-platform full gates, and no installed API.
+  - [ ] Profile B `MultiIoQueuedEvent`: active contract front.
+  - [ ] Profile C `MultiIoDedicatedFixedTick`: follows Profile B evidence.
 - [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at
   least two Profiles have contract and performance evidence.

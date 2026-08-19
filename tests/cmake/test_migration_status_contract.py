@@ -292,7 +292,7 @@ def main() -> None:
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
     require(
         plan_text,
-        "RTM-R1 Profile A：在 IOE-C1 已于",
+        "RTM-R1 Profile B：Profile A `SingleLoopInlineEvent` 已于",
         plan,
     )
     require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
@@ -302,6 +302,21 @@ def main() -> None:
         status_text,
         "Current IOE-C1 compatibility-path and shutdown closure checkpoint",
         migration_status,
+    )
+    require(
+        status_text,
+        "Current RTM-R1 Profile A SingleLoopInlineEvent checkpoint",
+        migration_status,
+    )
+    require(
+        status_text,
+        "`adb8b483d9b00ed0e9723321f2d7438e43a5e478`",
+        migration_status,
+    )
+    require(
+        normalized_roadmap_text,
+        "Profile B is now the active contract front",
+        roadmap,
     )
     require(status_text, "kernel-terminal and consumer-terminal", migration_status)
     require(normalized_status_text, "The closure removes the remaining completion-to-Channel publisher", migration_status)

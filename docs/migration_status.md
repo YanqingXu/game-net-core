@@ -58,6 +58,9 @@ Current IOE-C1 all-kind direct consumer checkpoint:
 Current IOE-C1 compatibility-path and shutdown closure checkpoint:
 `c2d7e9d65dab8b110b58c20594b0cebd5199cf26` (2026-08-20)
 
+Current RTM-R1 Profile A SingleLoopInlineEvent checkpoint:
+`adb8b483d9b00ed0e9723321f2d7438e43a5e478` (2026-08-20)
+
 ## Current Task Goal
 
 `game-net-core` is the component-split migration target for the larger
@@ -78,9 +81,15 @@ rejects use. The four shutdown phases are observably monotonic, and real
 cancellation terminal consumption occurs during Quiescing. Windows
 Debug/Release, Linux ASan/UBSan, repeated focused contracts, scope/API guards,
 directional performance smoke, exact-commit tests, and remote-main verification
-all pass. RTM-R1 Profile A contracts are now the active execution front while
-independent ARCH-G1 review proceeds in parallel. Candidate freeze, REL-V1 and
-release packaging are not development prerequisites.
+all pass. RTM-R1 Profile A is closed at `adb8b483`: its non-installed
+`SingleLoopInlineEvent` composition runs TCP accept, connection ownership,
+framing, bounded inline handling, output admission, and shutdown on one
+caller-owned EventLoop with zero TcpServer workers and zero cross-domain
+handoffs. Queue saturation, handler overrun/exception, protocol/output failure,
+callback-reentrant stop, and bounded shutdown are terminal and observable.
+Profile B `MultiIoQueuedEvent` contracts are now the active execution front
+while independent ARCH-G1 review proceeds in parallel. Candidate freeze,
+REL-V1 and release packaging are not development prerequisites.
 
 The IOE-C1 closure checkpoint's directional Windows Release echo check used
 4 connections, one
@@ -95,6 +104,15 @@ while close latency and retained bytes/connection improve; this unpaired local
 smoke has no regression threshold and does not claim a cross-commit performance
 decision. All ten runs report `status: ok`. These numbers are same-worktree
 smoke signals only, not promotion evidence.
+
+The Profile A minimum-handoff Windows Release baseline uses the existing Core
+echo probe with 4 connections, zero TcpServer worker loops, 10,000 messages per
+connection, 256-byte payloads, a 500 ms settle window, and a 30 s timeout. Five
+serialized samples produced medians of 122,760.126 RTT/s, 59.9415 MiB/s, 63.6 us
+P99, 0.1748 ms connection close, 0.1297 ms server stop, and 184,320 bytes working-
+set delta. This is a directional topology baseline, not a promotion threshold;
+the real framed Profile contract separately proves exact 2/2/1 bounded dispatch,
+same-owner queued continuation, and zero cross-domain handoffs.
 
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
@@ -261,7 +279,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, and IOE-C1 at `c2d7e9d6`. The final fake-readiness compatibility path is retired, shutdown phase publication is monotonic, and dual-platform/API/sanitizer/performance plus exact-commit evidence passes. RTM-R1 Profile A is the active contract front. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profile A at `adb8b483`. Profile A is a runnable non-installed zero-worker TCP composition with bounded dispatch and zero cross-domain handoff. Profile B is the active contract front. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 
@@ -800,7 +818,7 @@ Pre-hardening Phase 4 baseline retained as immutable historical evidence:
   3.5 Core history; it is not the current Phase 4 evidence.
 - Scope guard: local self-test and repository scan pass; CI runs both before
   CMake configure.
-- Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
+- Intent/documentation guards: CI runs the intent consistency guard, intent metadata contract guard, Core benchmark contract guard, Runtime Profile contract guard, Logger thread-contract guard, EventLoop contract guard, TCP lifecycle contract guard, TcpConnection context contract guard, TcpConnection thread-contract guard, EventLoopThreadPool contract guard, TimerQueue contract guard, threading gate contract guard, migration status contract guard, install/package contract guard, MSVC UTF-8 build contract guard, platform backend contract guard, Windows IOCP milestone contract guard, Windows IOCP data-path contract guard, sanitizer flag contract guard, Release-safe test guard, and workflow job structure guard before CMake configure. The EventLoop contract guard now also requires the cross-thread-observed pending functor execution state to be atomic or synchronized.
 - Historical intent-governance snapshot (2026-07-06, not the current inventory):
   all 60 formal `*.intent.md` documents at that checkpoint carried ordered
   `status`, `target`, `migration_source`, and `promote_gate` front matter and

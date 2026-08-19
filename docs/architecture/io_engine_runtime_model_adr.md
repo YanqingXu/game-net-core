@@ -161,6 +161,19 @@ they are neither initialized nor accessed. Repeated `quit()` is phase-monotonic,
 including re-entry during FinalDraining. Public API changes, if any, require a
 later additive review after both native engines have evidence.
 
+RTM-R1 Profile A is integrated at
+`adb8b483d9b00ed0e9723321f2d7438e43a5e478` as the non-installed
+`SingleLoopInlineEvent` example/support composition. One caller-owned EventLoop
+owns TCP accept, all connections, framing, the inline handler, output admission,
+same-owner continuation, and shutdown; TcpServer has zero worker loops. Frame
+count/byte budgets bound each dispatch, the normal EventLoop queue is the only
+continuation path, and queue rejection, handler overrun/exception, protocol
+failure, or output overload terminates the connection. The runnable echo and
+contract establish the zero-cross-domain-handoff baseline without publishing a
+new stable Profile API. Profile B `MultiIoQueuedEvent` is the next delivery
+slice; common installed abstractions remain deferred until at least two
+Profiles produce matching contract and performance evidence.
+
 ## Current Coupling Inventory
 
 The locations below are the implementation checklist, not merely examples.

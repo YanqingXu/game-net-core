@@ -225,9 +225,9 @@ capability Engine。IOE-R1 在精确提交
 
 ### 9.1 Profile A：SingleLoopInlineEvent
 
-- [ ] 限定 handler 执行预算和禁止阻塞规则；
-- [ ] 明确 transport、I/O topology、callback context 和 backpressure；
-- [ ] 以 echo/轻量请求建立最低 handoff 基线。
+- [x] 限定 handler 执行预算和禁止阻塞规则；
+- [x] 明确 transport、I/O topology、callback context 和 backpressure；
+- [x] 以 echo/轻量请求建立最低 handoff 基线。
 
 ### 9.2 Profile B：MultiIoQueuedEvent
 
@@ -359,11 +359,12 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **RTM-R1 Profile A：在 IOE-C1 已于
-> `c2d7e9d65dab8b110b58c20594b0cebd5199cf26` 关闭后，立即建立
-> SingleLoopInlineEvent 的 handler 预算、禁止阻塞、callback context、backpressure
-> 与最低 handoff 基线合同，并形成第一个可运行 TCP-only Profile 垂直切片。**
+> **RTM-R1 Profile B：Profile A `SingleLoopInlineEvent` 已于
+> `adb8b483d9b00ed0e9723321f2d7438e43a5e478` 形成首个可运行、非安装的
+> TCP-only 垂直切片；立即建立 `MultiIoQueuedEvent` 的有界 handoff、
+> empty-to-non-empty wakeup 合并、generation-safe endpoint 回送、typed overload
+> 与慢消费者恢复合同。**
 
 ARCH-G1 独立 review 与后续 Profile contract 继续并行，不形成冻结点。下一个可运行目标
-不是新发布 tag，而是直接交付 RTM-R1 Profile A 合同和实现；Linux/epoll 与 stable
-public surface 持续全绿。
+不是新发布 tag，而是直接交付 RTM-R1 Profile B 合同和实现；Profile A 保持 provisional、
+非安装，Linux/epoll 与 stable public surface 持续全绿。

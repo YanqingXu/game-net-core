@@ -1,6 +1,6 @@
 # game-net-core 长期目标
 
-更新日期：2026-08-19
+更新日期：2026-08-20
 
 形成本文时参考的治理提交：`1daa649`
 
@@ -286,16 +286,22 @@ Runtime Model
 当前仓库已经具备目标架构的基础：
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
-- epoll 提供自然的 Readiness 主线；
-- IOCP 已实现 Completion operation、buffer retention 和 shutdown obligation；
+- epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
+  路径；
+- IOCP 已直接分发带 identity/result/bytes/generation 的 Completion notice，fake
+  Channel readiness 兼容路径已退役；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
-- `LogicLoop`、Pipeline 示例和 Broadcast 已展示跨执行域组合与有界背压。
+- `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff 的首个非安装 Runtime
+  Profile，`LogicLoop`、Pipeline 示例和 Broadcast 则展示跨执行域组合与有界背压。
 
 当前张力也已经明确：
 
-- `Poller` 和 `Channel` 仍以 Readiness 形状承载 IOCP completion；
-- Completion identity 被转换成 read/write event，再由 Channel 转交；
-- EventLoop 配置与指标混合公共调度预算和 IOCP backend capacity；
+- 仍只有一个 TCP Runtime Profile 完成垂直验证，queued-event 与 fixed-tick
+  Profile 尚未形成同等级合同和数字证据；
+- Profile A 的组合接口仍故意留在非安装 example/support 层，至少两个 Profile
+  证明共同需求前不能提升公共抽象；
+- I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
+  明确审查的 breaking line；
 - 当前 `LogicLoop` 更接近周期性有界 drain，不应被描述为所有游戏适用的权威
   FixedRate Tick。
 
