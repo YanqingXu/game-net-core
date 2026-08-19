@@ -48,12 +48,12 @@ See `migration_status.md` for the current checked state of these phases.
   committed at `f407440084c48f324ab3a65912443bb257aa8e77`, with direct
   read/write closed at `82d89831de81522ecd25c8eedd42f395e2a07613` and all-kind
   direct consumers at `d0f2e07c3e3798605ac5d60ee33a7f7689fd542c`.
-  The current Engine worktree removes legacy completion translation/storage and
-  makes shutdown phases monotonic. Dual-platform/API/sanitizer/performance
-  validation passes; exact-commit evidence binding closes IOE-C1 next, with
-  ARCH-G1 independent review and RTM-R1 Profile contracts proceeding in
-  parallel. CI/performance evidence stays commit-bound and continuous;
-  endurance and licensing move to promotion time.
+  IOE-C1 is closed at `c2d7e9d65dab8b110b58c20594b0cebd5199cf26`: legacy
+  completion translation/storage is retired, shutdown phases are monotonic,
+  and dual-platform/API/sanitizer/performance plus exact-commit evidence passes.
+  RTM-R1 Profile A is now the active contract front while ARCH-G1 independent
+  review proceeds in parallel. CI/performance evidence stays commit-bound and
+  continuous; endurance and licensing move to promotion time.
 
 ## Phase 1: Project Skeleton
 
@@ -285,10 +285,10 @@ Active execution front:
   stable public-surface drift.
 - [x] IOE-R2: move epoll into an explicit Readiness Engine with generation-safe
   registrations; closed at `6f45aa6e78152b8fd86df925962e580101b2f2ee`.
-- [ ] IOE-C1: native typed notices, all four direct consumers, removal of the
+- [x] IOE-C1: native typed notices, all four direct consumers, removal of the
   legacy fake translation/runtime Channel storage, and monotonic shutdown are
-  implemented; dual-platform/API/sanitizer/performance evidence passes and
-  exact-commit binding remains before marking the milestone integrated.
+  integrated at `c2d7e9d65dab8b110b58c20594b0cebd5199cf26` with
+  dual-platform/API/sanitizer/performance and exact-commit evidence.
 - [ ] RTM-R1: validate three TCP-only provisional Profiles in parallel with the
   Engine line.
 - [ ] RTM-R2: add bounded logic sharding and Hybrid execution only after at

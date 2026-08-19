@@ -359,12 +359,11 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 现在立即执行：
 
-> **IOE-C1：Accept/Connect/Read/Write typed consumer 均已进入 EventLoop owner
-> dispatch，completion-to-Channel publisher、operation link、Channel storage 实现与
-> Acceptor fallback 已删除；`Poller::poll()` 兼容 slot 显式拒绝。关闭 phase 现在可观察、
-> 单调，并在 Quiescing 消费真实 cancellation terminal。双平台全量、sanitizer、API、
-> 重复合同与性能证据门均通过；当前直接绑定精确提交证据并关闭 IOE-C1。**
+> **RTM-R1 Profile A：在 IOE-C1 已于
+> `c2d7e9d65dab8b110b58c20594b0cebd5199cf26` 关闭后，立即建立
+> SingleLoopInlineEvent 的 handler 预算、禁止阻塞、callback context、backpressure
+> 与最低 handoff 基线合同，并形成第一个可运行 TCP-only Profile 垂直切片。**
 
-ARCH-G1 独立 review 与 RTM-R1 的三个 Profile contract 继续并行，不形成冻结点。下一个
-可运行目标不是新发布 tag，而是：把当前 IOE-C1 worktree 绑定精确提交证据并直接推进
-RTM-R1 Profile A 的可运行合同；Linux/epoll 与 stable public surface 持续全绿。
+ARCH-G1 独立 review 与后续 Profile contract 继续并行，不形成冻结点。下一个可运行目标
+不是新发布 tag，而是直接交付 RTM-R1 Profile A 合同和实现；Linux/epoll 与 stable
+public surface 持续全绿。

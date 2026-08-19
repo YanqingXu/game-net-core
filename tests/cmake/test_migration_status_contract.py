@@ -179,7 +179,7 @@ def main() -> None:
     verify_inventory_tamper_detection(status_text, intent_inventory, migration_status)
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
-    require(status_text, "Current production-roadmap audit: 2026-08-19", migration_status)
+    require(status_text, "Current production-roadmap audit: 2026-08-20", migration_status)
     implementation_checkpoint = "669ebb0a7c5c475dea74b12275c66a2ce1876804"
     superseded_candidate = "c061f9967b9481b70b2faf9a8fee24f5a3e72ffc"
     superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-4"
@@ -292,14 +292,19 @@ def main() -> None:
     require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
     require(
         plan_text,
-        "IOE-C1：Accept/Connect/Read/Write typed consumer 均已进入 EventLoop owner",
+        "RTM-R1 Profile A：在 IOE-C1 已于",
         plan,
     )
     require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
     require(status_text, "Current IOE-C1 direct read/write checkpoint", migration_status)
     require(status_text, "Current IOE-C1 all-kind direct consumer checkpoint", migration_status)
+    require(
+        status_text,
+        "Current IOE-C1 compatibility-path and shutdown closure checkpoint",
+        migration_status,
+    )
     require(status_text, "kernel-terminal and consumer-terminal", migration_status)
-    require(normalized_status_text, "removes the remaining completion-to-Channel publisher", migration_status)
+    require(normalized_status_text, "The closure removes the remaining completion-to-Channel publisher", migration_status)
     require(normalized_status_text, "observably monotonic", migration_status)
     require(assessment_text, "P1-04 | P1（已关闭）", assessment)
     require(plan_text, "P1-04 | API-R1（已关闭）", plan)
