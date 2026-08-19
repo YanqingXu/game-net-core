@@ -17,6 +17,12 @@ SKIP_FILES = {
     "tests/scope/test_scope_guard.py",
     "tests/scope/test_intent_metadata.py",
 }
+ACTIVE_EXPERIMENTAL_SOURCE_PREFIX = "src/experimental/io_uring/"
+ACTIVE_EXPERIMENTAL_TEST_PATHS = {
+    "tests/CMakeLists.txt",
+    "tests/cmake/test_io_uring_completion_engine_contract.py",
+    "tests/contract/io_engine/test_io_uring_completion_engine.cpp",
+}
 TEXT_SUFFIXES = {
     "",
     ".cmake",
@@ -119,6 +125,8 @@ def check_deferred_path(root: Path, path: Path) -> list[Violation]:
 
     if len(parts) >= 2 and parts[0] == "src":
         component = parts[1]
+        if component == "experimental" and rel.startswith(ACTIVE_EXPERIMENTAL_SOURCE_PREFIX):
+            return violations
         if component in DEFERRED_SRC_DIRS and component not in ACTIVE_COMPONENTS:
             violations.append(Violation(rel, 1, "deferred path", f"component {component!r} is not active"))
 
@@ -137,6 +145,12 @@ def check_text(root: Path, path: Path) -> list[Violation]:
     for line_number, line in enumerate(text.splitlines(), start=1):
         for match in COMPONENT_REFERENCE.finditer(line):
             component = match.group(1)
+            active_io_uring_reference = component == "experimental" and (
+                rel.startswith(ACTIVE_EXPERIMENTAL_SOURCE_PREFIX)
+                or rel in ACTIVE_EXPERIMENTAL_TEST_PATHS
+            )
+            if active_io_uring_reference:
+                continue
             if component not in ACTIVE_COMPONENTS:
                 violations.append(Violation(rel, line_number, "deferred component", match.group(0)))
             if layer is not None and component not in LAYER_ALLOWED_COMPONENTS[layer]:

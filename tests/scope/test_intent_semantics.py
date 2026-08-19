@@ -84,6 +84,10 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_broadcast": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
 }
 
+EXPERIMENTAL_VERIFICATION_PATHS = {
+    "tests/contract/io_engine/test_io_uring_completion_engine.cpp",
+}
+
 ARTIFACT_KINDS = {"installed-library", "example", "benchmark"}
 MIGRATION_MODES = {"adapt", "redesign", "native"}
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}
@@ -535,6 +539,7 @@ def validate_verification(
     fuzz_cmake: str,
     intent_name: str,
     require_path: bool,
+    experimental_inventory: ConfiguredInventory | None = None,
 ) -> None:
     paths = verification_paths(body)
     if require_path:
@@ -554,8 +559,22 @@ def validate_verification(
                 f"intent fuzz file is not registered with a fuzz target: {test_path}",
             )
         elif test_path.endswith(".cpp"):
+            if (
+                test_path in EXPERIMENTAL_VERIFICATION_PATHS
+                and experimental_inventory is None
+            ):
+                # Windows cannot configure the Linux-only optional target. Its
+                # CMake/CI registration is guarded by the dedicated static
+                # contract and executed by both Linux Debug and ASan jobs.
+                continue
+            selected_inventory = (
+                experimental_inventory
+                if test_path in EXPERIMENTAL_VERIFICATION_PATHS
+                and experimental_inventory is not None
+                else inventory
+            )
             require(
-                test_path in inventory.tests_by_source,
+                test_path in selected_inventory.tests_by_source,
                 f"intent verification file is not in configured CTest inventory: {test_path}",
             )
         else:
@@ -576,6 +595,7 @@ def validate_intent(
     frozen_core: bool = False,
     require_provenance: bool = True,
     require_verification_path: bool = True,
+    experimental_inventory: ConfiguredInventory | None = None,
 ) -> None:
     metadata, body = parse_front_matter(path)
     try:
@@ -609,6 +629,7 @@ def validate_intent(
         fuzz_cmake,
         intent_name,
         require_verification_path,
+        experimental_inventory,
     )
 
 
@@ -865,6 +886,20 @@ def main() -> None:
                 "GAMENET_ENABLE_TLS": "OFF",
             },
         )
+        experimental_inventory = None
+        if sys.platform.startswith("linux"):
+            experimental_inventory = configure_inventory(
+                repo_root,
+                temp_root / "configured-io-uring-experimental",
+                {
+                    "CMAKE_BUILD_TYPE": "Debug",
+                    "GAMENET_BUILD_BENCHMARKS": "OFF",
+                    "GAMENET_BUILD_FUZZING": "OFF",
+                    "GAMENET_BUILD_TESTING": "ON",
+                    "GAMENET_ENABLE_EXPERIMENTAL": "ON",
+                    "GAMENET_ENABLE_TLS": "OFF",
+                },
+            )
 
         validate_dependency_direction(inventory)
 
@@ -880,6 +915,7 @@ def main() -> None:
                 frozen_core=relative_path in FROZEN_CORE_ACTIVE_INTENTS,
                 require_provenance=is_phase4,
                 require_verification_path=is_phase4,
+                experimental_inventory=experimental_inventory,
             )
 
         run_negative_fixtures(temp_root)

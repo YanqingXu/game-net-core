@@ -78,6 +78,28 @@ add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_
 add_gamenet_test(contract io_engine ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_engine_poller_adapter.cpp threading lifecycle)
 add_gamenet_test(contract io_engine ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_readiness_engine.cpp threading lifecycle)
 add_gamenet_test(contract io_engine ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_completion_engine.cpp threading lifecycle)
+if(GAMENET_ENABLE_EXPERIMENTAL)
+    add_executable(
+        gamenet_io_uring_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_uring_completion_engine.cpp
+    )
+    target_include_directories(
+        gamenet_io_uring_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_io_uring_contract
+        PRIVATE GameNet::experimental
+    )
+    add_test(
+        NAME contract.io_engine.test_io_uring_completion_engine
+        COMMAND gamenet_io_uring_contract
+    )
+    set_tests_properties(
+        contract.io_engine.test_io_uring_completion_engine
+        PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle"
+    )
+endif()
 add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool.cpp threading lifecycle)
 add_gamenet_test(contract event_loop_thread_pool ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread_pool/test_event_loop_thread_pool_restart_soak.cpp threading lifecycle)

@@ -89,6 +89,17 @@ def main() -> None:
         "namespace gamenet::experimental { class Udp {}; }\n",
         "deferred path",
     )
+    assert_clean(
+        repo_root,
+        "src/experimental/io_uring/OneShot.cc",
+        "namespace gamenet::experimental::io_uring { class OneShot {}; }\n",
+    )
+    assert_violation(
+        repo_root,
+        "src/experimental/udp/Udp.cc",
+        "namespace gamenet::experimental { class Udp {}; }\n",
+        "deferred path",
+    )
     assert_violation(
         repo_root,
         "src/core/CMakeLists.txt",

@@ -52,8 +52,12 @@ JOB_CONTRACTS = {
         "Build",
         "Test",
         60,
-        ("ci-evidence/ctest-junit.xml", "ci-evidence/install-consumer-junit.xml"),
-        10,
+        (
+            "ci-evidence/ctest-junit.xml",
+            "ci-evidence/io-uring-experimental-junit.xml",
+            "ci-evidence/install-consumer-junit.xml",
+        ),
+        14,
         package_step="Install and verify package consumer",
     ),
     "linux-asan-ubsan": JobContract(
@@ -65,8 +69,11 @@ JOB_CONTRACTS = {
         "Build",
         "Test",
         60,
-        ("ci-evidence/ctest-junit.xml",),
-        11,
+        (
+            "ci-evidence/ctest-junit.xml",
+            "ci-evidence/io-uring-asan-junit.xml",
+        ),
+        15,
         fuzz=True,
     ),
     "linux-tsan": JobContract(
@@ -843,6 +850,14 @@ def main() -> None:
     require(workflow, "python tests/cmake/test_dedicated_fixed_tick_profile_contract.py")
     require(workflow, "python3 tests/cmake/test_sharded_hybrid_profile_contract.py")
     require(workflow, "python tests/cmake/test_sharded_hybrid_profile_contract.py")
+    require(workflow, "python3 tests/cmake/test_io_uring_completion_engine_contract.py")
+    require(workflow, "python tests/cmake/test_io_uring_completion_engine_contract.py")
+    assert workflow.count(
+        "python3 tests/cmake/test_io_uring_completion_engine_contract.py"
+    ) == 4
+    assert workflow.count(
+        "python tests/cmake/test_io_uring_completion_engine_contract.py"
+    ) == 2
     require(workflow, "python3 tests/cmake/test_release_safe_tests.py")
     require(workflow, "python3 tests/ci/test_long_soak_workflow.py")
     require(workflow, "python3 tests/ci/test_core_benchmark_workflow.py")
@@ -859,6 +874,26 @@ def main() -> None:
     require(workflow, "-DGAMENET_ENABLE_TSAN=ON")
     require(workflow, "-DGAMENET_ENABLE_TLS=OFF")
     require(workflow, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF")
+    linux_io_uring = step_block(
+        job_block(workflow, "linux-cmake"),
+        "Build and test experimental IOE-X1 io_uring",
+    )
+    require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
+    require(linux_io_uring, "--expected-total 129")
+    require(linux_io_uring, "--expect-label experimental=1")
+    require(linux_io_uring, "--target gamenet_io_uring_contract")
+    require(
+        linux_io_uring,
+        "contract.io_engine.test_io_uring_completion_engine",
+    )
+    linux_io_uring_asan = step_block(
+        job_block(workflow, "linux-asan-ubsan"),
+        "Build and test experimental IOE-X1 io_uring with ASan/UBSan",
+    )
+    require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
+    require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
+    require(linux_io_uring_asan, "detect_leaks=1:halt_on_error=1")
+    require(linux_io_uring_asan, "--target gamenet_io_uring_contract")
     require(workflow, "cmake --install build --prefix \"$PWD/build/_install\"")
     require(workflow, "cmake -S tests/cmake/install_consumer")
     require(workflow, "-DCMAKE_PREFIX_PATH=\"$PWD/build/_install\"")
@@ -901,6 +936,10 @@ def main() -> None:
         require(guards, verifier)
         require(guards, semantic_guard)
         require(guards, f"{interpreter} tests/cmake/test_build_governance_contract.py")
+        require(
+            guards,
+            f"{interpreter} tests/cmake/test_io_uring_completion_engine_contract.py",
+        )
         assert guards.index(verifier) < guards.index(semantic_guard), (
             f"{job_name} must verify immutable migration provenance before intent semantics"
         )

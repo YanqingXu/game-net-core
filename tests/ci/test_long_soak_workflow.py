@@ -181,6 +181,11 @@ def main() -> None:
     require(job, "python3 tests/cmake/test_packet_framer_fuzz_contract.py", workflow)
     require(job, "python3 tests/cmake/test_logger_thread_contract.py", workflow)
     require(job, "python3 tests/cmake/test_build_governance_contract.py", workflow)
+    require(
+        job,
+        "python3 tests/cmake/test_io_uring_completion_engine_contract.py",
+        workflow,
+    )
     require(job, "python3 tests/cmake/test_tcp_connection_thread_contract.py", workflow)
     require(job, "python3 tests/ci/test_core_benchmark_workflow.py", workflow)
     require(job, "python3 tests/ci/test_phase4_benchmark_workflow.py", workflow)
@@ -218,12 +223,16 @@ def main() -> None:
     sharded_hybrid_profile_guard = (
         "python3 tests/cmake/test_sharded_hybrid_profile_contract.py"
     )
+    io_uring_guard = (
+        "python3 tests/cmake/test_io_uring_completion_engine_contract.py"
+    )
     require(guards, verifier, workflow)
     require(guards, semantic_guard, workflow)
     require(guards, runtime_profile_guard, workflow)
     require(guards, queued_profile_guard, workflow)
     require(guards, fixed_tick_profile_guard, workflow)
     require(guards, sharded_hybrid_profile_guard, workflow)
+    require(guards, io_uring_guard, workflow)
     assert guards.index(verifier) < guards.index(semantic_guard), (
         "long-soak must verify immutable migration provenance before intent semantics"
     )
@@ -450,6 +459,11 @@ def main() -> None:
     require(
         self_hosted_ci,
         "python3 tests/cmake/test_build_governance_contract.py",
+        workflow,
+    )
+    require(
+        self_hosted_ci,
+        "python3 tests/cmake/test_io_uring_completion_engine_contract.py",
         workflow,
     )
 

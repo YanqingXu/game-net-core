@@ -231,7 +231,7 @@ determinism。因此任一早期检查点的 CI、性能、容量或 endurance �
 | active intent | 36 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 176 |
+| intent 显式 verification paths | 178 |
 | public headers | 55 |
 | `.cc` sources | 46 |
 | CTest tests | 128 |

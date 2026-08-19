@@ -130,6 +130,7 @@ jobs:
             "tests/cmake/test_multi_io_queued_profile_contract.py"
             "tests/cmake/test_dedicated_fixed_tick_profile_contract.py"
             "tests/cmake/test_sharded_hybrid_profile_contract.py"
+            "tests/cmake/test_io_uring_completion_engine_contract.py"
             "tests/cmake/test_release_safe_tests.py"
             "tests/ci/test_workflow_jobs.py"
             "tests/ci/test_long_soak_workflow.py"

@@ -164,6 +164,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -417,6 +418,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -659,6 +661,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
           python3 tests/ci/test_performance_regression.py

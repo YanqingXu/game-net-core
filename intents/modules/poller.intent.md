@@ -137,10 +137,15 @@ owns nor extends Channel lifetime.
 
 ## 8. Backend Abstraction Intent
 v1 backend targets are Linux epoll and Windows IOCP.
-Poller abstraction should preserve the possibility of:
+Poller abstraction preserves the possibility of:
 - kqueue backend
-- io_uring-related future experiment
+- a non-installed io_uring experiment beside, rather than inside, the Poller
+  compatibility path
 without forcing upper layers to change semantic assumptions.
+
+IOE-X1 does not make Poller completion-shaped and does not replace Linux's
+production `EpollReadinessPort`. Its raw io_uring Engine owns independent
+one-shot completion slots and is built only by the Linux experimental target.
 
 Windows WinSock `select()` is not an acceptable performance target for the
 current migration. It may remain only as deleted legacy context or local

@@ -125,6 +125,18 @@ Contract tests verify:
 - Linux cross-thread Engine wakeup is owned and drained by the readiness port,
   emits no user notice, and preserves EventLoop's wakeup observation; every
   other direct port operation rejects a foreign thread
+- the default-off IOE-X1 contract must use a real Linux io_uring fd and exercise
+  one-shot Accept, Recv, and Send end to end; a model-only queue is insufficient
+- the contract fills the finite native SQ before flush and observes a typed
+  `SubmissionQueueFull` without an overflow allocation or fallback, then proves
+  accepted work still completes after flush
+- a pending Recv is canceled during quiesce. The internal ASYNC_CANCEL CQE and
+  the target `ECANCELED` CQE are counted separately, the target emits exactly
+  one Cancelled notice, its lease remains live until notice transfer, and
+  Shutdown waits for all staged/active/cancel obligations
+- static governance keeps epoll as the normal Linux Core path and rejects
+  multishot, provided-buffer selection, registered/fixed files, zero-copy Send,
+  SQPOLL, install/export, or a Windows experimental fallback in IOE-X1
 
 ## 5.1 Runtime Profile Required Test Examples
 - Profile A uses one real TcpServer with zero worker loops and proves accept,

@@ -44,19 +44,24 @@ def main() -> None:
     require(root_text, "game-net-core is static-only before 1.0", root_cmake)
     require(root_text, "if(GAMENET_ENABLE_TLS)", root_cmake)
     require(root_text, "GAMENET_ENABLE_TLS=ON is not implemented", root_cmake)
-    require(root_text, "if(GAMENET_ENABLE_EXPERIMENTAL)", root_cmake)
     require(
         root_text,
-        "GAMENET_ENABLE_EXPERIMENTAL=ON is not implemented",
+        'if(GAMENET_ENABLE_EXPERIMENTAL AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")',
         root_cmake,
     )
+    require(
+        root_text,
+        "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1 io_uring target",
+        root_cmake,
+    )
+    require(root_text, "add_subdirectory(src/experimental/io_uring)", root_cmake)
     assert root_text.index('project(GameNetCore VERSION 0.3.0 LANGUAGES CXX)') < root_text.index(
         "game-net-core currently supports only Linux and Windows"
     )
     assert root_text.index('option(GAMENET_ENABLE_EXPERIMENTAL "Build experimental modules" OFF)') < (
         root_text.index("if(BUILD_SHARED_LIBS)")
     )
-    assert root_text.index("if(GAMENET_ENABLE_EXPERIMENTAL)") < root_text.index(
+    assert root_text.index("if(GAMENET_ENABLE_EXPERIMENTAL AND NOT") < root_text.index(
         "add_subdirectory(src/core)"
     )
 
@@ -93,7 +98,8 @@ def main() -> None:
         "Linux is the Tier 1 reference platform",
         "Windows is Tier 2 until the M3 IOCP",
         "macOS, BSD variants, and all other target systems fail",
-        "`BUILD_SHARED_LIBS=ON`, `GAMENET_ENABLE_TLS=ON`, and",
+        "`BUILD_SHARED_LIBS=ON` and `GAMENET_ENABLE_TLS=ON`",
+        "`GAMENET_ENABLE_EXPERIMENTAL=ON` is supported only on Linux",
         "No binary ABI compatibility is promised before version 1.0.",
     ):
         require(intent_text, fragment, platform_intent)
@@ -113,6 +119,7 @@ def main() -> None:
         "no binary ABI compatibility promise before version 1.0",
         "`GAMENET_ENABLE_TLS`",
         "`GAMENET_ENABLE_EXPERIMENTAL`",
+        "IOE-X1 io_uring",
     ):
         require(docs_text, fragment, platform_docs)
 
@@ -122,6 +129,7 @@ def main() -> None:
     require(readme_text, "Windows/IOCP is a required Tier 2", readme)
     require(readme_text, "static-only before 1.0", readme)
     require(readme_text, "docs/development/platform_support.md", readme)
+    require(readme_text, "Linux-only IOE-X1 io_uring", readme)
     require(readme_text, "## Licensing Status", readme)
     require(readme_text, "all-rights-reserved", readme)
     require(readme_text, "docs/development/licensing.md", readme)

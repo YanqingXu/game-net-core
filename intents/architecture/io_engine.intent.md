@@ -170,6 +170,35 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
   same-line fingerprint/layout churn; no production or test path initializes,
   reads, or writes them.
 
+IOE-X1 authorizes one experimental Linux completion vertical slice:
+
+- `GAMENET_ENABLE_EXPERIMENTAL=ON` on Linux builds a non-installed
+  `GameNet::experimental` target containing a real raw-syscall io_uring
+  Completion Engine. The default remains `OFF`; Windows rejects the option;
+  the production Core continues to select epoll as its default and fallback;
+- the first Engine is owner-thread-only and invokes no user callback. The owner
+  explicitly enqueues, flushes, waits, pulls terminal notices, begins quiesce,
+  and completes shutdown. A foreign thread receives an explicit owner error;
+- only one-shot Accept, Recv, and Send are admitted. Every accepted operation
+  receives a finite slot plus nonzero generation, owns its buffer/address
+  storage and optional lease until exactly one terminal CQE, and becomes one
+  typed success/failure/cancellation notice;
+- the SQ, operation slots, completion batch, ready-notice count, per-operation
+  payload, and total Engine-owned bytes are finite. A full native submission
+  queue returns `SubmissionQueueFull`; it never blocks, allocates an unbounded
+  overflow queue, or falls back to inline/readiness execution;
+- `ASYNC_CANCEL` completion is only cancellation-request bookkeeping. The
+  target operation's terminal CQE alone retires its slot and lease. Repeated
+  cancellation is idempotent; stale slot generations cannot retire a reused
+  operation;
+- quiesce seals new one-shot work, flushes already-enqueued SQEs, submits
+  bounded cancellation for every active operation, drains both target and
+  internal cancel CQEs, and reaches physical Shutdown only when no staged SQE,
+  active operation, or cancel completion remains;
+- no multishot Accept/Recv, provided-buffer ring, buffer selection, registered
+  or fixed file, zero-copy Send, SQPOLL, linked operation graph, public backend
+  selector, or production TcpConnection integration is authorized in IOE-X1.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -180,7 +209,10 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
 3. IOE-C1 moves IOCP delivery to typed Completion notices, removes fake
    Channel translation from both production and compatibility paths, and makes
    repeated shutdown requests phase-monotonic.
-4. Only proven, cross-backend concepts may later graduate to a narrow public
+4. IOE-X1 proves the same terminal-operation and final-drain invariants through
+   a default-off, non-installed real io_uring path while epoll stays production
+   default/fallback.
+5. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -224,6 +256,14 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
 - `tests/integration/tcp/test_iocp_quit_completion_drain.cpp` verifies a real
   cancellation terminal packet is consumed while the loop is Quiescing and
   before Shutdown publication.
+- `tests/contract/io_engine/test_io_uring_completion_engine.cpp` verifies a
+  real Linux one-shot Accept/Recv/Send round trip, finite-SQ rejection,
+  owner-thread enforcement, operation generation, cancellation CQE separation,
+  lease retention, and bounded final-drain convergence.
+- `tests/cmake/test_io_uring_completion_engine_contract.py` guards the
+  default-off/non-installed Linux target, epoll fallback, raw-kernel operation
+  allowlist, explicit finite budgets, CI execution, and rejection of multishot,
+  provided buffers, fixed files, zero-copy, and SQPOLL.
 
 Every Engine implementation slice adds a focused contract before replacing a
 backend path. Cross-platform full CTest and the core benchmark are required for
@@ -235,6 +275,7 @@ integration; a local sample is directional evidence, not a release gate.
 - no public backend selection or platform handle API in IOE-R1;
 - no unbounded queue introduced to hide pressure;
 - no normalization of completion into synthetic readiness after IOE-C1;
+- no production-backend replacement or advanced io_uring feature in IOE-X1;
 - no new business logic in EventLoop or the Engine.
 
 ## 10. Review Questions

@@ -34,9 +34,9 @@ if(GAMENET_ENABLE_TLS)
     )
 endif()
 
-if(GAMENET_ENABLE_EXPERIMENTAL)
+if(GAMENET_ENABLE_EXPERIMENTAL AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR
-        "GAMENET_ENABLE_EXPERIMENTAL=ON is not implemented; experimental modules remain deferred."
+        "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1 io_uring target."
     )
 endif()
 
@@ -57,6 +57,9 @@ add_subdirectory(src/transport)
 add_subdirectory(src/game_session)
 add_subdirectory(src/game_logic)
 add_subdirectory(src/broadcast)
+if(GAMENET_ENABLE_EXPERIMENTAL)
+    add_subdirectory(src/experimental/io_uring)
+endif()
 add_subdirectory(examples)
 
 if(GAMENET_BUILD_BENCHMARKS)

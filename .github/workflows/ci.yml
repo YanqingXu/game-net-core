@@ -106,6 +106,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -135,6 +136,27 @@ jobs:
           ctest --test-dir build --output-on-failure --timeout 60
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
+
+      - name: Build and test experimental IOE-X1 io_uring
+        run: |
+          cmake -S . -B build-io-uring-experimental \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DGAMENET_BUILD_TESTING=ON \
+            -DGAMENET_BUILD_BENCHMARKS=OFF \
+            -DGAMENET_ENABLE_TLS=OFF \
+            -DGAMENET_ENABLE_EXPERIMENTAL=ON
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-io-uring-experimental \
+            --expected-total 129 \
+            --expect-label experimental=1 \
+            --output ci-evidence/io-uring-experimental-inventory.json
+          cmake --build build-io-uring-experimental \
+            --target gamenet_io_uring_contract --parallel
+          ctest --test-dir build-io-uring-experimental \
+            -R '^contract.io_engine.test_io_uring_completion_engine$' \
+            --output-on-failure --timeout 10 \
+            --output-junit "$PWD/ci-evidence/io-uring-experimental-junit.xml" \
+            --output-log "$PWD/ci-evidence/io-uring-experimental-ctest.log"
 
       - name: Install and verify package consumer
         run: |
@@ -169,6 +191,10 @@ jobs:
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 128 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build --parallel' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
+            --command 'cmake -S . -B build-io-uring-experimental -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-experimental --expected-total 129 --expect-label experimental=1 --output ci-evidence/io-uring-experimental-inventory.json' \
+            --command 'cmake --build build-io-uring-experimental --target gamenet_io_uring_contract --parallel' \
+            --command 'ctest --test-dir build-io-uring-experimental -R ^contract.io_engine.test_io_uring_completion_engine$ --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-experimental-junit.xml --output-log $PWD/ci-evidence/io-uring-experimental-ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
             --command 'cmake -S tests/cmake/install_consumer -B build-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json' \
@@ -313,6 +339,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -341,6 +368,31 @@ jobs:
           ctest --test-dir build-asan --output-on-failure --timeout 60
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
+
+      - name: Build and test experimental IOE-X1 io_uring with ASan/UBSan
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          cmake -S . -B build-io-uring-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DGAMENET_BUILD_TESTING=ON \
+            -DGAMENET_BUILD_BENCHMARKS=OFF \
+            -DGAMENET_ENABLE_ASAN_UBSAN=ON \
+            -DGAMENET_ENABLE_TLS=OFF \
+            -DGAMENET_ENABLE_EXPERIMENTAL=ON
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-io-uring-asan \
+            --expected-total 129 \
+            --expect-label experimental=1 \
+            --output ci-evidence/io-uring-asan-inventory.json
+          cmake --build build-io-uring-asan \
+            --target gamenet_io_uring_contract --parallel
+          ctest --test-dir build-io-uring-asan \
+            -R '^contract.io_engine.test_io_uring_completion_engine$' \
+            --output-on-failure --timeout 10 \
+            --output-junit "$PWD/ci-evidence/io-uring-asan-junit.xml" \
+            --output-log "$PWD/ci-evidence/io-uring-asan-ctest.log"
 
       - name: Configure PacketFramer libFuzzer smoke
         env:
@@ -393,6 +445,10 @@ jobs:
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 128 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-asan --parallel' \
             --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
+            --command 'cmake -S . -B build-io-uring-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-asan --expected-total 129 --expect-label experimental=1 --output ci-evidence/io-uring-asan-inventory.json' \
+            --command 'cmake --build build-io-uring-asan --target gamenet_io_uring_contract --parallel' \
+            --command 'ctest --test-dir build-io-uring-asan -R ^contract.io_engine.test_io_uring_completion_engine$ --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-asan-junit.xml --output-log $PWD/ci-evidence/io-uring-asan-ctest.log' \
             --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-fuzz --target gamenet_fuzz_packet_framer --parallel' \
             --command 'cmake -E make_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus ci-evidence/fuzz/artifacts' \
@@ -510,6 +566,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -667,6 +724,7 @@ jobs:
           python3 tests/cmake/test_multi_io_queued_profile_contract.py
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+          python3 tests/cmake/test_io_uring_completion_engine_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -858,6 +916,7 @@ jobs:
           python tests/cmake/test_multi_io_queued_profile_contract.py
           python tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python tests/cmake/test_sharded_hybrid_profile_contract.py
+          python tests/cmake/test_io_uring_completion_engine_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py
@@ -1082,6 +1141,7 @@ jobs:
           python tests/cmake/test_multi_io_queued_profile_contract.py
           python tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python tests/cmake/test_sharded_hybrid_profile_contract.py
+          python tests/cmake/test_io_uring_completion_engine_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py

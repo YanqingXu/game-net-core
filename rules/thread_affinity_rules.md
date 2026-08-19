@@ -226,6 +226,15 @@ No other direct mutation path is allowed for core loop state.
 - one fixed native wait batch is separate from
   `maxActiveChannelsPerIteration`; a full batch reports backend budget
   exhaustion while EventLoop continues its normal bounded scheduler phases
+- IOE-X1's raw io_uring Engine is non-installed and owner-thread-only. Enqueue,
+  flush, wait, notice pull, cancel, quiesce, and shutdown all validate the
+  constructing EventLoop owner; it exposes no direct cross-thread mutation or
+  user callback in the first slice
+- one-shot Accept/Recv/Send completion and ASYNC_CANCEL bookkeeping are decoded
+  only by that owner. A cancel CQE never retires the target; only the matching
+  slot-plus-generation target CQE may publish and retire the terminal notice
+- SQ exhaustion returns `SubmissionQueueFull` synchronously. It may not block,
+  invoke inline work, switch to epoll, or append to an overflow queue
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

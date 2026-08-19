@@ -59,12 +59,13 @@ commands remain valid:
 | Option | Supported value | `ON` behavior |
 |---|---|---|
 | `GAMENET_ENABLE_TLS` | `OFF` | Configure fails because TLS is not implemented in the active target graph |
-| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF` | Configure fails because experimental transports/modules are deferred |
+| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1 io_uring Engine and its direct contracts; Windows rejects it |
 
-An option that has no implementation must not configure successfully. TLS,
-UDP, KCP, and other experimental work require promoted intent, ownership and
-threading contracts, targets, and direct tests before an enabling value can be
-accepted.
+An option that has no implementation must not configure successfully. The
+Linux-only IOE-X1 io_uring target is the sole active experimental module; it
+does not replace epoll and is not installed. TLS, UDP, KCP, and other
+experimental work still require promoted intent, ownership/threading
+contracts, targets, and direct tests before an enabling value can be accepted.
 
 ## Supported Configuration Examples
 
@@ -96,12 +97,27 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
+The dedicated IOE-X1 contract configuration is Linux-only:
+
+```bash
+cmake -S . -B build-io-uring \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DGAMENET_BUILD_TESTING=ON \
+  -DGAMENET_ENABLE_EXPERIMENTAL=ON
+cmake --build build-io-uring --target gamenet_io_uring_contract --parallel
+ctest --test-dir build-io-uring \
+  -R '^contract.io_engine.test_io_uring_completion_engine$' \
+  --output-on-failure
+```
+
 ## Contract Enforcement
 
 `tests/cmake/test_build_governance_contract.py` checks:
 
 - the root platform allow-list and explicit Core backend selection;
-- configure-time rejection for shared libraries and unimplemented options;
+- configure-time rejection for shared libraries, TLS, unsupported Windows
+  experimental requests, and any unimplemented option;
+- the default-off, Linux-only, non-installed IOE-X1 io_uring target;
 - explicit `STATIC` declarations for every installed library target;
 - this support matrix, README/CI documentation, and workflow registration.
 

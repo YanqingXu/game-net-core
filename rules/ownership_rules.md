@@ -81,6 +81,17 @@ It must not blur these roles.
 - the public/platform-internal `EPollPoller` remains a compatibility shell over
   the same native port. EventLoop's production adapter uses the port directly
   and does not restore raw `epoll_event.data.ptr` delivery
+- the IOE-X1 experimental target owns its io_uring fd, SQ/CQ mappings, SQE
+  mapping, fixed operation slots, staged-submission identities, internal cancel
+  obligations, and ready notices. It is neither installed nor owned by the
+  production EventLoop adapter
+- each accepted one-shot operation owns its address/buffer storage and optional
+  source-private lease until the matching terminal CQE becomes a move-only
+  notice. A successful Accept notice owns the accepted fd until the owner
+  explicitly releases it; otherwise notice destruction closes it
+- quiesce retains every active slot and lease through target cancellation
+  completion. Closing the ring is destructor fallback, not evidence of an
+  orderly final drain; the contract requires explicit bounded Shutdown first
 
 ## 3. Poller
 - Poller does not own Channel

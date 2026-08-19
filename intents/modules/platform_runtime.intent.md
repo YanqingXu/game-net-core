@@ -110,10 +110,11 @@ This module is not business logic.
 - macOS, BSD variants, and all other target systems fail at CMake configure
   time instead of selecting Linux sources implicitly.
 - Installed library targets are static-only before version 1.0.
-- `BUILD_SHARED_LIBS=ON`, `GAMENET_ENABLE_TLS=ON`, and
-  `GAMENET_ENABLE_EXPERIMENTAL=ON` fail at configure time. The latter two
-  options remain accepted only as `OFF` for command-line compatibility while
-  their modules are deferred.
+- `BUILD_SHARED_LIBS=ON` and `GAMENET_ENABLE_TLS=ON` fail at configure time.
+  `GAMENET_ENABLE_EXPERIMENTAL=ON` is supported only on Linux and builds only
+  the non-installed IOE-X1 io_uring target; it does not authorize or build
+  deferred UDP, KCP, TLS, HTTP, RPC, or coroutine modules. Windows rejects the
+  experimental option explicitly.
 - No binary ABI compatibility is promised before version 1.0.
 
 ---
@@ -152,9 +153,9 @@ This module is not business logic.
   runtime path.
 - Unsupported platform features must be reported as unsupported, not emulated
   silently.
-- Unsupported target systems, shared-library requests, and unimplemented
-  optional-module requests fail during CMake configure rather than producing a
-  partially selected build.
+- Unsupported target systems, shared-library requests, unsupported Windows
+  experimental requests, and unimplemented optional-module requests fail
+  during CMake configure rather than producing a partially selected build.
 - Would-block and interrupted errors must normalize to stable helper predicates.
 - Windows `WSARecv` / `WSASend` synchronous non-pending failures and queued
   error completions normalize into the same owner-loop connection error/close
@@ -194,6 +195,8 @@ This module is not business logic.
 - `docs/development/windows_iocp_milestone.md` defines the Windows promotion
   gates for IOCP wakeup, overlapped read/write ownership, and cancel/close ordering.
 - Linux CI/builds verify the Linux source selection and EPollPoller path.
+- A dedicated Linux experimental configure builds and runs the real IOE-X1
+  io_uring contract while the ordinary Linux build remains experimental-off.
 - `tests/cmake/test_build_governance_contract.py` verifies the supported target
   systems, explicit backend branches, static-only targets, rejected empty
   options, documentation, and CI guard registration.

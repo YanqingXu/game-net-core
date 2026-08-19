@@ -46,7 +46,8 @@ The `ci` workflow validates:
 - CMake configure with C++23 and testing enabled.
 - Build-governance guard for the Linux/Windows target-system allow-list,
   explicit static installed targets, rejected shared-library builds, and
-  configure-time failure for unimplemented TLS/experimental options.
+  configure-time failure for unimplemented TLS and unsupported Windows
+  experimental options, plus a separate default-off Linux IOE-X1 gate.
 - Public API manifest v2 verification for classified exported targets and
   headers, plus a deterministic diff against the immutable 0.2 preview
   snapshot. Producer checkouts fetch full history so the snapshot inventory
@@ -111,10 +112,12 @@ The `ci` workflow validates:
   verification through the IOCP backend.
 - Windows MSVC Release build and CTest suite as a required main-CI job.
 
-It keeps post-Phase-4/experimental modules disabled:
+Ordinary production builds keep optional modules disabled. A separate Linux
+job slice enables only the non-installed IOE-X1 io_uring contract. Still
+disabled are:
 
 - TLS
-- experimental transport
+- experimental transport other than the isolated IOE-X1 Engine
 - HTTP, WebSocket, RPC, UDP, KCP, PMTU/FEC, metrics, coroutine, and a formal
   all-in-one game pipeline library
 
@@ -155,6 +158,7 @@ python3 tests/cmake/test_runtime_profile_contract.py
 python3 tests/cmake/test_multi_io_queued_profile_contract.py
 python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
 python3 tests/cmake/test_sharded_hybrid_profile_contract.py
+python3 tests/cmake/test_io_uring_completion_engine_contract.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 python3 tests/ci/test_long_soak_workflow.py
@@ -897,6 +901,7 @@ py -3 tests\cmake\test_runtime_profile_contract.py
 py -3 tests\cmake\test_multi_io_queued_profile_contract.py
 py -3 tests\cmake\test_dedicated_fixed_tick_profile_contract.py
 py -3 tests\cmake\test_sharded_hybrid_profile_contract.py
+py -3 tests\cmake\test_io_uring_completion_engine_contract.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 py -3 tests\ci\test_long_soak_workflow.py
