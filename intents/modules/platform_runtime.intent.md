@@ -34,7 +34,9 @@ This module is not business logic.
 - Implement `SocketsOps` behind the stable public `gamenet/core/net/SocketsOps.h` entry.
 - Create, write, drain, and close EventLoop wakeup descriptors per platform.
 - Host concrete poller backends under `gamenet/core/net/poller/`.
-- Select the default poller backend at build time through `Poller::newDefaultPoller()`.
+- Select the default compatibility poller backend at build time through
+  `Poller::newDefaultPoller()`; production EventLoop uses the source-private
+  Engine factory.
 - Keep unsupported platform capabilities explicit.
 
 ---
@@ -90,7 +92,9 @@ This module is not business logic.
 - `EventLoop` calls `platform::createWakeupFds()`, `writeWakeup()`, and `drainWakeup()`.
 - `Socket`, `Acceptor`, `Connector`, `TcpConnection`, and future promoted
   platform users call `sockets::*` through the stable public header.
-- `PollerFactory` chooses an IOCP-backed Windows backend and `EPollPoller` on Linux.
+- `PollerFactory` chooses an IOCP-backed Windows backend and `EPollPoller` on Linux
+  as a compatibility shell. Both the shell and the production Engine use the
+  source-private `EpollReadinessPort` native implementation.
 - CMake selects exactly one socket implementation, one wakeup implementation, and
   one concrete poller backend for the target platform.
 

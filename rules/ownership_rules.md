@@ -71,6 +71,16 @@ It must not blur these roles.
   and may not extend a callback target beyond its registration/operation lease
 - The Engine remains Quiescing through EventLoop FinalDraining. Physical
   Shutdown and backend release occur during owner-thread EventLoop destruction
+- On Linux, `EpollReadinessPort` owns the epoll descriptor, internal eventfd,
+  fixed native/decoded batch storage, and registration identity maps. It borrows
+  Channel targets and owns no callback or socket
+- a `ReadinessNotice` is a value snapshot that borrows its target only after
+  source-plus-generation validation. Removing the registration erases that
+  generation before Channel release; a stale kernel token therefore owns and
+  addresses nothing
+- the public/platform-internal `EPollPoller` remains a compatibility shell over
+  the same native port. EventLoop's production adapter uses the port directly
+  and does not restore raw `epoll_event.data.ptr` delivery
 
 ## 3. Poller
 - Poller does not own Channel

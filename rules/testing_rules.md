@@ -98,6 +98,19 @@ Contract tests verify:
 - the legacy public IOCP dequeue option maps to source-private Engine backend
   capacity while `maxActiveChannelsPerIteration` remains the independent
   EventLoop dispatch budget
+- the epoll Readiness Engine contract must prove nonzero registration identity,
+  stable generation across interest disable/re-enable, a new generation after
+  remove/re-register, stale-token rejection, and exact-fd/target cancellation
+- multiple native masks for one current generation merge into one typed notice,
+  while a queued mask for an interest that has since been removed is filtered;
+  a fixed wait capacity reports exhaustion and later waits expose every ready
+  source without invoking a callback inside the port
+- level-triggered readiness repeats until the application consumes the source;
+  the port consumes no payload, and the application still observes EAGAIN after
+  draining it
+- Linux cross-thread Engine wakeup is owned and drained by the readiness port,
+  emits no user notice, and preserves EventLoop's wakeup observation; every
+  other direct port operation rejects a foreign thread
 
 ## 6. Channel Required Test Examples
 - handleEvent dispatches correct callback by revents

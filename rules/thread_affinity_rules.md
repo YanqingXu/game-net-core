@@ -124,6 +124,15 @@ No other direct mutation path is allowed for core loop state.
 - `IoEngineOptions::maxCompletionNoticesPerWait` is backend capacity. It is
   compatibility-mapped from the legacy public IOCP option and is not an
   EventLoop scheduling/fairness budget
+- On Linux, `EpollReadinessPort` owns register/update/cancel/wait and validates
+  the EventLoop owner on every such call. Its eventfd `wakeup()` is the only
+  cross-thread method and performs no callback or registration mutation
+- epoll returns generation tokens to the port. The port resolves and validates
+  each token before EventLoop can observe a Channel; an unknown/replaced token
+  is stale work and is never dispatched
+- one fixed native wait batch is separate from
+  `maxActiveChannelsPerIteration`; a full batch reports backend budget
+  exhaustion while EventLoop continues its normal bounded scheduler phases
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

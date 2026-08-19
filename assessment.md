@@ -224,25 +224,25 @@ determinism。因此任一早期检查点的 CI、性能、容量或 endurance �
 
 | 项目 | 当前事实 |
 | --- | ---: |
-| 正式 intent | 61 |
-| active intent | 30 |
+| 正式 intent | 63 |
+| active intent | 32 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 140 |
+| intent 显式 verification paths | 157 |
 | public headers | 55 |
-| `.cc` sources | 40 |
-| CTest tests | 122 |
+| `.cc` sources | 42 |
+| CTest tests | 123 |
 
 测试分区：
 
 - unit：8；
-- contract：100；
+- contract：102；
 - integration：13。
 
 交叉标签中包括：
 
-- threading：94；
-- lifecycle：99；
+- threading：96；
+- lifecycle：101；
 - game pipeline：7；
 - broadcast：5。
 
@@ -570,8 +570,9 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 - 当时的上游参考 `7fa6922`、M3-R1 已审查检查点 `95a6ab5` 与“尚未冻结
   v0.3 最终候选”被明确区分；
 - 当时测试清单统一为 120（8 unit、99 contract、13 integration；93
-  threading、98 lifecycle）；PERF-R1 关闭清单为 121/8/100/13，当前架构线已增至
-  122/8/101/13，历史 GOV-R2/PERF-R1 数字不冒充当前库存；
+  threading、98 lifecycle）；PERF-R1 关闭清单为 121/8/100/13，IOE-R1 为
+  122/8/101/13，当前 IOE-R2 架构线已增至 123/8/102/13，历史
+  GOV-R2/PERF-R1 数字不冒充当前库存；
 - `be749ad`、`5f926f3`、`b344318` 的 benchmark/capacity/endurance 结果只在
   historical evidence 范围出现；
 - P1-01/P2-01 的关闭证据链接到具体合同；GOV-R2 当时将 API-R1 设为下一

@@ -119,6 +119,18 @@ invent a blocking destructor drain. IOE-C1 must replace this escape with typed
 terminal retirement owned by the Completion Engine.
 
 IOE-R2 introduces the native Readiness Engine and keeps Channel on that path.
+The Linux production adapter owns `EpollReadinessPort` directly; `EPollPoller`
+is retained only as the platform-internal compatibility surface selected by the
+legacy Poller factory. Native epoll payloads now carry a monotonic registration
+generation, never a raw Channel pointer. The port validates source, generation,
+and target, filters readiness against current interests, merges masks for one
+current identity, drops stale tokens, and then
+hands the bounded notice batch to EventLoop. It also owns/drains the Linux
+eventfd wakeup, so cross-thread scheduling no longer needs an EventLoop-owned
+wakeup Channel on epoll. The initial port is explicitly level-triggered and
+uses a fixed 64-notice default capacity independent of EventLoop dispatch
+budget.
+
 IOE-C1 introduces typed IOCP completion notices, moves completion retention and
 association behind the Completion Engine, then deletes Channel's IOCP operation
 mailboxes and EventLoop's backend downcasts. Public API changes, if any, require

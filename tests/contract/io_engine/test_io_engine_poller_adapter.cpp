@@ -78,7 +78,7 @@ bool hasExpectedPlatformCapabilities(const gamenet::net::EventLoop& loop) {
 #else
     return hasCapability(capabilities, IoEngineCapability::Readiness) &&
         !hasCapability(capabilities, IoEngineCapability::Completion) &&
-        !hasCapability(capabilities, IoEngineCapability::BackendWakeup);
+        hasCapability(capabilities, IoEngineCapability::BackendWakeup);
 #endif
 }
 
@@ -90,6 +90,9 @@ void testAdapterLifecycleFollowsOwnerLoop() {
     GAMENET_TEST_ASSERT(
         EngineHarness::ioEngineOptions(loop).
             maxCompletionNoticesPerWait == 3);
+    GAMENET_TEST_ASSERT(
+        EngineHarness::ioEngineOptions(loop).
+            maxReadinessNoticesPerWait == 64);
     GAMENET_TEST_ASSERT(
         EngineHarness::ioEngineAdmission(loop) ==
         IoEngineAdmissionResult::Accepted);

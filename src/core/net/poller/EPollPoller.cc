@@ -1,150 +1,109 @@
 #include "gamenet/core/net/poller/EPollPoller.h"
 
-#include "gamenet/core/base/Timestamp.h"
+#include "../detail/EpollReadinessPort.h"
 #include "gamenet/core/net/Channel.h"
+#include "gamenet/core/net/EventLoop.h"
 
-#include "gamenet/core/base/Logger.h"
-
-#include <cerrno>
-#include <cstring>
 #include <stdexcept>
-#include <unistd.h>
+#include <string>
 
 namespace gamenet::net {
 
 namespace {
 
-[[noreturn]] void epollDie(const char* what) {
-    LOG_SYSFATAL << what << ": " << std::strerror(errno);
-    __builtin_unreachable();
-}
-
-uint32_t toEpollEvents(uint32_t events) noexcept {
-    uint32_t epollEvents = 0;
-    if (events & Channel::kReadEvent) {
-        epollEvents |= EPOLLIN | EPOLLPRI;
-    }
-    if (events & Channel::kWriteEvent) {
-        epollEvents |= EPOLLOUT;
-    }
-    return epollEvents;
-}
-
-uint32_t fromEpollEvents(uint32_t events) noexcept {
-    uint32_t channelEvents = 0;
-    if (events & (EPOLLIN | EPOLLPRI)) {
-        channelEvents |= Channel::kReadEvent;
-    }
-    if (events & EPOLLOUT) {
-        channelEvents |= Channel::kWriteEvent;
-    }
-    if (events & EPOLLERR) {
-        channelEvents |= Channel::kErrorEvent;
-    }
-    if (events & (EPOLLHUP | EPOLLRDHUP)) {
-        channelEvents |= Channel::kCloseEvent;
-    }
-    return channelEvents;
+[[noreturn]] void rejectReadinessMutation(
+    const char* operation,
+    detail::ReadinessPortResult result) {
+    throw std::logic_error(
+        std::string("EPollPoller ") + operation +
+        " rejected by readiness port: " +
+        std::to_string(static_cast<unsigned int>(result)));
 }
 
 }  // namespace
 
 EPollPoller::EPollPoller(EventLoop* loop)
-    : Poller(loop), epollfd_(::epoll_create1(EPOLL_CLOEXEC)), events_(kInitEventListSize) {
-    if (epollfd_ < 0) {
-        epollDie("epoll_create1");
-    }
-}
+    : Poller(loop),
+      readinessPort_(
+          std::make_unique<detail::EpollReadinessPort>(loop)) {}
 
-EPollPoller::~EPollPoller() {
-    ::close(epollfd_);
-}
+EPollPoller::~EPollPoller() = default;
 
-gamenet::base::Timestamp EPollPoller::poll(int timeoutMs, ChannelList* activeChannels) {
-    const int numEvents =
-        ::epoll_wait(epollfd_, events_.data(), static_cast<int>(events_.size()), timeoutMs);
-    const auto now = gamenet::base::now();
-    if (numEvents > 0) {
-        fillActiveChannels(numEvents, activeChannels);
-        if (static_cast<std::size_t>(numEvents) == events_.size()) {
-            events_.resize(events_.size() * 2);
+gamenet::base::Timestamp EPollPoller::poll(
+    int timeoutMs,
+    ChannelList* activeChannels) {
+    const auto batch = readinessPort_->wait(timeoutMs);
+    for (const auto& notice : batch.notices) {
+        const auto existing = channels_.find(notice.identity.source);
+        if (existing == channels_.end() ||
+            existing->second != notice.target ||
+            !readinessPort_->isCurrent(notice.identity, notice.target)) {
+            continue;
         }
-    } else if (numEvents < 0 && errno != EINTR) {
-        epollDie("epoll_wait");
+        notice.target->setRevents(notice.events);
+        activeChannels->push_back(notice.target);
     }
-    return now;
+    return batch.observedAt;
 }
 
 void EPollPoller::updateChannel(Channel* channel) {
-    const int index = channel->index();
-    const SocketFd fd = channel->fd();
-
-    if (index == kNew || index == kDeleted) {
-        if (index == kNew) {
-            const auto [it, inserted] = channels_.emplace(fd, channel);
-            if (!inserted) {
-                throw std::logic_error(
-                    it->second == channel
-                        ? "EPollPoller new Channel is already registered"
-                        : "EPollPoller fd belongs to a different Channel");
-            }
-        } else {
-            const auto it = channels_.find(fd);
-            if (it == channels_.end() || it->second != channel) {
-                throw std::logic_error(
-                    "EPollPoller deleted Channel registration identity mismatch");
-            }
-        }
-
-        channel->setIndex(kAdded);
-        update(EPOLL_CTL_ADD, channel);
-        return;
+    if (channel == nullptr) {
+        throw std::invalid_argument(
+            "EPollPoller update requires a Channel");
     }
-
-    const auto existing = channels_.find(fd);
-    if (existing == channels_.end() || existing->second != channel) {
+    const auto existing = channels_.find(channel->fd());
+    if (existing != channels_.end() && existing->second != channel) {
         throw std::logic_error(
-            "EPollPoller update Channel registration identity mismatch");
+            "EPollPoller fd belongs to a different Channel");
     }
 
-    if (channel->isNoneEvent()) {
-        update(EPOLL_CTL_DEL, channel);
-        channel->setIndex(kDeleted);
-    } else {
-        update(EPOLL_CTL_MOD, channel);
+    const bool newCompatibilityRegistration = existing == channels_.end();
+    if (newCompatibilityRegistration) {
+        channels_.emplace(channel->fd(), channel);
     }
+    detail::ReadinessRegistrationResult registered;
+    try {
+        registered = readinessPort_->registerOrUpdate({
+            .source = channel->fd(),
+            .target = channel,
+            .interests = channel->events(),
+        });
+    } catch (...) {
+        if (newCompatibilityRegistration) {
+            channels_.erase(channel->fd());
+        }
+        throw;
+    }
+    if (registered.result != detail::ReadinessPortResult::Accepted) {
+        if (newCompatibilityRegistration) {
+            channels_.erase(channel->fd());
+        }
+        rejectReadinessMutation("update", registered.result);
+    }
+    channel->setIndex(
+        channel->isNoneEvent() ? kDeleted : kAdded);
 }
 
 void EPollPoller::removeChannel(Channel* channel) {
-    const SocketFd fd = channel->fd();
-    const auto it = channels_.find(fd);
-    if (it == channels_.end() || it->second != channel) {
+    if (channel == nullptr) {
+        throw std::invalid_argument(
+            "EPollPoller remove requires a Channel");
+    }
+    const auto existing = channels_.find(channel->fd());
+    if (existing == channels_.end() || existing->second != channel) {
         throw std::logic_error(
             "EPollPoller remove Channel registration identity mismatch");
     }
-
-    if (channel->index() == kAdded) {
-        update(EPOLL_CTL_DEL, channel);
+    const auto result = readinessPort_->cancel(channel);
+    if (result != detail::ReadinessPortResult::Accepted) {
+        rejectReadinessMutation("remove", result);
     }
-    channels_.erase(it);
+    channels_.erase(existing);
     channel->setIndex(kNew);
 }
 
-void EPollPoller::fillActiveChannels(int numEvents, ChannelList* activeChannels) const {
-    for (int i = 0; i < numEvents; ++i) {
-        auto* channel = static_cast<Channel*>(events_[i].data.ptr);
-        channel->setRevents(fromEpollEvents(events_[i].events));
-        activeChannels->push_back(channel);
-    }
-}
-
-void EPollPoller::update(int operation, Channel* channel) {
-    epoll_event event{};
-    event.events = toEpollEvents(channel->events());
-    event.data.ptr = channel;
-    if (::epoll_ctl(epollfd_, operation, channel->fd(), &event) < 0) {
-        epollDie("epoll_ctl");
-    }
+bool EPollPoller::wakeup() {
+    return readinessPort_->wakeup();
 }
 
 }  // namespace gamenet::net

@@ -7,7 +7,7 @@
 #include "IocpPollerAccess.h"
 #include "gamenet/core/net/poller/IocpPoller.h"
 #else
-#include "gamenet/core/net/poller/EPollPoller.h"
+#include "EpollReadinessPort.h"
 #endif
 
 #include <exception>
@@ -19,12 +19,31 @@ namespace gamenet::net::detail {
 #ifdef _WIN32
 using NativePoller = IocpPoller;
 #else
-using NativePoller = EPollPoller;
+using NativePoller = Poller;
+
+IoEngineOperationResult toIoEngineResult(
+    ReadinessPortResult result) noexcept {
+    switch (result) {
+        case ReadinessPortResult::Accepted:
+            return IoEngineOperationResult::Accepted;
+        case ReadinessPortResult::RejectedInvalid:
+            return IoEngineOperationResult::RejectedInvalid;
+        case ReadinessPortResult::RejectedNotRegistered:
+            return IoEngineOperationResult::RejectedNotRegistered;
+        case ReadinessPortResult::RejectedConflict:
+            return IoEngineOperationResult::RejectedConflict;
+        case ReadinessPortResult::RejectedShutdown:
+            return IoEngineOperationResult::RejectedShutdown;
+    }
+    std::terminate();
+}
 #endif
 
-// Multiple inheritance is deliberate and source-private. Poller preserves the
-// byte-stable EventLoop storage declaration; IoEngine is the only production
-// call surface used by EventLoop.cc during IOE-R1.
+// The dual Poller/IoEngine object is deliberate and source-private. Poller
+// preserves EventLoop's byte-stable storage declaration; Linux directly owns
+// EpollReadinessPort and leaves Poller's legacy map empty, while Windows
+// retains the IocpPoller compatibility base. The separately constructed
+// EPollPoller compatibility shell continues to maintain that legacy map.
 class PollerIoEngineAdapter final : public NativePoller, public IoEngine {
 public:
     PollerIoEngineAdapter(EventLoop* loop, IoEngineOptions options)
@@ -34,7 +53,16 @@ public:
         : NativePoller(loop),
 #endif
           ownerLoop_(loop),
-          options_(options) {
+          options_(options)
+#ifndef _WIN32
+          , readinessPort_(
+                loop,
+                ReadinessPortOptions{
+                    .maxNoticesPerWait =
+                        options.maxReadinessNoticesPerWait,
+                })
+#endif
+    {
         if (ownerLoop_ == nullptr) {
             throw std::invalid_argument(
                 "PollerIoEngineAdapter requires an owning EventLoop");
@@ -44,6 +72,11 @@ public:
             throw std::invalid_argument(
                 "I/O Engine completion capacity must be in [1, 64]");
         }
+        if (options_.maxReadinessNoticesPerWait == 0 ||
+            options_.maxReadinessNoticesPerWait > 4096) {
+            throw std::invalid_argument(
+                "I/O Engine readiness capacity must be in [1, 4096]");
+        }
     }
 
     IoEngineCapability capabilities() const noexcept override {
@@ -51,7 +84,8 @@ public:
         return IoEngineCapability::Completion |
             IoEngineCapability::BackendWakeup;
 #else
-        return IoEngineCapability::Readiness;
+        return IoEngineCapability::Readiness |
+            IoEngineCapability::BackendWakeup;
 #endif
     }
 
@@ -82,7 +116,11 @@ public:
         if (phase_ == IoEnginePhase::Shutdown) {
             throw std::logic_error("I/O Engine wait after shutdown");
         }
+#ifdef _WIN32
         return NativePoller::poll(timeoutMs, notices.readiness_);
+#else
+        return waitForReadiness(timeoutMs, notices.readiness_);
+#endif
     }
 
     IoEngineOperationResult registerOrUpdateReadiness(
@@ -92,15 +130,28 @@ public:
             return IoEngineOperationResult::RejectedInvalid;
         }
         if (phase_ == IoEnginePhase::Shutdown &&
-            !NativePoller::hasChannel(channel)) {
+            !hasReadiness(channel)) {
             return IoEngineOperationResult::RejectedShutdown;
         }
+#ifdef _WIN32
         try {
             NativePoller::updateChannel(channel);
         } catch (const std::logic_error&) {
             return IoEngineOperationResult::RejectedConflict;
         }
         return IoEngineOperationResult::Accepted;
+#else
+        const auto registered = readinessPort_.registerOrUpdate({
+            .source = channel->fd(),
+            .target = channel,
+            .interests = channel->events(),
+        });
+        if (registered.result != ReadinessPortResult::Accepted) {
+            return toIoEngineResult(registered.result);
+        }
+        channel->setIndex(channel->isNoneEvent() ? kDeleted : kAdded);
+        return IoEngineOperationResult::Accepted;
+#endif
     }
 
     IoEngineOperationResult cancelReadiness(Channel* channel) override {
@@ -111,16 +162,32 @@ public:
         if (phase_ == IoEnginePhase::Shutdown) {
             return IoEngineOperationResult::RejectedShutdown;
         }
-        if (!NativePoller::hasChannel(channel)) {
+#ifdef _WIN32
+        if (!hasReadiness(channel)) {
             return IoEngineOperationResult::RejectedNotRegistered;
         }
         NativePoller::removeChannel(channel);
         return IoEngineOperationResult::Accepted;
+#else
+        const auto result = readinessPort_.cancel(channel);
+        if (result != ReadinessPortResult::Accepted) {
+            return toIoEngineResult(result);
+        }
+        channel->setIndex(kNew);
+        return IoEngineOperationResult::Accepted;
+#endif
     }
 
     bool hasReadiness(Channel* channel) const override {
         assertOwnerThread();
-        return channel != nullptr && NativePoller::hasChannel(channel);
+        if (channel == nullptr) {
+            return false;
+        }
+#ifdef _WIN32
+        return NativePoller::hasChannel(channel);
+#else
+        return readinessPort_.has(channel);
+#endif
     }
 
     bool wakeup() override {
@@ -129,7 +196,7 @@ public:
 #ifdef _WIN32
         return NativePoller::wakeup();
 #else
-        return false;
+        return readinessPort_.wakeup();
 #endif
     }
 
@@ -246,13 +313,73 @@ public:
 #endif
     }
 
+    IoWaitProgress waitProgress() const noexcept override {
+        return lastWaitProgress_;
+    }
+
+#ifndef _WIN32
+    gamenet::base::Timestamp poll(
+        int timeoutMs,
+        ChannelList* activeChannels) override {
+        return waitForReadiness(timeoutMs, activeChannels);
+    }
+
+    void updateChannel(Channel* channel) override {
+        const auto result = registerOrUpdateReadiness(channel);
+        if (!accepted(result)) {
+            throw std::logic_error(
+                "readiness Poller compatibility update rejected");
+        }
+    }
+
+    void removeChannel(Channel* channel) override {
+        const auto result = cancelReadiness(channel);
+        if (!accepted(result)) {
+            throw std::logic_error(
+                "readiness Poller compatibility remove rejected");
+        }
+    }
+#endif
+
 private:
     void assertOwnerThread() const {
         ownerLoop_->assertInLoopThread();
     }
 
+#ifndef _WIN32
+    static constexpr int kNew = -1;
+    static constexpr int kAdded = 1;
+    static constexpr int kDeleted = 2;
+
+    gamenet::base::Timestamp waitForReadiness(
+        int timeoutMs,
+        ChannelList* activeChannels) {
+        const auto batch = readinessPort_.wait(timeoutMs);
+        lastWaitProgress_ = {
+            .deliveredNotices = batch.progress.deliveredNotices,
+            .staleNotices = batch.progress.staleNotices,
+            .wakeupNotices = batch.progress.wakeupNotices,
+            .budgetExhausted = batch.progress.budgetExhausted,
+        };
+        for (const auto& notice : batch.notices) {
+            if (!readinessPort_.isCurrent(
+                    notice.identity,
+                    notice.target)) {
+                continue;
+            }
+            notice.target->setRevents(notice.events);
+            activeChannels->push_back(notice.target);
+        }
+        return batch.observedAt;
+    }
+#endif
+
     EventLoop* ownerLoop_;
     IoEngineOptions options_;
+    IoWaitProgress lastWaitProgress_{};
+#ifndef _WIN32
+    EpollReadinessPort readinessPort_;
+#endif
     IoEnginePhase phase_{IoEnginePhase::Running};
 };
 

@@ -71,6 +71,7 @@ constexpr bool accepted(IoEngineOperationResult result) noexcept {
 // Compatibility mapping for backend capacity. EventLoop scheduling budgets
 // remain in EventLoopOptions and are intentionally absent from this type.
 struct IoEngineOptions {
+    std::size_t maxReadinessNoticesPerWait{64};
     std::size_t maxCompletionNoticesPerWait{64};
 };
 
@@ -91,6 +92,13 @@ private:
 struct IoCompletionProgress {
     std::size_t drained{0};
     std::size_t deferred{0};
+    bool budgetExhausted{false};
+};
+
+struct IoWaitProgress {
+    std::size_t deliveredNotices{0};
+    std::size_t staleNotices{0};
+    std::size_t wakeupNotices{0};
     bool budgetExhausted{false};
 };
 
@@ -132,6 +140,7 @@ public:
     virtual bool quiescent() const noexcept = 0;
     virtual void markShutdown() = 0;
     virtual IoCompletionProgress completionProgress() const noexcept = 0;
+    virtual IoWaitProgress waitProgress() const noexcept = 0;
 
 };
 

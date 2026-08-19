@@ -10,7 +10,7 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：122（8/101/13；threading 95、lifecycle 100）。API-R1 已完成，
+当前测试基线：123（8/102/13；threading 96、lifecycle 101）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策

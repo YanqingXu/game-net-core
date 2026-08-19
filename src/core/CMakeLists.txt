@@ -34,6 +34,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     list(APPEND GAMENET_CORE_SOURCES
+        net/detail/EpollReadinessPort.cc
         net/platform/SocketsOps_linux.cc
         net/platform/Wakeup_linux.cc
         net/poller/EPollPoller.cc

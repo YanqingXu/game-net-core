@@ -346,8 +346,13 @@ EventLoop::EventLoop(EventLoopOptions options)
                   options_.maxIocpCompletionsPerPoll,
           })),
       timerQueue_(std::unique_ptr<TimerQueue>(new TimerQueue(this))),
+#ifdef _WIN32
       wakeupFds_(platform::createWakeupFds()),
       wakeupChannel_(std::make_unique<Channel>(this, wakeupFds_.readFd)),
+#else
+      wakeupFds_(),
+      wakeupChannel_(),
+#endif
       activeChannelCursor_(0),
       currentActiveChannel_(nullptr),
       pendingFunctorPeak_(0),
@@ -359,8 +364,13 @@ EventLoop::EventLoop(EventLoopOptions options)
     }
     t_loopInThisThread = this;
 
-    wakeupChannel_->setReadCallback([this](gamenet::base::Timestamp receiveTime) { handleRead(receiveTime); });
-    wakeupChannel_->enableReading();
+    if (wakeupChannel_) {
+        wakeupChannel_->setReadCallback(
+            [this](gamenet::base::Timestamp receiveTime) {
+                handleRead(receiveTime);
+            });
+        wakeupChannel_->enableReading();
+    }
 }
 
 EventLoop::~EventLoop() {
@@ -383,9 +393,11 @@ EventLoop::~EventLoop() {
         lifecycleState_->loop = nullptr;
         phase_.store(EventLoopPhase::Shutdown, std::memory_order_release);
     }
-    wakeupChannel_->disableAll();
-    wakeupChannel_->remove();
-    platform::closeWakeupFds(wakeupFds_);
+    if (wakeupChannel_) {
+        wakeupChannel_->disableAll();
+        wakeupChannel_->remove();
+        platform::closeWakeupFds(wakeupFds_);
+    }
     detail::ioEngineFromPoller(*poller_).markShutdown();
     t_loopInThisThread = nullptr;
 }
@@ -1145,6 +1157,18 @@ void EventLoop::doExpiredTimers(gamenet::base::Timestamp now) {
 }
 
 void EventLoop::emitIocpCompletionMetric() {
+    const auto waitProgress =
+        detail::ioEngineFromPoller(*poller_).waitProgress();
+    if (waitProgress.wakeupNotices != 0) {
+        EventLoopMetricSample wakeupSample;
+        wakeupSample.event = EventLoopMetricEvent::WakeupHandled;
+        wakeupSample.loop = this;
+        wakeupSample.wakeupCount =
+            wakeupCount_.load(std::memory_order_relaxed);
+        wakeupSample.drainedWork = waitProgress.wakeupNotices;
+        emitEventLoopMetric(wakeupSample);
+    }
+
     const auto progress =
         detail::ioEngineFromPoller(*poller_).completionProgress();
     if (progress.drained == 0 && progress.deferred == 0) {

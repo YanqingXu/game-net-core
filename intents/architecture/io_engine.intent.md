@@ -110,6 +110,25 @@ IOE-R1 names those source-private contracts directly:
 adapter compatibility-maps the stable `EventLoopOptions` IOCP field into it;
 EventLoop callback/timer/control/functor budgets remain scheduler policy.
 
+IOE-R2 gives Readiness its own source-private vocabulary and native owner:
+
+- `ReadinessRegistrationIdentity` is the numeric source plus a nonzero,
+  monotonically allocated generation; the generation is the value carried by
+  each native epoll event instead of a raw Channel pointer;
+- `ReadinessNotice` contains that identity, the borrowed Channel target, and a
+  readiness mask; notices for one current generation may merge masks only
+  within its current interests (error/close remain unconditional), while an
+  unknown or replaced generation is counted stale and cannot escape the port;
+- `EpollReadinessPort` owns epoll, its fixed native/notice batches, registration
+  maps, and the internal eventfd wakeup. EventLoop owns dispatch and callbacks;
+- register/update/cancel/wait remain owner-thread-only. `wakeup()` remains the
+  sole cross-thread port method and carries no registration or business data;
+- the first native implementation is bounded level-triggered epoll. Disabling
+  and re-enabling interests retains one registration generation; remove and
+  re-register always allocates a new generation;
+- `IoEngineOptions::maxReadinessNoticesPerWait` is backend capacity, independent
+  of EventLoop's `maxActiveChannelsPerIteration` dispatch budget.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -130,6 +149,12 @@ EventLoop callback/timer/control/functor budgets remain scheduler policy.
   committed completion cancellation, contains callback failure, invalidates a
   stale remove/re-register notice, continues a budgeted batch, follows the
   EventLoop lifecycle, and dispatches cross-thread wakeup on the owner loop.
+- `tests/contract/io_engine/test_readiness_engine.cpp` verifies the concrete
+  epoll port identity lifecycle, owner-only mutation, invalid request rejection,
+  remove/re-register stale filtering, current-interest mask filtering,
+  same-generation mask merge, bounded wait
+  continuation, and internal cross-thread wakeup. On Windows it verifies that
+  the same owner-loop Engine remains Completion-only.
 - `tests/contract/poller/test_poller_contract.cpp` verifies bounded backend
   waiting and backend-neutral Poller behavior during the adapter slice.
 - `tests/contract/event_loop/test_event_loop.cpp` verifies owner-thread dispatch,

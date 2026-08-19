@@ -66,12 +66,36 @@ def main() -> None:
         / "detail"
         / "IocpPollerAccess.h"
     )
+    readiness_port_header = (
+        repo_root / "src" / "core" / "net" / "detail" / "ReadinessPort.h"
+    )
+    epoll_readiness_port_header = (
+        repo_root / "src" / "core" / "net" / "detail" / "EpollReadinessPort.h"
+    )
+    epoll_readiness_port_source = (
+        repo_root / "src" / "core" / "net" / "detail" / "EpollReadinessPort.cc"
+    )
+    epoll_readiness_harness = (
+        repo_root
+        / "src"
+        / "core"
+        / "net"
+        / "detail"
+        / "EpollReadinessPortHarness.h"
+    )
     io_engine_test = (
         repo_root
         / "tests"
         / "contract"
         / "io_engine"
         / "test_io_engine_poller_adapter.cpp"
+    )
+    readiness_engine_test = (
+        repo_root
+        / "tests"
+        / "contract"
+        / "io_engine"
+        / "test_readiness_engine.cpp"
     )
     control_registry = (
         repo_root / "src" / "core" / "net" / "detail" / "EventLoopControlRegistry.h"
@@ -127,7 +151,22 @@ def main() -> None:
     assert iocp_poller_access.exists(), (
         f"missing source-private IOCP production access seam: {iocp_poller_access}"
     )
+    assert readiness_port_header.exists(), (
+        f"missing source-private ReadinessPort vocabulary: {readiness_port_header}"
+    )
+    assert epoll_readiness_port_header.exists(), (
+        f"missing epoll ReadinessPort declaration: {epoll_readiness_port_header}"
+    )
+    assert epoll_readiness_port_source.exists(), (
+        f"missing epoll ReadinessPort implementation: {epoll_readiness_port_source}"
+    )
+    assert epoll_readiness_harness.exists(), (
+        f"missing epoll readiness deterministic harness: {epoll_readiness_harness}"
+    )
     assert io_engine_test.exists(), f"missing I/O Engine contract: {io_engine_test}"
+    assert readiness_engine_test.exists(), (
+        f"missing Readiness Engine contract: {readiness_engine_test}"
+    )
     assert active_batch_harness.exists(), (
         f"missing source-private active Channel batch harness: {active_batch_harness}"
     )
@@ -151,7 +190,18 @@ def main() -> None:
     io_engine_header_text = io_engine_header.read_text(encoding="utf-8")
     io_engine_adapter_text = io_engine_adapter.read_text(encoding="utf-8")
     iocp_poller_access_text = iocp_poller_access.read_text(encoding="utf-8")
+    readiness_port_header_text = readiness_port_header.read_text(encoding="utf-8")
+    epoll_readiness_port_header_text = epoll_readiness_port_header.read_text(
+        encoding="utf-8"
+    )
+    epoll_readiness_port_source_text = epoll_readiness_port_source.read_text(
+        encoding="utf-8"
+    )
+    epoll_readiness_harness_text = epoll_readiness_harness.read_text(
+        encoding="utf-8"
+    )
     io_engine_test_text = io_engine_test.read_text(encoding="utf-8")
+    readiness_engine_test_text = readiness_engine_test.read_text(encoding="utf-8")
     control_registry_text = control_registry.read_text(encoding="utf-8")
     active_batch_harness_text = active_batch_harness.read_text(encoding="utf-8")
     iocp_association_harness_text = iocp_association_harness.read_text(
@@ -194,12 +244,45 @@ def main() -> None:
     require(io_engine_header_text, "commitCompletionSubmission", io_engine_header)
     require(io_engine_header_text, "commitCompletionCancellation", io_engine_header)
     require(io_engine_header_text, "maxCompletionNoticesPerWait", io_engine_header)
+    require(io_engine_header_text, "maxReadinessNoticesPerWait", io_engine_header)
+    require(readiness_port_header_text, "struct ReadinessRegistrationIdentity", readiness_port_header)
+    require(readiness_port_header_text, "struct ReadinessNotice", readiness_port_header)
+    require(readiness_port_header_text, "class ReadinessPort", readiness_port_header)
+    require(
+        epoll_readiness_port_header_text,
+        "class EpollReadinessPort final : public ReadinessPort",
+        epoll_readiness_port_header,
+    )
+    require(
+        epoll_readiness_port_source_text,
+        "allocateGeneration(request.source)",
+        epoll_readiness_port_source,
+    )
+    require(
+        epoll_readiness_port_source_text,
+        "event.data.u64 = generation",
+        epoll_readiness_port_source,
+    )
+    require(
+        epoll_readiness_port_source_text,
+        "registration->second.interests | alwaysDelivered",
+        epoll_readiness_port_source,
+    )
+    assert "event.data.ptr" not in epoll_readiness_port_source_text, (
+        "native epoll events must carry generation identity, not raw Channel pointers"
+    )
+    require(
+        epoll_readiness_harness_text,
+        "NativeReadinessEvent",
+        epoll_readiness_harness,
+    )
     require(
         event_loop_source_text,
         ".maxCompletionNoticesPerWait =",
         event_loop_source,
     )
     require(io_engine_adapter_text, '#include "IocpPollerAccess.h"', io_engine_adapter)
+    require(io_engine_adapter_text, '#include "EpollReadinessPort.h"', io_engine_adapter)
     assert "EventLoopIocpAssociationHarness" not in io_engine_adapter_text, (
         "production Engine adapter must not depend on a repository-test harness"
     )
@@ -208,6 +291,31 @@ def main() -> None:
         io_engine_test_text,
         "testMutationRejectsForeignThreadAndInvalidIdentity",
         io_engine_test,
+    )
+    require(
+        readiness_engine_test_text,
+        "testGenerationRejectsStaleRemoveAndMergesCurrentMask",
+        readiness_engine_test,
+    )
+    require(
+        readiness_engine_test_text,
+        "removedInterestEvent",
+        readiness_engine_test,
+    )
+    require(
+        readiness_engine_test_text,
+        "testBoundedWaitContinuesAndBackendWakeupIsInternal",
+        readiness_engine_test,
+    )
+    require(
+        readiness_engine_test_text,
+        "testLevelTriggeredNoticePreservesApplicationEagain",
+        readiness_engine_test,
+    )
+    require(
+        tests_cmake_text,
+        "contract/io_engine/test_readiness_engine.cpp",
+        tests_cmake,
     )
     require(
         io_engine_test_text,

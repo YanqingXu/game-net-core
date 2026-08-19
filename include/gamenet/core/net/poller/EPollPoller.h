@@ -6,11 +6,11 @@
 #include "gamenet/core/net/Poller.h"
 
 #ifndef _WIN32
-#include <sys/epoll.h>
-
-#include <vector>
-
 namespace gamenet::net {
+
+namespace detail {
+class EpollReadinessPort;
+}
 
 class EPollPoller : public Poller {
 public:
@@ -20,18 +20,13 @@ public:
     gamenet::base::Timestamp poll(int timeoutMs, ChannelList* activeChannels) override;
     void updateChannel(Channel* channel) override;
     void removeChannel(Channel* channel) override;
+    bool wakeup() override;
 
 private:
     static constexpr int kNew = -1;
     static constexpr int kAdded = 1;
     static constexpr int kDeleted = 2;
-    static constexpr int kInitEventListSize = 16;
-
-    void fillActiveChannels(int numEvents, ChannelList* activeChannels) const;
-    void update(int operation, Channel* channel);
-
-    int epollfd_;
-    std::vector<epoll_event> events_;
+    std::unique_ptr<detail::EpollReadinessPort> readinessPort_;
 };
 
 }  // namespace gamenet::net

@@ -69,8 +69,8 @@ annotated-tag checkout, warm paired/interleaved collection, one retention
 snapshot batch per owner loop, complete JSON flush, byte-preserving stderr
 diagnostics, and a connect/accept/echo/close batch barrier that leaves the
 reviewed two-second probe deadline unchanged. The
-inventory is 122 configured CTest tests: 8 unit tests, 101 contract tests, and
-13 integration tests, with 95 threading and 100 lifecycle labels. Complete local
+inventory is 123 configured CTest tests: 8 unit tests, 102 contract tests, and
+13 integration tests, with 96 threading and 101 lifecycle labels. Complete local
 `candidate-10k` preflight for the barrier passed nine times on Windows and
 three times on Linux with identical profile parameters; local Windows
 regression/Core-capacity paired matrices pass their original budgets. None is
@@ -231,7 +231,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 63 | 32 | 20 | 11 | 156 |
+| 63 | 32 | 20 | 11 | 157 |
 
 ## Historical Production-Hardening Evidence
 
