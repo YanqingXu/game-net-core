@@ -205,6 +205,18 @@ silence. Drive or consumer failure is observable and fail-closed: it cannot
 publish a false drained future or let EventLoop Shutdown overtake a kernel
 obligation. This still adds no production TCP path or installed surface.
 
+IOE-X3 adds one source-private `IoUringTcpConnectionDriver` for an already-
+established stream socket. One EventLoop owner uniquely owns the socket, Pump,
+Recv/Send identities, finite FIFO send bytes/segments, close reason, and stop
+publication. At most one Recv and one Send are active; pause cancels an active
+Recv and prohibits repost, resume waits for its target terminal CQE, and Send
+chunks advance the exact FIFO front. Message callbacks may re-enter owner-safe
+driver methods only after the terminal identity is cleared. Explicit close,
+EventLoop quiesce, I/O failure, and callback failure retain the socket until
+Pump physical stop removes the Channel, detaches lifecycle state, and drains
+every CQE. The proof uses real loopback TCP but remains one connection per Pump;
+that topology is evidence, not permission for production integration.
+
 ## Current Coupling Inventory
 
 The locations below are the implementation checklist, not merely examples.
@@ -237,6 +249,7 @@ slice. It will be added with the slice rather than as an empty placeholder.
 | IOE-R2 | `tests/contract/io_engine/test_readiness_engine.cpp` | Poller and Channel lifetime tests | stale registration generation after remove/re-register |
 | IOE-C1 | `tests/contract/io_engine/test_completion_engine.cpp` | IOCP sync-error, partial/segmented write, high-water resume and completion-drain tests | cancel-before-dequeue retains lease; direct dispatch is budgeted; observer replacement retires driver state without upper callback |
 | IOE-X2 | `tests/contract/io_engine/test_io_uring_event_loop_pump.cpp` | EventLoop lifecycle-hub and IOE-X1 Engine contracts | ring-fd-only scheduling, independent dispatch budget, quit-auto-cancel, consumer failure, and terminal lease retirement before Shutdown |
+| IOE-X3 | `tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp` | IOE-X1 Engine, IOE-X2 Pump, and EventLoop lifecycle-hub contracts | real TCP one-Recv, finite FIFO Send, pause/cancel/resume, callback failure, foreign mutation, and socket release after physical Pump stop |
 | Network-only | `tests/contract/runtime_model/test_network_only_profile.cpp` | TcpServer/TcpConnection lifecycle and memory tests | callback/thread mismatch and bounded shutdown |
 | Network/logic split | `tests/contract/runtime_model/test_network_logic_split_profile.cpp` | LogicLoop and pipeline handoff/saturation/shutdown tests | saturated handoff, stale binding, close race |
 | Sharded Hybrid | `tests/contract/runtime_model/test_sharded_hybrid_profile.cpp` | Profiles B/C, broadcast multi-loop, and pipeline Tick tests | coupled placement, owner migration, cell saturation bleed, event/tick overtaking, or stale output |

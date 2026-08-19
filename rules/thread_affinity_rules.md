@@ -246,6 +246,14 @@ No other direct mutation path is allowed for core loop state.
   lifecycle continuation and never a pending functor, recursive callback, or
   blocking wait. A drive failure remains observable and keeps final drain open
   until kernel, cancellation, notice, and callback obligations are silent
+- the IOE-X3 single-connection driver is constructed, started, sent through,
+  paused, resumed, closed, and destroyed only on the same EventLoop owner as
+  its Pump. It exposes no direct cross-thread mutation path; a foreign call is
+  rejected before socket, queue, identity, or callback state changes
+- Recv/Send terminal consumers clear the exact active identity before invoking
+  a driver callback. Re-entry may request pause, resume, send, close, or quit,
+  but the outer frame revalidates phase/read desire before any repost and may
+  never create a second active Recv or recursive callback
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

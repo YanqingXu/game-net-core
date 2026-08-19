@@ -156,6 +156,19 @@ Contract tests verify:
   converge only as drained-after-failure; no failure path may detach the ring
   Channel, release an operation lease, or publish a drained future while any
   Engine obligation or decoded notice remains
+- the IOE-X3 contract must use a real established stream socket and prove the
+  driver never has more than one Recv and one Send identity active. A message
+  callback pauses re-entrantly, peer input remains unread without repost, and
+  resume posts exactly one replacement after cancellation/terminal retirement
+- the same contract fills finite send-byte and segment admission, observes the
+  exact typed rejection without fallback, drains accepted segments in FIFO
+  order, and verifies partial-send bookkeeping cannot underflow or reorder
+- explicit close and EventLoop quit each leave a real Recv pending, consume its
+  target cancellation terminal, retain the socket until Pump physical stop,
+  publish one first close reason, invoke one close consumer in Stopped state,
+  and converge active operations, notices, owned bytes, and pending send bytes
+  to zero. Foreign-thread mutation and throwing message callbacks are rejected
+  or contained without callback-after-stop
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

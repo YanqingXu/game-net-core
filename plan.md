@@ -10,7 +10,8 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：129（8/107/14；threading 102、lifecycle 107）。API-R1 已完成，
+当前测试基线：129（8/107/14；threading 102、lifecycle 107）；Linux experimental
+基线随 IOE-X3 增至 132（8/110/14；threading 105、lifecycle 110、experimental 3）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -284,6 +285,19 @@ IOE-X2 继续保持 Linux-only、default-off、non-installed：
 IOE-X2 不进入 production Poller/TcpConnection，也不创建公共 backend selector。它只证明
 现有 owner-loop 生命周期能够驱动真实 Completion Engine。
 
+IOE-X3 继续保持 Linux-only、default-off、non-installed：
+
+- [x] 一个 EventLoop owner 独占已建立 TCP socket、Pump 和全部 operation identity；
+- [x] `start`/resume 最多提交一个 Recv，pause 取消已提交 Recv 且禁止 repost；
+- [x] send admission 同时受 byte/segment 上限约束，单 Send in-flight，分块/partial 按 FIFO 推进；
+- [x] callback re-entry 在 identity 清除后执行，外层返回前重验 phase/read desire；
+- [x] explicit close、EventLoop quit、I/O/callback failure 都等待 target CQE、Pump physical stop 后才关闭 socket 和发布 future；
+- [x] 真实 loopback TCP、ASan/UBSan focused repeat、全量 inventory、默认跨平台和 stable API 作为关闭门。
+
+IOE-X3 仍不是 production `TcpConnection` backend。每连接一个 Pump/ring 只是单连接合同
+载体，不是可推广拓扑；下一步必须先证明一个 owner Pump 对多连接的 generation-safe 路由和
+隔离关闭，才能讨论 production adapter。
+
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
 
@@ -387,9 +401,12 @@ EventLoop 驱动的真实 one-shot completion pump：ring fd 只负责唤醒调�
 generation、lease、取消与 final drain 继续由 Engine/Pump 持有；首次 Quiescing 会自动提交
 source-private participant，未清空义务时 EventLoop 不得越过 Shutdown。
 
-当前下一前沿转为 **IOE-X3 contract shaping**：先在 active intent 中定义一个仍然
-Linux-only、non-installed 的单连接 Completion TCP driver，固定 socket/operation owner、
-one-recv-in-flight、有限 send bytes、read-pause=no-repost、close/cancel/terminal retirement
-和 re-entry 规则，再决定是否值得形成更接近 TcpConnection 的实验垂直切片。ARCH-G1 独立
-review 继续并行且不形成冻结点；不得借 IOE-X3 修改 production TcpConnection，或开放
-multishot、provided buffers、fixed files、zero-copy、SQPOLL 和公共 backend selector。
+IOE-X3 已把上述 Pump 组合成一个真实 loopback TCP 单连接垂直切片，固定 socket/operation
+owner、one-recv-in-flight、有限 FIFO send、read-pause=no-repost、close/cancel/terminal
+retirement 和 callback re-entry；它仍不修改 production TcpConnection。
+
+当前下一前沿转为 **IOE-X4 shared-Pump routing contract shaping**：一个 EventLoop/Engine/Pump
+必须 generation-safe 地路由至少两个连接的 Recv/Send terminal notice，证明 per-connection
+byte/segment 隔离、单连接 close 不取消邻接连接、owner quit 聚合 drain，且不采用每连接一个
+ring/Channel 的生产伪拓扑。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X4
+开放 multishot、provided buffers、fixed files、zero-copy、SQPOLL 或公共 backend selector。

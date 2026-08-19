@@ -239,6 +239,40 @@ IOE-X2 authorizes one source-private EventLoop-driven completion pump:
   per-operation functor posts, fake readiness results, multishot, provided
   buffers, fixed files, zero-copy, SQPOLL, or production TCP integration.
 
+IOE-X3 authorizes one experimental single-connection Completion TCP driver:
+
+- `IoUringTcpConnectionDriver` remains Linux-only, default-off, non-installed,
+  and source-private. It composes one IOE-X2 Pump for one already-established
+  stream socket; it does not modify or substitute production `TcpConnection`;
+- the constructing EventLoop thread is the only mutation and callback owner.
+  Construction transfers unique socket ownership to the driver, the caller
+  owns and outlives the driver and EventLoop, retains the driver through every
+  message/close consumer return, and uses no direct cross-thread driver method;
+- `start()` posts exactly one one-shot Recv. At most one Recv identity may be
+  active. A successful terminal Recv clears that identity before invoking the
+  message consumer, and a replacement is posted only after re-entry is
+  revalidated;
+- read pause means `readDesired == false`: it requests cancellation of an
+  already-submitted Recv when possible and never posts a replacement. Resume
+  during cancellation records desire only; the target terminal CQE must retire
+  before exactly one replacement Recv may be submitted;
+- send admission owns a copied segment only within explicit byte and segment
+  limits. At most one Send identity is active; queued segments preserve FIFO,
+  partial terminal results advance the exact front offset, and `Accepted`
+  bytes are either sent or terminally discarded by an observable close;
+- peer EOF, terminal Recv/Send failure, user callback failure, EventLoop
+  quiesce, or explicit close chooses one first close reason. Closing revokes
+  read repost and new send admission, asks the Pump to seal/cancel, and keeps
+  the socket plus all operation state alive through every target terminal CQE;
+- the Pump's physical stopped hook runs only after Engine shutdown, Channel
+  removal, lifecycle detach, decoded-notice retirement, and consumer return.
+  Only that hook closes the socket, publishes the driver stop future, and
+  invokes the single close consumer. Close-consumer re-entry observes Stopped;
+- IOE-X3 does not authorize Accept/listen integration, production
+  `TcpConnection` changes, a public connection/backend selector, worker-thread
+  fallback, unbounded output, multishot, provided buffers, fixed files,
+  zero-copy, SQPOLL, TLS, framing, or game/business callbacks in Core.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -255,7 +289,10 @@ IOE-X2 authorizes one source-private EventLoop-driven completion pump:
 5. IOE-X2 proves that the isolated one-shot Engine can participate in the
    existing EventLoop owner/fairness/final-drain lifecycle without becoming a
    Poller backend or changing production TCP.
-6. Only proven, cross-backend concepts may later graduate to a narrow public
+6. IOE-X3 proves connection-level one-Recv, bounded FIFO Send, pause/resume,
+   re-entry, and close retirement over that Pump for one established socket,
+   still without changing production TCP or exposing backend selection.
+7. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -309,6 +346,11 @@ IOE-X2 authorizes one source-private EventLoop-driven completion pump:
   that its lease survives through the cancellation consumer, and that pump
   retirement precedes EventLoop Shutdown with bounded dispatch and zero
   residual operation/notice state.
+- `tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp` verifies
+  one real established stream socket, one-Recv-in-flight, pause/no-repost and
+  resume-after-terminal behavior, finite FIFO Send admission, callback
+  re-entry, pending-Recv cancellation, first-close-reason, socket release only
+  after physical Pump stop, foreign-thread rejection, and zero residual state.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

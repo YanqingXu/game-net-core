@@ -1,6 +1,7 @@
 add_library(gamenet_experimental_io_uring STATIC
     IoUringCompletionEngine.cc
     IoUringEventLoopPump.cc
+    IoUringTcpConnectionDriver.cc
 )
 add_library(GameNet::experimental ALIAS gamenet_experimental_io_uring)
 

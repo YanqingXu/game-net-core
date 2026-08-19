@@ -101,6 +101,15 @@ It must not blur these roles.
   remove its Channel and detach its lifecycle node only after every decoded
   notice and active consumer frame is retired; a failed drive owns no right to
   release or transfer a still-kernel-referenced slot
+- the IOE-X3 driver uniquely owns one transferred established socket, one Pump,
+  the active Recv/Send identities, bounded FIFO send segments, copied pending
+  bytes, first close reason, metrics, and stop promise. The caller owns and
+  outlives the driver and EventLoop, retains the driver through all consumer
+  frames, and does not close the transferred socket
+- each accepted driver Send owns its copied bytes until terminally sent or
+  counted discarded during close. The driver retains the socket through Pump
+  Engine shutdown; only the physical Pump-stopped hook may close it, publish
+  the driver stop future, and invoke the close consumer
 
 ## 3. Poller
 - Poller does not own Channel

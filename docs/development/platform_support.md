@@ -59,11 +59,11 @@ commands remain valid:
 | Option | Supported value | `ON` behavior |
 |---|---|---|
 | `GAMENET_ENABLE_TLS` | `OFF` | Configure fails because TLS is not implemented in the active target graph |
-| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1 io_uring Engine and its direct contracts; Windows rejects it |
+| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1/X2/X3 io_uring Engine, EventLoop pump, single-connection driver, and their direct contracts; Windows rejects it |
 
 An option that has no implementation must not configure successfully. The
-Linux-only IOE-X1 io_uring target is the sole active experimental module; it
-does not replace epoll and is not installed. TLS, UDP, KCP, and other
+Linux-only IOE-X1/X2/X3 io_uring target is the sole active experimental module;
+it does not replace epoll and is not installed. TLS, UDP, KCP, and other
 experimental work still require promoted intent, ownership/threading
 contracts, targets, and direct tests before an enabling value can be accepted.
 
@@ -97,8 +97,8 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
-The dedicated IOE-X1/X2 Engine and EventLoop-pump contract configuration is
-Linux-only:
+The dedicated IOE-X1/X2/X3 Engine, EventLoop-pump, and single-connection-driver
+contract configuration is Linux-only:
 
 ```bash
 cmake -S . -B build-io-uring \
@@ -107,7 +107,7 @@ cmake -S . -B build-io-uring \
   -DGAMENET_ENABLE_EXPERIMENTAL=ON
 cmake --build build-io-uring --target gamenet_io_uring_contracts --parallel
 ctest --test-dir build-io-uring \
-  -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump)$' \
+  -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver)$' \
   --output-on-failure
 ```
 

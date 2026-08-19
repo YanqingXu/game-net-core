@@ -48,11 +48,14 @@ class IoUringEventLoopPump {
 public:
     using CompletionConsumer =
         std::function<void(IoUringCompletionNotice&)>;
+    using StoppedConsumer =
+        std::function<void(const IoUringEventLoopPumpStopSummary&)>;
 
     IoUringEventLoopPump(
         gamenet::net::EventLoop* ownerLoop,
         IoUringEventLoopPumpOptions options,
-        CompletionConsumer consumer);
+        CompletionConsumer consumer,
+        StoppedConsumer stoppedConsumer = {});
     ~IoUringEventLoopPump();
     IoUringEventLoopPump(const IoUringEventLoopPump&) = delete;
     IoUringEventLoopPump& operator=(const IoUringEventLoopPump&) = delete;

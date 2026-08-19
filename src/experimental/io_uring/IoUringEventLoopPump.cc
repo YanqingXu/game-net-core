@@ -41,10 +41,12 @@ public:
     IoUringEventLoopPumpImpl(
         gamenet::net::EventLoop* ownerLoop,
         IoUringEventLoopPumpOptions options,
-        IoUringEventLoopPump::CompletionConsumer consumer)
+        IoUringEventLoopPump::CompletionConsumer consumer,
+        IoUringEventLoopPump::StoppedConsumer stoppedConsumer)
         : ownerLoop_(ownerLoop),
           options_(validatedOptions(ownerLoop, options, consumer)),
           consumer_(std::move(consumer)),
+          stoppedConsumer_(std::move(stoppedConsumer)),
           engine_(ownerLoop, options_.engine),
           stopFuture_(stopPromise_.get_future().share()) {
         ownerLoop_->assertInLoopThread();
@@ -295,14 +297,25 @@ private:
         if (phase_ == Phase::Stopped) return;
         removeSources();
         phase_ = Phase::Stopped;
-        IoUringEventLoopPumpStopSummary summary{
-            .result = (metrics_.driveFailures == 0 &&
-                       metrics_.consumerFailures == 0)
-                ? IoUringEventLoopPumpStopResult::Drained
-                : IoUringEventLoopPumpStopResult::DrainedAfterFailure,
-            .pump = metrics_,
-            .engine = engine_.metrics(),
+        auto makeSummary = [this] {
+            return IoUringEventLoopPumpStopSummary{
+                .result = (metrics_.driveFailures == 0 &&
+                           metrics_.consumerFailures == 0)
+                    ? IoUringEventLoopPumpStopResult::Drained
+                    : IoUringEventLoopPumpStopResult::DrainedAfterFailure,
+                .pump = metrics_,
+                .engine = engine_.metrics(),
+            };
         };
+        auto summary = makeSummary();
+        if (stoppedConsumer_) {
+            try {
+                stoppedConsumer_(summary);
+            } catch (...) {
+                ++metrics_.consumerFailures;
+                summary = makeSummary();
+            }
+        }
         stopPromise_.set_value(std::move(summary));
     }
 
@@ -329,6 +342,7 @@ private:
     gamenet::net::EventLoop* ownerLoop_;
     IoUringEventLoopPumpOptions options_;
     IoUringEventLoopPump::CompletionConsumer consumer_;
+    IoUringEventLoopPump::StoppedConsumer stoppedConsumer_;
     IoUringCompletionEngine engine_;
     std::unique_ptr<gamenet::net::Channel> channel_;
     gamenet::net::EventLoopLifecycleSource lifecycleSource_;
@@ -347,11 +361,13 @@ private:
 IoUringEventLoopPump::IoUringEventLoopPump(
     gamenet::net::EventLoop* ownerLoop,
     IoUringEventLoopPumpOptions options,
-    CompletionConsumer consumer)
+    CompletionConsumer consumer,
+    StoppedConsumer stoppedConsumer)
     : impl_(std::make_shared<IoUringEventLoopPumpImpl>(
           ownerLoop,
           options,
-          std::move(consumer))) {
+          std::move(consumer),
+          std::move(stoppedConsumer))) {
     impl_->initialize();
 }
 

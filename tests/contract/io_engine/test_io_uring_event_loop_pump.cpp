@@ -82,6 +82,8 @@ int main() {
     int consumerDepth = 0;
     int consumerDepthPeak = 0;
     bool injectedConsumerFailure = false;
+    bool stoppedHookCalled = false;
+    bool stoppedHookObservedRetirement = false;
     bool timedOut = false;
 
     bool invalidOptionsRejected = false;
@@ -141,6 +143,16 @@ int main() {
                 ++cancelledNotices;
             }
             --consumerDepth;
+        },
+        [&](const uring::IoUringEventLoopPumpStopSummary& stoppedSummary) {
+            stoppedHookCalled = true;
+            stoppedHookObservedRetirement =
+                pumpPointer->stopped() &&
+                loop.attachedLifecycleNodeCount() == 0 &&
+                stoppedSummary.engine.activeOperations == 0 &&
+                stoppedSummary.engine.pendingCancelCompletions == 0 &&
+                stoppedSummary.engine.readyNotices == 0 &&
+                stoppedSummary.engine.ownedBytes == 0;
         });
     pumpPointer = &pump;
     const auto stopFuture = pump.stopFuture();
@@ -193,6 +205,8 @@ int main() {
     GAMENET_TEST_ASSERT(summary.pump.consumerFailures == 1);
     GAMENET_TEST_ASSERT(summary.pump.continuationSignals >= 1);
     GAMENET_TEST_ASSERT(summary.pump.quiesceActivations == 1);
+    GAMENET_TEST_ASSERT(stoppedHookCalled);
+    GAMENET_TEST_ASSERT(stoppedHookObservedRetirement);
     GAMENET_TEST_ASSERT(summary.engine.operationsAccepted == 4);
     GAMENET_TEST_ASSERT(summary.engine.terminalNotices == 4);
     GAMENET_TEST_ASSERT(summary.engine.cancelledOperations == 1);

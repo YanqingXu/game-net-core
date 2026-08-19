@@ -876,20 +876,21 @@ def main() -> None:
     require(workflow, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF")
     linux_io_uring = step_block(
         job_block(workflow, "linux-cmake"),
-        "Build and test experimental IOE-X1/X2 io_uring",
+        "Build and test experimental IOE-X1/X2/X3 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
-    require(linux_io_uring, "--expected-total 131")
-    require(linux_io_uring, "--expect-label experimental=2")
+    require(linux_io_uring, "--expected-total 132")
+    require(linux_io_uring, "--expect-label experimental=3")
     require(linux_io_uring, "--target gamenet_io_uring_contracts")
     require(
         linux_io_uring,
         "contract.io_engine.test_io_uring_",
     )
     require(linux_io_uring, "event_loop_pump")
+    require(linux_io_uring, "tcp_connection_driver")
     linux_io_uring_asan = step_block(
         job_block(workflow, "linux-asan-ubsan"),
-        "Build and test experimental IOE-X1/X2 io_uring with ASan/UBSan",
+        "Build and test experimental IOE-X1/X2/X3 io_uring with ASan/UBSan",
     )
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")

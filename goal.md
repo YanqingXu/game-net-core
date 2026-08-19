@@ -294,7 +294,9 @@ Runtime Model
   Completion Engine，Accept/Recv/Send、SQ-full、cancel、lease 和 final drain 合同及
   opt-in 数字基准均已闭环；其 source-private EventLoop completion pump 已通过真实
   ring-fd Channel 驱动、独立 dispatch budget、quit 自动取消和 terminal lease 退休
-  合同；生产默认和 fallback 仍是 epoll；
+  合同；其单连接 Completion TCP driver 又在真实 loopback TCP 上证明 one-recv-in-flight、
+  有限 FIFO send、pause/no-repost、callback re-entry 和 socket-after-terminal 退休；这些
+  能力仍不安装，生产默认和 fallback 仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
   多 I/O owner、独立逻辑 owner、有界合并唤醒和 generation-safe 回送；
@@ -311,9 +313,9 @@ Runtime Model
   后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
   明确审查的 breaking line；
-- IOE-X1/X2 只证明隔离的 one-shot completion capability 及其 EventLoop 驱动方式，
-  不自动授权 production TcpConnection 集成、公共 backend selector 或
-  multishot/provided-buffer 等高级能力；
+- IOE-X1/X2/X3 只证明隔离的 one-shot completion capability、EventLoop 驱动方式和
+  单连接机械语义，不自动授权 production TcpConnection 集成、每连接一个 ring 的生产
+  拓扑、公共 backend selector 或 multishot/provided-buffer 等高级能力；
 - 当前 `LogicLoop` 更接近周期性有界 drain，不应被描述为所有游戏适用的权威
   FixedRate Tick。
 

@@ -71,9 +71,11 @@ See `migration_status.md` for the current checked state of these phases.
   review as `NO-PROMOTION`; it also closes a Profile C cadence-stop summary
   publication race. IOE-X2 now adds a non-installed EventLoop-driven one-shot
   completion pump with ring-fd scheduling, an independent dispatch budget,
-  automatic quit cancellation, and fail-closed terminal retirement. The active
-  implementation front is IOE-X3 single-connection Completion-driver contract
-  shaping, while ARCH-G1 independent review proceeds in parallel.
+  automatic quit cancellation, and fail-closed terminal retirement. IOE-X3
+  composes it into one non-installed real-TCP connection driver with one Recv,
+  bounded FIFO Send, pause/resume, re-entry, and socket-after-terminal close.
+  The active implementation front is IOE-X4 shared-Pump multi-connection
+  routing, while ARCH-G1 independent review proceeds in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 
