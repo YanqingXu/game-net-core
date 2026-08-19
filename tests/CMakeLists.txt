@@ -159,11 +159,32 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         contract.io_engine.test_io_uring_tcp_connection_hub
         PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle"
     )
+    add_executable(
+        gamenet_io_uring_tcp_connection_hub_capacity_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_uring_tcp_connection_hub_capacity.cpp
+    )
+    target_include_directories(
+        gamenet_io_uring_tcp_connection_hub_capacity_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_io_uring_tcp_connection_hub_capacity_contract
+        PRIVATE GameNet::experimental
+    )
+    add_test(
+        NAME contract.io_engine.test_io_uring_tcp_connection_hub_capacity
+        COMMAND gamenet_io_uring_tcp_connection_hub_capacity_contract
+    )
+    set_tests_properties(
+        contract.io_engine.test_io_uring_tcp_connection_hub_capacity
+        PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle;capacity"
+    )
     add_custom_target(gamenet_io_uring_contracts DEPENDS
         gamenet_io_uring_contract
         gamenet_io_uring_event_loop_pump_contract
         gamenet_io_uring_tcp_connection_driver_contract
         gamenet_io_uring_tcp_connection_hub_contract
+        gamenet_io_uring_tcp_connection_hub_capacity_contract
     )
 endif()
 add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)

@@ -186,6 +186,18 @@ Contract tests verify:
   the Hub future plus Pump summary precede EventLoop Shutdown. Foreign mutation,
   connection-capacity rejection, and rejected-fd ownership rollback are direct
   assertions
+- the IOE-X5 capacity contract must simultaneously admit exactly 256 real TCP
+  routes to one Hub, close and generation-replace exactly 64, and prove all 192
+  retained routes receive and send after replacement has begun. Old identities
+  must reject without touching replacements
+- capacity evidence must reconcile 320 connection futures and socket closes,
+  exact initial/replacement/retained callback counts, every accepted send byte,
+  a 256 active-route high-water mark, zero active operation-route entries, zero
+  aggregate pending bytes, and zero Engine active/ready/owned-byte residue
+- focused soak repeats the capacity/churn contract under ASan/UBSan and TSan.
+  Its opt-in Release benchmark emits validated structured evidence and remains
+  outside CTest; directional epoll comparison cannot by itself promote a public
+  selector or production adapter
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

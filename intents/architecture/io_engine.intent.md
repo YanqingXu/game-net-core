@@ -315,6 +315,35 @@ IOE-X4 authorizes one experimental shared-Pump connection hub:
   routing, cross-owner connection migration, multishot, provided buffers,
   fixed files, zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
 
+IOE-X5 authorizes capacity, churn, and directional measurement of that same
+experimental shared-Pump Hub without expanding its production authority:
+
+- one direct contract fixes 256 simultaneously admitted real loopback TCP
+  routes on one EventLoop/Pump/Engine. It closes and generation-replaces 64
+  routes while the other 192 retain their identities and must make receive and
+  send progress after replacement begins;
+- the contract keeps the connection table, operation table, receive bytes,
+  per-route send bytes/segments, aggregate send bytes, Pump dispatch, and
+  EventLoop lifecycle budgets explicit and finite. Every old identity is stale,
+  every accepted byte is sent or discarded, and all 320 old/replacement route
+  futures, sockets, operation entries, and byte reservations converge before
+  Hub stop;
+- the capacity contract remains one bounded test, not an unbounded connection
+  factory or a production listener. Peers own their non-Hub socket ends and
+  transfer only the established server ends to the Hub;
+- a separate opt-in, non-CTest, Release-oriented shared-Hub benchmark may keep
+  one fixed-size framed echo in flight per route and report connection count,
+  completed round trips, throughput, P50/P99/P999 latency, working-set delta,
+  bytes per connection, shutdown latency, operation/connection high-water
+  marks, rejection counts, and zero-residue metrics in validated JSON;
+- benchmark and production epoll samples are directional because their
+  transport and dispatch topology differ. IOE-X5 must publish an explicit
+  `PROMOTE` or `DEFER` decision; a local numeric advantage alone cannot authorize
+  a public selector or production `TcpConnection` integration;
+- IOE-X5 still forbids Accept/listen ownership inside the Hub, dynamic route
+  growth, cross-owner migration, multishot, provided buffers, fixed files,
+  zero-copy, SQPOLL, TLS, framing in Core, or game/business callbacks.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -337,7 +366,9 @@ IOE-X4 authorizes one experimental shared-Pump connection hub:
 7. IOE-X4 replaces the proof-only per-connection Pump topology with one finite
    owner Hub that generation-routes multiple connection operations and proves
    isolated close plus aggregate owner shutdown.
-8. Only proven, cross-backend concepts may later graduate to a narrow public
+8. IOE-X5 subjects that Hub to fixed 256-route churn, soak, and directional
+   measurement before recording a production-adapter promotion decision.
+9. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -402,6 +433,10 @@ IOE-X4 authorizes one experimental shared-Pump connection hub:
   continued neighbor progress, callback-safe replacement, explicit Hub stop,
   EventLoop-quit aggregate cancellation, and zero connection/operation/byte
   residue before Hub stop publication.
+- `tests/contract/io_engine/test_io_uring_tcp_connection_hub_capacity.cpp`
+  verifies one shared Pump holds 256 real TCP routes, generation-replaces 64
+  from close callbacks, preserves post-churn progress for the other 192, and
+  drains all 320 route lifetimes plus fixed operation/byte state to zero.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

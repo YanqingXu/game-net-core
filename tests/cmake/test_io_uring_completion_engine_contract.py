@@ -46,9 +46,19 @@ def main() -> None:
         repo_root
         / "tests/contract/io_engine/test_io_uring_tcp_connection_hub.cpp"
     )
+    hub_capacity_contract = (
+        repo_root
+        / "tests/contract/io_engine/test_io_uring_tcp_connection_hub_capacity.cpp"
+    )
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     benchmark = repo_root / "benchmarks" / "io_uring" / "one_shot.cpp"
     benchmark_validator = repo_root / "tools" / "validate_io_uring_benchmark.py"
+    shared_hub_benchmark = (
+        repo_root / "benchmarks" / "io_uring" / "shared_tcp_hub.cpp"
+    )
+    shared_hub_validator = (
+        repo_root / "tools" / "validate_io_uring_shared_hub_benchmark.py"
+    )
     benchmark_docs = repo_root / "docs" / "development" / "io_uring_benchmark.md"
     intent = repo_root / "intents/architecture/io_engine.intent.md"
     thread_rules = repo_root / "rules/thread_affinity_rules.md"
@@ -71,8 +81,11 @@ def main() -> None:
         pump_contract,
         driver_contract,
         hub_contract,
+        hub_capacity_contract,
         benchmark,
         benchmark_validator,
+        shared_hub_benchmark,
+        shared_hub_validator,
         benchmark_docs,
     ):
         assert path.is_file(), f"missing IOE-X1 artifact: {path}"
@@ -220,10 +233,20 @@ def main() -> None:
     require(tests_text, "gamenet_io_uring_event_loop_pump_contract", tests_cmake)
     require(tests_text, "gamenet_io_uring_tcp_connection_driver_contract", tests_cmake)
     require(tests_text, "gamenet_io_uring_tcp_connection_hub_contract", tests_cmake)
+    require(
+        tests_text,
+        "gamenet_io_uring_tcp_connection_hub_capacity_contract",
+        tests_cmake,
+    )
     require(tests_text, "gamenet_io_uring_contracts", tests_cmake)
     require(tests_text, "test_io_uring_event_loop_pump.cpp", tests_cmake)
     require(tests_text, "test_io_uring_tcp_connection_driver.cpp", tests_cmake)
     require(tests_text, "test_io_uring_tcp_connection_hub.cpp", tests_cmake)
+    require(
+        tests_text,
+        "test_io_uring_tcp_connection_hub_capacity.cpp",
+        tests_cmake,
+    )
     require(tests_text, "contract.io_engine.test_io_uring_completion_engine", tests_cmake)
     require(tests_text, "GameNet::experimental", tests_cmake)
     require(tests_text, "experimental;threading;lifecycle", tests_cmake)
@@ -286,11 +309,30 @@ def main() -> None:
         require(hub_contract_text, fragment, hub_contract)
     assert "socketpair(" not in hub_contract_text
 
+    hub_capacity_text = hub_capacity_contract.read_text(encoding="utf-8")
+    for fragment in (
+        "kInitialConnections = 256",
+        "kReplacementConnections = 64",
+        "testFixed256RouteChurnAndPostReplacementProgress",
+        "IoUringTcpHubSendResult::HubByteLimit",
+        "maxActiveConnections == 256",
+        "connectionsAccepted == 320",
+        "activeOperations == 0",
+        "AF_INET",
+    ):
+        require(hub_capacity_text, fragment, hub_capacity_contract)
+    assert "socketpair(" not in hub_capacity_text
+
     benchmark_cmake_text = benchmark_cmake.read_text(encoding="utf-8")
     require(benchmark_cmake_text, "if(GAMENET_ENABLE_EXPERIMENTAL)", benchmark_cmake)
     require(
         benchmark_cmake_text,
         "add_executable(gamenet_io_uring_one_shot_benchmark",
+        benchmark_cmake,
+    )
+    require(
+        benchmark_cmake_text,
+        "add_executable(gamenet_io_uring_shared_tcp_hub_benchmark",
         benchmark_cmake,
     )
     require(benchmark_cmake_text, "GameNet::experimental", benchmark_cmake)
@@ -328,6 +370,26 @@ def main() -> None:
         benchmark_validator,
     )
     require(validator_text, "io_uring benchmark used a fallback", benchmark_validator)
+
+    shared_hub_benchmark_text = shared_hub_benchmark.read_text(encoding="utf-8")
+    for fragment in (
+        "gamenet.io_uring_shared_tcp_hub_benchmark.v1",
+        "IoUringTcpConnectionHub",
+        "completed_round_trips",
+        "working_set_bytes_per_connection",
+        "active_operation_routes",
+        "engine_owned_bytes",
+    ):
+        require(shared_hub_benchmark_text, fragment, shared_hub_benchmark)
+
+    shared_hub_validator_text = shared_hub_validator.read_text(encoding="utf-8")
+    require(
+        shared_hub_validator_text,
+        'SCHEMA = "gamenet.io_uring_shared_tcp_hub_benchmark.v1"',
+        shared_hub_validator,
+    )
+    require(shared_hub_validator_text, "max_active_connections", shared_hub_validator)
+    require(shared_hub_validator_text, "engine_owned_bytes", shared_hub_validator)
 
     sys.path.insert(0, str(repo_root / "tools"))
     import validate_io_uring_benchmark as benchmark_contract
@@ -371,6 +433,9 @@ def main() -> None:
     docs_text = benchmark_docs.read_text(encoding="utf-8")
     require(docs_text, "gamenet_io_uring_one_shot_benchmark", benchmark_docs)
     require(docs_text, "validate_io_uring_benchmark.py", benchmark_docs)
+    require(docs_text, "gamenet_io_uring_shared_tcp_hub_benchmark", benchmark_docs)
+    require(docs_text, "validate_io_uring_shared_hub_benchmark.py", benchmark_docs)
+    require(docs_text, "IOE-X5 decision: `PROMOTE`", benchmark_docs)
     require(docs_text, "directional", benchmark_docs)
 
     intent_text = intent.read_text(encoding="utf-8")
@@ -378,22 +443,31 @@ def main() -> None:
     require(intent_text, "IOE-X2 authorizes one source-private EventLoop-driven completion pump", intent)
     require(intent_text, "IOE-X3 authorizes one experimental single-connection Completion TCP driver", intent)
     require(intent_text, "IOE-X4 authorizes one experimental shared-Pump connection hub", intent)
+    require(intent_text, "IOE-X5 authorizes capacity, churn, and directional measurement", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_completion_engine.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_tcp_connection_hub.cpp", intent)
+    require(
+        intent_text,
+        "tests/contract/io_engine/test_io_uring_tcp_connection_hub_capacity.cpp",
+        intent,
+    )
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X1's raw io_uring Engine", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X2's non-installed completion pump", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X3 single-connection driver", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X4 connection Hub", thread_rules)
+    require(thread_rules.read_text(encoding="utf-8"), "IOE-X5 capacity/churn", thread_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X1 experimental target owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X2 pump owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X3 driver uniquely owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X4 Hub uniquely owns", ownership_rules)
+    require(ownership_rules.read_text(encoding="utf-8"), "IOE-X5 capacity fixture", ownership_rules)
     require(testing_rules.read_text(encoding="utf-8"), "real Linux io_uring fd", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X2 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X3 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X4 contract", testing_rules)
+    require(testing_rules.read_text(encoding="utf-8"), "IOE-X5 capacity contract", testing_rules)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "test_io_uring_completion_engine_contract.py", workflow)
@@ -402,13 +476,14 @@ def main() -> None:
     require(workflow_text, "event_loop_pump", workflow)
     require(workflow_text, "tcp_connection_driver", workflow)
     require(workflow_text, "tcp_connection_hub", workflow)
+    require(workflow_text, "tcp_connection_hub_capacity", workflow)
     require(
         platform_docs.read_text(encoding="utf-8"),
-        "IOE-X1/X2/X3/X4 io_uring",
+        "IOE-X1/X2/X3/X4/X5 io_uring",
         platform_docs,
     )
 
-    print("IOE-X1/X2/X3/X4 Engine, Pump, driver, and shared-Hub contracts verified")
+    print("IOE-X1/X2/X3/X4/X5 Engine, Pump, driver, shared-Hub, and capacity contracts verified")
 
 
 if __name__ == "__main__":

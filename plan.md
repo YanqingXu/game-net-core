@@ -310,12 +310,12 @@ IOE-X4 shared-Pump routing 保持 Linux-only、default-off、non-installed：
 
 IOE-X5 shared-Hub capacity/soak decision 立即接续，不等待冻结或 promotion：
 
-- [ ] 固定 256 个真实 TCP route 只共享一个 owner Pump/Engine，记录 fd/operation/byte 上界；
-- [ ] 混合小包双向 burst 与局部 close/churn，证明邻接 route 公平进展且 generation 不串线；
-- [ ] Hub aggregate/per-route 饱和恢复与 owner quit 全量 drain 做 focused soak；
-- [ ] Release 数字基准记录吞吐、P50/P99/P999、内存与 shutdown 延迟；
-- [ ] 与 epoll production baseline 做同场景方向性比较，不把不同语义伪装成等价结果；
-- [ ] 形成 production adapter 的 `PROMOTE` / `DEFER` 决定；决定前不改 public selector 或 production `TcpConnection`。
+- [x] 固定 256 个真实 TCP route 只共享一个 owner Pump/Engine，记录 fd/operation/byte 上界；
+- [x] 混合小包双向 burst 与局部 close/churn，证明邻接 route 公平进展且 generation 不串线；
+- [x] Hub aggregate/per-route 饱和恢复与 owner quit 全量 drain 做 focused soak；
+- [x] Release 数字基准记录吞吐、P50/P99/P999、内存与 shutdown 延迟；
+- [x] 与 epoll production baseline 做同场景方向性比较，不把不同语义伪装成等价结果；
+- [x] 形成 production adapter 的 `PROMOTE` / `DEFER` 决定；决定前不改 public selector 或 production `TcpConnection`。
 
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
@@ -430,8 +430,10 @@ IOE-X4 shared-Pump routing 已以一个 EventLoop/Engine/Pump generation-safe �
 operation slot 也改为保留到对应 terminal notice 被取走，消除了 decoded-but-undispatched
 notice 与新 generation 共槽的歧义。
 
-当前下一前沿转为 **IOE-X5 shared-Hub capacity/soak decision**：用固定 256 route、burst、
-局部 churn、aggregate saturation、Release latency/throughput/memory 和 shutdown latency 判断
-共享 completion data path 是否具备 production adapter 的证据基础。ARCH-G1 独立 review 继续
-并行且不形成冻结点；不得借 IOE-X5 开放 multishot、provided buffers、fixed files、zero-copy、
-SQPOLL、公共 backend selector 或直接修改 production `TcpConnection`。
+IOE-X5 已用固定 256 route、64-route generation churn、aggregate saturation、Release
+latency/throughput/memory 和 shutdown latency 得出受限 `PROMOTE`：只推进 source-private
+production-adapter contract shaping。当前下一前沿转为 **IOE-X6 adapter contract**，先统一
+cross-backend ownership、close reason、backpressure、callback re-entry 和 shutdown observation，
+再讨论任何 selector。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X6 开放
+multishot、provided buffers、fixed files、zero-copy、SQPOLL、公共 backend selector 或直接
+替换 production `TcpConnection`。

@@ -265,6 +265,10 @@ No other direct mutation path is allowed for core loop state.
 - the Hub maintenance lifecycle source may only retry SQ-full cancellation and
   resignal bounded maintenance. It transports no CQE or business data and
   invokes no user callback; completion and close delivery stay on Pump dispatch
+- IOE-X5 capacity/churn peers may perform socket syscalls on peer-owned ends,
+  but they observe no Hub table, identity, queue, metric, or future. All 256
+  route admissions, 64 replacements, callbacks, close decisions, and aggregate
+  stop transitions remain serialized on the one EventLoop owner
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

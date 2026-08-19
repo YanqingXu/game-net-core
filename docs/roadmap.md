@@ -74,8 +74,10 @@ See `migration_status.md` for the current checked state of these phases.
   automatic quit cancellation, and fail-closed terminal retirement. IOE-X3
   composes it into one non-installed real-TCP connection driver with one Recv,
   bounded FIFO Send, pause/resume, re-entry, and socket-after-terminal close.
-  The active implementation front is IOE-X4 shared-Pump multi-connection
-  routing, while ARCH-G1 independent review proceeds in parallel.
+  IOE-X4 closes shared-Pump multi-connection routing and IOE-X5 closes fixed
+  capacity/churn plus directional measurement with a source-private-adapter
+  `PROMOTE`. IOE-X6 adapter contract shaping is next while ARCH-G1 independent
+  review proceeds in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 

@@ -137,7 +137,7 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
-      - name: Build and test experimental IOE-X1/X2/X3/X4 io_uring
+      - name: Build and test experimental IOE-X1/X2/X3/X4/X5 io_uring
         run: |
           cmake -S . -B build-io-uring-experimental \
             -DCMAKE_BUILD_TYPE=Debug \
@@ -147,13 +147,13 @@ jobs:
             -DGAMENET_ENABLE_EXPERIMENTAL=ON
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-io-uring-experimental \
-            --expected-total 133 \
-            --expect-label experimental=4 \
+            --expected-total 134 \
+            --expect-label experimental=5 \
             --output ci-evidence/io-uring-experimental-inventory.json
           cmake --build build-io-uring-experimental \
             --target gamenet_io_uring_contracts --parallel
           ctest --test-dir build-io-uring-experimental \
-            -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub)$' \
+            -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity)$' \
             --output-on-failure --timeout 10 \
             --output-junit "$PWD/ci-evidence/io-uring-experimental-junit.xml" \
             --output-log "$PWD/ci-evidence/io-uring-experimental-ctest.log"
@@ -192,7 +192,7 @@ jobs:
             --command 'cmake --build build --parallel' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-io-uring-experimental -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-experimental --expected-total 133 --expect-label experimental=4 --output ci-evidence/io-uring-experimental-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-experimental --expected-total 134 --expect-label experimental=5 --output ci-evidence/io-uring-experimental-inventory.json' \
             --command 'cmake --build build-io-uring-experimental --target gamenet_io_uring_contracts --parallel' \
             --command 'ctest --test-dir build-io-uring-experimental -R ^contract.io_engine.test_io_uring_ --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-experimental-junit.xml --output-log $PWD/ci-evidence/io-uring-experimental-ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
@@ -369,7 +369,7 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
-      - name: Build and test experimental IOE-X1/X2/X3/X4 io_uring with ASan/UBSan
+      - name: Build and test experimental IOE-X1/X2/X3/X4/X5 io_uring with ASan/UBSan
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
@@ -383,13 +383,13 @@ jobs:
             -DGAMENET_ENABLE_EXPERIMENTAL=ON
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-io-uring-asan \
-            --expected-total 133 \
-            --expect-label experimental=4 \
+            --expected-total 134 \
+            --expect-label experimental=5 \
             --output ci-evidence/io-uring-asan-inventory.json
           cmake --build build-io-uring-asan \
             --target gamenet_io_uring_contracts --parallel
           ctest --test-dir build-io-uring-asan \
-            -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub)$' \
+            -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity)$' \
             --output-on-failure --timeout 10 \
             --output-junit "$PWD/ci-evidence/io-uring-asan-junit.xml" \
             --output-log "$PWD/ci-evidence/io-uring-asan-ctest.log"
@@ -446,7 +446,7 @@ jobs:
             --command 'cmake --build build-asan --parallel' \
             --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-io-uring-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-asan --expected-total 133 --expect-label experimental=4 --output ci-evidence/io-uring-asan-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-asan --expected-total 134 --expect-label experimental=5 --output ci-evidence/io-uring-asan-inventory.json' \
             --command 'cmake --build build-io-uring-asan --target gamenet_io_uring_contracts --parallel' \
             --command 'ctest --test-dir build-io-uring-asan -R ^contract.io_engine.test_io_uring_ --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-asan-junit.xml --output-log $PWD/ci-evidence/io-uring-asan-ctest.log' \
             --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \

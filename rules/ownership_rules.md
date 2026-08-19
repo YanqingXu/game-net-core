@@ -126,6 +126,10 @@ It must not blur these roles.
   neighbor's operation/byte reservation. Hub/EventLoop stop retains every route
   and operation mapping through aggregate Pump physical shutdown, then closes
   sockets and publishes all connection futures before the Hub future
+- the IOE-X5 capacity fixture owns every peer socket until test teardown and
+  transfers exactly 320 established Hub ends across 256 initial plus 64
+  replacement admissions. Rejection or route retirement closes each transferred
+  end once; the fixture never shares ownership of a Hub end or grows Hub tables
 
 ## 3. Poller
 - Poller does not own Channel
