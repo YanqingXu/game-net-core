@@ -15,8 +15,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 128 CTest tests: 8 unit, 107 contract, and 13
-  integration, with 101 threading and 106 lifecycle labels. The IOE-R2
+- The current inventory is 129 CTest tests: 8 unit, 107 contract, and 14
+  integration, with 102 threading and 107 lifecycle labels. The IOE-R2
   Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
   and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
   the PERF-R1 reviewed-surface diff remains strictly empty.
@@ -66,9 +66,11 @@ See `migration_status.md` for the current checked state of these phases.
   Linux-only non-installed Engine has real one-shot Accept/Recv/Send,
   SQ-full/cancel/lease/final-drain contracts, ASan/UBSan coverage, and a
   structured opt-in directional benchmark while epoll remains production
-  default/fallback. The active front is now the cross-Profile real-TCP
-  integration contract and common-capability decision; ARCH-G1 independent
-  review proceeds in parallel.
+  default/fallback. The cross-Profile real-TCP integration contract now drives
+  the same echo/stop lifecycle through A/B/C/D and closes the common-capability
+  review as `NO-PROMOTION`; it also closes a Profile C cadence-stop summary
+  publication race. The active implementation front is IOE-X2 contract shaping,
+  while ARCH-G1 independent review proceeds in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 

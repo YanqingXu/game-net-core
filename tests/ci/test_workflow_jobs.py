@@ -13,8 +13,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 128
-EXPECTED_THREADING_TOTAL = 101
+EXPECTED_CTEST_TOTAL = 129
+EXPECTED_THREADING_TOTAL = 102
 EXPECTED_CONSUMER_TOTAL = 2
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
@@ -715,7 +715,7 @@ def main() -> None:
     require(self_hosted_job, '"tests/ci/test_workflow_jobs.py"')
     require(self_hosted_job, "& py -3 $guard")
     require(self_hosted_job, '-G "Visual Studio 18 2026"')
-    require(self_hosted_job, "--expected-total 128")
+    require(self_hosted_job, "--expected-total 129")
     require(self_hosted_job, "--timeout 30")
     require(self_hosted_job, "- name: Install and verify package consumer")
     require(self_hosted_job, "--expected-total 2")
@@ -879,7 +879,7 @@ def main() -> None:
         "Build and test experimental IOE-X1 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
-    require(linux_io_uring, "--expected-total 129")
+    require(linux_io_uring, "--expected-total 130")
     require(linux_io_uring, "--expect-label experimental=1")
     require(linux_io_uring, "--target gamenet_io_uring_contract")
     require(
@@ -1059,8 +1059,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 128")
-    require(ci_docs, "threading=101")
+    require(ci_docs, "exactly 129")
+    require(ci_docs, "threading=102")
     require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")

@@ -10,9 +10,11 @@
 Profile 工作。当前执行前沿以 `plan.md` 为准：IOE-R1 已在 `8bb14e72` 关闭，IOE-R2
 已在 `6f45aa6e` 关闭，IOE-C1 已在 `c2d7e9d6` 关闭，RTM-R1 Profile A/B 分别在
 `adb8b483`/`633d613` 关闭，Profile C 已在 `da57edc` 关闭；RTM-R2 Profile D 的
-non-installed sharded Hybrid vertical slice 已在 `b3b184b1` 关闭。ARCH-G1 独立 review、
-跨 Profile 共同能力审查继续推进；IOE-X1 已在 `a39b702` 建立真实内核闭环并在
-`d3b31c5` 补齐结构化方向性基准和精确证据。
+non-installed sharded Hybrid vertical slice 已在 `b3b184b1` 关闭。跨 Profile 共同能力审查
+已通过同一真实 TCP echo/stop 合同形成 `NO-PROMOTION` 决定，四个 Profile 继续非安装；
+高重复验证同时关闭了 Profile C cadence-stop summary 早于结果发布的生命周期竞态。
+IOE-X1 已在 `a39b702` 建立真实内核闭环并在 `d3b31c5` 补齐结构化方向性基准和精确证据；
+ARCH-G1 独立 review 继续推进。
 
 ## 1. 执行结论
 
@@ -232,21 +234,21 @@ determinism。因此任一早期检查点的 CI、性能、容量或 endurance �
 | active intent | 36 |
 | deferred intent | 20 |
 | legacy intent | 11 |
-| intent 显式 verification paths | 178 |
+| intent 显式 verification paths | 179 |
 | public headers | 55 |
 | `.cc` sources | 46 |
-| CTest tests | 128 |
+| CTest tests | 129 |
 
 测试分区：
 
 - unit：8；
 - contract：107；
-- integration：13。
+- integration：14。
 
 交叉标签中包括：
 
-- threading：101；
-- lifecycle：106；
+- threading：102；
+- lifecycle：107；
 - game pipeline：7；
 - broadcast：5。
 
@@ -649,12 +651,12 @@ plan 完成项和 roadmap 候选描述分属不同时间点，且 `be749ad`、`b
 当前最重要的事情不是继续扩展协议或 Gateway，也不是再次冻结候选，而是向长期架构
 目标形成连续可运行切片：
 
-1. 补齐 ADR 已指定的跨 Profile 真实 TCP 组合集成合同；
-2. 保持 Profile A/B/C/D 非安装，从四个已验证垂直切片形成共同能力与差异矩阵，明确
-   installed runtime surface 是否有足够证据；
+1. 保持跨 Profile 真实 TCP 组合合同全绿，并执行共同能力审查的 `NO-PROMOTION` 决定；
+2. 进入 IOE-X2 contract shaping，在 active intent 中先固定 EventLoop completion pump 的
+   owner、operation retention、取消与 final-drain 失败语义；
 3. 并行完成 ARCH-G1 独立 review，并保持 RTM-R2 的分片、顺序和生命周期合同全绿；
-4. IOE-X1 保持 experimental/default-off；任何 EventLoop/TcpConnection 集成先提升新的
-   active contract，不借本切片开放高级 io_uring 能力；
+4. IOE-X1 保持 experimental/default-off；新的最小 source-private 集成不借机开放
+   production TcpConnection 或高级 io_uring 能力；
 5. 把 CI、benchmark、capacity 作为伴随证据；只有准备 promotion 时才执行 endurance、
    许可证和 REL-D1。
 

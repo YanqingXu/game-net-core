@@ -71,6 +71,10 @@ committed tick may still invoke the handler. A callback already inside the
 handler may finish, but its output is stale after revocation. Rejected normal
 cancellation admission is recovered by the next timer callback; shutdown never
 needs a business control lane or raw inline fallback.
+The logic-stop future cannot become ready before the cadence-stop admission
+outcome is published. If an already committed owner callback wins the race and
+retires the timer before a cancellation post is needed, that converged owner
+path is recorded as accepted rather than exposing the summary's sentinel value.
 
 ## 5. Metrics and Directional Baseline
 

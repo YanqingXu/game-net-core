@@ -187,6 +187,11 @@ Each Profile must state and test:
   no-overtake rule, and owner-executor return path.
 - `examples/runtime_profiles/multi_io_sharded_hybrid_echo.cpp` is the runnable
   Profile D TCP echo composition.
+- `tests/integration/runtime_model/test_tcp_runtime_profiles.cpp` drives the
+  same real framed TCP echo and graceful-stop scenario through Profiles A/B/C/D
+  on the configured platform. It normalizes only the proven common lifecycle
+  result while separately checking zero-handoff versus cross-domain handoff,
+  timer retirement, cell retirement, and owner/generation safety.
 
 RTM-R1 and RTM-R2 add Profile-specific contracts before exposing runtime
 Profile types. All four vertical slices now exist as non-installed compositions;

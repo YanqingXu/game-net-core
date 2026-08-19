@@ -144,6 +144,12 @@ Contract tests verify:
   output, and a drained shutdown
 
 ## 5.1 Runtime Profile Required Test Examples
+- the cross-Profile integration contract must execute the same real framed TCP
+  echo and graceful-stop lifecycle through Profiles A/B/C/D, compare a narrow
+  normalized outcome, and still assert each Profile's distinct handoff,
+  cadence, cell-retirement, and owner/generation invariants; source-level API
+  similarity or four individually green contracts is not evidence for an
+  installed common Profile surface
 - Profile A uses one real TcpServer with zero worker loops and proves accept,
   connection, framing, handler, reply, and close callbacks stay on the caller's
   EventLoop owner thread

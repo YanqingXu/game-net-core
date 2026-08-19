@@ -58,6 +58,9 @@ def main() -> None:
         "PostResult::QueueFull",
         "EndpointResult::Overloaded",
         "stopCadenceOnOwner",
+        "cadenceStopResultPublished",
+        "cadenceStopResultPublished.store(true, std::memory_order_release)",
+        "!state->cadenceStopResultPublished.load(std::memory_order_acquire)",
         "completeLogicStop",
         "closeAndDiscard",
     ):

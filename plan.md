@@ -10,7 +10,7 @@
 `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`，但从本计划开始不再作为
 开发基线、分支门或后续任务的冻结点。
 
-当前测试基线：128（8/107/13；threading 101、lifecycle 106）。API-R1 已完成，
+当前测试基线：129（8/107/14；threading 102、lifecycle 107）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -365,14 +365,14 @@ planned -> contract-ready -> implemented -> verified -> integrated
 现在立即执行：
 
 > **Cross-Profile common-capability review：IOE-X1 已在
-> `d3b31c5c4e7966553094f7e42cf74f1b49a11077` 完成真实 one-shot、typed SQ-full、
-> cancel/terminal lease、final drain、epoll fallback 与结构化方向性基准。下一切片直接
-> 补齐 ADR 已指定但尚不存在的
-> `tests/integration/runtime_model/test_tcp_runtime_profiles.cpp`，在同一真实 TCP 生命周期
-> 场景中组合验证 Profile A/B/C/D，并据此形成 installed runtime surface 的明确决定。**
+> `d3b31c5c4e7966553094f7e42cf74f1b49a11077` 完成真实 one-shot 关闭；当前切片又以
+> `tests/integration/runtime_model/test_tcp_runtime_profiles.cpp` 在同一真实 TCP 生命周期中
+> 组合验证 Profile A/B/C/D，并形成 `NO-PROMOTION` 决定。四个 Profile 继续显式、
+> provisional、非安装；归一化 observation 只属于测试词汇，不提升为 runtime API。**
 
-ARCH-G1 独立 review 与跨 Profile 共同能力审查继续并行，不形成冻结点。Profile A/B/C/D
-保持 provisional、非安装；在共同能力审查形成明确兼容性决定前不提升 installed runtime
-surface。下一 IOE completion 集成切片必须先由新的 active contract 授权；IOE-X1 不顺带
-开放 production TcpConnection 集成、multishot、provided buffers、fixed files、zero-copy
-或 SQPOLL。
+重复合同同时发现并关闭 Profile C 的 cadence-stop summary 发布竞态：logic future 必须等待
+取消结果发布，owner Tick 抢先退休 timer 时记录收敛的 Accepted 结果。当前下一前沿转为
+**IOE-X2 contract shaping**：先在 active intent 中明确 EventLoop 驱动的一次性 Completion
+pump 的 owner、operation retention、取消与 final-drain 失败语义，再实现最小 source-private
+集成合同。ARCH-G1 独立 review 继续并行且不形成冻结点；IOE-X1 不顺带开放 production
+TcpConnection 集成、multishot、provided buffers、fixed files、zero-copy 或 SQPOLL。

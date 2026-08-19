@@ -177,7 +177,11 @@ establishes at `b3b184b1cd8d28a256cffc60679ab832373dcfef` independent
 connection placement and stable player/room/scene
 sharding across bounded logic cells; its event and fixed-tick lanes preserve
 cell-local FIFO without promising cross-cell global order. All four remain
-non-installed while common capability review is pending.
+non-installed. The combined real-TCP A/B/C/D lifecycle contract and
+`runtime_profile_common_capability_review.md` close common-capability review as
+`NO-PROMOTION`: the shared lower-level primitives are sufficient, while handler,
+cadence, sharding, stop, and metrics differences remain explicit. The normalized
+test observation is not an installed runtime API.
 
 IOE-X1 is integrated at
 `d3b31c5c4e7966553094f7e42cf74f1b49a11077` as a Linux-only,

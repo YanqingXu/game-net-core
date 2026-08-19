@@ -150,6 +150,12 @@ def main() -> None:
     perf_additive_api_diff = (
         repo_root / "docs" / "reviews" / "perf-r1-public-api-additive-diff.json"
     )
+    common_profile_review = (
+        repo_root
+        / "docs"
+        / "architecture"
+        / "runtime_profile_common_capability_review.md"
+    )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     configured_tests = re.findall(
@@ -171,6 +177,7 @@ def main() -> None:
     readme_text = readme.read_text(encoding="utf-8")
     api_review_text = api_review.read_text(encoding="utf-8")
     perf_api_review_text = perf_api_review.read_text(encoding="utf-8")
+    common_profile_review_text = common_profile_review.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
@@ -294,6 +301,26 @@ def main() -> None:
         plan_text,
         "Cross-Profile common-capability review：IOE-X1",
         plan,
+    )
+    require(
+        tests_cmake_text,
+        "integration/runtime_model/test_tcp_runtime_profiles.cpp",
+        tests_cmake,
+    )
+    require(
+        common_profile_review_text,
+        "Do not promote an installed Runtime Profile interface now.",
+        common_profile_review,
+    )
+    require(
+        common_profile_review_text,
+        "tests/integration/runtime_model/test_tcp_runtime_profiles.cpp",
+        common_profile_review,
+    )
+    require(
+        common_profile_review_text,
+        "Disposition: `NO-PROMOTION`",
+        common_profile_review,
     )
     require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
     require(status_text, "Current IOE-C1 direct read/write checkpoint", migration_status)

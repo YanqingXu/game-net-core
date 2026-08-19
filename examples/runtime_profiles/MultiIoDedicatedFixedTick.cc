@@ -226,6 +226,7 @@ struct MultiIoDedicatedFixedTick::CallbackState {
     std::atomic<bool> cadenceSetupPending{false};
     std::atomic<bool> timerRetired{true};
     std::atomic<bool> cadenceStopRequested{false};
+    std::atomic<bool> cadenceStopResultPublished{false};
     std::atomic<std::size_t> tickCallbacksInFlight{0};
     std::atomic<bool> logicStopCompleted{false};
     std::atomic<bool> activeTickObserved{false};
@@ -929,12 +930,15 @@ void MultiIoDedicatedFixedTick::stopCadenceOnOwner(
 
 void MultiIoDedicatedFixedTick::requestCadenceStop(
     const std::shared_ptr<CallbackState>& state) {
-    if (state->timerRetired.load(std::memory_order_acquire) &&
-        !state->cadenceSetupPending.load(std::memory_order_acquire)) {
+    if (state->cadenceStopRequested.exchange(true, std::memory_order_acq_rel)) {
         completeLogicStop(state);
         return;
     }
-    if (state->cadenceStopRequested.exchange(true, std::memory_order_acq_rel)) {
+    if (state->timerRetired.load(std::memory_order_acquire) &&
+        !state->cadenceSetupPending.load(std::memory_order_acquire)) {
+        state->cadenceStopPostResult.store(
+            gamenet::net::PostResult::Accepted, std::memory_order_release);
+        state->cadenceStopResultPublished.store(true, std::memory_order_release);
         completeLogicStop(state);
         return;
     }
@@ -944,20 +948,18 @@ void MultiIoDedicatedFixedTick::requestCadenceStop(
     state->cadenceStopPostResult.store(posted, std::memory_order_release);
     if (posted == gamenet::net::PostResult::Accepted) {
         state->timerCancelPosts.fetch_add(1, std::memory_order_relaxed);
-        return;
-    }
-    if (posted == gamenet::net::PostResult::QueueFull) {
+    } else if (posted == gamenet::net::PostResult::QueueFull) {
         state->timerCancelQueueFull.fetch_add(1, std::memory_order_relaxed);
-        return;
+    } else {
+        state->timerCancelUnavailable.fetch_add(1, std::memory_order_relaxed);
+        if (posted == gamenet::net::PostResult::OwnerUnavailable) {
+            state->cadenceSetupPending.store(false, std::memory_order_release);
+        }
+        if (!state->cadenceSetupPending.load(std::memory_order_acquire)) {
+            state->timerRetired.store(true, std::memory_order_release);
+        }
     }
-
-    state->timerCancelUnavailable.fetch_add(1, std::memory_order_relaxed);
-    if (posted == gamenet::net::PostResult::OwnerUnavailable) {
-        state->cadenceSetupPending.store(false, std::memory_order_release);
-    }
-    if (!state->cadenceSetupPending.load(std::memory_order_acquire)) {
-        state->timerRetired.store(true, std::memory_order_release);
-    }
+    state->cadenceStopResultPublished.store(true, std::memory_order_release);
     completeLogicStop(state);
 }
 
@@ -1007,6 +1009,7 @@ void MultiIoDedicatedFixedTick::revokeProfile(
 void MultiIoDedicatedFixedTick::completeLogicStop(
     const std::shared_ptr<CallbackState>& state) {
     if (state->active.load(std::memory_order_acquire) ||
+        !state->cadenceStopResultPublished.load(std::memory_order_acquire) ||
         state->cadenceSetupPending.load(std::memory_order_acquire) ||
         !state->timerRetired.load(std::memory_order_acquire) ||
         state->tickCallbacksInFlight.load(std::memory_order_acquire) != 0) {

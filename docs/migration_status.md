@@ -112,10 +112,13 @@ owners immobile, and isolates per-cell saturation. IOE-X1 one-shot completion
 is closed at `d3b31c5`: the Linux-only non-installed raw io_uring Engine proves
 Accept/Recv/Send, typed SQ-full, cancel/terminal lease, final drain, zero
 fallback, sanitizer execution, and structured directional numbers while epoll
-remains the production default/fallback. The active execution front is the
-cross-Profile real-TCP integration contract and common-capability decision;
-independent ARCH-G1 review proceeds in parallel. Candidate freeze, REL-V1 and
-release packaging are not development prerequisites.
+remains the production default/fallback. The cross-Profile real-TCP contract
+now drives the same echo/stop lifecycle through A/B/C/D and closes the
+common-capability review as `NO-PROMOTION`; repeated execution also closes the
+Profile C cadence-stop summary publication race. The active implementation
+front is IOE-X2 contract shaping; independent ARCH-G1 review proceeds in
+parallel. Candidate freeze, REL-V1 and release packaging are not development
+prerequisites.
 
 The IOE-C1 closure checkpoint's directional Windows Release echo check used
 4 connections, one
@@ -180,8 +183,8 @@ annotated-tag checkout, warm paired/interleaved collection, one retention
 snapshot batch per owner loop, complete JSON flush, byte-preserving stderr
 diagnostics, and a connect/accept/echo/close batch barrier that leaves the
 reviewed two-second probe deadline unchanged. The
-inventory is 128 configured CTest tests: 8 unit tests, 107 contract tests, and
-13 integration tests, with 101 threading and 106 lifecycle labels. Complete local
+inventory is 129 configured CTest tests: 8 unit tests, 107 contract tests, and
+14 integration tests, with 102 threading and 107 lifecycle labels. Complete local
 `candidate-10k` preflight for the barrier passed nine times on Windows and
 three times on Linux with identical profile parameters; local Windows
 regression/Core-capacity paired matrices pass their original budgets. None is
@@ -331,7 +334,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. RTM-R2 Profile D is closed at `b3b184b1` with independent placement/sharding and cell-local Hybrid ordering. IOE-X1 is closed at `d3b31c5` with a Linux-only real one-shot Engine, bounded terminal lifecycle, zero fallback, sanitizer evidence, and an opt-in benchmark. All four Profiles and IOE-X1 remain non-installed. The active front is the cross-Profile real-TCP integration/common-capability decision. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. RTM-R2 Profile D is closed at `b3b184b1` with independent placement/sharding and cell-local Hybrid ordering. IOE-X1 is closed at `d3b31c5` with a Linux-only real one-shot Engine, bounded terminal lifecycle, zero fallback, sanitizer evidence, and an opt-in benchmark. The cross-Profile real-TCP contract closes common-capability review as `NO-PROMOTION`; all four Profiles and IOE-X1 remain non-installed. The active front is IOE-X2 contract shaping. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 
@@ -342,7 +345,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 67 | 36 | 20 | 11 | 178 |
+| 67 | 36 | 20 | 11 | 179 |
 
 ## Historical Production-Hardening Evidence
 
