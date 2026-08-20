@@ -264,7 +264,7 @@ public:
         if (route == nullptr) {
             return IoUringTcpHubReadControlResult::StaleConnection;
         }
-        if (route->phase != RoutePhase::Running ||
+        if (route->phase == RoutePhase::Closing ||
             phase_ != IoUringTcpHubPhase::Running) {
             return IoUringTcpHubReadControlResult::Closing;
         }
@@ -293,7 +293,7 @@ public:
         if (route == nullptr) {
             return IoUringTcpHubReadControlResult::StaleConnection;
         }
-        if (route->phase != RoutePhase::Running ||
+        if (route->phase == RoutePhase::Closing ||
             phase_ != IoUringTcpHubPhase::Running) {
             return IoUringTcpHubReadControlResult::Closing;
         }
@@ -320,6 +320,26 @@ public:
         return beginRouteClose(*route, reason, true);
     }
 
+    bool shutdownConnection(Identity identity) {
+        assertOwner();
+        auto* route = findRoute(identity, true);
+        if (route == nullptr ||
+            phase_ != IoUringTcpHubPhase::Running ||
+            route->phase == RoutePhase::Closing) {
+            return false;
+        }
+        if (route->phase == RoutePhase::GracefulDraining) return true;
+        route->phase = RoutePhase::GracefulDraining;
+        route->closeReason = IoUringTcpHubCloseReason::GracefulShutdown;
+        ++route->metrics.closeRequests;
+        ++route->metrics.gracefulShutdownRequests;
+        ++metrics_.gracefulShutdownRequests;
+        if (!route->sendIdentity.valid() && route->sendSegments.empty()) {
+            halfCloseWrite(*route);
+        }
+        return true;
+    }
+
     bool stop() {
         assertOwner();
         return beginHubStop(IoUringTcpHubCloseReason::HubStopped);
@@ -344,6 +364,7 @@ public:
 private:
     enum class RoutePhase : std::uint8_t {
         Running,
+        GracefulDraining,
         Closing,
     };
 
@@ -380,6 +401,7 @@ private:
         int closeNativeError{};
         std::size_t pendingSendBytes{};
         bool readDesired{true};
+        bool writeHalfClosed{false};
         bool retryReceiveCancel{false};
         bool retrySendCancel{false};
     };
@@ -438,7 +460,7 @@ private:
 
     IoUringSubmissionResult submitReceive(Route& route) {
         if (phase_ != IoUringTcpHubPhase::Running ||
-            route.phase != RoutePhase::Running || !route.readDesired ||
+            route.phase == RoutePhase::Closing || !route.readDesired ||
             route.receiveIdentity.valid()) {
             return IoUringSubmissionResult::Accepted;
         }
@@ -533,8 +555,10 @@ private:
             }
             return false;
         }
+        const bool preservingGracefulReason =
+            route.phase == RoutePhase::GracefulDraining;
         route.phase = RoutePhase::Closing;
-        route.closeReason = reason;
+        if (!preservingGracefulReason) route.closeReason = reason;
         route.closeNativeError = nativeError;
         route.readDesired = false;
         ++route.metrics.closeRequests;
@@ -646,7 +670,7 @@ private:
         ++route.metrics.receiveTerminals;
         if (notice.status() == IoUringCompletionStatus::Cancelled) {
             ++route.metrics.receiveCancellations;
-            if (route.phase == RoutePhase::Running && route.readDesired &&
+            if (route.phase != RoutePhase::Closing && route.readDesired &&
                 submitReceive(route) != IoUringSubmissionResult::Accepted) {
                 ++metrics_.engineRejections;
                 (void)beginRouteClose(
@@ -697,7 +721,7 @@ private:
             return;
         }
         if (phase_ == IoUringTcpHubPhase::Running &&
-            route.phase == RoutePhase::Running && route.readDesired &&
+            route.phase != RoutePhase::Closing && route.readDesired &&
             !route.receiveIdentity.valid() &&
             submitReceive(route) != IoUringSubmissionResult::Accepted) {
             ++metrics_.engineRejections;
@@ -725,7 +749,7 @@ private:
             notice.payload() == expected;
         if (!validSuccess) {
             discardFrontSendSegment(route);
-            if (route.phase == RoutePhase::Running) {
+            if (route.phase != RoutePhase::Closing) {
                 (void)beginRouteClose(
                     route,
                     IoUringTcpHubCloseReason::SendFailed,
@@ -769,7 +793,20 @@ private:
                 route,
                 IoUringTcpHubCloseReason::EngineRejected,
                 true);
+            return;
         }
+        if (route.phase == RoutePhase::GracefulDraining &&
+            route.sendSegments.empty() && !route.sendIdentity.valid()) {
+            halfCloseWrite(route);
+        }
+    }
+
+    void halfCloseWrite(Route& route) noexcept {
+        if (route.writeHalfClosed || route.phase == RoutePhase::Closing) return;
+        route.socket.shutdownWrite();
+        route.writeHalfClosed = true;
+        ++route.metrics.writeHalfCloses;
+        ++metrics_.writeHalfCloses;
     }
 
     void reservePendingBytes(Route& route, std::size_t bytes) noexcept {
@@ -1043,6 +1080,11 @@ IoUringTcpHubReadControlResult IoUringTcpConnectionHub::pauseRead(
 IoUringTcpHubReadControlResult IoUringTcpConnectionHub::resumeRead(
     IoUringTcpConnectionIdentity connection) {
     return impl_->resumeRead(connection);
+}
+
+bool IoUringTcpConnectionHub::shutdownConnection(
+    IoUringTcpConnectionIdentity connection) {
+    return impl_->shutdownConnection(connection);
 }
 
 bool IoUringTcpConnectionHub::closeConnection(

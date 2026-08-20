@@ -210,6 +210,16 @@ Contract tests verify:
 - a separate observer-lifetime case destroys the adapter with a real Recv
   pending. No adapter callback may run afterward, while the retained future
   must still report forced terminal close and zero physical Hub residue
+- the IOE-X7 graceful case must place real accepted output behind a constrained
+  TCP send buffer, request graceful shutdown before peer drain, reject new send,
+  and prove both production epoll and Adapter peers receive the complete payload
+  followed by local EOF. Each peer then sends data after observing that EOF and
+  half-closes; both owners must deliver the inbound data before terminal close
+- Adapter metrics must report one graceful request and one native write
+  half-close, zero discarded accepted bytes, one peer-EOF physical terminal,
+  `GracefulShutdown` semantic close info, future-before-close-callback ordering,
+  and zero Hub/Engine residue. Repeated shutdown plus force escalation must
+  retain `GracefulShutdown` while cancelling/draining the remaining Recv once
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

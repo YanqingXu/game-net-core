@@ -59,10 +59,10 @@ commands remain valid:
 | Option | Supported value | `ON` behavior |
 |---|---|---|
 | `GAMENET_ENABLE_TLS` | `OFF` | Configure fails because TLS is not implemented in the active target graph |
-| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1/X2/X3/X4/X5/X6 io_uring Engine, EventLoop pump, single-connection driver, shared-Pump Hub, semantic adapter, and their direct/capacity contracts; Windows rejects it |
+| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1/X2/X3/X4/X5/X6/X7 io_uring Engine, EventLoop pump, single-connection driver, shared-Pump Hub, semantic adapter, and their direct/capacity/graceful contracts; Windows rejects it |
 
 An option that has no implementation must not configure successfully. The
-Linux-only IOE-X1/X2/X3/X4/X5/X6 io_uring target is the sole active experimental module;
+Linux-only IOE-X1/X2/X3/X4/X5/X6/X7 io_uring target is the sole active experimental module;
 it does not replace epoll and is not installed. TLS, UDP, KCP, and other
 experimental work still require promoted intent, ownership/threading
 contracts, targets, and direct tests before an enabling value can be accepted.
@@ -97,8 +97,8 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
-The dedicated IOE-X1/X2/X3/X4/X5/X6 Engine, EventLoop-pump,
-single-connection-driver, shared-Pump Hub, semantic adapter, and fixed-capacity contract
+The dedicated IOE-X1/X2/X3/X4/X5/X6/X7 Engine, EventLoop-pump,
+single-connection-driver, shared-Pump Hub, semantic adapter, fixed-capacity, and graceful contract
 configuration is Linux-only:
 
 ```bash

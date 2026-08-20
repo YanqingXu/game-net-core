@@ -376,6 +376,33 @@ is contract shaping for a future production adapter, not backend selection:
   production `TcpConnection`. Missing graceful-drain equivalence remains an
   explicit later contract rather than being faked as forced close.
 
+IOE-X7 authorizes that missing graceful-drain and half-close contract inside
+the same non-installed Hub/Adapter boundary:
+
+- `tryShutdown` seals new route send admission and publishes
+  `GracefulShutdown` as the first semantic reason. Every send accepted before
+  that call remains owned and must be fully sent; it cannot be reclassified as
+  discarded merely because graceful shutdown began;
+- once the route's accepted output reaches zero, the owner executes exactly one
+  native `shutdownWrite`. The route keeps its receive desire and at most one
+  Recv active, may deliver peer data after local half-close, and reaches its
+  terminal close only on peer EOF, reset/failure, explicit force escalation, or
+  owner/Hub quiescence;
+- repeated graceful requests are idempotent. Force escalation may cancel the
+  still-pending Recv and accelerate physical close, but first-close-reason wins:
+  an earlier `GracefulShutdown` remains the Adapter close info;
+- Hub metrics and route summaries expose graceful request and write-half-close
+  counts. Terminal publication still follows target CQE retirement, socket
+  close, accepted-byte reconciliation, and precedes Adapter close callbacks;
+- a real-TCP contract drives production epoll `TcpConnection` and the Adapter
+  through accepted pending output, graceful request, peer-observed full payload
+  then EOF, peer reply after local EOF, peer half-close, and identical graceful
+  terminal observation. A second route proves forced escalation preserves the
+  first graceful reason without stranding Recv/Send work;
+- IOE-X7 remains owner-thread-only, default-off, and non-installed. It does not
+  authorize Accept/listen ownership, cross-thread Adapter calls, public backend
+  selection, production `TcpConnection` changes, or advanced io_uring features.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -403,7 +430,9 @@ is contract shaping for a future production adapter, not backend selection:
 9. IOE-X6 shapes a non-installed per-route semantic adapter and proves its
    common forced-close/backpressure boundary beside production epoll without
    selecting or replacing a backend.
-10. Only proven, cross-backend concepts may later graduate to a narrow public
+10. IOE-X7 adds pending-output graceful drain, one native write half-close,
+   continued read, peer-EOF terminal, and first-reason-preserving escalation.
+11. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -475,7 +504,10 @@ is contract shaping for a future production adapter, not backend selection:
 - `tests/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp` drives
   production epoll TcpConnection and the IOE-X6 adapter through matching real
   TCP output saturation, read pause/resume, callback re-entry, forced close,
-  first close info, socket-before-future retirement, and post-observer drain.
+  first close info, socket-before-future retirement, and post-observer drain;
+  IOE-X7 extends it with pending-output graceful drain, peer-observed local EOF,
+  continued inbound delivery, peer EOF terminal, and force escalation that
+  cannot replace the first graceful close info.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

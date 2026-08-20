@@ -138,6 +138,10 @@ It must not blur these roles.
   adapter publishes its semantic terminal future only after the Hub route
   future proves socket close, operation retirement, and byte convergence, and
   before invoking surviving close observers
+- IOE-X7 graceful shutdown transfers no new ownership: the Hub retains every
+  preaccepted Send segment through successful transmission, then retains the
+  half-closed socket and Recv lease until peer terminal or force escalation.
+  `shutdownWrite` neither releases the socket nor completes the route future
 
 ## 3. Poller
 - Poller does not own Channel

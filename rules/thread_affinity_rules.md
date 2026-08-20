@@ -276,6 +276,10 @@ No other direct mutation path is allowed for core loop state.
 - destroying an IOE-X6 adapter revokes only its observer. The owner-loop
   destructor requests route close, while Hub completion dispatch retains and
   retires the socket/operation obligations without touching the dead adapter
+- IOE-X7 graceful request, final Send completion, native `shutdownWrite`, later
+  Recv delivery/EOF, and any force escalation all execute on the same Hub owner.
+  A peer may observe/read/write only its peer-owned socket; it cannot signal
+  half-close by mutating Adapter or Hub state from another thread
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

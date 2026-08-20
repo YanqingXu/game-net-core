@@ -55,6 +55,7 @@ enum class IoUringTcpHubReadControlResult : std::uint8_t {
 
 enum class IoUringTcpHubCloseReason : std::uint8_t {
     Explicit,
+    GracefulShutdown,
     PeerClosed,
     ReceiveFailed,
     SendFailed,
@@ -88,6 +89,8 @@ struct IoUringTcpConnectionHubConnectionMetrics {
     std::uint64_t bytesSent{};
     std::uint64_t bytesDiscarded{};
     std::uint64_t closeRequests{};
+    std::uint64_t gracefulShutdownRequests{};
+    std::uint64_t writeHalfCloses{};
     std::uint64_t callbackFailures{};
     std::size_t pendingSendBytes{};
     std::size_t pendingSendSegments{};
@@ -105,6 +108,8 @@ struct IoUringTcpConnectionHubMetrics {
     std::uint64_t sendAdmissions{};
     std::uint64_t bytesSent{};
     std::uint64_t bytesDiscarded{};
+    std::uint64_t gracefulShutdownRequests{};
+    std::uint64_t writeHalfCloses{};
     std::uint64_t connectionByteLimitRejections{};
     std::uint64_t connectionSegmentLimitRejections{};
     std::uint64_t hubByteLimitRejections{};
@@ -181,6 +186,8 @@ public:
     IoUringTcpHubReadControlResult pauseRead(
         IoUringTcpConnectionIdentity connection);
     IoUringTcpHubReadControlResult resumeRead(
+        IoUringTcpConnectionIdentity connection);
+    bool shutdownConnection(
         IoUringTcpConnectionIdentity connection);
     bool closeConnection(
         IoUringTcpConnectionIdentity connection,

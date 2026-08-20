@@ -54,6 +54,8 @@ struct AdapterState {
     bool configured{true};
     bool established{false};
     bool overloadLatched{false};
+    bool gracefulRequested{false};
+    bool forceCloseRequested{false};
     bool terminalPublished{false};
 };
 
@@ -70,6 +72,9 @@ CloseInfo mapCloseInfo(
     using StableReason = gamenet::net::TcpConnectionCloseReason;
     StableReason mapped = StableReason::InternalError;
     switch (reason) {
+    case IoUringTcpHubCloseReason::GracefulShutdown:
+        mapped = StableReason::GracefulShutdown;
+        break;
     case IoUringTcpHubCloseReason::PeerClosed:
         mapped = StableReason::PeerEof;
         break;
@@ -109,8 +114,10 @@ void requestCallbackFailure(
         *state,
         {.reason = gamenet::net::TcpConnectionCloseReason::CallbackFailure,
          .nativeError = 0});
-    if (state->phase == ClosePhase::Open) {
+    if (state->phase != ClosePhase::Closed &&
+        !state->forceCloseRequested) {
         state->phase = ClosePhase::Closing;
+        state->forceCloseRequested = true;
         try {
             (void)state->hub->closeConnection(
                 state->identity,
@@ -175,7 +182,7 @@ void handleOutputProgress(
     }
     if (state->metrics.readingPaused &&
         pendingBytes <= state->options.lowWaterMarkBytes &&
-        state->phase == ClosePhase::Open) {
+        (state->phase == ClosePhase::Open || state->gracefulRequested)) {
         const auto resumed = state->hub->resumeRead(state->identity);
         if (resumed == IoUringTcpHubReadControlResult::Applied ||
             resumed == IoUringTcpHubReadControlResult::Unchanged) {
@@ -446,13 +453,35 @@ public:
             *state_,
             {.reason = gamenet::net::TcpConnectionCloseReason::ForcedShutdown,
              .nativeError = 0});
-        if (state_->phase == ClosePhase::Closing) {
+        if (state_->phase == ClosePhase::Closing &&
+            (!state_->gracefulRequested || state_->forceCloseRequested)) {
             return gamenet::net::PostResult::Accepted;
         }
         state_->phase = ClosePhase::Closing;
+        state_->forceCloseRequested = true;
         return state_->hub->closeConnection(
                    state_->identity,
                    IoUringTcpHubCloseReason::Explicit)
+            ? gamenet::net::PostResult::Accepted
+            : gamenet::net::PostResult::OwnerUnavailable;
+    }
+
+    gamenet::net::PostResult tryShutdown() {
+        assertOwner(*state_);
+        if (!state_->established || state_->phase == ClosePhase::Closed) {
+            return gamenet::net::PostResult::Shutdown;
+        }
+        publishCloseInfo(
+            *state_,
+            {.reason =
+                 gamenet::net::TcpConnectionCloseReason::GracefulShutdown,
+             .nativeError = 0});
+        if (state_->gracefulRequested) {
+            return gamenet::net::PostResult::Accepted;
+        }
+        state_->gracefulRequested = true;
+        state_->phase = ClosePhase::Closing;
+        return state_->hub->shutdownConnection(state_->identity)
             ? gamenet::net::PostResult::Accepted
             : gamenet::net::PostResult::OwnerUnavailable;
     }
@@ -514,6 +543,10 @@ gamenet::net::TcpSendResult IoUringTcpConnectionAdapter::trySend(
 
 gamenet::net::PostResult IoUringTcpConnectionAdapter::tryForceClose() {
     return impl_->tryForceClose();
+}
+
+gamenet::net::PostResult IoUringTcpConnectionAdapter::tryShutdown() {
+    return impl_->tryShutdown();
 }
 
 bool IoUringTcpConnectionAdapter::connected() const {

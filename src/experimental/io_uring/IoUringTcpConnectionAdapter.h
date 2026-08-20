@@ -85,6 +85,7 @@ public:
     IoUringTcpHubAddResult establish(
         gamenet::net::SocketFd establishedSocket);
     gamenet::net::TcpSendResult trySend(std::string_view payload);
+    gamenet::net::PostResult tryShutdown();
     gamenet::net::PostResult tryForceClose();
 
     bool connected() const;
