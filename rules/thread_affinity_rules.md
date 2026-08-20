@@ -280,6 +280,19 @@ No other direct mutation path is allowed for core loop state.
   Recv delivery/EOF, and any force escalation all execute on the same Hub owner.
   A peer may observe/read/write only its peer-owned socket; it cannot signal
   half-close by mutating Adapter or Hub state from another thread
+- IOE-X8 permits only Adapter `trySend`, `tryShutdown`, and `tryForceClose` from
+  foreign threads. They may copy/reserve and append to the Adapter's bounded
+  command mailbox, then signal one EventLoop lifecycle source; they never call
+  Hub, touch route identities, perform socket syscalls, or invoke callbacks
+- owner and foreign command admission share one mutex-defined order. The owner
+  drains at most the configured budget per lifecycle callback and self-signals
+  while work remains; callback re-entry observes all earlier accepted commands
+  before its newly admitted command. Configuration, establish, query, and
+  destruction remain owner-only
+- owner destruction may begin only after foreign facade calls have returned.
+  Accepted mailbox work retains shared state and copied payload, never a raw
+  observer; observer revocation therefore cannot create an off-owner callback
+  or callback-after-destroy
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

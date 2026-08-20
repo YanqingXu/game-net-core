@@ -403,6 +403,48 @@ the same non-installed Hub/Adapter boundary:
   authorize Accept/listen ownership, cross-thread Adapter calls, public backend
   selection, production `TcpConnection` changes, or advanced io_uring features.
 
+IOE-X8 authorizes bounded cross-thread command admission at that Adapter
+boundary without moving Hub or connection ownership:
+
+- callback configuration, socket establishment, state/metric queries, and
+  Adapter destruction remain owner-loop-only. Only `trySend`, `tryShutdown`,
+  and `tryForceClose` may be called from a foreign thread, and the caller must
+  keep the Adapter facade alive until each call returns;
+- one fixed-capacity Adapter command mailbox serializes owner and foreign
+  Send/Shutdown/Force commands. One source-private EventLoop lifecycle signal
+  coalesces wakeups and drains at most a configured command budget per turn;
+  Hub mutation, socket syscalls, callbacks, and terminal publication remain on
+  the original EventLoop owner;
+- a non-empty foreign send copies its payload before returning `Accepted` and
+  atomically reserves it against the Adapter hard byte limit and command-slot
+  limit. Hard pressure returns `Overloaded`; mailbox pressure returns
+  `SchedulingQueueFull`; a terminal-sealed connection returns `Closed`, while
+  EventLoop admission closure maps to `OwnerShutdown` or `OwnerUnavailable`.
+  Rejection owns no payload and creates no deferred work;
+- command admission order is the lifecycle order. Every send accepted before
+  the first accepted Shutdown/Force command is delivered to the owner before
+  that terminal command. The first terminal admission seals later sends;
+  repeated terminal requests are idempotent and first-close-reason still wins;
+- `Accepted` transfers the command and copied payload obligation to shared
+  Adapter state, not to the observer facade. The command must reach Hub send or
+  be reconciled as cancelled bytes by one observable connection terminal.
+  Owner quit drains the signalled mailbox before physical Hub retirement;
+- callback re-entry uses the same mailbox ordering. Owner-side calls may drain
+  already accepted foreign commands first, but no callback executes off-owner
+  and no caller blocks waiting for the EventLoop;
+- owner-side Adapter destruction requires all active facade calls to have
+  returned, revokes the observer, seals the mailbox, reconciles queued sends,
+  and requests physical route close. Already accepted commands retain no raw
+  facade pointer and cannot callback after observer destruction;
+- a real-TCP contract drives production epoll `TcpConnection` and the Adapter
+  from foreign callers through ordered send then graceful shutdown, mailbox
+  saturation/recovery, concurrent shutdown/force races, observer revocation,
+  and owner quit. It asserts typed rejection, one terminal, accepted-byte
+  reconciliation, callback owner affinity, and zero queue/Hub/Engine residue;
+- IOE-X8 remains Linux-only, default-off, source-private, and non-installed. It
+  does not authorize listener/Accept ownership, public backend selection,
+  production `TcpConnection` changes, or advanced io_uring operations.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -432,7 +474,9 @@ the same non-installed Hub/Adapter boundary:
    selecting or replacing a backend.
 10. IOE-X7 adds pending-output graceful drain, one native write half-close,
    continued read, peer-EOF terminal, and first-reason-preserving escalation.
-11. Only proven, cross-backend concepts may later graduate to a narrow public
+11. IOE-X8 adds bounded cross-thread Send/Shutdown/Force admission while the
+   Adapter, Hub, socket, callbacks, and retirement remain on one owner loop.
+12. Only proven, cross-backend concepts may later graduate to a narrow public
    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -507,7 +551,9 @@ the same non-installed Hub/Adapter boundary:
   first close info, socket-before-future retirement, and post-observer drain;
   IOE-X7 extends it with pending-output graceful drain, peer-observed local EOF,
   continued inbound delivery, peer EOF terminal, and force escalation that
-  cannot replace the first graceful close info.
+  cannot replace the first graceful close info; IOE-X8 extends the same real
+  TCP boundary with foreign send/shutdown/force order, bounded mailbox
+  saturation, observer revocation, owner quit, and zero command residue.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

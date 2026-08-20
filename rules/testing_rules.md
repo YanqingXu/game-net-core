@@ -220,6 +220,18 @@ Contract tests verify:
   `GracefulShutdown` semantic close info, future-before-close-callback ordering,
   and zero Hub/Engine residue. Repeated shutdown plus force escalation must
   retain `GracefulShutdown` while cancelling/draining the remaining Recv once
+- the IOE-X8 cross-thread contract must call production `TcpConnection` and the
+  Adapter from non-owner threads over real loopback TCP. A send accepted before
+  graceful shutdown must reach the peer before EOF; callbacks remain on the
+  owner and terminal publication remains single-shot
+- a finite Adapter mailbox fixture must deterministically fill without running
+  the owner, return `SchedulingQueueFull`/`QueueFull` without retaining rejected
+  work, then recover after a bounded drain. Concurrent graceful/force requests
+  must retain the first admitted reason and reject later send
+- observer-revocation and owner-quit cases must leave no pending command,
+  reserved byte, route, operation, notice, socket, or owned-byte residue. Tests
+  must join active facade calls before owner destruction and must prove no
+  accepted command retains or invokes the dead observer
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

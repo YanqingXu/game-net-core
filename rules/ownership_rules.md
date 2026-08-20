@@ -142,6 +142,14 @@ It must not blur these roles.
   preaccepted Send segment through successful transmission, then retains the
   half-closed socket and Recv lease until peer terminal or force escalation.
   `shutdownWrite` neither releases the socket nor completes the route future
+- IOE-X8 foreign Send admission copies the payload and transfers that copy plus
+  one command slot and byte reservation to shared Adapter state. Rejection
+  retains nothing. Moving a command to the owner transfers the payload to the
+  existing Hub send obligation or reconciles it as terminal-cancelled bytes
+- the Adapter mailbox and lifecycle signal own no socket, Hub route, or facade.
+  Owner-side observer destruction seals and clears the mailbox only after
+  active calls return; the Hub remains the unique owner of socket, operation,
+  and physical stop-future retirement
 
 ## 3. Poller
 - Poller does not own Channel

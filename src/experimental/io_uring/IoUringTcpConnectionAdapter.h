@@ -20,6 +20,8 @@ struct IoUringTcpConnectionAdapterOptions {
     std::size_t lowWaterMarkBytes{16U * 1024U};
     std::size_t highWaterMarkBytes{64U * 1024U};
     std::size_t hardLimitBytes{4U * 1024U * 1024U};
+    std::size_t maxPendingCommands{256};
+    std::size_t maxCommandsPerTurn{32};
 
     void validate() const;
 };
@@ -32,8 +34,14 @@ struct IoUringTcpConnectionAdapterMetrics {
     std::uint64_t writeCompleteNotifications{};
     std::uint64_t droppedNotifications{};
     std::uint64_t callbackFailures{};
+    std::uint64_t foreignSendAdmissions{};
+    std::uint64_t foreignLifecycleAdmissions{};
+    std::uint64_t commandQueueRejections{};
+    std::uint64_t cancelledCommandBytes{};
     std::size_t pendingOutputBytes{};
     std::size_t peakPendingOutputBytes{};
+    std::size_t pendingCommands{};
+    std::size_t maxPendingCommands{};
     bool readingPaused{};
 };
 
@@ -46,9 +54,9 @@ struct IoUringTcpConnectionAdapterStopSummary {
 
 class IoUringTcpConnectionAdapterImpl;
 
-// Source-private IOE-X6 bridge that projects one Hub route onto the existing
-// TCP send/close vocabulary. It is not installed and does not select or replace
-// the production TcpConnection backend.
+// Source-private IOE-X6/X7/X8 bridge that projects one Hub route onto the
+// existing TCP send/close vocabulary. It is not installed and does not select
+// or replace the production TcpConnection backend.
 class IoUringTcpConnectionAdapter {
 public:
     using MessageCallback = std::function<void(
@@ -84,6 +92,9 @@ public:
     // accepted and rejected descriptors. Configuration is sealed afterward.
     IoUringTcpHubAddResult establish(
         gamenet::net::SocketFd establishedSocket);
+    // IOE-X8: these three admission methods are safe from a foreign thread
+    // while the caller keeps this facade alive. All Hub mutation and callbacks
+    // remain serialized on the owner loop.
     gamenet::net::TcpSendResult trySend(std::string_view payload);
     gamenet::net::PostResult tryShutdown();
     gamenet::net::PostResult tryForceClose();
