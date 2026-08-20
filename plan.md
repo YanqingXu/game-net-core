@@ -11,7 +11,7 @@
 开发基线、分支门或后续任务的冻结点。
 
 当前测试基线：129（8/107/14；threading 102、lifecycle 107）；Linux experimental
-基线随 IOE-X7 增至 135（8/113/14；threading 108、lifecycle 113、experimental 6）。API-R1 已完成，
+基线随 IOE-X9 增至 136（8/114/14；threading 109、lifecycle 114、experimental 7）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -346,12 +346,21 @@ IOE-X8 cross-thread admission / lifecycle equivalence 立即接续：
 
 IOE-X9 source-private listener / Accept ownership 立即接续：
 
-- [ ] 先提升 active intent 与 rules，固定 listener、accepted fd、Hub route 和 stop future 的唯一 owner；
-- [ ] 用一个有界 one-shot Accept 窗口接入现有 shared Pump，明确 slot、fd、callback 和取消义务；
-- [ ] 容量满、SQ pressure、瞬时 accept error 与 owner quit 都必须 typed/fail-closed，拒绝 fd 只关闭一次；
-- [ ] 用真实多客户端 burst/churn 覆盖 Accept generation、route admission、公平预算与 listener-first stop；
-- [ ] 与 production epoll `TcpServer` 跑同一 bind/connect/echo/graceful-stop 观察序列和 sanitizer/repeat；
-- [ ] 仍保持 source-private、default-off、non-installed，不在 X9 引入公共 selector 或替换 production backend。
+- [x] 先提升 active intent 与 rules，固定 listener、accepted fd、Hub route 和 stop future 的唯一 owner；
+- [x] 用一个有界 one-shot Accept 窗口接入现有 shared Pump，明确 slot、fd、callback 和取消义务；
+- [x] 容量满、SQ pressure、瞬时 accept error 与 owner quit 都必须 typed/fail-closed，拒绝 fd 只关闭一次；
+- [x] 用真实多客户端 burst/churn 覆盖 Accept generation、route admission、公平预算与 listener-first stop；
+- [x] 与 production epoll `TcpServer` 跑同一 bind/connect/echo/graceful-stop 观察序列和 sanitizer/repeat；
+- [x] 仍保持 source-private、default-off、non-installed，不在 X9 引入公共 selector 或替换 production backend。
+
+IOE-X10 listener capacity / performance decision 作为下一前沿：
+
+- [ ] 固定并发客户端、Accept 深度、route 上限和 churn 波次，避免动态或无界负载；
+- [ ] 记录 connect/echo 完成率、P50/P99/P999、fd/operation/内存高水位和 shutdown 延迟；
+- [ ] 对 capacity/SQ rejection、恢复时间和 listener-first stop 做精确零残留核算；
+- [ ] production epoll `TcpServer` 使用相同 bind/connect/echo/client-count 场景并排测量；
+- [ ] 输出 source-private integration 的 `PROMOTE` / `DEFER` 决定，不把方向性数字写成后端优劣；
+- [ ] 决定前继续禁止 installed listener API、公共 selector 和 production backend 替换。
 
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
@@ -467,11 +476,14 @@ operation slot 也改为保留到对应 terminal notice 被取走，消除了 de
 notice 与新 generation 共槽的歧义。
 
 IOE-X5 已用固定 256 route、64-route generation churn 和方向性数字得出受限 `PROMOTE`；
-IOE-X6 以真实 epoll/io_uring 双路径关闭 source-private forced-close/backpressure adapter
-合同，IOE-X7 又关闭 pending-output graceful drain、一次 write half-close、继续读、peer EOF、
-force escalation 与 reset/callback/owner-quit 终局矩阵。当前下一前沿转为
-**IOE-X8 cross-thread admission / lifecycle equivalence**：在不迁移 owner 的前提下证明
-foreign send/shutdown/force 的有界 admission、顺序和 final drain，再讨论 listener 或
-selector。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X8 开放 multishot、
-provided buffers、fixed files、zero-copy、SQPOLL、公共 backend selector 或直接替换
-production `TcpConnection`。
+IOE-X6/X7/X8 依次关闭 source-private forced-close/backpressure、graceful half-close 和
+bounded cross-thread admission。IOE-X9 又把一个有限 one-shot listener 窗口接入现有
+Hub/Pump，真实证明 accepted-fd 转移、容量恢复、route generation churn、回调重入、
+首臂 operation pressure、listener-first stop 和 owner quit 零残留。实现检查点为
+`24ca10e4ec9a6358050d8aa10cec060a42925275`。
+
+当前下一前沿转为 **IOE-X10 listener capacity / performance decision**：在固定并发和
+同 bind/connect/echo 场景下测量 completion listener 与 production epoll，只决定是否继续
+source-private integration shaping。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借
+X10 开放 multishot、provided buffers、fixed files、zero-copy、SQPOLL、公共 backend
+selector 或直接替换 production `TcpServer`/`TcpConnection`。

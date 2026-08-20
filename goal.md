@@ -304,8 +304,10 @@ Runtime Model
   pending-output drain、单次 TCP write half-close、继续读、peer EOF、force escalation
   及 reset/callback/owner-quit 终局矩阵；其固定容量 command mailbox 又证明 foreign
   send/shutdown/force 的 payload ownership、线性化顺序、typed saturation、首原因、
-  observer revocation 和 quit 核算。下一合同扩展 source-private listener/Accept ownership。
-  这些能力仍不安装，生产默认和 fallback 仍是 epoll；
+  observer revocation 和 quit 核算；source-private listener 又在同一个 shared Pump 内
+  证明有限 one-shot Accept、accepted-fd 单一所有权、容量拒绝恢复、route generation
+  复用、回调重入、listener-first stop 与 owner-quit 排空。下一步只对该 listener 拓扑做
+  固定容量和同场景性能决策。这些能力仍不安装，生产默认和 fallback 仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
   多 I/O owner、独立逻辑 owner、有界合并唤醒和 generation-safe 回送；
@@ -322,8 +324,9 @@ Runtime Model
   后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
   明确审查的 breaking line；
-- IOE-X1/X2/X3/X4/X5/X6/X7/X8 只证明隔离 one-shot completion、EventLoop 驱动、单连接、
-  固定容量 shared-Pump 以及 source-private forced/graceful/cross-thread adapter 语义。
+- IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 只证明隔离 one-shot completion、EventLoop 驱动、单连接、
+  固定容量 shared-Pump、source-private forced/graceful/cross-thread adapter 语义以及
+  bounded listener/Accept ownership。
   capacity/soak 与方向性数字已经允许继续做 adapter contract shaping，但不自动授权
   production TcpConnection 集成、公共 backend selector、listener/Accept 集成或
   multishot/provided-buffer 等高级能力；
