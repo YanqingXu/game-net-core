@@ -125,8 +125,10 @@ re-entry, first-close-reason, and socket release only after Pump physical stop.
 IOE-X4 closes shared-Pump routing; IOE-X5 closes fixed 256-route capacity/churn
 plus validated directional measurement; IOE-X6 closes the non-installed
 forced-close/backpressure semantic adapter beside production epoll. IOE-X7
-graceful-drain/half-close equivalence is next while independent ARCH-G1 review
-proceeds in parallel. Candidate
+closes pending-output graceful drain, one write half-close, continued inbound
+delivery, peer EOF, escalation, and reset/callback/owner-quit terminal cases.
+IOE-X8 cross-thread admission/lifecycle equivalence is next while independent
+ARCH-G1 review proceeds in parallel. Candidate
 freeze, REL-V1 and release packaging are not development prerequisites.
 
 The IOE-C1 closure checkpoint's directional Windows Release echo check used
@@ -343,7 +345,7 @@ as a passing 24/72-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. RTM-R2 Profile D is closed at `b3b184b1`; IOE-X1 is closed at `d3b31c5`. The cross-Profile review is `NO-PROMOTION`. IOE-X2 supplies a Linux-only non-installed EventLoop completion pump; IOE-X3 adds one real-TCP single-connection driver; IOE-X4 closes shared-Pump route isolation; IOE-X5 closes fixed-256-route capacity/churn and directional Release measurement. IOE-X6 closes a source-private forced-close/backpressure adapter beside production epoll without stable-surface change. IOE-X7 graceful-drain/half-close equivalence is next. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
+| 7 | I/O Engine and Runtime Profiles | Active: ARCH-G1 artifacts are complete with independent review pending; IOE-R1 is closed at `8bb14e72`, IOE-R2 at `6f45aa6e`, IOE-C1 at `c2d7e9d6`, and RTM-R1 Profiles A/B/C at `adb8b483`/`633d613`/`da57edc`. RTM-R2 Profile D is closed at `b3b184b1`; IOE-X1 is closed at `d3b31c5`. The cross-Profile review is `NO-PROMOTION`. IOE-X2 supplies a Linux-only non-installed EventLoop completion pump; IOE-X3 adds one real-TCP single-connection driver; IOE-X4 closes shared-Pump route isolation; IOE-X5 closes fixed-256-route capacity/churn and directional Release measurement. IOE-X6 closes a source-private forced-close/backpressure adapter; IOE-X7 closes graceful-drain/half-close equivalence and terminal escalation beside production epoll without stable-surface change. IOE-X8 cross-thread admission/lifecycle equivalence is next. No candidate freeze is required; each integrated slice carries exact-commit contracts and evidence |
 
 ## Current Intent Inventory
 

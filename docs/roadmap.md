@@ -76,9 +76,10 @@ See `migration_status.md` for the current checked state of these phases.
   bounded FIFO Send, pause/resume, re-entry, and socket-after-terminal close.
   IOE-X4 closes shared-Pump routing, IOE-X5 closes fixed capacity/churn plus
   directional measurement, and IOE-X6 closes the source-private forced-close/
-  backpressure semantic adapter beside production epoll. IOE-X7 graceful-drain
-  and half-close equivalence is next while ARCH-G1 independent review proceeds
-  in parallel.
+  backpressure semantic adapter beside production epoll. IOE-X7 closes
+  graceful-drain, half-close, escalation, and reset/callback/owner-quit terminal
+  equivalence. IOE-X8 cross-thread admission/lifecycle equivalence is next while
+  ARCH-G1 independent review proceeds in parallel.
   CI/performance evidence stays commit-bound and continuous; endurance and
   licensing move to promotion time.
 

@@ -11,7 +11,7 @@
 开发基线、分支门或后续任务的冻结点。
 
 当前测试基线：129（8/107/14；threading 102、lifecycle 107）；Linux experimental
-基线随 IOE-X3 增至 132（8/110/14；threading 105、lifecycle 110、experimental 3）。API-R1 已完成，
+基线随 IOE-X7 增至 135（8/113/14；threading 108、lifecycle 113、experimental 6）。API-R1 已完成，
 M3-R3（本地关闭）的生命周期修复和 PERF-R1 的 additive API 审查继续作为历史事实。
 
 ## 1. 执行决策
@@ -328,12 +328,21 @@ IOE-X6 source-private adapter contract 立即接续：
 
 IOE-X7 graceful-drain / half-close equivalence 立即接续：
 
-- [ ] Adapter `tryShutdown` 与 force-close 分离，首次 Graceful 原因不可被升级覆盖；
-- [ ] shutdown 前已接受输出完整发送，随后只执行一次 `shutdownWrite`，读侧继续有效；
-- [ ] peer EOF 才发布 graceful terminal；force escalation 只加速物理关闭、不改首原因；
-- [ ] owner quit、peer reset、callback failure 与 pending Recv/Send 组合保持唯一 terminal；
-- [ ] 与 production epoll pending-output shutdown 合同跑同一真实 TCP 观察序列；
-- [ ] 仍不增加 selector、Accept ownership、安装 header 或 production `TcpConnection` 改动。
+- [x] Adapter `tryShutdown` 与 force-close 分离，首次 Graceful 原因不可被升级覆盖；
+- [x] shutdown 前已接受输出完整发送，随后只执行一次 `shutdownWrite`，读侧继续有效；
+- [x] peer EOF 才发布 graceful terminal；force escalation 只加速物理关闭、不改首原因；
+- [x] owner quit、peer reset、callback failure 与 pending Recv/Send 组合保持唯一 terminal；
+- [x] 与 production epoll pending-output shutdown 合同跑同一真实 TCP 观察序列；
+- [x] 仍不增加 selector、Accept ownership、安装 header 或 production `TcpConnection` 改动。
+
+IOE-X8 cross-thread admission / lifecycle equivalence 立即接续：
+
+- [ ] 先提升 active intent 与 rules，固定 Adapter/Hub owner 不迁移、foreign caller 只做有界 admission；
+- [ ] 为 foreign `trySend` 明确 payload ownership、排队上限、拒绝结果和 accepted-before-terminal 顺序；
+- [ ] 为 foreign `tryShutdown` / `tryForceClose` 固定幂等、首原因和 shutdown admission seal；
+- [ ] 覆盖 send/shutdown/force/observer-destroy 并发竞态、queue saturation 与 owner quit final drain；
+- [ ] 与 production epoll 跨线程合同使用同一真实 TCP 观察序列并运行 sanitizer/repeat；
+- [ ] 保持 source-private、default-off、non-installed，不借本切片加入 listener、selector 或 stable API。
 
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
@@ -449,9 +458,11 @@ operation slot 也改为保留到对应 terminal notice 被取走，消除了 de
 notice 与新 generation 共槽的歧义。
 
 IOE-X5 已用固定 256 route、64-route generation churn 和方向性数字得出受限 `PROMOTE`；
-IOE-X6 又以真实 epoll/io_uring 双路径关闭 source-private forced-close/backpressure adapter
-合同。当前下一前沿转为 **IOE-X7 graceful-drain / half-close equivalence**：先证明 pending
-output、`shutdownWrite`、继续读、peer EOF 与 force escalation 的共同语义，再讨论任何
-selector。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X7 开放 multishot、
+IOE-X6 以真实 epoll/io_uring 双路径关闭 source-private forced-close/backpressure adapter
+合同，IOE-X7 又关闭 pending-output graceful drain、一次 write half-close、继续读、peer EOF、
+force escalation 与 reset/callback/owner-quit 终局矩阵。当前下一前沿转为
+**IOE-X8 cross-thread admission / lifecycle equivalence**：在不迁移 owner 的前提下证明
+foreign send/shutdown/force 的有界 admission、顺序和 final drain，再讨论 listener 或
+selector。ARCH-G1 独立 review 继续并行且不形成冻结点；不得借 IOE-X8 开放 multishot、
 provided buffers、fixed files、zero-copy、SQPOLL、公共 backend selector 或直接替换
 production `TcpConnection`。
