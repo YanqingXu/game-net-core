@@ -21,6 +21,7 @@
 #include <future>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -926,6 +927,279 @@ void testAdapterGracefulReasonSurvivesForcedEscalation() {
     GAMENET_TEST_ASSERT(hubStop->pump.engine.ownedBytes == 0);
 }
 
+void testAdapterGracefulPeerResetRetiresPendingWork() {
+    gamenet::net::EventLoop loop;
+    TcpPairFactory factory;
+    auto pair = factory.makePair(false);
+    std::optional<uring::IoUringTcpConnectionHubStopSummary> hubStop;
+    uring::IoUringTcpConnectionHub hub(
+        &loop,
+        hubOptions(),
+        [&](const uring::IoUringTcpConnectionHubStopSummary& summary) {
+            hubStop = summary;
+            loop.quit();
+        });
+    uring::IoUringTcpConnectionAdapter adapter(
+        &loop,
+        &hub,
+        adapterOptions());
+    std::shared_future<uring::IoUringTcpConnectionAdapterStopSummary> future;
+    int closeInfoCallbacks = 0;
+    int closeCallbacks = 0;
+    bool timedOut = false;
+
+    adapter.setCloseInfoCallback(
+        [&](uring::IoUringTcpConnectionAdapter&,
+            const gamenet::net::TcpConnectionCloseInfo& info) {
+            GAMENET_TEST_ASSERT(
+                future.wait_for(0s) == std::future_status::ready);
+            GAMENET_TEST_ASSERT(
+                info.reason ==
+                gamenet::net::TcpConnectionCloseReason::GracefulShutdown);
+            ++closeInfoCallbacks;
+        });
+    adapter.setCloseCallback(
+        [&](uring::IoUringTcpConnectionAdapter&) {
+            ++closeCallbacks;
+            GAMENET_TEST_ASSERT(hub.stop());
+        });
+    const std::string payload(kGracefulPayloadBytes, 'r');
+    loop.runAfter(0ms, [&] {
+        GAMENET_TEST_ASSERT(
+            adapter.establish(pair.connection.release()) ==
+            uring::IoUringTcpHubAddResult::Accepted);
+        future = adapter.stopFuture();
+        GAMENET_TEST_ASSERT(
+            adapter.trySend(payload) ==
+            gamenet::net::TcpSendResult::Accepted);
+        GAMENET_TEST_ASSERT(
+            adapter.tryShutdown() ==
+            gamenet::net::PostResult::Accepted);
+        linger reset{
+            .l_onoff = 1,
+            .l_linger = 0,
+        };
+        GAMENET_TEST_ASSERT(
+            ::setsockopt(
+                pair.peer.get(),
+                SOL_SOCKET,
+                SO_LINGER,
+                &reset,
+                sizeof(reset)) == 0);
+        const int peer = pair.peer.release();
+        GAMENET_TEST_ASSERT(::close(peer) == 0);
+    });
+    loop.runAfter(3s, [&] {
+        timedOut = true;
+        (void)adapter.tryForceClose();
+        (void)hub.stop();
+        loop.quit();
+    });
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(!timedOut);
+    GAMENET_TEST_ASSERT(closeInfoCallbacks == 1);
+    GAMENET_TEST_ASSERT(closeCallbacks == 1);
+    const auto summary = future.get();
+    GAMENET_TEST_ASSERT(
+        summary.closeInfo.reason ==
+        gamenet::net::TcpConnectionCloseReason::GracefulShutdown);
+    GAMENET_TEST_ASSERT(
+        summary.transport.reason ==
+        uring::IoUringTcpHubCloseReason::GracefulShutdown);
+    GAMENET_TEST_ASSERT(summary.transport.nativeError != 0);
+    GAMENET_TEST_ASSERT(
+        summary.transport.connection.gracefulShutdownRequests == 1);
+    GAMENET_TEST_ASSERT(
+        summary.transport.connection.bytesDiscarded != 0);
+    GAMENET_TEST_ASSERT(summary.transport.connection.pendingSendBytes == 0);
+    GAMENET_TEST_ASSERT(hubStop.has_value());
+    GAMENET_TEST_ASSERT(hubStop->allConnectionsStopped);
+    GAMENET_TEST_ASSERT(hubStop->hub.activeConnections == 0);
+    GAMENET_TEST_ASSERT(hubStop->hub.pendingSendBytes == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.activeOperations == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.readyNotices == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.ownedBytes == 0);
+}
+
+void testAdapterGracefulCallbackFailureIsContained() {
+    gamenet::net::EventLoop loop;
+    TcpPairFactory factory;
+    auto pair = factory.makePair(false);
+    std::optional<uring::IoUringTcpConnectionHubStopSummary> hubStop;
+    uring::IoUringTcpConnectionHub hub(
+        &loop,
+        hubOptions(),
+        [&](const uring::IoUringTcpConnectionHubStopSummary& summary) {
+            hubStop = summary;
+            loop.quit();
+        });
+    uring::IoUringTcpConnectionAdapter adapter(
+        &loop,
+        &hub,
+        adapterOptions());
+    std::shared_future<uring::IoUringTcpConnectionAdapterStopSummary> future;
+    std::size_t peerReadBytes = 0;
+    bool peerSawEof = false;
+    bool replySent = false;
+    bool timedOut = false;
+    int messageCallbacks = 0;
+    int closeInfoCallbacks = 0;
+    int closeCallbacks = 0;
+
+    adapter.setMessageCallback(
+        [&](uring::IoUringTcpConnectionAdapter&, std::string_view payload) {
+            GAMENET_TEST_ASSERT(payload == "callback-failure");
+            ++messageCallbacks;
+            throw std::runtime_error("expected adapter callback failure");
+        });
+    adapter.setCloseInfoCallback(
+        [&](uring::IoUringTcpConnectionAdapter&,
+            const gamenet::net::TcpConnectionCloseInfo& info) {
+            GAMENET_TEST_ASSERT(
+                future.wait_for(0s) == std::future_status::ready);
+            GAMENET_TEST_ASSERT(
+                info.reason ==
+                gamenet::net::TcpConnectionCloseReason::GracefulShutdown);
+            ++closeInfoCallbacks;
+        });
+    adapter.setCloseCallback(
+        [&](uring::IoUringTcpConnectionAdapter&) {
+            ++closeCallbacks;
+            GAMENET_TEST_ASSERT(hub.stop());
+        });
+    const std::string payload(kGracefulPayloadBytes, 'c');
+    loop.runEvery(1ms, [&] {
+        drainUntilEof(pair.peer.get(), peerReadBytes, peerSawEof);
+        if (!peerSawEof || replySent) return;
+        GAMENET_TEST_ASSERT(peerReadBytes == kGracefulPayloadBytes);
+        sendAll(pair.peer.get(), "callback-failure");
+        replySent = true;
+    });
+    loop.runAfter(0ms, [&] {
+        GAMENET_TEST_ASSERT(
+            adapter.establish(pair.connection.release()) ==
+            uring::IoUringTcpHubAddResult::Accepted);
+        future = adapter.stopFuture();
+        GAMENET_TEST_ASSERT(
+            adapter.trySend(payload) ==
+            gamenet::net::TcpSendResult::Accepted);
+        GAMENET_TEST_ASSERT(
+            adapter.tryShutdown() ==
+            gamenet::net::PostResult::Accepted);
+    });
+    loop.runAfter(5s, [&] {
+        timedOut = true;
+        (void)adapter.tryForceClose();
+        (void)hub.stop();
+        loop.quit();
+    });
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(!timedOut);
+    GAMENET_TEST_ASSERT(peerSawEof);
+    GAMENET_TEST_ASSERT(replySent);
+    GAMENET_TEST_ASSERT(messageCallbacks == 1);
+    GAMENET_TEST_ASSERT(closeInfoCallbacks == 1);
+    GAMENET_TEST_ASSERT(closeCallbacks == 1);
+    const auto summary = future.get();
+    GAMENET_TEST_ASSERT(
+        summary.closeInfo.reason ==
+        gamenet::net::TcpConnectionCloseReason::GracefulShutdown);
+    GAMENET_TEST_ASSERT(
+        summary.transport.reason ==
+        uring::IoUringTcpHubCloseReason::GracefulShutdown);
+    GAMENET_TEST_ASSERT(summary.adapter.callbackFailures == 1);
+    GAMENET_TEST_ASSERT(
+        summary.transport.connection.gracefulShutdownRequests == 1);
+    GAMENET_TEST_ASSERT(
+        summary.transport.connection.writeHalfCloses == 1);
+    GAMENET_TEST_ASSERT(
+        summary.transport.connection.bytesSent ==
+        kGracefulPayloadBytes);
+    GAMENET_TEST_ASSERT(summary.transport.connection.bytesDiscarded == 0);
+    GAMENET_TEST_ASSERT(summary.transport.connection.pendingSendBytes == 0);
+    GAMENET_TEST_ASSERT(hubStop.has_value());
+    GAMENET_TEST_ASSERT(hubStop->allConnectionsStopped);
+    GAMENET_TEST_ASSERT(hubStop->hub.activeConnections == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.activeOperations == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.readyNotices == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.ownedBytes == 0);
+}
+
+void testAdapterGracefulOwnerQuitFinalDrains() {
+    gamenet::net::EventLoop loop;
+    TcpPairFactory factory;
+    auto pair = factory.makePair(false);
+    std::optional<uring::IoUringTcpConnectionHubStopSummary> hubStop;
+    uring::IoUringTcpConnectionHub hub(
+        &loop,
+        hubOptions(),
+        [&](const uring::IoUringTcpConnectionHubStopSummary& summary) {
+            hubStop = summary;
+        });
+    uring::IoUringTcpConnectionAdapter adapter(
+        &loop,
+        &hub,
+        adapterOptions());
+    std::shared_future<uring::IoUringTcpConnectionAdapterStopSummary> future;
+    int closeInfoCallbacks = 0;
+    int closeCallbacks = 0;
+
+    adapter.setCloseInfoCallback(
+        [&](uring::IoUringTcpConnectionAdapter&,
+            const gamenet::net::TcpConnectionCloseInfo& info) {
+            GAMENET_TEST_ASSERT(
+                future.wait_for(0s) == std::future_status::ready);
+            GAMENET_TEST_ASSERT(
+                info.reason ==
+                gamenet::net::TcpConnectionCloseReason::GracefulShutdown);
+            ++closeInfoCallbacks;
+        });
+    adapter.setCloseCallback(
+        [&](uring::IoUringTcpConnectionAdapter&) {
+            ++closeCallbacks;
+        });
+    const std::string payload(kGracefulPayloadBytes, 'q');
+    loop.runAfter(0ms, [&] {
+        GAMENET_TEST_ASSERT(
+            adapter.establish(pair.connection.release()) ==
+            uring::IoUringTcpHubAddResult::Accepted);
+        future = adapter.stopFuture();
+        GAMENET_TEST_ASSERT(
+            adapter.trySend(payload) ==
+            gamenet::net::TcpSendResult::Accepted);
+        GAMENET_TEST_ASSERT(
+            adapter.tryShutdown() ==
+            gamenet::net::PostResult::Accepted);
+        loop.quit();
+    });
+    loop.loop();
+
+    GAMENET_TEST_ASSERT(
+        future.wait_for(0s) == std::future_status::ready);
+    GAMENET_TEST_ASSERT(closeInfoCallbacks == 1);
+    GAMENET_TEST_ASSERT(closeCallbacks == 1);
+    const auto summary = future.get();
+    GAMENET_TEST_ASSERT(
+        summary.closeInfo.reason ==
+        gamenet::net::TcpConnectionCloseReason::GracefulShutdown);
+    GAMENET_TEST_ASSERT(
+        summary.transport.reason ==
+        uring::IoUringTcpHubCloseReason::GracefulShutdown);
+    GAMENET_TEST_ASSERT(
+        summary.transport.connection.gracefulShutdownRequests == 1);
+    GAMENET_TEST_ASSERT(summary.transport.connection.pendingSendBytes == 0);
+    GAMENET_TEST_ASSERT(hubStop.has_value());
+    GAMENET_TEST_ASSERT(hubStop->allConnectionsStopped);
+    GAMENET_TEST_ASSERT(hubStop->hub.activeConnections == 0);
+    GAMENET_TEST_ASSERT(hubStop->hub.activeOperationRoutes == 0);
+    GAMENET_TEST_ASSERT(hubStop->hub.pendingSendBytes == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.activeOperations == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.readyNotices == 0);
+    GAMENET_TEST_ASSERT(hubStop->pump.engine.ownedBytes == 0);
+}
+
 }  // namespace
 
 int main() {
@@ -933,5 +1207,8 @@ int main() {
     testObserverDestructionRetainsPhysicalObligation();
     testProductionAndAdapterGracefulDrainAndHalfClose();
     testAdapterGracefulReasonSurvivesForcedEscalation();
+    testAdapterGracefulPeerResetRetiresPendingWork();
+    testAdapterGracefulCallbackFailureIsContained();
+    testAdapterGracefulOwnerQuitFinalDrains();
     return 0;
 }
