@@ -153,7 +153,7 @@ jobs:
           cmake --build build-io-uring-experimental \
             --target gamenet_io_uring_contracts --parallel
           ctest --test-dir build-io-uring-experimental \
-            -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_connection_adapter)$' \
+      -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter)$' \
             --output-on-failure --timeout 10 \
             --output-junit "$PWD/ci-evidence/io-uring-experimental-junit.xml" \
             --output-log "$PWD/ci-evidence/io-uring-experimental-ctest.log"
@@ -389,7 +389,7 @@ jobs:
           cmake --build build-io-uring-asan \
             --target gamenet_io_uring_contracts --parallel
           ctest --test-dir build-io-uring-asan \
-            -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_connection_adapter)$' \
+          -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter)$' \
             --output-on-failure --timeout 10 \
             --output-junit "$PWD/ci-evidence/io-uring-asan-junit.xml" \
             --output-log "$PWD/ci-evidence/io-uring-asan-ctest.log"

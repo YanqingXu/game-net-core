@@ -59,10 +59,10 @@ commands remain valid:
 | Option | Supported value | `ON` behavior |
 |---|---|---|
 | `GAMENET_ENABLE_TLS` | `OFF` | Configure fails because TLS is not implemented in the active target graph |
-| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1/X2/X3/X4/X5/X6/X7/X8 io_uring Engine, EventLoop pump, single-connection driver, shared-Pump Hub, semantic adapter, and their direct/capacity/graceful/cross-thread contracts; Windows rejects it |
+| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 io_uring Engine, EventLoop pump, single-connection driver, shared-Pump Hub/listener, semantic adapter, and their direct/capacity/graceful/cross-thread/listener contracts; Windows rejects it |
 
 An option that has no implementation must not configure successfully. The
-Linux-only IOE-X1/X2/X3/X4/X5/X6/X7/X8 io_uring target is the sole active experimental module;
+Linux-only IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 io_uring target is the sole active experimental module;
 it does not replace epoll and is not installed. TLS, UDP, KCP, and other
 experimental work still require promoted intent, ownership/threading
 contracts, targets, and direct tests before an enabling value can be accepted.
@@ -97,9 +97,10 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
-The dedicated IOE-X1/X2/X3/X4/X5/X6/X7/X8 Engine, EventLoop-pump,
-single-connection-driver, shared-Pump Hub, semantic adapter, fixed-capacity,
-graceful, and bounded cross-thread contract configuration is Linux-only:
+The dedicated IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 Engine, EventLoop-pump,
+single-connection-driver, shared-Pump Hub/listener, semantic adapter,
+fixed-capacity, graceful, bounded cross-thread, and listener contract
+configuration is Linux-only:
 
 ```bash
 cmake -S . -B build-io-uring \
@@ -108,7 +109,7 @@ cmake -S . -B build-io-uring \
   -DGAMENET_ENABLE_EXPERIMENTAL=ON
 cmake --build build-io-uring --target gamenet_io_uring_contracts --parallel
 ctest --test-dir build-io-uring \
-  -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_connection_adapter)$' \
+  -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter)$' \
   --output-on-failure
 ```
 

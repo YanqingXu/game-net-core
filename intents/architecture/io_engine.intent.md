@@ -445,6 +445,49 @@ boundary without moving Hub or connection ownership:
   does not authorize listener/Accept ownership, public backend selection,
   production `TcpConnection` changes, or advanced io_uring operations.
 
+IOE-X9 authorizes one source-private listener inside the existing shared Hub;
+it does not create a second Pump or move connection ownership:
+
+- a valid, already-bound/listening stream socket transfers to the Hub on every
+  `listen` call, including synchronous rejection. One Hub owns at most one
+  listener lifetime, its socket, callback factory, Accept identities, metrics,
+  close reason, native error, and stop promise. Listener configuration and all
+  lifecycle calls remain owner-loop-only;
+- `maxPendingAccepts` is a positive finite one-shot Accept window. Every
+  accepted submission is generation-bound in the Hub's existing fixed
+  operation-route table as `Accept`; Pump/Engine budgets bound CQ decoding and
+  per-turn dispatch, so listener progress adds no unbounded queue, worker,
+  Channel, ring, or recursive drain;
+- a successful Accept notice owns its nonblocking/CLOEXEC fd until the owner
+  Hub consumes it. The connection factory returns callbacks only and never
+  sees or owns the fd. The Hub establishes RAII before fallible work, clears
+  the exact Accept identity before factory re-entry, revalidates listener/Hub
+  phase afterward, and transfers the fd directly into `addConnection` only
+  when admission remains open. Capacity, invalid-factory, callback, quiesce,
+  and Engine rejection paths close the accepted fd exactly once;
+- connection capacity rejection is local and observable, then the listener
+  rearms. `EINTR`, `ECONNABORTED`, and `EPROTO` are bounded transient Accept
+  terminals and rearm; other Accept failure, factory exception/invalid return,
+  or inability to arm the first one-shot closes the listener fail-closed with
+  typed result/reason/native error while already-established routes remain
+  owned by the Hub;
+- `stopListening` first seals admission and closes the listening socket, then
+  cancels every exact pending Accept. Its future is published only after all
+  Accept identities retire and proves listener socket close plus zero active
+  Accepts. Hub stop performs that listener-first transition before closing
+  connection routes and quiescing the shared Pump; the listener future is
+  ready no later than the Hub stop future;
+- a real-TCP contract drives production epoll `TcpServer` and the Hub listener
+  through bind/listen, connect, echo, peer close, and graceful server stop. Hub
+  cases additionally cover a finite concurrent Accept window, connection-limit
+  rejection/recovery, generation reuse across burst/churn, callback re-entry,
+  deterministic Engine-operation pressure, explicit listener stop, and owner
+  quit with zero listener/route/operation/notice/fd/byte residue;
+- IOE-X9 remains Linux-only, default-off, source-private, and non-installed.
+  It does not authorize public listener APIs, backend selection, production
+  `Acceptor`/`TcpServer` changes, multishot Accept, provided buffers, or other
+  advanced io_uring features.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -475,9 +518,11 @@ boundary without moving Hub or connection ownership:
 10. IOE-X7 adds pending-output graceful drain, one native write half-close,
    continued read, peer-EOF terminal, and first-reason-preserving escalation.
 11. IOE-X8 adds bounded cross-thread Send/Shutdown/Force admission while the
-   Adapter, Hub, socket, callbacks, and retirement remain on one owner loop.
-12. Only proven, cross-backend concepts may later graduate to a narrow public
-   capability surface. Platform-specific controls remain source-private.
+    Adapter, Hub, socket, callbacks, and retirement remain on one owner loop.
+12. IOE-X9 moves one finite one-shot listener window into the existing shared
+    Hub/Pump and proves accepted-fd transfer plus listener-first stop.
+13. Only proven, cross-backend concepts may later graduate to a narrow public
+    capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
 
@@ -554,6 +599,11 @@ boundary without moving Hub or connection ownership:
   cannot replace the first graceful close info; IOE-X8 extends the same real
   TCP boundary with foreign send/shutdown/force order, bounded mailbox
   saturation, observer revocation, owner quit, and zero command residue.
+- `tests/contract/io_engine/test_io_uring_tcp_listener.cpp` drives production
+  epoll and the shared-Pump listener through real bind/connect/echo/stop, then
+  verifies finite Accept depth, capacity rejection/recovery, generation churn,
+  first-arm Engine pressure, callback re-entry, explicit stop, owner quit,
+  accepted-fd reconciliation, and zero listener/Hub/Engine residue.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

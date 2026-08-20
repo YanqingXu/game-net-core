@@ -8,10 +8,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <deque>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <sys/socket.h>
 #include <utility>
 #include <vector>
 
@@ -44,6 +46,8 @@ IoUringTcpConnectionHubOptions validateOptions(
         options.maxSendBytesPerOperation == 0 ||
         options.maxPendingSendBytesPerConnection == 0 ||
         options.maxPendingSendSegmentsPerConnection == 0 ||
+        options.maxPendingAccepts == 0 ||
+        options.maxPendingAccepts > options.pump.engine.maxOperations ||
         options.maxSendBytesPerOperation >
             options.maxPendingSendBytesPerConnection ||
         options.maxReceiveBytes > options.pump.engine.maxBytesPerOperation ||
@@ -56,9 +60,26 @@ IoUringTcpConnectionHubOptions validateOptions(
         options.pump.engine.maxOwnedBytes <
             perConnectionEngineBudget * connections) {
         throw std::invalid_argument(
-            "IoUringTcpConnectionHub requires finite two-connection Recv/Send and aggregate budgets");
+            "IoUringTcpConnectionHub requires finite connection, Accept, Recv/Send, and aggregate budgets");
     }
     return options;
+}
+
+bool isListeningSocket(gamenet::net::SocketFd socket) noexcept {
+    if (!gamenet::net::sockets::isValid(socket)) return false;
+    int accepting = 0;
+    socklen_t length = sizeof(accepting);
+    return ::getsockopt(
+               socket,
+               SOL_SOCKET,
+               SO_ACCEPTCONN,
+               &accepting,
+               &length) == 0 &&
+        accepting != 0;
+}
+
+bool isTransientAcceptError(int error) noexcept {
+    return error == EINTR || error == ECONNABORTED || error == EPROTO;
 }
 
 std::uint32_t nextGeneration(std::uint32_t current) noexcept {
@@ -76,6 +97,39 @@ bool sameOperation(
 }  // namespace
 
 class IoUringTcpConnectionHubImpl final {
+private:
+    enum class ListenerPhase : std::uint8_t {
+        Running,
+        Closing,
+        Closed,
+    };
+
+    struct Listener {
+        Listener(
+            gamenet::net::SocketFd socketFd,
+            IoUringTcpConnectionHub::AcceptedConnectionFactory factoryValue,
+            std::size_t acceptDepth)
+            : socket(socketFd),
+              factory(std::move(factoryValue)),
+              stopFuture(stopPromise.get_future().share()) {
+            acceptIdentities.reserve(acceptDepth);
+        }
+
+        gamenet::net::Socket socket;
+        IoUringTcpConnectionHub::AcceptedConnectionFactory factory;
+        std::promise<IoUringTcpHubListenerStopSummary> stopPromise;
+        std::shared_future<IoUringTcpHubListenerStopSummary> stopFuture;
+        std::vector<IoUringOperationIdentity> acceptIdentities;
+        IoUringTcpHubListenerMetrics metrics{};
+        IoUringTcpHubListenerCloseReason closeReason{
+            IoUringTcpHubListenerCloseReason::Explicit};
+        int closeNativeError{};
+        ListenerPhase phase{ListenerPhase::Running};
+        bool retryAcceptSubmission{false};
+        bool retryAcceptCancellation{false};
+        bool stopPublished{false};
+    };
+
 public:
     using Identity = IoUringTcpConnectionIdentity;
     using ConnectionMetrics = IoUringTcpConnectionHubConnectionMetrics;
@@ -199,6 +253,77 @@ public:
             .identity = identity,
             .stopFuture = std::move(future),
         };
+    }
+
+    IoUringTcpHubListenOutcome listen(
+        gamenet::net::SocketFd listeningSocket,
+        IoUringTcpConnectionHub::AcceptedConnectionFactory factory) {
+        gamenet::net::Socket transferred(listeningSocket);
+        assertOwner();
+        if (!isListeningSocket(listeningSocket) || !factory) {
+            return {.result = IoUringTcpHubListenResult::RejectedInvalid};
+        }
+        if (phase_ == IoUringTcpHubPhase::Quiescing) {
+            return {.result = IoUringTcpHubListenResult::RejectedQuiescing};
+        }
+        if (phase_ == IoUringTcpHubPhase::Stopped) {
+            return {.result = IoUringTcpHubListenResult::RejectedShutdown};
+        }
+        if (listener_ &&
+            (listener_->phase != ListenerPhase::Closed || consumerDepth_ != 0)) {
+            return {.result = IoUringTcpHubListenResult::AlreadyListening};
+        }
+        if (listener_) listener_.reset();
+
+        listener_ = std::make_unique<Listener>(
+            transferred.releaseFd(),
+            std::move(factory),
+            options_.maxPendingAccepts);
+        auto future = listener_->stopFuture;
+        const auto armResult = armAcceptWindow();
+        if (!listener_->acceptIdentities.empty()) {
+            if (armResult != IoUringSubmissionResult::Accepted) {
+                listener_->retryAcceptSubmission = true;
+                signalMaintenance();
+            }
+            return {
+                .result = IoUringTcpHubListenResult::Accepted,
+                .stopFuture = std::move(future),
+            };
+        }
+
+        auto result = IoUringTcpHubListenResult::EngineRejected;
+        auto reason = IoUringTcpHubListenerCloseReason::EngineRejected;
+        if (armResult == IoUringSubmissionResult::RejectedQuiescing) {
+            result = IoUringTcpHubListenResult::RejectedQuiescing;
+            reason = IoUringTcpHubListenerCloseReason::EventLoopQuiescing;
+        } else if (armResult == IoUringSubmissionResult::RejectedShutdown) {
+            result = IoUringTcpHubListenResult::RejectedShutdown;
+            reason = IoUringTcpHubListenerCloseReason::EventLoopQuiescing;
+        } else if (armResult == IoUringSubmissionResult::RejectedInvalid) {
+            result = IoUringTcpHubListenResult::RejectedInvalid;
+        }
+        (void)beginListenerStop(reason, 0, false);
+        return {.result = result, .stopFuture = std::move(future)};
+    }
+
+    bool stopListening() {
+        assertOwner();
+        return beginListenerStop(
+            IoUringTcpHubListenerCloseReason::Explicit,
+            0,
+            true);
+    }
+
+    bool listening() const noexcept {
+        return listener_ && listener_->phase == ListenerPhase::Running;
+    }
+
+    IoUringTcpHubListenerMetrics listenerMetrics() const noexcept {
+        if (listener_) return listenerMetricsSnapshot(*listener_);
+        return lastListenerSummary_
+            ? lastListenerSummary_->listener
+            : IoUringTcpHubListenerMetrics{};
     }
 
     IoUringTcpHubSendResult send(Identity identity, std::string_view payload) {
@@ -458,6 +583,188 @@ private:
         return true;
     }
 
+    static IoUringTcpHubListenerMetrics listenerMetricsSnapshot(
+        const Listener& listener) noexcept {
+        auto snapshot = listener.metrics;
+        snapshot.activeAccepts = listener.acceptIdentities.size();
+        return snapshot;
+    }
+
+    void updateListenerAcceptMetrics(Listener& listener) noexcept {
+        listener.metrics.activeAccepts = listener.acceptIdentities.size();
+        listener.metrics.maxActiveAccepts = (std::max)(
+            listener.metrics.maxActiveAccepts,
+            listener.acceptIdentities.size());
+    }
+
+    bool bindAcceptOperation(IoUringOperationIdentity operation) noexcept {
+        if (!operation.valid() || operation.slot >= operationRoutes_.size() ||
+            operationRoutes_[operation.slot].active) {
+            ++metrics_.invariantFailures;
+            return false;
+        }
+        operationRoutes_[operation.slot] = {
+            .operation = operation,
+            .connection = {},
+            .kind = IoUringOperationKind::Accept,
+            .active = true,
+        };
+        ++activeOperationRoutes_;
+        return true;
+    }
+
+    IoUringSubmissionResult armAcceptWindow() {
+        if (!listener_ || listener_->phase != ListenerPhase::Running ||
+            phase_ != IoUringTcpHubPhase::Running) {
+            return IoUringSubmissionResult::RejectedQuiescing;
+        }
+        auto& listener = *listener_;
+        listener.retryAcceptSubmission = false;
+        while (listener.acceptIdentities.size() <
+               options_.maxPendingAccepts) {
+            const auto outcome = pump_->enqueueAccept(listener.socket.fd());
+            if (outcome.result != IoUringSubmissionResult::Accepted) {
+                ++listener.metrics.engineRejections;
+                return outcome.result;
+            }
+            if (!bindAcceptOperation(outcome.identity)) {
+                ++listener.metrics.engineRejections;
+                (void)pump_->cancel(outcome.identity);
+                (void)beginHubStop(IoUringTcpHubCloseReason::EngineRejected);
+                return IoUringSubmissionResult::RejectedInvalid;
+            }
+            listener.acceptIdentities.push_back(outcome.identity);
+            ++listener.metrics.acceptSubmissions;
+            updateListenerAcceptMetrics(listener);
+        }
+        return IoUringSubmissionResult::Accepted;
+    }
+
+    bool requestListenerCancellations() noexcept {
+        if (!listener_ || listener_->acceptIdentities.empty()) return true;
+        auto& listener = *listener_;
+        bool retry = false;
+        for (const auto identity : listener.acceptIdentities) {
+            try {
+                const auto result = pump_->cancel(identity);
+                switch (result) {
+                case IoUringCancelResult::Accepted:
+                    ++listener.metrics.acceptCancellationRequests;
+                    break;
+                case IoUringCancelResult::AlreadyRequested:
+                case IoUringCancelResult::RejectedInvalid:
+                case IoUringCancelResult::RejectedShutdown:
+                    break;
+                case IoUringCancelResult::SubmissionQueueFull:
+                case IoUringCancelResult::RejectedNotSubmitted:
+                    retry = true;
+                    break;
+                }
+            } catch (...) {
+                retry = true;
+                ++listener.metrics.engineRejections;
+            }
+        }
+        listener.retryAcceptCancellation = retry;
+        if (retry) signalMaintenance();
+        return !retry;
+    }
+
+    bool beginListenerStop(
+        IoUringTcpHubListenerCloseReason reason,
+        int nativeError,
+        bool requestCancellation) noexcept {
+        if (!listener_ || listener_->phase != ListenerPhase::Running) {
+            return false;
+        }
+        auto& listener = *listener_;
+        listener.phase = ListenerPhase::Closing;
+        listener.closeReason = reason;
+        listener.closeNativeError = nativeError;
+        ++listener.metrics.stopRequests;
+        listener.retryAcceptSubmission = false;
+        if (gamenet::net::sockets::isValid(listener.socket.fd())) {
+            listener.socket.close();
+            ++listener.metrics.listenerSocketCloseCount;
+        }
+        if (requestCancellation) {
+            (void)requestListenerCancellations();
+        }
+        tryPublishListenerStopped();
+        return true;
+    }
+
+    void tryPublishListenerStopped() noexcept {
+        if (!listener_ || listener_->phase != ListenerPhase::Closing ||
+            !listener_->acceptIdentities.empty() || listener_->stopPublished) {
+            return;
+        }
+        auto& listener = *listener_;
+        listener.phase = ListenerPhase::Closed;
+        listener.stopPublished = true;
+        listener.retryAcceptCancellation = false;
+        listener.factory = {};
+        updateListenerAcceptMetrics(listener);
+        const auto summary = IoUringTcpHubListenerStopSummary{
+            .reason = listener.closeReason,
+            .nativeError = listener.closeNativeError,
+            .listener = listenerMetricsSnapshot(listener),
+            .socketClosed =
+                !gamenet::net::sockets::isValid(listener.socket.fd()),
+            .acceptsRetired = listener.acceptIdentities.empty(),
+        };
+        lastListenerSummary_ = summary;
+        try {
+            listener.stopPromise.set_value(summary);
+        } catch (...) {
+            ++metrics_.invariantFailures;
+        }
+    }
+
+    bool removeAcceptIdentity(IoUringOperationIdentity operation) noexcept {
+        if (!listener_) return false;
+        auto& identities = listener_->acceptIdentities;
+        const auto found = std::find_if(
+            identities.begin(),
+            identities.end(),
+            [operation](IoUringOperationIdentity current) {
+                return sameOperation(current, operation);
+            });
+        if (found == identities.end()) return false;
+        identities.erase(found);
+        updateListenerAcceptMetrics(*listener_);
+        return true;
+    }
+
+    void maintainAcceptWindow() noexcept {
+        if (!listener_ || listener_->phase != ListenerPhase::Running ||
+            phase_ != IoUringTcpHubPhase::Running) {
+            tryPublishListenerStopped();
+            return;
+        }
+        try {
+            const auto result = armAcceptWindow();
+            if (result == IoUringSubmissionResult::Accepted) return;
+            if (!listener_->acceptIdentities.empty()) {
+                listener_->retryAcceptSubmission = true;
+                return;
+            }
+            (void)beginListenerStop(
+                result == IoUringSubmissionResult::RejectedQuiescing ||
+                        result == IoUringSubmissionResult::RejectedShutdown
+                    ? IoUringTcpHubListenerCloseReason::EventLoopQuiescing
+                    : IoUringTcpHubListenerCloseReason::EngineRejected,
+                0,
+                false);
+        } catch (...) {
+            ++listener_->metrics.engineRejections;
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::EngineRejected,
+                0,
+                true);
+        }
+    }
+
     IoUringSubmissionResult submitReceive(Route& route) {
         if (phase_ != IoUringTcpHubPhase::Running ||
             route.phase == RoutePhase::Closing || !route.readDesired ||
@@ -583,8 +890,32 @@ private:
         return true;
     }
 
+    static IoUringTcpHubListenerCloseReason mapListenerCloseReason(
+        IoUringTcpHubCloseReason reason) noexcept {
+        switch (reason) {
+        case IoUringTcpHubCloseReason::EventLoopQuiescing:
+            return IoUringTcpHubListenerCloseReason::EventLoopQuiescing;
+        case IoUringTcpHubCloseReason::Destroyed:
+            return IoUringTcpHubListenerCloseReason::Destroyed;
+        case IoUringTcpHubCloseReason::EngineRejected:
+            return IoUringTcpHubListenerCloseReason::EngineRejected;
+        case IoUringTcpHubCloseReason::HubStopped:
+            return IoUringTcpHubListenerCloseReason::HubStopped;
+        case IoUringTcpHubCloseReason::CallbackFailed:
+            return IoUringTcpHubListenerCloseReason::CallbackFailed;
+        case IoUringTcpHubCloseReason::Explicit:
+        case IoUringTcpHubCloseReason::GracefulShutdown:
+        case IoUringTcpHubCloseReason::PeerClosed:
+        case IoUringTcpHubCloseReason::ReceiveFailed:
+        case IoUringTcpHubCloseReason::SendFailed:
+            return IoUringTcpHubListenerCloseReason::HubStopped;
+        }
+        return IoUringTcpHubListenerCloseReason::HubStopped;
+    }
+
     bool beginHubStop(IoUringTcpHubCloseReason reason) {
         if (phase_ != IoUringTcpHubPhase::Running) return false;
+        (void)beginListenerStop(mapListenerCloseReason(reason), 0, true);
         phase_ = IoUringTcpHubPhase::Quiescing;
         hubCloseReason_ = reason;
         for (auto& slot : slots_) {
@@ -628,8 +959,18 @@ private:
             return;
         }
         const auto connection = entry.connection;
+        const auto kind = entry.kind;
         entry = {};
         --activeOperationRoutes_;
+        if (kind == IoUringOperationKind::Accept) {
+            if (!removeAcceptIdentity(operation)) {
+                recordRoutingFailure();
+                return;
+            }
+            handleAcceptNotice(notice);
+            tryPublishListenerStopped();
+            return;
+        }
         auto* route = findRoute(connection, false);
         if (route == nullptr) {
             recordRoutingFailure();
@@ -662,6 +1003,118 @@ private:
     void recordRoutingFailure() noexcept {
         ++metrics_.invariantFailures;
         (void)beginHubStop(IoUringTcpHubCloseReason::EngineRejected);
+    }
+
+    void handleAcceptNotice(IoUringCompletionNotice& notice) {
+        if (!listener_) {
+            recordRoutingFailure();
+            return;
+        }
+        auto& listener = *listener_;
+        ++listener.metrics.acceptTerminals;
+
+        if (notice.status() == IoUringCompletionStatus::Cancelled) {
+            ++listener.metrics.acceptCancellations;
+            if (listener.phase == ListenerPhase::Running) {
+                ++listener.metrics.engineRejections;
+                (void)beginListenerStop(
+                    IoUringTcpHubListenerCloseReason::EngineRejected,
+                    notice.nativeError(),
+                    true);
+            }
+            return;
+        }
+        if (notice.status() != IoUringCompletionStatus::Succeeded) {
+            if (listener.phase == ListenerPhase::Running &&
+                isTransientAcceptError(notice.nativeError())) {
+                ++listener.metrics.transientAcceptFailures;
+                maintainAcceptWindow();
+                return;
+            }
+            if (listener.phase == ListenerPhase::Running) {
+                (void)beginListenerStop(
+                    IoUringTcpHubListenerCloseReason::AcceptFailed,
+                    notice.nativeError(),
+                    true);
+            }
+            return;
+        }
+
+        gamenet::net::Socket accepted(notice.releaseAcceptedSocket());
+        ++listener.metrics.acceptedSockets;
+        if (!gamenet::net::sockets::isValid(accepted.fd())) {
+            ++listener.metrics.engineRejections;
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::EngineRejected,
+                0,
+                true);
+            return;
+        }
+        if (listener.phase != ListenerPhase::Running ||
+            phase_ != IoUringTcpHubPhase::Running) {
+            ++listener.metrics.acceptedSocketRejections;
+            return;
+        }
+
+        IoUringTcpHubAcceptedConnectionCallbacks callbacks;
+        try {
+            callbacks = listener.factory();
+        } catch (...) {
+            ++listener.metrics.callbackFailures;
+            ++listener.metrics.acceptedSocketRejections;
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::CallbackFailed,
+                0,
+                true);
+            return;
+        }
+        if (listener.phase != ListenerPhase::Running ||
+            phase_ != IoUringTcpHubPhase::Running) {
+            ++listener.metrics.acceptedSocketRejections;
+            return;
+        }
+        if (!callbacks.messageConsumer) {
+            ++listener.metrics.callbackFailures;
+            ++listener.metrics.acceptedSocketRejections;
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::CallbackFailed,
+                0,
+                true);
+            return;
+        }
+
+        IoUringTcpConnectionHubAddOutcome added;
+        try {
+            added = addConnection(
+                accepted.releaseFd(),
+                std::move(callbacks.messageConsumer),
+                std::move(callbacks.closeConsumer),
+                std::move(callbacks.outputProgressConsumer));
+        } catch (...) {
+            ++listener.metrics.engineRejections;
+            ++listener.metrics.acceptedSocketRejections;
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::EngineRejected,
+                0,
+                true);
+            return;
+        }
+        if (added.result == IoUringTcpHubAddResult::Accepted) {
+            ++listener.metrics.connectionsAdmitted;
+        } else {
+            ++listener.metrics.acceptedSocketRejections;
+            if (added.result == IoUringTcpHubAddResult::ConnectionLimit) {
+                ++listener.metrics.connectionLimitRejections;
+            } else if (listener.phase == ListenerPhase::Running &&
+                       phase_ == IoUringTcpHubPhase::Running) {
+                (void)beginListenerStop(
+                    IoUringTcpHubListenerCloseReason::EngineRejected,
+                    0,
+                    true);
+                return;
+            }
+        }
+        maintainAcceptWindow();
     }
 
     void handleReceiveNotice(
@@ -930,6 +1383,17 @@ private:
         assertOwner();
         if (phase_ != IoUringTcpHubPhase::Running) return;
         bool retryRemains = false;
+        if (listener_ && listener_->phase == ListenerPhase::Closing &&
+            listener_->retryAcceptCancellation) {
+            (void)requestListenerCancellations();
+            retryRemains = listener_->retryAcceptCancellation;
+        }
+        if (listener_ && listener_->phase == ListenerPhase::Running &&
+            listener_->retryAcceptSubmission) {
+            const auto result = armAcceptWindow();
+            listener_->retryAcceptSubmission =
+                result != IoUringSubmissionResult::Accepted;
+        }
         for (auto& slot : slots_) {
             auto* route = slot.route.get();
             if (route == nullptr) continue;
@@ -960,6 +1424,10 @@ private:
                 ownerLoop_->phase() == gamenet::net::EventLoopPhase::Running
                 ? IoUringTcpHubCloseReason::EngineRejected
                 : IoUringTcpHubCloseReason::EventLoopQuiescing;
+            (void)beginListenerStop(
+                mapListenerCloseReason(hubCloseReason_),
+                0,
+                false);
             phase_ = IoUringTcpHubPhase::Quiescing;
             for (auto& slot : slots_) {
                 if (slot.route) {
@@ -976,6 +1444,18 @@ private:
             for (auto& operation : operationRoutes_) operation = {};
             activeOperationRoutes_ = 0;
         }
+        if (listener_ && !listener_->acceptIdentities.empty()) {
+            ++metrics_.invariantFailures;
+            listener_->acceptIdentities.clear();
+            updateListenerAcceptMetrics(*listener_);
+        }
+        if (listener_ && listener_->phase == ListenerPhase::Running) {
+            (void)beginListenerStop(
+                mapListenerCloseReason(hubCloseReason_),
+                0,
+                false);
+        }
+        tryPublishListenerStopped();
         for (auto& slot : slots_) {
             if (!slot.route) continue;
             slot.route->receiveIdentity = {};
@@ -992,8 +1472,10 @@ private:
         const auto summary = IoUringTcpConnectionHubStopSummary{
             .hub = metrics(),
             .pump = pumpSummary,
+            .listener = lastListenerSummary_,
             .allConnectionsStopped = metrics_.activeConnections == 0 &&
-                activeOperationRoutes_ == 0 && pendingSendBytes_ == 0,
+                activeOperationRoutes_ == 0 && pendingSendBytes_ == 0 &&
+                (!listener_ || listener_->phase == ListenerPhase::Closed),
         };
         if (!stopPublished_) {
             stopPublished_ = true;
@@ -1026,6 +1508,8 @@ private:
     std::shared_future<IoUringTcpConnectionHubStopSummary> stopFuture_;
     std::vector<Slot> slots_;
     std::vector<OperationRoute> operationRoutes_;
+    std::unique_ptr<Listener> listener_;
+    std::optional<IoUringTcpHubListenerStopSummary> lastListenerSummary_;
     std::unique_ptr<IoUringEventLoopPump> pump_;
     gamenet::net::EventLoopLifecycleSource maintenanceSource_;
     IoUringTcpConnectionHubMetrics metrics_{};
@@ -1064,6 +1548,25 @@ IoUringTcpConnectionHubAddOutcome IoUringTcpConnectionHub::addConnection(
         std::move(messageConsumer),
         std::move(closeConsumer),
         std::move(outputProgressConsumer));
+}
+
+IoUringTcpHubListenOutcome IoUringTcpConnectionHub::listen(
+    gamenet::net::SocketFd listeningSocket,
+    AcceptedConnectionFactory connectionFactory) {
+    return impl_->listen(listeningSocket, std::move(connectionFactory));
+}
+
+bool IoUringTcpConnectionHub::stopListening() {
+    return impl_->stopListening();
+}
+
+bool IoUringTcpConnectionHub::listening() const noexcept {
+    return impl_->listening();
+}
+
+IoUringTcpHubListenerMetrics
+IoUringTcpConnectionHub::listenerMetrics() const noexcept {
+    return impl_->listenerMetrics();
 }
 
 IoUringTcpHubSendResult IoUringTcpConnectionHub::send(

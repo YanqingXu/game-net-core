@@ -232,6 +232,20 @@ Contract tests verify:
   reserved byte, route, operation, notice, socket, or owned-byte residue. Tests
   must join active facade calls before owner destruction and must prove no
   accepted command retains or invokes the dead observer
+- the IOE-X9 listener contract must use real AF_INET loopback sockets and drive
+  production epoll `TcpServer` plus the shared-Pump listener through the same
+  bind/listen, client connect, echo, peer close, and owner stop observations.
+  Both paths must invoke user callbacks on their owner and publish one terminal
+- an Adapter/Hub fixture must arm a finite one-shot Accept window, accept a
+  burst up to route capacity, reject and close overflow accepted fds, retire
+  the active routes, then admit a replacement wave without stale generation
+  delivery. Callback re-entry may stop the listener or Hub and must not rearm
+- deterministic operation pressure must reject the first Accept arm with a
+  typed result and a ready listener summary, closing the transferred listener
+  once while existing routes remain valid. Explicit stop and EventLoop quit
+  must cancel every exact Accept, publish listener-before-Hub stop, and leave
+  zero active Accept/route/operation/notice/fd/byte state under normal,
+  ASan/UBSan, TSan, and focused repeat gates
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

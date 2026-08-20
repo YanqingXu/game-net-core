@@ -150,6 +150,20 @@ It must not blur these roles.
   Owner-side observer destruction seals and clears the mailbox only after
   active calls return; the Hub remains the unique owner of socket, operation,
   and physical stop-future retirement
+- IOE-X9 `listen` transfers one already-bound/listening socket to the Hub on
+  every result. The Hub listener uniquely owns that socket, its finite set of
+  Accept identities, callback factory, metrics, close reason/error, and stop
+  promise until all Accept terminals retire and the listener future publishes
+- each successful Accept notice owns its accepted fd. The Hub first wraps it in
+  RAII, invokes a factory that owns no fd, and transfers it directly to exactly
+  one connection Route only on successful `addConnection`. Rejection, factory
+  failure, listener stop/re-entry, or notice destruction closes it exactly
+  once; no raw accepted fd is retained by a callback or side queue
+- listener stop owns pending Accept cancellation through exact terminal
+  notices. Closing the listening socket seals new kernel admission but does not
+  erase those obligations. Hub/Pump stop publication requires zero active
+  Accept routes, a closed listener socket, all connection routes retired, and
+  zero Engine notices/leases/owned bytes
 
 ## 3. Poller
 - Poller does not own Channel

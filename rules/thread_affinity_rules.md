@@ -293,6 +293,19 @@ No other direct mutation path is allowed for core loop state.
   Accepted mailbox work retains shared state and copied payload, never a raw
   observer; observer revocation therefore cannot create an off-owner callback
   or callback-after-destroy
+- IOE-X9 listener construction/configuration, `listen`, `stopListening`, Accept
+  submission/cancellation, factory invocation, accepted-fd admission, metrics,
+  future publication, and destruction are Hub-owner-loop-only. The existing
+  Pump remains the sole completion dispatcher; no listener callback, route
+  mutation, socket syscall, or generation transition runs on a foreign thread
+- an Accept terminal clears its exact operation-route generation before the
+  connection factory may re-enter. The outer frame revalidates Hub/listener
+  phase before transferring the accepted fd or rearming, and one Pump turn
+  remains bounded by `maxNoticesPerTurn` across Accept/Recv/Send together
+- Hub stop seals/closes the listener and requests exact Accept cancellation
+  before route close and Pump quiesce. Explicit listener stop may retry a
+  temporarily full cancellation SQ through the existing owner maintenance
+  source; it never blocks, spins, or adds a pending functor
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

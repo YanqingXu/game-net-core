@@ -180,6 +180,26 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle;capacity"
     )
     add_executable(
+        gamenet_io_uring_tcp_listener_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_uring_tcp_listener.cpp
+    )
+    target_include_directories(
+        gamenet_io_uring_tcp_listener_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_io_uring_tcp_listener_contract
+        PRIVATE GameNet::experimental
+    )
+    add_test(
+        NAME contract.io_engine.test_io_uring_tcp_listener
+        COMMAND gamenet_io_uring_tcp_listener_contract
+    )
+    set_tests_properties(
+        contract.io_engine.test_io_uring_tcp_listener
+        PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle;capacity"
+    )
+    add_executable(
         gamenet_io_uring_tcp_connection_adapter_contract
         ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp
     )
@@ -205,6 +225,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         gamenet_io_uring_tcp_connection_driver_contract
         gamenet_io_uring_tcp_connection_hub_contract
         gamenet_io_uring_tcp_connection_hub_capacity_contract
+        gamenet_io_uring_tcp_listener_contract
         gamenet_io_uring_tcp_connection_adapter_contract
     )
 endif()

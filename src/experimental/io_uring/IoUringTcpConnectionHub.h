@@ -7,6 +7,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 namespace gamenet::experimental::io_uring {
@@ -66,6 +67,25 @@ enum class IoUringTcpHubCloseReason : std::uint8_t {
     Destroyed,
 };
 
+enum class IoUringTcpHubListenResult : std::uint8_t {
+    Accepted,
+    AlreadyListening,
+    RejectedInvalid,
+    EngineRejected,
+    RejectedQuiescing,
+    RejectedShutdown,
+};
+
+enum class IoUringTcpHubListenerCloseReason : std::uint8_t {
+    Explicit,
+    AcceptFailed,
+    EngineRejected,
+    CallbackFailed,
+    EventLoopQuiescing,
+    HubStopped,
+    Destroyed,
+};
+
 struct IoUringTcpConnectionHubOptions {
     IoUringEventLoopPumpOptions pump{};
     std::size_t maxConnections{32};
@@ -74,6 +94,50 @@ struct IoUringTcpConnectionHubOptions {
     std::size_t maxSendBytesPerOperation{4U * 1024U};
     std::size_t maxPendingSendBytesPerConnection{64U * 1024U};
     std::size_t maxPendingSendSegmentsPerConnection{64};
+    std::size_t maxPendingAccepts{1};
+};
+
+struct IoUringTcpHubAcceptedConnectionCallbacks {
+    std::function<void(IoUringTcpConnectionIdentity, std::string_view)>
+        messageConsumer;
+    std::function<void(
+        IoUringTcpConnectionIdentity,
+        IoUringTcpHubCloseReason)> closeConsumer;
+    std::function<void(IoUringTcpConnectionIdentity, std::size_t)>
+        outputProgressConsumer;
+};
+
+struct IoUringTcpHubListenerMetrics {
+    std::uint64_t acceptSubmissions{};
+    std::uint64_t acceptTerminals{};
+    std::uint64_t acceptCancellations{};
+    std::uint64_t acceptCancellationRequests{};
+    std::uint64_t acceptedSockets{};
+    std::uint64_t connectionsAdmitted{};
+    std::uint64_t acceptedSocketRejections{};
+    std::uint64_t connectionLimitRejections{};
+    std::uint64_t transientAcceptFailures{};
+    std::uint64_t engineRejections{};
+    std::uint64_t callbackFailures{};
+    std::uint64_t stopRequests{};
+    std::uint64_t listenerSocketCloseCount{};
+    std::size_t activeAccepts{};
+    std::size_t maxActiveAccepts{};
+};
+
+struct IoUringTcpHubListenerStopSummary {
+    IoUringTcpHubListenerCloseReason reason{
+        IoUringTcpHubListenerCloseReason::Explicit};
+    int nativeError{};
+    IoUringTcpHubListenerMetrics listener{};
+    bool socketClosed{};
+    bool acceptsRetired{};
+};
+
+struct IoUringTcpHubListenOutcome {
+    IoUringTcpHubListenResult result{
+        IoUringTcpHubListenResult::RejectedInvalid};
+    std::shared_future<IoUringTcpHubListenerStopSummary> stopFuture{};
 };
 
 struct IoUringTcpConnectionHubConnectionMetrics {
@@ -138,6 +202,7 @@ struct IoUringTcpConnectionHubConnectionStopSummary {
 struct IoUringTcpConnectionHubStopSummary {
     IoUringTcpConnectionHubMetrics hub{};
     IoUringEventLoopPumpStopSummary pump{};
+    std::optional<IoUringTcpHubListenerStopSummary> listener;
     bool allConnectionsStopped{};
 };
 
@@ -165,6 +230,8 @@ public:
         std::size_t)>;
     using StoppedConsumer =
         std::function<void(const IoUringTcpConnectionHubStopSummary&)>;
+    using AcceptedConnectionFactory =
+        std::function<IoUringTcpHubAcceptedConnectionCallbacks()>;
 
     IoUringTcpConnectionHub(
         gamenet::net::EventLoop* ownerLoop,
@@ -180,6 +247,14 @@ public:
         MessageConsumer messageConsumer,
         CloseConsumer closeConsumer = {},
         OutputProgressConsumer outputProgressConsumer = {});
+    // The already-bound/listening socket transfers on every call. The factory
+    // returns callbacks only; accepted descriptors never escape Hub ownership.
+    IoUringTcpHubListenOutcome listen(
+        gamenet::net::SocketFd listeningSocket,
+        AcceptedConnectionFactory connectionFactory);
+    bool stopListening();
+    bool listening() const noexcept;
+    IoUringTcpHubListenerMetrics listenerMetrics() const noexcept;
     IoUringTcpHubSendResult send(
         IoUringTcpConnectionIdentity connection,
         std::string_view payload);

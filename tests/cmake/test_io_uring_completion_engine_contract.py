@@ -56,6 +56,10 @@ def main() -> None:
         repo_root
         / "tests/contract/io_engine/test_io_uring_tcp_connection_hub_capacity.cpp"
     )
+    listener_contract = (
+        repo_root
+        / "tests/contract/io_engine/test_io_uring_tcp_listener.cpp"
+    )
     adapter_contract = (
         repo_root
         / "tests/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp"
@@ -94,6 +98,7 @@ def main() -> None:
         driver_contract,
         hub_contract,
         hub_capacity_contract,
+        listener_contract,
         adapter_contract,
         benchmark,
         benchmark_validator,
@@ -214,6 +219,10 @@ def main() -> None:
         "IoUringTcpConnectionHub",
         "IoUringTcpConnectionIdentity",
         "maxConnections",
+        "maxPendingAccepts",
+        "IoUringTcpHubListenOutcome",
+        "IoUringTcpHubListenerStopSummary",
+        "stopListening",
         "maxTotalPendingSendBytes",
         "operationRoutes_",
         "nextGeneration",
@@ -294,6 +303,11 @@ def main() -> None:
     )
     require(
         tests_text,
+        "gamenet_io_uring_tcp_listener_contract",
+        tests_cmake,
+    )
+    require(
+        tests_text,
         "gamenet_io_uring_tcp_connection_adapter_contract",
         tests_cmake,
     )
@@ -304,6 +318,11 @@ def main() -> None:
     require(
         tests_text,
         "test_io_uring_tcp_connection_hub_capacity.cpp",
+        tests_cmake,
+    )
+    require(
+        tests_text,
+        "test_io_uring_tcp_listener.cpp",
         tests_cmake,
     )
     require(
@@ -386,6 +405,25 @@ def main() -> None:
     ):
         require(hub_capacity_text, fragment, hub_capacity_contract)
     assert "socketpair(" not in hub_capacity_text
+
+    listener_contract_text = listener_contract.read_text(encoding="utf-8")
+    for fragment in (
+        "testProductionAndCompletionListenerEchoAndStop",
+        "testListenerBurstCapacityRecoveryAndGenerationChurn",
+        "testListenerFirstArmOperationPressureIsTyped",
+        "testListenerFactoryReentryStopsAdmission",
+        "testListenerFactoryFailuresFailClosed",
+        "testListenerOwnerQuitDrains",
+        "IoUringTcpHubListenResult::EngineRejected",
+        "connectionLimitRejections == 1",
+        "maxActiveAccepts == 2",
+        "IoUringTcpHubListenerCloseReason::EventLoopQuiescing",
+        "activeOperationRoutes == 0",
+        "TcpServerStopOutcome::Drained",
+        "AF_INET",
+    ):
+        require(listener_contract_text, fragment, listener_contract)
+    assert "socketpair(" not in listener_contract_text
 
     adapter_contract_text = adapter_contract.read_text(encoding="utf-8")
     for fragment in (
@@ -542,6 +580,7 @@ def main() -> None:
     require(intent_text, "IOE-X6 authorizes one non-installed TCP semantic adapter", intent)
     require(intent_text, "IOE-X7 authorizes that missing graceful-drain", intent)
     require(intent_text, "IOE-X8 authorizes bounded cross-thread command admission", intent)
+    require(intent_text, "IOE-X9 authorizes one source-private listener", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_completion_engine.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp", intent)
@@ -556,6 +595,11 @@ def main() -> None:
         "tests/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp",
         intent,
     )
+    require(
+        intent_text,
+        "tests/contract/io_engine/test_io_uring_tcp_listener.cpp",
+        intent,
+    )
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X1's raw io_uring Engine", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X2's non-installed completion pump", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X3 single-connection driver", thread_rules)
@@ -564,6 +608,7 @@ def main() -> None:
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X6 semantic adapter", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X7 graceful request", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X8 permits only Adapter", thread_rules)
+    require(thread_rules.read_text(encoding="utf-8"), "IOE-X9 listener construction", thread_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X1 experimental target owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X2 pump owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X3 driver uniquely owns", ownership_rules)
@@ -572,6 +617,7 @@ def main() -> None:
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X6 adapter borrows", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X7 graceful shutdown", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X8 foreign Send admission", ownership_rules)
+    require(ownership_rules.read_text(encoding="utf-8"), "IOE-X9 `listen` transfers", ownership_rules)
     require(testing_rules.read_text(encoding="utf-8"), "real Linux io_uring fd", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X2 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X3 contract", testing_rules)
@@ -580,6 +626,7 @@ def main() -> None:
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X6 cross-backend contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X7 graceful case", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X8 cross-thread contract", testing_rules)
+    require(testing_rules.read_text(encoding="utf-8"), "IOE-X9 listener contract", testing_rules)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "test_io_uring_completion_engine_contract.py", workflow)
@@ -589,14 +636,15 @@ def main() -> None:
     require(workflow_text, "tcp_connection_driver", workflow)
     require(workflow_text, "tcp_connection_hub", workflow)
     require(workflow_text, "tcp_connection_hub_capacity", workflow)
+    require(workflow_text, "tcp_listener", workflow)
     require(workflow_text, "tcp_connection_adapter", workflow)
     require(
         platform_docs.read_text(encoding="utf-8"),
-        "IOE-X1/X2/X3/X4/X5/X6/X7/X8 io_uring",
+        "IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 io_uring",
         platform_docs,
     )
 
-    print("IOE-X1/X2/X3/X4/X5/X6/X7/X8 Engine, Pump, driver, Hub, capacity, adapter, graceful, and cross-thread contracts verified")
+    print("IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 Engine, Pump, driver, Hub, capacity, adapter, graceful, cross-thread, and listener contracts verified")
 
 
 if __name__ == "__main__":
