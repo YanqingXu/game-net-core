@@ -337,12 +337,21 @@ IOE-X7 graceful-drain / half-close equivalence 立即接续：
 
 IOE-X8 cross-thread admission / lifecycle equivalence 立即接续：
 
-- [ ] 先提升 active intent 与 rules，固定 Adapter/Hub owner 不迁移、foreign caller 只做有界 admission；
-- [ ] 为 foreign `trySend` 明确 payload ownership、排队上限、拒绝结果和 accepted-before-terminal 顺序；
-- [ ] 为 foreign `tryShutdown` / `tryForceClose` 固定幂等、首原因和 shutdown admission seal；
-- [ ] 覆盖 send/shutdown/force/observer-destroy 并发竞态、queue saturation 与 owner quit final drain；
-- [ ] 与 production epoll 跨线程合同使用同一真实 TCP 观察序列并运行 sanitizer/repeat；
-- [ ] 保持 source-private、default-off、non-installed，不借本切片加入 listener、selector 或 stable API。
+- [x] 先提升 active intent 与 rules，固定 Adapter/Hub owner 不迁移、foreign caller 只做有界 admission；
+- [x] 为 foreign `trySend` 明确 payload ownership、排队上限、拒绝结果和 accepted-before-terminal 顺序；
+- [x] 为 foreign `tryShutdown` / `tryForceClose` 固定幂等、首原因和 shutdown admission seal；
+- [x] 覆盖 send/shutdown/force/observer-destroy 并发竞态、queue saturation 与 owner quit final drain；
+- [x] 与 production epoll 跨线程合同使用同一真实 TCP 观察序列并运行 sanitizer/repeat；
+- [x] 保持 source-private、default-off、non-installed，不借本切片加入 listener、selector 或 stable API。
+
+IOE-X9 source-private listener / Accept ownership 立即接续：
+
+- [ ] 先提升 active intent 与 rules，固定 listener、accepted fd、Hub route 和 stop future 的唯一 owner；
+- [ ] 用一个有界 one-shot Accept 窗口接入现有 shared Pump，明确 slot、fd、callback 和取消义务；
+- [ ] 容量满、SQ pressure、瞬时 accept error 与 owner quit 都必须 typed/fail-closed，拒绝 fd 只关闭一次；
+- [ ] 用真实多客户端 burst/churn 覆盖 Accept generation、route admission、公平预算与 listener-first stop；
+- [ ] 与 production epoll `TcpServer` 跑同一 bind/connect/echo/graceful-stop 观察序列和 sanitizer/repeat；
+- [ ] 仍保持 source-private、default-off、non-installed，不在 X9 引入公共 selector 或替换 production backend。
 
 UDP/可靠数据报/KCP 只有在 Core、Engine 和至少两个 TCP Profile 稳定后才可提升对应
 deferred intent。HTTP、WebSocket、RPC、TLS 和 coroutine 继续不在当前路线内。
