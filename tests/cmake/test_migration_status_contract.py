@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -156,6 +157,17 @@ def main() -> None:
         / "architecture"
         / "runtime_profile_common_capability_review.md"
     )
+    x10_evidence_dir = (
+        repo_root
+        / "docs"
+        / "development"
+        / "benchmark_results"
+        / "2026-08-22-ioe-x10-f5d39b8"
+    )
+    x10_evidence = x10_evidence_dir / "evidence.json"
+    arch_g1_review = (
+        repo_root / "docs" / "reviews" / "arch-g1-independent-review.md"
+    )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     configured_tests = re.findall(
@@ -178,6 +190,8 @@ def main() -> None:
     api_review_text = api_review.read_text(encoding="utf-8")
     perf_api_review_text = perf_api_review.read_text(encoding="utf-8")
     common_profile_review_text = common_profile_review.read_text(encoding="utf-8")
+    x10_evidence_record = json.loads(x10_evidence.read_text(encoding="utf-8"))
+    arch_g1_review_text = arch_g1_review.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
@@ -187,16 +201,55 @@ def main() -> None:
     normalized_status_text = " ".join(status_text.split())
     require(status_text, "Last checked: 2026-07-11", migration_status)
     require(status_text, "Current production-roadmap audit: 2026-08-20", migration_status)
+    require(status_text, "Current M1 closure audit: 2026-08-22", migration_status)
     implementation_checkpoint = "669ebb0a7c5c475dea74b12275c66a2ce1876804"
     superseded_candidate = "c061f9967b9481b70b2faf9a8fee24f5a3e72ffc"
     superseded_candidate_tag = "v0.3.0-rel-c1-refreeze-4"
     candidate_tag = "v0.3.0-rel-c1-refreeze-5"
     reviewed_surface_tag = "api-r1-perf-r1-reviewed-surface"
     reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
+    current_governance_checkpoint = "a5ff7e6d823984a86e89146889f29f6615702ec3"
+    current_implementation_checkpoint = "f5d39b800b4dd943531670aa09840c931c3dee4d"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
     git(repo_root, "merge-base", "--is-ancestor", implementation_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{current_implementation_checkpoint}^{{commit}}")
+    git(repo_root, "cat-file", "-e", f"{current_governance_checkpoint}^{{commit}}")
+    git(
+        repo_root,
+        "merge-base",
+        "--is-ancestor",
+        current_governance_checkpoint,
+        current_implementation_checkpoint,
+    )
+    git(repo_root, "merge-base", "--is-ancestor", current_implementation_checkpoint, "HEAD")
+
+    assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
+    assert x10_evidence_record["decision"] == "PROMOTE"
+    assert x10_evidence_record["decision_scope"] == (
+        "later source-private io_uring integration shaping only"
+    )
+    assert x10_evidence_record["metadata"]["commit"] == current_implementation_checkpoint
+    assert x10_evidence_record["protocol"] == {
+        "active_routes": 256,
+        "churn_waves": 4,
+        "hub_route_limit": 256,
+        "max_pending_accepts": 32,
+        "payload_bytes": 64,
+        "replacements_per_wave": 64,
+        "round_trips_per_route_per_wave": 100,
+    }
+    for backend in ("epoll", "io_uring"):
+        samples = x10_evidence_record["samples"][backend]
+        assert len(samples) == 5
+        for sample in samples:
+            sample_path = x10_evidence_dir / sample["path"]
+            assert sample_path.is_file(), sample_path
+            digest = hashlib.sha256(sample_path.read_bytes()).hexdigest()
+            assert digest == sample["sha256"]
+    require(arch_g1_review_text, "`APPROVE`", arch_g1_review)
+    require(arch_g1_review_text, current_implementation_checkpoint, arch_g1_review)
 
     assert freeze_record == {
         "schema": "gamenet.candidate_freeze.v1",
@@ -253,8 +306,6 @@ def main() -> None:
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
-        (assessment_text, assessment),
-        (plan_text, plan),
     ):
         require(text, implementation_checkpoint, source)
         require(text, "API-R1", source)
@@ -264,8 +315,6 @@ def main() -> None:
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
-        (assessment_text, assessment),
-        (plan_text, plan),
     ):
         require(text, superseded_candidate, source)
         require(text, superseded_candidate_tag, source)
@@ -285,23 +334,86 @@ def main() -> None:
         "Candidate freeze is retired as a development gate",
         roadmap,
     )
+    require(assessment_text, "IOE-X10 实现与证据提交 `f5d39b8`", assessment)
+    require(assessment_text, "production-hardening preview", assessment)
     require(
         assessment_text,
-        "历史 v0.3 工程候选：annotated tag",
+        "IOE-X10 listener capacity/performance decision",
         assessment,
     )
-    require(
-        normalized_plan_text,
-        "main 持续前进 + 小步纵向切片 + 每提交精确留证 + 里程碑按需推广",
-        plan,
+    require(assessment_text, "ARCH-G1", assessment)
+    require(assessment_text, "v0.3.0-internal-candidate", assessment)
+    require(assessment_text, "gamenet-game-gateway", assessment)
+    require(assessment_text, "NO-PROMOTION", assessment)
+    require(assessment_text, "公共 backend selector", assessment)
+
+    require(plan_text, current_governance_checkpoint, plan)
+    require(plan_text, current_implementation_checkpoint, plan)
+    require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
+    require(plan_text, "长期方向：`goal.md`", plan)
+    require(plan_text, "当前评估：`assessment.md`", plan)
+    require(plan_text, "当前唯一实现前沿是 **M2", plan)
+    assert plan_text.count("当前唯一实现前沿") == 1, (
+        "plan must declare exactly one current implementation front"
     )
-    require(assessment_text, "P2-02 | P2（已关闭）", assessment)
-    require(plan_text, "P2-02 | GOV-R2（已关闭）", plan)
-    require(
+    for milestone in (
+        "M1：IOE-X10、ARCH-G1 与治理统一",
+        "M2：v0.3.0 内部候选",
+        "M3：`gamenet-game-gateway` 真实集成",
+        "M4：Apache-2.0 下的 v0.3.0 外部发布",
+        "M5：v0.4 Runtime 边界",
+        "M6：v0.5 io_uring 可安装实验后端",
+        "M7：v0.6 Lua 与 typed RPC",
+        "M8：v0.7 Async 与 Coroutine",
+        "M9：v0.8 TLS、Web" + "Socket 与 DNS",
+        "M10：v0.9 UDP/KCP 实验能力",
+        "M11：v1.0 稳定化与发布",
+    ):
+        require(plan_text, milestone, plan)
+    roadmap_milestones = re.findall(
+        r"^##\s+\d+\.\s+M(?:[1-9]|1[01])：",
         plan_text,
-        "Cross-Profile common-capability review：IOE-X1",
-        plan,
+        re.MULTILINE,
     )
+    assert len(roadmap_milestones) == 11, (
+        "plan must contain exactly eleven executable roadmap milestones"
+    )
+    require(plan_text, "v0.3.0-internal-candidate", plan)
+    require(plan_text, "gamenet-game-gateway", plan)
+    require(plan_text, "NO-PROMOTION", plan)
+    require(plan_text, "不开放公共 backend selector", plan)
+    require(plan_text, "IOE-X1–X9", plan)
+    require(plan_text, "X10=DEFER 或 ARCH-G1 要求暂停", plan)
+    require(plan_text, "X10=PROMOTE 且 ARCH-G1=APPROVE", plan)
+    require(plan_text, "M6 标记 skipped-by-evidence", plan)
+    for slice_name in ("IOE-X11", "IOE-X12", "IOE-X13", "IOE-X14", "IOE-X15"):
+        require(plan_text, slice_name, plan)
+    require(plan_text, "GameNet::experimental_io_uring", plan)
+    require(plan_text, "IoUringTcpServer", plan)
+    require(plan_text, "IoUringTcpClient", plan)
+    require(plan_text, "Apache-2.0", plan)
+    require(plan_text, "GameNet::experimental_datagram", plan)
+    require(plan_text, "v1 稳定范围", plan)
+    require(plan_text, "v1 实验范围", plan)
+    require(plan_text, "v1 发布门", plan)
+    require(plan_text, "Linux/epoll 和 Windows/IOCP", plan)
+    require(plan_text, "完整 HTTP server", plan)
+    require(plan_text, "raw ICMP", plan)
+    require(plan_text, "版本里程碑因证据分支被跳过时不发布空版本", plan)
+    for fixed_protocol_anchor in (
+        "并发 active routes | 256",
+        "`maxPendingAccepts` | 32",
+        "4 波，每波替换 64 routes",
+        "每连接 echo round trips | 100",
+        "payload | 64 bytes",
+        "每个 backend 5 次 Release 样本",
+    ):
+        require(plan_text, fixed_protocol_anchor, plan)
+    require(plan_text, "M1 状态：已关闭", plan)
+    require(plan_text, "ARCH-G1：`APPROVE`", plan)
+    require(plan_text, "2026-08-22-ioe-x10-f5d39b8", plan)
+    assert "IOE-R2's generation-safe epoll Readiness Engine" not in plan_text
+    assert "IOE-X8 cross-thread admission/lifecycle equivalence is next" not in plan_text
     require(
         tests_cmake_text,
         "integration/runtime_model/test_tcp_runtime_profiles.cpp",
@@ -358,8 +470,6 @@ def main() -> None:
     require(status_text, "kernel-terminal and consumer-terminal", migration_status)
     require(normalized_status_text, "The closure removes the remaining completion-to-Channel publisher", migration_status)
     require(normalized_status_text, "observably monotonic", migration_status)
-    require(assessment_text, "P1-04 | P1（已关闭）", assessment)
-    require(plan_text, "P1-04 | API-R1（已关闭）", plan)
     require(status_text, "Current API-R1 surface decision: `APPROVE`", migration_status)
     require(status_text, reviewed_surface_tag, migration_status)
     require(
@@ -367,20 +477,12 @@ def main() -> None:
         "The historical implementation checkpoint is `669ebb0`",
         migration_status,
     )
-    require(plan_text, "M3-R3（本地关闭）", plan)
-    require(plan_text, "长期方向：`goal.md`", plan)
     require(goal_text, implementation_checkpoint, goal)
     require(goal_text, "本文不是当前实现授权，也不是发布证据", goal)
     require(goal_text, "owner-loop 并发与生命周期内核", goal)
     require(goal_text, "Readiness 与 Completion", goal)
     require(goal_text, "不把候选冻结或发布决定作为架构演进前置条件", goal)
-    require(assessment_text, "P1-05 | P1（本地关闭）", assessment)
-    require(assessment_text, "P1-06 | P1（本地关闭）", assessment)
-    require(
-        assessment_text,
-        "API-R1 已批准，`9d2a5be` 同线 diff 严格为空",
-        assessment,
-    )
+    require(assessment_text, "外部采用仍被许可证阻塞", assessment)
     assert "stable surface review 未完成" not in assessment_text, (
         "assessment must not contradict the recorded API-R1 APPROVE decision"
     )
@@ -414,14 +516,17 @@ def main() -> None:
     )
     require(
         assessment_text,
-        f"| CTest tests | {configured_test_count} |",
+        f"默认测试基线为 {configured_test_count}",
         assessment,
     )
+    require(assessment_text, "Linux experimental 基线为 136", assessment)
     require(
         normalized_plan_text,
-        f"当前测试基线：{configured_test_count}（{unit_count}/{contract_count}/{integration_count}",
+        f"默认测试基线为 {configured_test_count}（{unit_count} unit、"
+        f"{contract_count} contract、{integration_count} integration）",
         plan,
     )
+    require(plan_text, "Linux experimental 基线为 136", plan)
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(

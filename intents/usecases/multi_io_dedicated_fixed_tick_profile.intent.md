@@ -75,6 +75,8 @@ The logic-stop future cannot become ready before the cadence-stop admission
 outcome is published. If an already committed owner callback wins the race and
 retires the timer before a cancellation post is needed, that converged owner
 path is recorded as accepted rather than exposing the summary's sentinel value.
+The callback path and the already-accepted stop post may both observe that
+convergence, but they publish exactly one timer-cancellation outcome.
 
 ## 5. Metrics and Directional Baseline
 

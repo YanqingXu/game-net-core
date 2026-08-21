@@ -2,8 +2,9 @@
 
 game-net-core is a modern C++23 networking foundation for game servers.
 
-It is built around a Reactor-style EventLoop and aims to provide a small,
-testable, and extensible base for game-server networking.
+It is built around a single-owner EventLoop scheduler/event pump with native
+Readiness and Completion semantics, and aims to provide a small, testable, and
+extensible base for game-server networking.
 
 The repository is a component-by-component split and migration of the larger
 `mini_trantor` project. The goal is to extract the networking foundation first,
@@ -26,34 +27,28 @@ foundations without changing the core dependency direction.
 The published integration/contract preview is
 [`v0.2.0-phase4-preview`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview);
 it does not declare production readiness or API/ABI stability.
-The active Phase 6 line installs as `GameNetCore 0.3.0`. Its infrastructure
-snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed real 24-hour and
-72-hour Linux endurance runs, but those runs predate the current implementation
-checkpoint. M3-R1 is independently closed at `95a6ab5`, and M3-R2 is committed
-at `12adb00`. API-R1 independently approved the remediated 0.3 stable Core
-surface after closing its initial blockers. PERF-R1 first exposed deterministic
-comparator, high-fd client, and Linux overload-profile defects in
-`refreeze-1`; the first `refreeze-2` remote captures then exposed missing tag
-checkout, revision-wide benchmark order bias, capacity snapshot queue
-interference, incomplete stdout flushing, and hidden localized diagnostics.
-The current implementation checkpoint is
-`669ebb0a7c5c475dea74b12275c66a2ce1876804` (`669ebb0`). Its stable API remains
-the single source-compatible addition bound to reviewed-surface tag
-  `api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`.
-Historical REL-C1 evidence is retained at annotated tag
-`v0.3.0-rel-c1-refreeze-5`, which superseded
-`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc` after
-two hosted Windows capacity attempts proved that one probe could close on its
-I/O deadline before the server published the corresponding accept. The new
-batch lifecycle keeps connected sockets open through accept convergence before
-exact echo and abortive close; it does not relax the two-second deadline.
-The tag is now a historical engineering reference, not a development gate or
-REL-D1 decision. Development proceeds continuously on `main`, with exact-commit
-CI and performance evidence attached to each capability milestone. IOE-R1 is
-closed at `8bb14e72`; the active front is IOE-R2's generation-safe epoll
-Readiness Engine, while ARCH-G1 independent review and Runtime Profile contracts
-proceed in parallel. A future release will select a promotion commit when
-evidence is needed rather than freezing development in advance.
+The active line installs as `GameNetCore 0.3.0`. M1 closed on 2026-08-22 with
+IOE-X10 implementation/evidence checkpoint
+`f5d39b800b4dd943531670aa09840c931c3dee4d`: a fixed 256-route listener
+comparison produced a narrowly scoped `PROMOTE` for later source-private
+io_uring shaping, and independent ARCH-G1 review concluded `APPROVE`. The
+comparison does not claim that io_uring is faster overall and does not install
+an io_uring target, open a public backend selector, or replace production
+epoll. Evidence and review are recorded in
+[`docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/evidence.json`](docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/evidence.json)
+and [`docs/reviews/arch-g1-independent-review.md`](docs/reviews/arch-g1-independent-review.md).
+
+The current implementation front is M2: select an exact promotion commit and
+build the complete `v0.3.0-internal-candidate.1` evidence bundle before adding
+new IOE or Runtime functionality. Production Linux remains epoll, Windows
+remains IOCP, and the reviewed stable API remains zero-diff. Historical
+API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint
+`669ebb0a7c5c475dea74b12275c66a2ce1876804`, reviewed-surface tag
+`api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`,
+annotated tag `v0.3.0-rel-c1-refreeze-5`, and superseded
+`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`.
+These are engineering references, not current development gates or a release
+decision.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 
@@ -114,8 +109,9 @@ All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
 rejected, and no binary ABI compatibility is promised before 1.0.
 `GAMENET_ENABLE_TLS` remains an `OFF`-only compatibility option. The default-off
 `GAMENET_ENABLE_EXPERIMENTAL=ON` is accepted only on Linux and builds the
-non-installed Linux-only IOE-X1 io_uring one-shot Engine/contracts; it does not
-replace epoll or enable deferred transports. Windows rejects that option.
+non-installed Linux-only IOE-X1–X10 io_uring Engine/Pump/TCP/Hub/listener
+contracts and benchmark tooling; it does not replace epoll or enable deferred
+transports. Windows rejects that option.
 
 See [Platform and Build Support](docs/development/platform_support.md) for the
 support tiers, exact option behavior, commands, and Windows promotion criteria.

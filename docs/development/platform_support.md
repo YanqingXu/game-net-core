@@ -59,10 +59,10 @@ commands remain valid:
 | Option | Supported value | `ON` behavior |
 |---|---|---|
 | `GAMENET_ENABLE_TLS` | `OFF` | Configure fails because TLS is not implemented in the active target graph |
-| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 io_uring Engine, EventLoop pump, single-connection driver, shared-Pump Hub/listener, semantic adapter, and their direct/capacity/graceful/cross-thread/listener contracts; Windows rejects it |
+| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1–X10 io_uring Engine, EventLoop pump, single-connection driver, shared-Pump Hub/listener, semantic adapter, direct contracts, and optional fixed listener-comparison benchmark; Windows rejects it |
 
 An option that has no implementation must not configure successfully. The
-Linux-only IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 io_uring target is the sole active experimental module;
+Linux-only IOE-X1–X10 io_uring target is the sole active experimental module;
 it does not replace epoll and is not installed. TLS, UDP, KCP, and other
 experimental work still require promoted intent, ownership/threading
 contracts, targets, and direct tests before an enabling value can be accepted.
@@ -97,7 +97,7 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
-The dedicated IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 Engine, EventLoop-pump,
+The dedicated IOE-X1–X10 Engine, EventLoop-pump,
 single-connection-driver, shared-Pump Hub/listener, semantic adapter,
 fixed-capacity, graceful, bounded cross-thread, and listener contract
 configuration is Linux-only:
@@ -120,7 +120,7 @@ ctest --test-dir build-io-uring \
 - the root platform allow-list and explicit Core backend selection;
 - configure-time rejection for shared libraries, TLS, unsupported Windows
   experimental requests, and any unimplemented option;
-- the default-off, Linux-only, non-installed IOE-X1 io_uring target;
+- the default-off, Linux-only, non-installed IOE-X1–X10 io_uring target;
 - explicit `STATIC` declarations for every installed library target;
 - this support matrix, README/CI documentation, and workflow registration.
 

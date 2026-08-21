@@ -277,6 +277,7 @@ struct MultiIoDedicatedFixedTick::CallbackState {
     std::atomic<std::uint64_t> timerCancelAccepted{0};
     std::atomic<std::uint64_t> timerCancelQueueFull{0};
     std::atomic<std::uint64_t> timerCancelUnavailable{0};
+    std::atomic<bool> timerCancelOutcomeRecorded{false};
     std::atomic<std::size_t> logicStopDroppedCommands{0};
     std::atomic<std::size_t> logicStopDroppedBytes{0};
     std::atomic<std::uint64_t> queueAgeMaxUs{0};
@@ -905,6 +906,11 @@ void MultiIoDedicatedFixedTick::stopCadenceOnOwner(
     const std::shared_ptr<CallbackState>& state) {
     if (!state->logicExecutor.isInOwnerThread()) {
         state->logicOwnerViolations.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (state->timerCancelOutcomeRecorded.exchange(
+            true, std::memory_order_acq_rel)) {
+        completeLogicStop(state);
+        return;
     }
     gamenet::net::PostResult result = gamenet::net::PostResult::Accepted;
     if (state->cadenceTimer.valid()) {

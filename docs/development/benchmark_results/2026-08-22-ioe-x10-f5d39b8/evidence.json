@@ -1,0 +1,193 @@
+{
+  "checks": {
+    "all_samples_valid": true,
+    "alternating_interleave": true,
+    "five_samples_per_backend": true,
+    "fixed_protocol": true,
+    "one_warmup_per_backend": true,
+    "release_build": true,
+    "same_machine_compiler_affinity": true,
+    "stable_api_or_backend_selector_changed": false,
+    "zero_final_residue": true
+  },
+  "decision": "PROMOTE",
+  "decision_scope": "later source-private io_uring integration shaping only",
+  "failure": null,
+  "io_uring_to_epoll_median_ratios": {
+    "connects_per_second": 0.6230372364288937,
+    "p50_latency_us": 2.233183856502242,
+    "p999_latency_us": 0.764629388816645,
+    "p99_latency_us": 1.3961661341853036,
+    "round_trips_per_second": 0.49915634346148896,
+    "rss_high_water_bytes": 0.9537892791127541,
+    "server_shutdown_milliseconds": 0.013483764446890478,
+    "throughput_mib_per_second": 0.49915634346654286
+  },
+  "medians": {
+    "epoll": {
+      "connects_per_second": 232223.222322232,
+      "fd_high_water": 518.0,
+      "listener_shutdown_milliseconds": 1.0902,
+      "max_capacity_recovery_milliseconds": 2.5695,
+      "max_pending_send_bytes": 64.0,
+      "p50_latency_us": 223.0,
+      "p999_latency_us": 1538.0,
+      "p99_latency_us": 626.0,
+      "round_trips_per_second": 444597.429184834,
+      "rss_high_water_bytes": 6647808.0,
+      "server_shutdown_milliseconds": 1.0902,
+      "throughput_mib_per_second": 54.272147117
+    },
+    "io_uring": {
+      "connects_per_second": 144683.714670256,
+      "fd_high_water": 520.0,
+      "listener_shutdown_milliseconds": 1.0989,
+      "max_capacity_recovery_milliseconds": 3.7682,
+      "max_pending_send_bytes": 16384.0,
+      "p50_latency_us": 498.0,
+      "p999_latency_us": 1176.0,
+      "p99_latency_us": 874.0,
+      "round_trips_per_second": 221923.62706428,
+      "rss_high_water_bytes": 6340608.0,
+      "server_shutdown_milliseconds": 0.0147,
+      "throughput_mib_per_second": 27.090286507
+    }
+  },
+  "metadata": {
+    "affinity": [
+      0,
+      1
+    ],
+    "build_type": "Release",
+    "commit": "f5d39b800b4dd943531670aa09840c931c3dee4d",
+    "compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13700",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "machine": "WIN-QVJP2QP5U9D",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39"
+  },
+  "protocol": {
+    "active_routes": 256,
+    "churn_waves": 4,
+    "hub_route_limit": 256,
+    "max_pending_accepts": 32,
+    "payload_bytes": 64,
+    "replacements_per_wave": 64,
+    "round_trips_per_route_per_wave": 100
+  },
+  "samples": {
+    "epoll": [
+      {
+        "path": "sample-epoll-1.json",
+        "sha256": "10861af420cf5384dec686a5cf294650f7f12e648ea413155a296294ce2a1068"
+      },
+      {
+        "path": "sample-epoll-2.json",
+        "sha256": "1155024b95ab67c273ce4ff2c8afc3ae7bf054479e2b2ef8cc80f80b1578b193"
+      },
+      {
+        "path": "sample-epoll-3.json",
+        "sha256": "be6ac41173c02a74b1c9c62485aa1314c27022e0c51afe0359a46684ccd2860f"
+      },
+      {
+        "path": "sample-epoll-4.json",
+        "sha256": "60b343f3cfec4bcc246c833ad8d6c7fd34bc3827bf9c440666e1c73bdf0de189"
+      },
+      {
+        "path": "sample-epoll-5.json",
+        "sha256": "27c75590203285381d838cc78c1c3e4cafbf7a495264274a2472cdd26977b3e7"
+      }
+    ],
+    "io_uring": [
+      {
+        "path": "sample-io_uring-1.json",
+        "sha256": "a2af42e69c77327757edbb7261633e5fdc4cec3f04cc74061072d6ffcaf7ac9f"
+      },
+      {
+        "path": "sample-io_uring-2.json",
+        "sha256": "fe185389e1352f0d1548fad9b8fa2211aa7c60635deb74f2d01d7781adf9bf95"
+      },
+      {
+        "path": "sample-io_uring-3.json",
+        "sha256": "21a60798d9a451717908d007fb7a2039dba736a0116a5fa1ec91ecf2e95fbb67"
+      },
+      {
+        "path": "sample-io_uring-4.json",
+        "sha256": "235d9e64db0bdf10bc73b756bb25eb124c32cd39eb967c83640060d3d78a45f1"
+      },
+      {
+        "path": "sample-io_uring-5.json",
+        "sha256": "672af611334417db5ae26c62081503103ebc89b449aaa5720551cfddc5179797"
+      }
+    ]
+  },
+  "sampling": {
+    "alternating_first_backend": true,
+    "formal_samples_per_backend": 5,
+    "interleaved": true,
+    "run_order": [
+      {
+        "backend": "epoll",
+        "kind": "warmup",
+        "repetition": 1
+      },
+      {
+        "backend": "io_uring",
+        "kind": "warmup",
+        "repetition": 1
+      },
+      {
+        "backend": "epoll",
+        "kind": "formal",
+        "repetition": 1
+      },
+      {
+        "backend": "io_uring",
+        "kind": "formal",
+        "repetition": 1
+      },
+      {
+        "backend": "io_uring",
+        "kind": "formal",
+        "repetition": 2
+      },
+      {
+        "backend": "epoll",
+        "kind": "formal",
+        "repetition": 2
+      },
+      {
+        "backend": "epoll",
+        "kind": "formal",
+        "repetition": 3
+      },
+      {
+        "backend": "io_uring",
+        "kind": "formal",
+        "repetition": 3
+      },
+      {
+        "backend": "io_uring",
+        "kind": "formal",
+        "repetition": 4
+      },
+      {
+        "backend": "epoll",
+        "kind": "formal",
+        "repetition": 4
+      },
+      {
+        "backend": "epoll",
+        "kind": "formal",
+        "repetition": 5
+      },
+      {
+        "backend": "io_uring",
+        "kind": "formal",
+        "repetition": 5
+      }
+    ],
+    "warmups_per_backend": 1
+  },
+  "schema": "gamenet.ioe_x10_listener_evidence.v1"
+}

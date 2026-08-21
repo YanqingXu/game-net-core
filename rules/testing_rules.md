@@ -346,7 +346,9 @@ Contract tests verify:
   later ticks return queue depth to zero, and a fresh route succeeds
 - callback-active stop cancels/counts queued backlog, keeps the logic future
   pending through the committed tick and cadence retirement, revokes output,
-  and publishes bounded shutdown convergence time
+  publishes bounded shutdown convergence time, and records exactly one timer-
+  cancellation outcome even when the retiring callback races the accepted stop
+  post
 - Profile C metrics expose fixed-storage tick jitter P50/P99/P999, duration and
   queue-age P99/P999, max queue age/commands per tick, catch-up/skip/overrun,
   typed failures, owner violations, and exact cross-domain handoffs

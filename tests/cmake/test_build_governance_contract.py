@@ -119,7 +119,7 @@ def main() -> None:
         "no binary ABI compatibility promise before version 1.0",
         "`GAMENET_ENABLE_TLS`",
         "`GAMENET_ENABLE_EXPERIMENTAL`",
-        "IOE-X1 io_uring",
+        "IOE-X1–X10 io_uring",
     ):
         require(docs_text, fragment, platform_docs)
 
@@ -129,7 +129,7 @@ def main() -> None:
     require(readme_text, "Windows/IOCP is a required Tier 2", readme)
     require(readme_text, "static-only before 1.0", readme)
     require(readme_text, "docs/development/platform_support.md", readme)
-    require(readme_text, "Linux-only IOE-X1 io_uring", readme)
+    require(readme_text, "Linux-only IOE-X1–X10 io_uring", readme)
     require(readme_text, "## Licensing Status", readme)
     require(readme_text, "all-rights-reserved", readme)
     require(readme_text, "docs/development/licensing.md", readme)

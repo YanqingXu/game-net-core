@@ -5,7 +5,7 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-20
+## Current Roadmap Checkpoint — 2026-08-22
 
 - Historical REL-C1 implementation checkpoint
   `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled
@@ -69,19 +69,18 @@ See `migration_status.md` for the current checked state of these phases.
   default/fallback. The cross-Profile real-TCP integration contract now drives
   the same echo/stop lifecycle through A/B/C/D and closes the common-capability
   review as `NO-PROMOTION`; it also closes a Profile C cadence-stop summary
-  publication race. IOE-X2 now adds a non-installed EventLoop-driven one-shot
-  completion pump with ring-fd scheduling, an independent dispatch budget,
-  automatic quit cancellation, and fail-closed terminal retirement. IOE-X3
-  composes it into one non-installed real-TCP connection driver with one Recv,
-  bounded FIFO Send, pause/resume, re-entry, and socket-after-terminal close.
-  IOE-X4 closes shared-Pump routing, IOE-X5 closes fixed capacity/churn plus
-  directional measurement, and IOE-X6 closes the source-private forced-close/
-  backpressure semantic adapter beside production epoll. IOE-X7 closes
-  graceful-drain, half-close, escalation, and reset/callback/owner-quit terminal
-  equivalence. IOE-X8 cross-thread admission/lifecycle equivalence is next while
-  ARCH-G1 independent review proceeds in parallel.
+  publication race. IOE-X2–X9 close the EventLoop Pump, real-TCP driver, shared
+  Hub, fixed capacity/churn, semantic adapter, graceful half-close, bounded
+  cross-thread admission, and source-private listener/Accept ownership.
+  IOE-X10 is closed at `f5d39b800b4dd943531670aa09840c931c3dee4d`:
+  all ten fixed-protocol formal samples pass correctness, capacity, recovery,
+  and zero-residue validation, producing a narrow `PROMOTE` for later
+  source-private shaping. Independent ARCH-G1 is `APPROVE` after owner-
+  observation, destruction, and construction-rollback blockers were fixed.
+  No public selector, installed io_uring target, or production replacement is
+  authorized. M1 is closed; M2 promotion-commit evidence is the active front.
   CI/performance evidence stays commit-bound and continuous; endurance and
-  licensing move to promotion time.
+  licensing remain promotion gates.
 
 ## Phase 1: Project Skeleton
 
@@ -302,11 +301,10 @@ In progress after production hardening:
 
 ## Phase 7: I/O Engine and Runtime Profiles
 
-Active execution front:
+M1 is closed. Active execution front: M2 `v0.3.0-internal-candidate.1` evidence.
 
-- [ ] ARCH-G1: the owner-loop/I/O Engine and Runtime Model intents, accepted ADR,
-  semantic-coupling inventory, concrete test map, and dual-platform numerical
-  baseline are complete; independent architecture review remains in parallel.
+- [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
+  all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
 - [x] IOE-R1: the source-private Engine seam, typed admission/operation results,
   owner/lifetime contracts, Poller adapter, option layering, and dual-platform
   evidence are closed at `8bb14e72d8935879396d12a7a51c891311aa2a78` without
@@ -334,3 +332,10 @@ Active execution front:
 - [x] RTM-R2: bounded logic sharding and Hybrid execution are integrated as the
   non-installed Profile D vertical slice after Profiles A/B/C established
   contract and performance evidence.
+- [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
+  listener/Accept vertical slices are closed with exact-commit evidence.
+- [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`
+  only for later source-private shaping; raw evidence is bound to `f5d39b8`.
+- [ ] M2: select the exact promotion commit and complete dual-platform CI,
+  sanitizers, consumers, performance/capacity/fault, 24h/72h endurance,
+  package, SBOM, and notices before naming the internal candidate.

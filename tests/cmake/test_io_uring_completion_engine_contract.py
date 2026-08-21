@@ -801,11 +801,11 @@ def main() -> None:
     require(workflow_text, "tcp_connection_adapter", workflow)
     require(
         platform_docs.read_text(encoding="utf-8"),
-        "IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 io_uring",
+        "IOE-X1–X10 io_uring",
         platform_docs,
     )
 
-    print("IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 Engine, Pump, driver, Hub, capacity, adapter, graceful, cross-thread, and listener contracts verified")
+    print("IOE-X1–X10 Engine, Pump, driver, Hub, capacity, adapter, graceful, cross-thread, listener, and comparison contracts verified")
 
 
 if __name__ == "__main__":

@@ -336,7 +336,7 @@ void fixedTickGateBoundsWorkAndPreservesOwners() {
     GAMENET_TEST_ASSERT(metrics.timerSetupPosts == 1);
     GAMENET_TEST_ASSERT(metrics.timerSetupAccepted == 1);
     GAMENET_TEST_ASSERT(metrics.timerSetupFailures == 0);
-    GAMENET_TEST_ASSERT(metrics.timerCancelPosts == 1);
+    GAMENET_TEST_ASSERT(metrics.timerCancelPosts <= 1);
     GAMENET_TEST_ASSERT(metrics.timerCancelAccepted == 1);
     {
         std::lock_guard lock(observationsMutex);
@@ -554,6 +554,10 @@ void activeHandlerDelaysLogicStopAndRevokesOutput() {
     GAMENET_TEST_ASSERT(metrics.staleOutputs >= 1);
     GAMENET_TEST_ASSERT(metrics.outputsAccepted == 0);
     GAMENET_TEST_ASSERT(metrics.logicStopDroppedCommands >= 1);
+    GAMENET_TEST_ASSERT(metrics.timerCancelPosts <= 1);
+    GAMENET_TEST_ASSERT(metrics.timerCancelAccepted == 1);
+    GAMENET_TEST_ASSERT(metrics.timerCancelQueueFull == 0);
+    GAMENET_TEST_ASSERT(metrics.timerCancelUnavailable == 0);
     profile.reset();
     logicThread.stop();
 }
