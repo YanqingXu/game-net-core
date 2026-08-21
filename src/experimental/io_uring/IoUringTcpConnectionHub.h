@@ -186,6 +186,9 @@ struct IoUringTcpConnectionHubMetrics {
     std::size_t activeConnections{};
     std::size_t maxActiveConnections{};
     std::size_t activeOperationRoutes{};
+    std::size_t maxActiveOperationRoutes{};
+    std::size_t maxActiveReceives{};
+    std::size_t maxActiveSends{};
     std::size_t pendingSendBytes{};
     std::size_t maxPendingSendBytes{};
     std::size_t maxConsumerDepth{};
@@ -253,8 +256,9 @@ public:
         gamenet::net::SocketFd listeningSocket,
         AcceptedConnectionFactory connectionFactory);
     bool stopListening();
-    bool listening() const noexcept;
-    IoUringTcpHubListenerMetrics listenerMetrics() const noexcept;
+    // Mutable Hub observations are owner-loop-only and reject foreign reads.
+    bool listening() const;
+    IoUringTcpHubListenerMetrics listenerMetrics() const;
     IoUringTcpHubSendResult send(
         IoUringTcpConnectionIdentity connection,
         std::string_view payload);
@@ -269,8 +273,8 @@ public:
         IoUringTcpHubCloseReason reason = IoUringTcpHubCloseReason::Explicit);
     bool stop();
 
-    IoUringTcpHubPhase phase() const noexcept;
-    IoUringTcpConnectionHubMetrics metrics() const noexcept;
+    IoUringTcpHubPhase phase() const;
+    IoUringTcpConnectionHubMetrics metrics() const;
     std::shared_future<IoUringTcpConnectionHubStopSummary> stopFuture() const;
 
 private:

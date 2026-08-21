@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cerrno>
 #include <deque>
+#include <exception>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -172,15 +173,14 @@ public:
 
     ~IoUringTcpConnectionHubImpl() {
         if (!pump_) return;
-        try {
-            assertOwner();
-            if (phase_ != IoUringTcpHubPhase::Stopped) {
-                (void)beginHubStop(IoUringTcpHubCloseReason::Destroyed);
-            }
-        } catch (...) {
+        if (!ownerLoop_->isInLoopThread() ||
+            phase_ != IoUringTcpHubPhase::Stopped ||
+            stopFuture_.wait_for(std::chrono::milliseconds::zero()) !=
+                std::future_status::ready ||
+            !pump_->stopped() || maintenanceAttached_) {
+            std::terminate();
         }
         pump_.reset();
-        detachMaintenanceNoThrow();
     }
 
     IoUringTcpConnectionHubAddOutcome addConnection(
@@ -315,11 +315,13 @@ public:
             true);
     }
 
-    bool listening() const noexcept {
+    bool listening() const {
+        assertOwnerObservation();
         return listener_ && listener_->phase == ListenerPhase::Running;
     }
 
-    IoUringTcpHubListenerMetrics listenerMetrics() const noexcept {
+    IoUringTcpHubListenerMetrics listenerMetrics() const {
+        assertOwnerObservation();
         if (listener_) return listenerMetricsSnapshot(*listener_);
         return lastListenerSummary_
             ? lastListenerSummary_->listener
@@ -470,9 +472,13 @@ public:
         return beginHubStop(IoUringTcpHubCloseReason::HubStopped);
     }
 
-    IoUringTcpHubPhase phase() const noexcept { return phase_; }
+    IoUringTcpHubPhase phase() const {
+        assertOwnerObservation();
+        return phase_;
+    }
 
-    IoUringTcpConnectionHubMetrics metrics() const noexcept {
+    IoUringTcpConnectionHubMetrics metrics() const {
+        assertOwnerObservation();
         auto snapshot = metrics_;
         snapshot.activeConnections = metrics_.activeConnections;
         snapshot.activeOperationRoutes = activeOperationRoutes_;
@@ -551,6 +557,13 @@ private:
         }
     }
 
+    void assertOwnerObservation() const {
+        if (!ownerLoop_->isInLoopThread()) {
+            throw std::runtime_error(
+                "IoUringTcpConnectionHub observation used from a different thread");
+        }
+    }
+
     Route* findRoute(Identity identity, bool countStale) noexcept {
         if (!identity.valid() || identity.slot >= slots_.size()) {
             if (countStale) ++metrics_.staleConnectionRejections;
@@ -580,6 +593,20 @@ private:
             .active = true,
         };
         ++activeOperationRoutes_;
+        metrics_.maxActiveOperationRoutes = (std::max)(
+            metrics_.maxActiveOperationRoutes,
+            activeOperationRoutes_);
+        if (kind == IoUringOperationKind::Receive) {
+            ++activeReceives_;
+            metrics_.maxActiveReceives = (std::max)(
+                metrics_.maxActiveReceives,
+                activeReceives_);
+        } else if (kind == IoUringOperationKind::Send) {
+            ++activeSends_;
+            metrics_.maxActiveSends = (std::max)(
+                metrics_.maxActiveSends,
+                activeSends_);
+        }
         return true;
     }
 
@@ -610,6 +637,9 @@ private:
             .active = true,
         };
         ++activeOperationRoutes_;
+        metrics_.maxActiveOperationRoutes = (std::max)(
+            metrics_.maxActiveOperationRoutes,
+            activeOperationRoutes_);
         return true;
     }
 
@@ -962,6 +992,19 @@ private:
         const auto kind = entry.kind;
         entry = {};
         --activeOperationRoutes_;
+        if (kind == IoUringOperationKind::Receive) {
+            if (activeReceives_ == 0) {
+                recordRoutingFailure();
+                return;
+            }
+            --activeReceives_;
+        } else if (kind == IoUringOperationKind::Send) {
+            if (activeSends_ == 0) {
+                recordRoutingFailure();
+                return;
+            }
+            --activeSends_;
+        }
         if (kind == IoUringOperationKind::Accept) {
             if (!removeAcceptIdentity(operation)) {
                 recordRoutingFailure();
@@ -1518,6 +1561,8 @@ private:
     IoUringTcpHubCloseReason hubCloseReason_{
         IoUringTcpHubCloseReason::HubStopped};
     std::size_t activeOperationRoutes_{};
+    std::size_t activeReceives_{};
+    std::size_t activeSends_{};
     std::size_t pendingSendBytes_{};
     std::size_t consumerDepth_{};
     bool maintenanceAttached_{false};
@@ -1560,12 +1605,12 @@ bool IoUringTcpConnectionHub::stopListening() {
     return impl_->stopListening();
 }
 
-bool IoUringTcpConnectionHub::listening() const noexcept {
+bool IoUringTcpConnectionHub::listening() const {
     return impl_->listening();
 }
 
 IoUringTcpHubListenerMetrics
-IoUringTcpConnectionHub::listenerMetrics() const noexcept {
+IoUringTcpConnectionHub::listenerMetrics() const {
     return impl_->listenerMetrics();
 }
 
@@ -1598,11 +1643,11 @@ bool IoUringTcpConnectionHub::closeConnection(
 
 bool IoUringTcpConnectionHub::stop() { return impl_->stop(); }
 
-IoUringTcpHubPhase IoUringTcpConnectionHub::phase() const noexcept {
+IoUringTcpHubPhase IoUringTcpConnectionHub::phase() const {
     return impl_->phase();
 }
 
-IoUringTcpConnectionHubMetrics IoUringTcpConnectionHub::metrics() const noexcept {
+IoUringTcpConnectionHubMetrics IoUringTcpConnectionHub::metrics() const {
     return impl_->metrics();
 }
 

@@ -246,6 +246,48 @@ Contract tests verify:
   must cancel every exact Accept, publish listener-before-Hub stop, and leave
   zero active Accept/route/operation/notice/fd/byte state under normal,
   ASan/UBSan, TSan, and focused repeat gates
+- the IOE-X10 listener decision fixes 256 concurrent active routes, Hub route
+  capacity 256, `maxPendingAccepts == 32`, four churn waves replacing exactly
+  64 routes, 100 measured echo round trips per active route and wave, and a
+  64-byte payload. A runner or environment that cannot execute those values
+  records `DEFER`; it must not lower them and report success
+- production epoll and the source-private completion listener must execute the
+  same bounded connection/churn/echo state machine in Release on one machine,
+  compiler, build, client topology, and CPU-affinity set. Each backend receives
+  one full unrecorded warm-up and five retained samples; formal pairs alternate
+  which backend runs first and preserve the exact run order
+- every X10 sample must validate connect/echo/close totals, completion rate,
+  throughput, ordered P50/P99/P999 latency, fd/route/Accept/Recv/Send/pending-
+  byte/Engine-owned-byte/RSS high-water observations, typed capacity and SQ
+  rejection counts plus recovery, shutdown latency, and zero listener/route/
+  operation/notice/fd/pending-byte/Engine-owned-byte residue. Epoll operation
+  fields are explicitly unavailable and cannot be synthesized from readiness
+- the X10 evidence manifest records CPU, kernel, compiler, build type, affinity,
+  warm-up count, interleaving order, five hashes per backend, medians, and every
+  validation check. Missing/invalid samples, correctness/accounting/recovery/
+  lifecycle failure, nonzero residue, or metadata drift forces `DEFER`; only a
+  complete valid set may record narrowly scoped `PROMOTE` for later source-
+  private shaping, never a public selector or production replacement
+- the ARCH-G1 Hub observation regression contract invokes `listening`,
+  `listenerMetrics`, `phase`, and `metrics` from a real foreign thread and
+  requires every call to reject before reading owner state; owner-side queries
+  and shutdown must remain valid afterward
+- a deterministic subprocess destruction contract holds a real accepted Recv
+  and lease, invokes Pump destruction before physical stop, and requires an
+  immediate fail-fast result rather than the historical 250 ms owner wait or
+  source/slot cleanup. The normal owner-quit companion must still deliver one
+  cancellation terminal, retain the lease through its consumer, publish the
+  stop future, detach sources, and reach zero residue before legal destruction
+- a drained standalone Engine destroyed from a real foreign thread must fail
+  fast, proving owner-only destruction is independent of residue checks. A
+  separate Pump construction contract closes the EventLoop readiness plane so
+  ring-fd Channel registration rejects, then requires the original exception,
+  zero attached lifecycle nodes, and clean empty-Engine rollback without
+  termination or a timed wait
+- injected completion-consumer/drive failure may mark `DrainedAfterFailure`
+  only after the same terminal retirement and zero-residue checks. It cannot
+  make an early destructor legal or detach Channel/lifecycle sources while an
+  operation, notice, callback frame, or lease remains
 
 ## 5.1 Runtime Profile Required Test Examples
 - the cross-Profile integration contract must execute the same real framed TCP

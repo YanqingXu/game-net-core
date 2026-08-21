@@ -55,14 +55,6 @@ public:
     void initialize() {
         ownerLoop_->assertInLoopThread();
         const std::weak_ptr<IoUringEventLoopPumpImpl> weak = shared_from_this();
-        lifecycleSource_ =
-            gamenet::net::detail::EventLoopLifecycleRegistry::
-                attachQuiesceParticipant(*ownerLoop_, [weak] {
-                    if (const auto state = weak.lock()) {
-                        state->driveFromLifecycle();
-                    }
-                });
-        lifecycleAttached_ = true;
         try {
             channel_ = std::make_unique<gamenet::net::Channel>(
                 ownerLoop_,
@@ -79,32 +71,30 @@ public:
             });
             channel_->enableReading();
             channelRegistered_ = true;
+            lifecycleSource_ =
+                gamenet::net::detail::EventLoopLifecycleRegistry::
+                    attachQuiesceParticipant(*ownerLoop_, [weak] {
+                        if (const auto state = weak.lock()) {
+                            state->driveFromLifecycle();
+                        }
+                    });
+            lifecycleAttached_ = true;
         } catch (...) {
-            gamenet::net::detail::EventLoopLifecycleRegistry::detach(
-                *ownerLoop_, lifecycleSource_);
+            rollbackInitialization();
             throw;
         }
     }
 
     void destroy() noexcept {
         if (destroyed_) return;
-        destroyed_ = true;
-        try {
-            ownerLoop_->assertInLoopThread();
-            if (phase_ != Phase::Stopped) {
-                beginQuiesceInternal();
-                const auto result = engine_.shutdown(std::chrono::milliseconds(250));
-                while (auto notice = engine_.takeNextNotice()) {
-                    dispatchNotice(*notice);
-                }
-                if (result == IoUringShutdownResult::Drained) {
-                    finishStopped();
-                }
-            }
-        } catch (...) {
-            ++metrics_.driveFailures;
+        if (!ownerLoop_->isInLoopThread() || phase_ != Phase::Stopped ||
+            stopFuture_.wait_for(std::chrono::milliseconds::zero()) !=
+                std::future_status::ready ||
+            channelRegistered_ || lifecycleAttached_ || !engine_.quiescent() ||
+            engine_.metrics().readyNotices != 0) {
+            std::terminate();
         }
-        removeSourcesNoThrow();
+        destroyed_ = true;
     }
 
     IoUringSubmissionOutcome enqueueAccept(
@@ -168,6 +158,25 @@ public:
     }
 
 private:
+    void rollbackInitialization() noexcept {
+        bool rollbackFailed = false;
+        try {
+            removeSources();
+        } catch (...) {
+            rollbackFailed = true;
+        }
+        try {
+            rollbackFailed =
+                engine_.shutdown(std::chrono::milliseconds::zero()) !=
+                    IoUringShutdownResult::Drained ||
+                !engine_.quiescent() || engine_.metrics().readyNotices != 0 ||
+                rollbackFailed;
+        } catch (...) {
+            rollbackFailed = true;
+        }
+        if (rollbackFailed) std::terminate();
+    }
+
     void synchronizeLoopPhase() {
         if (ownerLoop_->phase() != gamenet::net::EventLoopPhase::Running) {
             beginQuiesceInternal();
@@ -329,13 +338,6 @@ private:
             gamenet::net::detail::EventLoopLifecycleRegistry::detach(
                 *ownerLoop_, lifecycleSource_);
             lifecycleAttached_ = false;
-        }
-    }
-
-    void removeSourcesNoThrow() noexcept {
-        try {
-            removeSources();
-        } catch (...) {
         }
     }
 

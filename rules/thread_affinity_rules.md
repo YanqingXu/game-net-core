@@ -298,6 +298,10 @@ No other direct mutation path is allowed for core loop state.
   future publication, and destruction are Hub-owner-loop-only. The existing
   Pump remains the sole completion dispatcher; no listener callback, route
   mutation, socket syscall, or generation transition runs on a foreign thread
+- Hub `listening`, `listenerMetrics`, `phase`, and `metrics` observe mutable
+  listener/route/operation state and therefore assert the same owner before
+  reading. They are not cross-thread snapshots; a foreign query fails before
+  accessing any non-atomic Hub field
 - an Accept terminal clears its exact operation-route generation before the
   connection factory may re-enter. The outer frame revalidates Hub/listener
   phase before transferring the accepted fd or rearming, and one Pump turn
@@ -306,6 +310,14 @@ No other direct mutation path is allowed for core loop state.
   before route close and Pump quiesce. Explicit listener stop may retry a
   temporarily full cancellation SQ through the existing owner maintenance
   source; it never blocks, spins, or adds a pending functor
+- Completion Engine, Pump, Driver, and Hub destruction is owner-only. Pump-
+  based destructors require an already-published physical stop and perform no
+  wait; a live accepted obligation is a fail-fast precondition violation, not
+  permission to block the EventLoop owner or execute a destructor drain
+- Pump initialization is owner-only and admits no operation before its Channel
+  and lifecycle participant are attached. Registration failure is rolled back
+  on that owner with a nonblocking empty-Engine Shutdown before constructor
+  unwind
 
 ## 6. Channel
 - Channel update/remove must occur on its owning EventLoop thread

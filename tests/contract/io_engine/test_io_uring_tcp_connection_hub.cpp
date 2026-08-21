@@ -331,6 +331,7 @@ void testCapacityForeignMutationAndAggregateEventLoopQuit() {
     auto rejectedPair = makeTcpPair();
     std::size_t closeCalls = 0;
     std::atomic<bool> foreignRejected{false};
+    std::array<bool, 4> foreignObservationsRejected{};
     uring::IoUringTcpConnectionHub* hubPointer = nullptr;
 
     uring::IoUringTcpConnectionHub hub(&loop, hubOptions());
@@ -382,12 +383,31 @@ void testCapacityForeignMutationAndAggregateEventLoopQuit() {
         } catch (const std::runtime_error&) {
             foreignRejected.store(true, std::memory_order_relaxed);
         }
+        const auto requireObservationRejection =
+            [&](std::size_t index, auto&& observe) {
+                try {
+                    observe();
+                } catch (const std::runtime_error&) {
+                    foreignObservationsRejected[index] = true;
+                }
+            };
+        requireObservationRejection(0, [&] { (void)hub.listening(); });
+        requireObservationRejection(1, [&] { (void)hub.listenerMetrics(); });
+        requireObservationRejection(2, [&] { (void)hub.phase(); });
+        requireObservationRejection(3, [&] { (void)hub.metrics(); });
     });
     foreign.join();
+    GAMENET_TEST_ASSERT(hub.phase() == uring::IoUringTcpHubPhase::Running);
+    GAMENET_TEST_ASSERT(!hub.listening());
+    (void)hub.listenerMetrics();
+    (void)hub.metrics();
     loop.runAfter(1ms, [&] { loop.quit(); });
     loop.loop();
 
     GAMENET_TEST_ASSERT(foreignRejected.load(std::memory_order_relaxed));
+    for (const bool rejected : foreignObservationsRejected) {
+        GAMENET_TEST_ASSERT(rejected);
+    }
     GAMENET_TEST_ASSERT(closeCalls == 2);
     GAMENET_TEST_ASSERT(addedA.stopFuture.wait_for(0s) == std::future_status::ready);
     GAMENET_TEST_ASSERT(addedB.stopFuture.wait_for(0s) == std::future_status::ready);

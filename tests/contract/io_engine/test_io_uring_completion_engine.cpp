@@ -6,13 +6,17 @@
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <array>
+#include <cerrno>
 #include <chrono>
+#include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -104,6 +108,33 @@ void testInvalidOptionsRejected() {
         rejected = true;
     }
     GAMENET_TEST_ASSERT(rejected);
+}
+
+void testForeignThreadDestructionFailsFast() {
+    const pid_t child = ::fork();
+    GAMENET_TEST_ASSERT(child >= 0);
+    if (child == 0) {
+        std::set_terminate([] { ::_exit(86); });
+        ::alarm(2);
+        gamenet::net::EventLoop loop;
+        auto engine = std::make_unique<uring::IoUringCompletionEngine>(&loop);
+        GAMENET_TEST_ASSERT(
+            engine->shutdown(0ms) == uring::IoUringShutdownResult::Drained);
+        std::thread foreign([engine = std::move(engine)]() mutable {
+            engine.reset();
+        });
+        foreign.join();
+        ::_exit(87);
+    }
+
+    int status = 0;
+    pid_t waited = -1;
+    do {
+        waited = ::waitpid(child, &status, 0);
+    } while (waited < 0 && errno == EINTR);
+    GAMENET_TEST_ASSERT(waited == child);
+    GAMENET_TEST_ASSERT(WIFEXITED(status));
+    GAMENET_TEST_ASSERT(WEXITSTATUS(status) == 86);
 }
 
 void testForeignThreadMutationRejected() {
@@ -379,6 +410,7 @@ void testCancelLeaseAndFinalDrain() {
 
 int main() {
     testInvalidOptionsRejected();
+    testForeignThreadDestructionFailsFast();
     testForeignThreadMutationRejected();
     testFiniteSqRejectsWithoutFallback();
     testOneShotAcceptRecvSend();

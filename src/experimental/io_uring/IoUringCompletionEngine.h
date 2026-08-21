@@ -117,6 +117,9 @@ struct IoUringCompletionEngineMetrics {
     std::size_t pendingCancelCompletions{};
     std::size_t readyNotices{};
     std::size_t ownedBytes{};
+    std::size_t maxActiveOperations{};
+    std::size_t maxReadyNotices{};
+    std::size_t maxOwnedBytes{};
 };
 
 class IoUringCompletionEngineImpl;

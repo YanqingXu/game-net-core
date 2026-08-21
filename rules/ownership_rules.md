@@ -90,17 +90,28 @@ It must not blur these roles.
   notice. A successful Accept notice owns the accepted fd until the owner
   explicitly releases it; otherwise notice destruction closes it
 - quiesce retains every active slot and lease through target cancellation
-  completion. Closing the ring is destructor fallback, not evidence of an
-  orderly final drain; the contract requires explicit bounded Shutdown first
+  completion. The standalone Engine may close the ring only after explicit
+  Shutdown and terminal-notice consumption prove zero active/staged/cancel/
+  notice/owned-byte state. Destruction with a live obligation fails fast and
+  never clears the slot or lease as fallback cleanup
 - the IOE-X2 pump owns its IOE-X1 Engine, borrowed-fd Channel registration,
   lifecycle-participant handle, finite dispatch state, and stop promise. The
   caller owns and outlives the pump and EventLoop; neither the Channel nor the
   lifecycle handle owns the ring fd or extends EventLoop lifetime
+- until both Pump source registrations succeed, construction retains sole
+  rollback ownership. A Channel or lifecycle registration failure has admitted
+  no operation, removes any earlier source, and moves the empty Engine to
+  Shutdown before partial-object unwind
 - an Accepted pump operation retains storage and its optional lease through
   the matching terminal CQE and source-private consumer frame. Pump stop may
   remove its Channel and detach its lifecycle node only after every decoded
   notice and active consumer frame is retired; a failed drive owns no right to
   release or transfer a still-kernel-referenced slot
+- the Pump, Driver, and Hub callers must retain their objects until physical
+  stop futures are ready. Their destructors release only already-silent source
+  and Engine storage; they neither acquire convergence ownership nor perform a
+  timed wait. Violating this precondition terminates instead of hiding accepted
+  work loss behind best-effort cleanup
 - the IOE-X3 driver uniquely owns one transferred established socket, one Pump,
   the active Recv/Send identities, bounded FIFO send segments, copied pending
   bytes, first close reason, metrics, and stop promise. The caller owns and

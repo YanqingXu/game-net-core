@@ -73,6 +73,15 @@ def main() -> None:
     shared_hub_validator = (
         repo_root / "tools" / "validate_io_uring_shared_hub_benchmark.py"
     )
+    listener_comparison_benchmark = (
+        repo_root / "benchmarks" / "io_uring" / "listener_comparison.cpp"
+    )
+    listener_comparison_validator = (
+        repo_root / "tools" / "validate_ioe_x10_listener_comparison.py"
+    )
+    listener_comparison_runner = (
+        repo_root / "tools" / "run_io_uring_listener_comparison.py"
+    )
     benchmark_docs = repo_root / "docs" / "development" / "io_uring_benchmark.md"
     intent = repo_root / "intents/architecture/io_engine.intent.md"
     thread_rules = repo_root / "rules/thread_affinity_rules.md"
@@ -104,6 +113,9 @@ def main() -> None:
         benchmark_validator,
         shared_hub_benchmark,
         shared_hub_validator,
+        listener_comparison_benchmark,
+        listener_comparison_validator,
+        listener_comparison_runner,
         benchmark_docs,
     ):
         assert path.is_file(), f"missing IOE-X1 artifact: {path}"
@@ -184,6 +196,34 @@ def main() -> None:
         "IORING_OP_SEND_ZC",
     ):
         assert forbidden not in pump_text, f"IOE-X2 scope escape: {forbidden}"
+    require(pump_text, "std::terminate()", pump_source)
+    require(pump_text, "stopFuture_.wait_for", pump_source)
+    require(pump_text, "rollbackInitialization", pump_source)
+    assert "engine_.shutdown(std::chrono::milliseconds(250))" not in pump_text
+    require(
+        pump_contract.read_text(encoding="utf-8"),
+        "testActiveDestructionFailsFastWithoutOwnerWait",
+        pump_contract,
+    )
+    require(
+        pump_contract.read_text(encoding="utf-8"),
+        "WEXITSTATUS(status) == 86",
+        pump_contract,
+    )
+    require(
+        pump_contract.read_text(encoding="utf-8"),
+        "testRegistrationFailureRollsBackEngine",
+        pump_contract,
+    )
+    require(engine_source.read_text(encoding="utf-8"), "std::terminate()", engine_source)
+    require(
+        contract.read_text(encoding="utf-8"),
+        "testForeignThreadDestructionFailsFast",
+        contract,
+    )
+    assert "shutdown(std::chrono::milliseconds(250))" not in engine_source.read_text(
+        encoding="utf-8"
+    )
 
     driver_text = driver_header.read_text(encoding="utf-8") + driver_source.read_text(
         encoding="utf-8"
@@ -245,6 +285,15 @@ def main() -> None:
         assert forbidden not in hub_text, f"IOE-X4 scope escape: {forbidden}"
     require(hub_text, "OutputProgressConsumer", hub_source)
     require(hub_text, "closeNativeError", hub_source)
+    require(hub_text, "assertOwnerObservation", hub_source)
+    hub_contract_text = hub_contract.read_text(encoding="utf-8")
+    for observation in (
+        "hub.listening()",
+        "hub.listenerMetrics()",
+        "hub.phase()",
+        "hub.metrics()",
+    ):
+        require(hub_contract_text, observation, hub_contract)
 
     adapter_text = adapter_header.read_text(encoding="utf-8") + adapter_source.read_text(
         encoding="utf-8"
@@ -468,6 +517,11 @@ def main() -> None:
         "add_executable(gamenet_io_uring_shared_tcp_hub_benchmark",
         benchmark_cmake,
     )
+    require(
+        benchmark_cmake_text,
+        "add_executable(gamenet_ioe_x10_listener_comparison_benchmark",
+        benchmark_cmake,
+    )
     require(benchmark_cmake_text, "GameNet::experimental", benchmark_cmake)
     assert "add_test(" not in benchmark_cmake_text
     assert "install(" not in benchmark_cmake_text
@@ -524,8 +578,115 @@ def main() -> None:
     require(shared_hub_validator_text, "max_active_connections", shared_hub_validator)
     require(shared_hub_validator_text, "engine_owned_bytes", shared_hub_validator)
 
+    listener_comparison_text = listener_comparison_benchmark.read_text(encoding="utf-8")
+    for fragment in (
+        "gamenet.ioe_x10_listener_comparison.v1",
+        "kActiveRoutes = 256",
+        "kMaxPendingAccepts = 32",
+        "kChurnWaves = 4",
+        "kReplacementsPerWave = 64",
+        "kRoundTripsPerRoutePerWave = 100",
+        "kPayloadBytes = 64",
+        "maxActiveOperations",
+        "maxEngineOwnedBytes",
+        "capacity_recovered",
+        "fd_residue",
+    ):
+        require(listener_comparison_text, fragment, listener_comparison_benchmark)
+    listener_validator_text = listener_comparison_validator.read_text(encoding="utf-8")
+    require(
+        listener_validator_text,
+        'SCHEMA = "gamenet.ioe_x10_listener_comparison.v1"',
+        listener_comparison_validator,
+    )
+    require(listener_validator_text, '"active_routes": 256', listener_comparison_validator)
+    require(listener_validator_text, "epoll must not synthesize", listener_comparison_validator)
+    listener_runner_text = listener_comparison_runner.read_text(encoding="utf-8")
+    require(
+        listener_runner_text,
+        'SCHEMA = "gamenet.ioe_x10_listener_evidence.v1"',
+        listener_comparison_runner,
+    )
+    require(listener_runner_text, "SAMPLES_PER_BACKEND = 5", listener_comparison_runner)
+    require(listener_runner_text, "WARMUPS_PER_BACKEND = 1", listener_comparison_runner)
+    require(listener_runner_text, 'decision = "PROMOTE"', listener_comparison_runner)
+
     sys.path.insert(0, str(repo_root / "tools"))
     import validate_io_uring_benchmark as benchmark_contract
+    import validate_ioe_x10_listener_comparison as listener_comparison_contract
+
+    def listener_document(backend: str) -> dict:
+        completion = backend == "io_uring"
+        return {
+            "schema": "gamenet.ioe_x10_listener_comparison.v1",
+            "status": "ok",
+            "backend": backend,
+            "build_type": "Release",
+            "parameters": dict(listener_comparison_contract.PARAMETERS),
+            "measurements": {
+                "connect_completions": 516,
+                "connections_admitted": 512,
+                "echo_completions": 128000,
+                "close_completions": 512,
+                "connect_completion_rate": 1.0,
+                "echo_completion_rate": 1.0,
+                "close_completion_rate": 1.0,
+                "connects_per_second": 1000.0,
+                "round_trips_per_second": 1000.0,
+                "throughput_mib_per_second": 10.0,
+                "p50_latency_us": 10,
+                "p99_latency_us": 20,
+                "p999_latency_us": 30,
+                "fd_baseline": 4,
+                "fd_high_water": 520,
+                "fd_final": 4,
+                "fd_residue": 0,
+                "max_active_routes": 256,
+                "max_active_accepts": 32 if completion else None,
+                "max_active_recvs": 256 if completion else None,
+                "max_active_sends": 256 if completion else None,
+                "max_active_operations": 544 if completion else None,
+                "max_pending_send_bytes": 16384,
+                "max_engine_owned_bytes": 32768 if completion else None,
+                "rss_before_bytes": 1000000,
+                "rss_high_water_bytes": 2000000,
+                "rss_after_bytes": 1500000,
+                "capacity_rejections": 4,
+                "sq_rejections": 0 if completion else None,
+                "capacity_recovered": True,
+                "max_capacity_recovery_milliseconds": 2.0,
+                "listener_shutdown_milliseconds": 1.0,
+                "server_shutdown_milliseconds": 1.0,
+                "listener_closed": True,
+                "final_active_routes": 0,
+                "final_active_accepts": 0 if completion else None,
+                "final_active_operations": 0 if completion else None,
+                "final_ready_notices": 0 if completion else None,
+                "final_pending_send_bytes": 0,
+                "final_engine_owned_bytes": 0 if completion else None,
+            },
+        }
+
+    for backend in ("epoll", "io_uring"):
+        listener_comparison_contract.validate_document(
+            listener_document(backend), expected_backend=backend
+        )
+    invalid_listener = listener_document("io_uring")
+    invalid_listener["measurements"]["final_active_operations"] = 1
+    try:
+        listener_comparison_contract.validate_document(invalid_listener)
+    except listener_comparison_contract.ListenerComparisonValidationError:
+        pass
+    else:
+        raise AssertionError("IOE-X10 validator accepted residual operation state")
+    fake_epoll = listener_document("epoll")
+    fake_epoll["measurements"]["max_active_accepts"] = 32
+    try:
+        listener_comparison_contract.validate_document(fake_epoll)
+    except listener_comparison_contract.ListenerComparisonValidationError:
+        pass
+    else:
+        raise AssertionError("IOE-X10 validator accepted fake epoll completion data")
 
     document = {
         "schema": "gamenet.io_uring_one_shot_benchmark.v1",

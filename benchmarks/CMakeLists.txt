@@ -29,6 +29,9 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     add_executable(gamenet_io_uring_shared_tcp_hub_benchmark
         io_uring/shared_tcp_hub.cpp
     )
+    add_executable(gamenet_ioe_x10_listener_comparison_benchmark
+        io_uring/listener_comparison.cpp
+    )
     target_link_libraries(gamenet_io_uring_one_shot_benchmark PRIVATE
         GameNet::experimental
     )
@@ -40,6 +43,13 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_compile_definitions(
         gamenet_io_uring_shared_tcp_hub_benchmark PRIVATE
+        GAMENET_BENCHMARK_BUILD_TYPE="$<CONFIG>"
+    )
+    target_link_libraries(gamenet_ioe_x10_listener_comparison_benchmark PRIVATE
+        GameNet::experimental
+    )
+    target_compile_definitions(
+        gamenet_ioe_x10_listener_comparison_benchmark PRIVATE
         GAMENET_BENCHMARK_BUILD_TYPE="$<CONFIG>"
     )
 endif()

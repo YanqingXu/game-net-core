@@ -5,11 +5,15 @@
 #include "../../support/TestAssert.h"
 
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <chrono>
+#include <csignal>
+#include <exception>
 #include <future>
 #include <memory>
 #include <stdexcept>
@@ -57,9 +61,78 @@ SocketPair makeSocketPair() {
     return {OwnedFd(descriptors[0]), OwnedFd(descriptors[1])};
 }
 
+void testActiveDestructionFailsFastWithoutOwnerWait() {
+    const auto started = std::chrono::steady_clock::now();
+    const pid_t child = ::fork();
+    GAMENET_TEST_ASSERT(child >= 0);
+    if (child == 0) {
+        std::set_terminate([] { ::_exit(86); });
+        ::alarm(2);
+        gamenet::net::EventLoop loop;
+        auto pair = makeSocketPair();
+        auto lease = std::make_shared<int>(7);
+        std::weak_ptr<int> observedLease = lease;
+        {
+            uring::IoUringEventLoopPump pump(
+                &loop,
+                uring::IoUringEventLoopPumpOptions{
+                    .engine = {
+                        .entries = 8,
+                        .maxOperations = 8,
+                        .maxCompletionsPerWait = 8,
+                        .maxBytesPerOperation = 64,
+                        .maxOwnedBytes = 512,
+                    },
+                    .maxNoticesPerTurn = 1,
+                },
+                [](uring::IoUringCompletionNotice&) {});
+            const auto outcome = pump.enqueueRecv(pair.pump.get(), 8, lease);
+            lease.reset();
+            GAMENET_TEST_ASSERT(
+                outcome.result == uring::IoUringSubmissionResult::Accepted);
+            GAMENET_TEST_ASSERT(!observedLease.expired());
+        }
+        ::_exit(87);
+    }
+
+    int status = 0;
+    pid_t waited = -1;
+    do {
+        waited = ::waitpid(child, &status, 0);
+    } while (waited < 0 && errno == EINTR);
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    GAMENET_TEST_ASSERT(waited == child);
+    GAMENET_TEST_ASSERT(WIFEXITED(status));
+    GAMENET_TEST_ASSERT(WEXITSTATUS(status) == 86);
+    GAMENET_TEST_ASSERT(elapsed < 225ms);
+}
+
+void testRegistrationFailureRollsBackEngine() {
+    gamenet::net::EventLoop loop;
+    loop.quit();
+    loop.loop();
+    GAMENET_TEST_ASSERT(
+        loop.phase() == gamenet::net::EventLoopPhase::Shutdown);
+
+    bool registrationRejected = false;
+    try {
+        uring::IoUringEventLoopPump pump(
+            &loop,
+            uring::IoUringEventLoopPumpOptions{},
+            [](uring::IoUringCompletionNotice&) {});
+    } catch (const std::logic_error&) {
+        registrationRejected = true;
+    }
+    GAMENET_TEST_ASSERT(registrationRejected);
+    GAMENET_TEST_ASSERT(loop.attachedLifecycleNodeCount() == 0);
+    GAMENET_TEST_ASSERT(loop.pendingLifecycleNodeCount() == 0);
+}
+
 }  // namespace
 
 int main() {
+    testRegistrationFailureRollsBackEngine();
+    testActiveDestructionFailsFastWithoutOwnerWait();
     gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
         .maxPendingFunctors = 8,
         .reservedPendingFunctors = 0,

@@ -235,6 +235,17 @@ IOE-X2 authorizes one source-private EventLoop-driven completion pump:
   consumer failure is counted and fails closed: the pump continues bounded
   nonblocking final-drain turns and cannot publish a false drained result or
   permit EventLoop Shutdown while a kernel obligation remains;
+- Pump, Driver, and Hub destruction is owner-only and requires their physical
+  stop future to be ready. The standalone Engine requires explicit Shutdown
+  plus consumption of every terminal notice before destruction. Violating a
+  destruction precondition fails fast; no destructor may block the owner,
+  detach a still-live source, close a ring with accepted work, clear a retained
+  slot/lease, or publish a synthetic drained result;
+- Pump construction publishes no usable object until both its ring-fd Channel
+  and lifecycle participant are registered. Any registration failure occurs
+  before operation admission and rolls back every source plus the empty Engine
+  to Shutdown synchronously with a zero timeout; constructor unwind must return
+  the original exception rather than trip the live-Engine destruction guard;
 - IOE-X2 does not authorize blocking owner waits, a second worker thread,
   per-operation functor posts, fake readiness results, multishot, provided
   buffers, fixed files, zero-copy, SQPOLL, or production TCP integration.
@@ -487,6 +498,51 @@ it does not create a second Pump or move connection ownership:
   It does not authorize public listener APIs, backend selection, production
   `Acceptor`/`TcpServer` changes, multishot Accept, provided buffers, or other
   advanced io_uring features.
+- `listening`, listener/Hub metrics, Hub phase, and every other observation of
+  mutable listener/route/operation state are owner-loop-only and explicitly
+  reject a foreign caller before reading that state. Immutable future handles
+  may be copied only where their documented lifetime permits; they do not make
+  the mutable Hub state thread-safe.
+
+IOE-X10 authorizes one fixed listener capacity/performance decision without
+changing either backend's runtime semantics or public surface:
+
+- one Linux-only Release scenario drives the source-private io_uring listener
+  and production epoll `TcpServer` with 256 concurrent active routes, a Hub
+  limit of 256, `maxPendingAccepts == 32`, four churn waves replacing exactly
+  64 routes per wave, 100 measured 64-byte echo round trips per active route
+  and wave, and no parameter downscaling;
+- one EventLoop owner constructs, mutates, callbacks, stops, and destroys each
+  server path. A separate bounded load thread exclusively owns every client
+  socket and transfers none of them to server code. It communicates terminal
+  load state back through bounded EventLoop admission/observation and joins
+  before benchmark storage is released; it never calls the Hub directly;
+- the two backend samples use the same connection/churn/echo state machine,
+  client count, payload, build, machine, CPU affinity, and timeout. The runner
+  performs one complete unrecorded warm-up per backend followed by five Release
+  samples per backend, interleaving the first backend in alternating order;
+- every structured sample records and validates connect, echo, and close
+  completion counts/rates; throughput and P50/P99/P999 latency; fd, route,
+  Accept, Recv, Send, pending-send-byte, Engine-owned-byte, and process-RSS
+  high-water observations; capacity/SQ rejection and recovery observations;
+  listener/server and aggregate shutdown latency; and final listener, route,
+  operation, notice, fd, pending-byte, and Engine-owned-byte residue;
+- backend-specific operation fields remain explicitly unavailable for epoll
+  rather than translating readiness into fake completion operations. All
+  common counts and lifecycle fields remain directly comparable, and the
+  evidence manifest retains every validated raw sample and its hash together
+  with CPU, kernel, compiler, build-type, affinity, and run-order metadata;
+- any correctness, accounting, recovery, owner/lifecycle, zero-residue, schema,
+  fixed-parameter, affinity, warm-up, interleaving, or five-sample failure
+  produces `DEFER`. Only a completely valid set may produce a narrowly scoped
+  `PROMOTE` for later source-private integration shaping; neither result opens
+  a public selector, changes production `TcpServer`/`TcpConnection`, or claims
+  universal backend superiority;
+- IOE-X10 still forbids multishot Accept/Recv, provided buffers, fixed files,
+  zero-copy, SQPOLL, installed experimental headers, public backend selection,
+  and production backend replacement. A correctness or lifecycle defect found
+  by measurement requires a separate intent/rules/contract fix-forward slice
+  followed by a complete rerun of the fixed X10 protocol.
 
 ## 7. Compatibility Sequence
 
@@ -521,7 +577,10 @@ it does not create a second Pump or move connection ownership:
     Adapter, Hub, socket, callbacks, and retirement remain on one owner loop.
 12. IOE-X9 moves one finite one-shot listener window into the existing shared
     Hub/Pump and proves accepted-fd transfer plus listener-first stop.
-13. Only proven, cross-backend concepts may later graduate to a narrow public
+13. IOE-X10 compares that listener topology with production epoll under one
+    fixed, interleaved Release protocol and records `PROMOTE` or `DEFER` only
+    for later source-private shaping.
+14. Only proven, cross-backend concepts may later graduate to a narrow public
     capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -604,6 +663,13 @@ it does not create a second Pump or move connection ownership:
   verifies finite Accept depth, capacity rejection/recovery, generation churn,
   first-arm Engine pressure, callback re-entry, explicit stop, owner quit,
   accepted-fd reconciliation, and zero listener/Hub/Engine residue.
+- `benchmarks/io_uring/listener_comparison.cpp` drives the fixed IOE-X10
+  256-route/four-wave listener workload through either production epoll or the
+  source-private completion listener and emits one validated backend sample.
+  `tools/run_io_uring_listener_comparison.py` owns warm-up, alternating
+  interleave, five-sample evidence retention, machine/affinity metadata, and
+  the final `PROMOTE`/`DEFER` decision document. The benchmark remains opt-in,
+  non-CTest, Linux-only, Release-oriented, and non-installed.
 - `tests/contract/event_loop/test_event_loop_lifecycle_hub.cpp` verifies the
   source-private quit participant is committed exactly once on the first
   Running-to-Quiescing transition, can self-signal during final drain, and is

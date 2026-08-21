@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <deque>
+#include <exception>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -79,12 +80,12 @@ public:
 
     ~IoUringTcpConnectionDriverImpl() {
         if (!pump_) return;
-        try {
-            assertOwner();
-            if (phase_ != IoUringTcpDriverPhase::Stopped) {
-                (void)beginClose(IoUringTcpDriverCloseReason::Destroyed);
-            }
-        } catch (...) {
+        if (!ownerLoop_->isInLoopThread() ||
+            phase_ != IoUringTcpDriverPhase::Stopped ||
+            stopFuture_.wait_for(std::chrono::milliseconds::zero()) !=
+                std::future_status::ready ||
+            !pump_->stopped()) {
+            std::terminate();
         }
         pump_.reset();
     }

@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstring>
 #include <deque>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -122,16 +123,12 @@ public:
     }
 
     ~IoUringCompletionEngineImpl() {
-        try {
-            if (phase_ != IoUringPhase::Shutdown) {
-                (void)shutdown(std::chrono::milliseconds(250));
-            }
-        } catch (...) {
+        if (!ownerLoop_->isInLoopThread() ||
+            phase_ != IoUringPhase::Shutdown || !quiescent() ||
+            !readyNotices_.empty() || ownedBytes_ != 0) {
+            std::terminate();
         }
         closeRing();
-        readyNotices_.clear();
-        slots_.clear();
-        ownedBytes_ = 0;
     }
 
     IoUringCompletionEngineOptions options() const noexcept {
@@ -162,6 +159,9 @@ public:
             .pendingCancelCompletions = pendingCancelCompletions_,
             .readyNotices = readyNotices_.size(),
             .ownedBytes = ownedBytes_,
+            .maxActiveOperations = maxActiveOperations_,
+            .maxReadyNotices = maxReadyNotices_,
+            .maxOwnedBytes = maxOwnedBytes_,
         };
     }
 
@@ -537,6 +537,9 @@ private:
         });
         ownedBytes_ += reservedBytes;
         ++activeOperations_;
+        maxActiveOperations_ = (std::max)(
+            maxActiveOperations_, activeOperations_);
+        maxOwnedBytes_ = (std::max)(maxOwnedBytes_, ownedBytes_);
         ++operationsAccepted_;
         return {
             .result = IoUringSubmissionResult::Accepted,
@@ -685,6 +688,8 @@ private:
             std::move(slot.storage),
             std::move(slot.lease),
             slot.reservedBytes));
+        maxReadyNotices_ = (std::max)(
+            maxReadyNotices_, readyNotices_.size());
         slot.active = false;
         slot.noticePending = true;
         slot.submitted = false;
@@ -776,6 +781,9 @@ private:
     std::size_t activeOperations_{};
     std::size_t pendingCancelCompletions_{};
     std::size_t ownedBytes_{};
+    std::size_t maxActiveOperations_{};
+    std::size_t maxReadyNotices_{};
+    std::size_t maxOwnedBytes_{};
     std::uint64_t operationsAccepted_{};
     std::uint64_t sqFullRejections_{};
     std::uint64_t operationLimitRejections_{};
