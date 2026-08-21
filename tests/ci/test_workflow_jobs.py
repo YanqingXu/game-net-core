@@ -876,11 +876,11 @@ def main() -> None:
     require(workflow, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF")
     linux_io_uring = step_block(
         job_block(workflow, "linux-cmake"),
-        "Build and test experimental IOE-X1/X2/X3/X4/X5/X6 io_uring",
+        "Build and test experimental IOE-X1–X10 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
-    require(linux_io_uring, "--expected-total 135")
-    require(linux_io_uring, "--expect-label experimental=6")
+    require(linux_io_uring, "--expected-total 136")
+    require(linux_io_uring, "--expect-label experimental=7")
     require(linux_io_uring, "--target gamenet_io_uring_contracts")
     require(
         linux_io_uring,
@@ -893,17 +893,20 @@ def main() -> None:
     require(linux_io_uring, "tcp_connection_adapter")
     linux_io_uring_asan = step_block(
         job_block(workflow, "linux-asan-ubsan"),
-        "Build and test experimental IOE-X1/X2/X3/X4/X5/X6 io_uring with ASan/UBSan",
+        "Build and test experimental IOE-X1–X10 io_uring with ASan/UBSan",
     )
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
     require(linux_io_uring_asan, "detect_leaks=1:halt_on_error=1")
-    require(linux_io_uring_asan, "--expected-total 135")
-    require(linux_io_uring_asan, "--expect-label experimental=6")
+    require(linux_io_uring_asan, "--expected-total 136")
+    require(linux_io_uring_asan, "--expect-label experimental=7")
     require(linux_io_uring_asan, "tcp_connection_hub")
     require(linux_io_uring_asan, "tcp_connection_hub_capacity")
     require(linux_io_uring_asan, "tcp_connection_adapter")
     require(linux_io_uring_asan, "--target gamenet_io_uring_contracts")
+    assert "\n      -R '^contract.io_engine.test_io_uring_" not in workflow, (
+        "io_uring CTest regex must remain inside its YAML run block"
+    )
     require(workflow, "cmake --install build --prefix \"$PWD/build/_install\"")
     require(workflow, "cmake -S tests/cmake/install_consumer")
     require(workflow, "-DCMAKE_PREFIX_PATH=\"$PWD/build/_install\"")
