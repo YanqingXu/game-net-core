@@ -615,6 +615,26 @@ def main() -> None:
         "capacity-gate-pair-",
     ):
         require(capacity_workflow_text, fragment, capacity_workflow)
+    for fragment in (
+        "Install pinned CMake for Windows capacity",
+        '$cmakeVersion = "4.4.2"',
+        '"e8139d85b3813bc38833142ae1940472e9a587e9b5d2718ac1804c60f4e57a64"',
+        "https://github.com/Kitware/CMake/releases/download/",
+        "Get-FileHash -LiteralPath $archive -Algorithm SHA256",
+        'if ($generatorHelp -notmatch "Visual Studio 18 2026")',
+        "$env:GITHUB_PATH",
+    ):
+        require(capacity_workflow_text, fragment, capacity_workflow)
+    pinned_cmake = capacity_workflow_text.index(
+        "- name: Install pinned CMake for Windows capacity"
+    )
+    toolchain_record = capacity_workflow_text.index(
+        "- name: Record capacity toolchain", pinned_cmake
+    )
+    windows_configure = capacity_workflow_text.index(
+        "- name: Configure Release capacity target", toolchain_record
+    )
+    assert pinned_cmake < toolchain_record < windows_configure
     assert "\n  push:" not in capacity_workflow_text
     assert "\n  pull_request:" not in capacity_workflow_text
     for fragment in (

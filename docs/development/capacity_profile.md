@@ -261,6 +261,13 @@ and RSS contracts. The dedicated profile therefore admits an aggregate pending
 ceiling of 2,621,440,000 bytes and requires both provisioned runner labels and
 the explicit `RUN_DEDICATED_100K` acknowledgement.
 
+The Windows producer downloads the official Kitware CMake 4.4.2 binary archive,
+verifies its pinned SHA-256 before extraction, confirms that it exposes the
+`Visual Studio 18 2026` generator, and only then places it on `GITHUB_PATH`.
+This keeps hosted and dedicated Windows capacity runs independent of an older
+machine-wide CMake installation while preserving the installed MSVC toolchain
+as part of the retained toolchain evidence.
+
 `tools/run_capacity_gate.py` owns the fixed profile definitions. It rejects
 parameter drift, validates every raw v3 sample, hashes the executable,
 toolchain record, and samples, then writes a canonical
