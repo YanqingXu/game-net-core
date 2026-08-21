@@ -621,7 +621,7 @@ def main() -> None:
         '"e8139d85b3813bc38833142ae1940472e9a587e9b5d2718ac1804c60f4e57a64"',
         "https://github.com/Kitware/CMake/releases/download/",
         "Get-FileHash -LiteralPath $archive -Algorithm SHA256",
-        'if ($generatorHelp -notmatch "Visual Studio 18 2026")',
+        'if (-not ($generatorHelp -match "Visual Studio 18 2026"))',
         "$env:GITHUB_PATH",
     ):
         require(capacity_workflow_text, fragment, capacity_workflow)

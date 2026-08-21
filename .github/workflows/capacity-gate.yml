@@ -141,7 +141,7 @@ jobs:
             throw "Pinned CMake executable is missing: $cmakeExecutable"
           }
           $generatorHelp = & $cmakeExecutable --help
-          if ($generatorHelp -notmatch "Visual Studio 18 2026") {
+          if (-not ($generatorHelp -match "Visual Studio 18 2026")) {
             throw "Pinned CMake does not provide the Visual Studio 18 2026 generator"
           }
           $cmakeBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
