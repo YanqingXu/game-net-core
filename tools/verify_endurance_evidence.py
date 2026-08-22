@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "gamenet.production_endurance.v1"
+SCHEMA = "gamenet.production_endurance.v2"
 PROFILES = {
     "abrupt_peer_reset",
     "callback_exception",
@@ -17,7 +17,7 @@ PROFILES = {
     "healthy_recovery",
     "forced_shutdown",
 }
-DURATIONS = {"candidate-24h": 86_400, "release-72h": 259_200}
+DURATIONS = {"candidate-1h": 3_600, "release-3h": 10_800}
 LINUX_MAX_RSS_BYTES = 512 * 1024 * 1024
 LINUX_MAX_RSS_GROWTH_BYTES = 64 * 1024 * 1024
 

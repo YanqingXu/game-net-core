@@ -352,7 +352,7 @@ def write_promotion_endurance_evidence(
         )
     }
     document = {
-        "schema": "gamenet.production_endurance.v1",
+        "schema": "gamenet.production_endurance.v2",
         "status": "success",
         "mode": mode,
         "candidate_sha": candidate_sha,
@@ -659,11 +659,11 @@ def main() -> None:
     ):
         require(pair_verifier_text, fragment, pair_verifier)
     for fragment in (
-        "gamenet.production_promotion_evidence.v1",
-        "gamenet.production_promotion_waiver.v1",
+        "gamenet.production_promotion_evidence.v2",
+        "gamenet.production_promotion_waiver.v2",
         "capacity pair manifest does not match revalidated raw evidence",
         "capacity profile does not satisfy the promotion stage",
-        "release promotion requires candidate-24h evidence",
+        "release promotion requires candidate-1h evidence",
         '"owner-waived"',
         '"owner_authorized_promotion"',
     ):
@@ -1019,8 +1019,8 @@ def main() -> None:
 
         candidate_endurance = write_promotion_endurance_evidence(
             evidence_root / "candidate-endurance",
-            mode="candidate-24h",
-            seconds=86_400,
+            mode="candidate-1h",
+            seconds=3_600,
             candidate_sha=candidate_sha,
             workflow_run_id="54321",
             workflow_run_attempt=1,
@@ -1064,7 +1064,7 @@ def main() -> None:
         assert candidate_waiver["endurance_policy"] == "owner-waived"
         assert candidate_waiver["endurance"] == []
         assert candidate_waiver["waiver"] == {
-            "scope": "candidate-24h",
+            "scope": "candidate-1h",
             "approved_by": "YanqingXu",
             "reason": waiver_reason,
             "duration_evidence_complete": False,
@@ -1152,8 +1152,8 @@ def main() -> None:
         )
         release_endurance = write_promotion_endurance_evidence(
             evidence_root / "release-endurance",
-            mode="release-72h",
-            seconds=259_200,
+            mode="release-3h",
+            seconds=10_800,
             candidate_sha=candidate_sha,
             workflow_run_id="60002",
             workflow_run_attempt=4,
@@ -1179,7 +1179,7 @@ def main() -> None:
         assert [
             item["mode"]
             for item in release_promotion["endurance"]
-        ] == ["candidate-24h", "release-72h"]
+        ] == ["candidate-1h", "release-3h"]
 
         release_waiver = promotion.verify_promotion(
             stage="release",
@@ -1199,7 +1199,7 @@ def main() -> None:
         assert release_waiver["endurance"] == []
         assert (
             release_waiver["waiver"]["scope"]
-            == "candidate-24h+release-72h"
+            == "candidate-1h+release-3h"
         )
         assert release_waiver["waiver"]["owner_authorized_promotion"] is True
 

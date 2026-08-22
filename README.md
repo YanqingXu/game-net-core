@@ -40,9 +40,10 @@ and [`docs/reviews/arch-g1-independent-review.md`](docs/reviews/arch-g1-independ
 
 The current unclosed implementation front remains M2. Exact candidate
 `a89e2b0f13242a4cd4b49093f562b93adcd509a4` passed dual-platform CI,
-capacity, benchmark, repeat-50, and install-package preflight, but its required
-24-hour endurance run was deliberately cancelled after 21,073.016 seconds
-when the work was converged; the 72-hour run was never started. This is a
+capacity, benchmark, repeat-50, and install-package preflight, but its
+old-policy endurance run was deliberately cancelled after 21,073.016 seconds
+when the work was converged, before result verification completed. The current
+1h/3h evidence chain has not started. This is a
 `STOPPED / NO-PROMOTION` checkpoint, not
 `v0.3.0-internal-candidate.1`. Details are recorded in
 [`docs/development/m2_internal_candidate_checkpoint_2026-08-22.md`](docs/development/m2_internal_candidate_checkpoint_2026-08-22.md).

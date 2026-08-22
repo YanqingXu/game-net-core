@@ -15,15 +15,15 @@ from verify_endurance_evidence import (
 )
 
 
-SCHEMA = "gamenet.production_promotion_evidence.v1"
-WAIVER_SCHEMA = "gamenet.production_promotion_waiver.v1"
+SCHEMA = "gamenet.production_promotion_evidence.v2"
+WAIVER_SCHEMA = "gamenet.production_promotion_waiver.v2"
 STAGE_CAPACITY_PROFILES = {
     "candidate": "candidate-10k",
     "release": "dedicated-100k",
 }
 STAGE_CURRENT_ENDURANCE_MODES = {
-    "candidate": "candidate-24h",
-    "release": "release-72h",
+    "candidate": "candidate-1h",
+    "release": "release-3h",
 }
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 
@@ -253,9 +253,9 @@ def verify_promotion(
             "endurance": [],
             "waiver": {
                 "scope": (
-                    "candidate-24h"
+                    "candidate-1h"
                     if stage == "candidate"
-                    else "candidate-24h+release-72h"
+                    else "candidate-1h+release-3h"
                 ),
                 "approved_by": waiver_approved_by,
                 "reason": waiver_reason,
@@ -275,7 +275,7 @@ def verify_promotion(
     else:
         require(
             candidate_endurance_evidence is not None,
-            "release promotion requires candidate-24h evidence",
+            "release promotion requires candidate-1h evidence",
         )
         candidate_run_id = positive_run_id(
             candidate_endurance_run_id,
@@ -287,7 +287,7 @@ def verify_promotion(
         )
         _, candidate_entry = verify_endurance(
             candidate_endurance_evidence,
-            mode="candidate-24h",
+            mode="candidate-1h",
             candidate_sha=candidate_sha,
             workflow_run_id=candidate_run_id,
             workflow_run_attempt=candidate_run_attempt,

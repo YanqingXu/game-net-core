@@ -3,6 +3,9 @@
 > **Decision: `STOPPED / NO-PROMOTION`.** This document is an execution
 > checkpoint, not an M2 closure record, internal release, or waiver. The name
 > `v0.3.0-internal-candidate.1` is reserved but was not produced.
+> The run names and durations in the evidence sections below preserve the
+> historical v1 policy. The current v2 restart policy is 1h/3h; it does not
+> retroactively promote the cancelled v1 result.
 
 ## Identity and scope
 
@@ -101,6 +104,6 @@ or evidence directory was deleted.
 
 M2 remains open and M3 remains blocked. If execution resumes, it must select
 and validate the intended exact promotion commit, run a fresh uninterrupted
-candidate-24h, then run release-72h against that exact retained candidate and
-dedicated-100k capacity pair. The cancelled checkpoint cannot be resumed,
-combined with another partial run, or treated as a waiver.
+`candidate-1h`, then run `release-3h` against that exact retained candidate and
+dedicated-100k capacity pair. The cancelled historical checkpoint cannot be
+resumed, combined with another partial run, or treated as a waiver.

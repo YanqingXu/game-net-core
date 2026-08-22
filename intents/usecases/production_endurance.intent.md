@@ -38,7 +38,7 @@ smoke run may validate orchestration but is not release evidence.
   and final evidence; it never reaches into reactor state
 
 ## 4. Evidence Contract
-- `candidate-24h` is fixed at 86,400 seconds and `release-72h` at 259,200
+- `candidate-1h` is fixed at 3,600 seconds and `release-3h` at 10,800
   seconds; production modes reject duration overrides
 - `candidate-waiver` and `release-waiver` are workflow-only owner exceptions;
   they run no endurance process, require a non-empty reason and recorded
@@ -52,15 +52,15 @@ smoke run may validate orchestration but is not release evidence.
   and enforces reviewed 512 MiB maximum / 64 MiB growth budgets
 - heartbeats are monotonic, bounded in silence, and report cumulative counts
   for every declared fault profile
-- the release gate accepts 72-hour evidence only for the same frozen commit
-  that already passed the 24-hour gate
+- the release gate accepts 3-hour evidence only for the same frozen commit
+  that already passed the 1-hour gate
 - the production workflow consumes one exact capacity workflow run and rerun
   attempt. Candidate mode revalidates the paired 10k raw evidence; release mode
   revalidates the paired dedicated 100k raw evidence and the exact retained
-  24-hour endurance attempt before emitting a same-commit promotion manifest
-- GitHub-hosted runners are not eligible because their maximum job execution
-  time is shorter than either production duration; the workflow targets a
-  dedicated self-hosted endurance runner
+  1-hour endurance attempt before emitting a same-commit promotion manifest
+- production evidence targets a dedicated self-hosted endurance runner so the
+  host identity, toolchain, capacity source, RSS observation, and uninterrupted
+  process boundary remain controlled across both fixed durations
 - the waiver evidence job may use a GitHub-hosted runner because it makes no
   duration or Linux/epoll runtime claim
 

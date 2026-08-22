@@ -10,7 +10,7 @@ from pathlib import Path
 from verify_endurance_evidence import EvidenceError, load_and_verify
 
 
-SCHEMA = "gamenet.production_endurance_pair.v1"
+SCHEMA = "gamenet.production_endurance_pair.v2"
 
 
 def sha256_file(path: Path) -> str:
@@ -22,7 +22,7 @@ def sha256_file(path: Path) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify same-commit 24/72-hour endurance evidence")
+    parser = argparse.ArgumentParser(description="Verify same-commit 1/3-hour endurance evidence")
     parser.add_argument("--candidate-evidence", type=Path, required=True)
     parser.add_argument("--release-evidence", type=Path, required=True)
     parser.add_argument("--candidate-sha", required=True)
@@ -38,7 +38,7 @@ def main() -> int:
     try:
         candidate = load_and_verify(
             arguments.candidate_evidence,
-            "candidate-24h",
+            "candidate-1h",
             arguments.candidate_sha,
             arguments.platform,
             arguments.backend,
@@ -47,7 +47,7 @@ def main() -> int:
         )
         release = load_and_verify(
             arguments.release_evidence,
-            "release-72h",
+            "release-3h",
             arguments.candidate_sha,
             arguments.platform,
             arguments.backend,
@@ -101,8 +101,8 @@ def main() -> int:
             "candidate_sha": arguments.candidate_sha,
             "platform": arguments.platform,
             "backend": arguments.backend,
-            "candidate_24h": candidate_entry,
-            "release_72h": release_entry,
+            "candidate_1h": candidate_entry,
+            "release_3h": release_entry,
         }
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
@@ -110,7 +110,7 @@ def main() -> int:
         print(f"endurance evidence pair verification failed: {error}", file=sys.stderr)
         return 1
 
-    print(f"verified same-commit 24/72-hour endurance pair: {arguments.candidate_sha}")
+    print(f"verified same-commit 1/3-hour endurance pair: {arguments.candidate_sha}")
     return 0
 
 

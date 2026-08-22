@@ -10,9 +10,10 @@ Current M1 closure audit: 2026-08-22
 
 Current M2 convergence audit: 2026-08-22. Promotion candidate
 `a89e2b0f13242a4cd4b49093f562b93adcd509a4` passed the non-endurance lanes,
-but candidate-24h run `32516260909/1` was cancelled after 21,073.016 seconds
-under the task-convergence instruction; release-72h was not dispatched. M2 is
-`STOPPED / NO-PROMOTION`, not closed, and no internal candidate is named.
+but old-policy endurance run `32516260909/1` was cancelled after 21,073.016
+seconds under the task-convergence instruction before result verification.
+The current 1h/3h chain has not been dispatched. M2 is `STOPPED /
+NO-PROMOTION`, not closed, and no internal candidate is named.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -97,9 +98,10 @@ Hub observation, fail-fast destruction, and Pump construction rollback blockers
 were fixed. No installed target, public selector, or production replacement was
 introduced. M2 selected exact main candidate `a89e2b0`; its dual-platform
 CI/sanitizer/consumer, performance/capacity/fault, repeat-50, and package
-preflight evidence passed. The required 24h run was cancelled at 21,073.016
-seconds during task convergence and 72h did not start, so the current decision
-is `NO-PROMOTION`. M2 remains the next task if work resumes; package SBOM and a
+preflight evidence passed. Its old-policy endurance run was cancelled at
+21,073.016 seconds during task convergence before result verification, and the
+current 1h/3h chain has not started, so the current decision is
+`NO-PROMOTION`. M2 remains the next task if work resumes; package SBOM and a
 complete evidence bundle for `v0.3.0-internal-candidate.1` are not claimed.
 
 `game-net-core` is the component-split migration target for the larger
@@ -353,9 +355,9 @@ only as a performance baseline and compares common metrics on the same runner.
 The production fault-injection executable covers reset, callback failure,
 bounded-output rejection, post-failure recovery, and slow-reader forced drain
 in one long-lived-process cycle. Its supervisor fixes candidate/release modes
-at 24/72 hours, writes monotonic checkpoints and hashed evidence, and requires
-the 72-hour run to consume same-SHA 24-hour evidence. Infrastructure snapshot
-`b3443182d0606792df44a12bcb08927e767bc060` completed the real Linux/epoll
+at 1/3 hours, writes monotonic checkpoints and hashed v2 evidence, and requires
+the 3-hour run to consume same-SHA 1-hour evidence. Historical v1 infrastructure
+snapshot `b3443182d0606792df44a12bcb08927e767bc060` completed the real Linux/epoll
 24-hour run `29895457789` (73,617 cycles) and 72-hour paired run
 `29984629032` (220,851 cycles). Its cross-platform performance run
 `29808395220` passed at earlier SHA `5f926f3`; these are historical
@@ -364,7 +366,7 @@ For owner-authorized omission of long-duration evidence, the manual workflow
 now also exposes `candidate-waiver` and `release-waiver` paths. They revalidate
 the same frozen commit's 10k or dedicated 100k capacity pair on a hosted runner
 and record owner/reason metadata with `status: waived`; neither is represented
-as a passing 24/72-hour result.
+as a passing 1/3-hour result.
 
 ## Phase Status
 
@@ -491,9 +493,10 @@ names the same SHA as the authoritative checkpoint above.
 - `integration.resilience.test_fault_injection` executes five production fault
   profiles in one cycle and is part of the ordinary Linux/Windows CTest matrix.
   The same executable can remain alive under a heartbeat supervisor for fixed
-  24/72-hour Linux/epoll modes. Snapshot `b344318` completed both real modes
-  with same-SHA pairing; shortened smoke evidence remains non-releasable and
-  the final changed runtime must be requalified after freeze.
+  1/3-hour Linux/epoll modes. Historical v1 snapshot `b344318` completed its
+  then-current 24/72-hour modes with same-SHA pairing; shortened smoke evidence
+  remains non-releasable and the final changed runtime must be requalified
+  after freeze.
 - At historical snapshot `b344318`, Windows MSVC Debug/Release preflights pass 89/89 configured
   CTests in 39.40/38.00 seconds. The Release fault-injection target separately
   passes 10/10 repeats in 1.98 seconds, the exact inventory verifier reports
@@ -721,7 +724,7 @@ The pre-H2-C Release `session-expiry-scan` scale study measured
 measured 3.17/59.63/797.36 ms. Those historical samples and the H2-C comparison
 above are local trends rather than reviewed regression thresholds. Current
 runtime changes still require a frozen candidate SHA plus Linux Debug/Release,
-Linux ASan/UBSan, Linux TSan, cross-platform performance, and 24/72-hour
+Linux ASan/UBSan, Linux TSan, cross-platform performance, and 1/3-hour
 endurance evidence before any stable promotion.
 
 Local Phase 4 hardening `final-v4` preflight subsequently frozen into candidate

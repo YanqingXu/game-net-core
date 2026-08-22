@@ -21,8 +21,9 @@ owner-thread ownership
 这套语义已经开始贯穿 Linux/epoll、Windows/IOCP、实验性 io_uring，以及上层 Runtime Profile。
 
 2026-08-22 的 M2 执行在精确候选 `a89e2b0` 上完成了 CI、容量、benchmark、
-repeat-50 和安装包预检，但按收敛指令取消了只运行 21,073.016 秒的 candidate-24h，
-且未启动 release-72h。当前结论因此是 `STOPPED / NO-PROMOTION`；这不是
+repeat-50 和安装包预检，但按收敛指令取消了按旧门槛启动、只运行
+21,073.016 秒的 candidate endurance，结果验证步骤未完成。当前 1h/3h 门槛仍须
+针对同一精确候选完整执行。当前结论因此是 `STOPPED / NO-PROMOTION`；这不是
 `v0.3.0-internal-candidate.1` 发布或 M2 关闭。
 
 ---
@@ -277,7 +278,7 @@ CI
 + benchmark
 + capacity
 + fault injection
-+ 24/72 小时 endurance
++ 1/3 小时 endurance
 + package/release evidence
 ```
 
@@ -310,8 +311,8 @@ Gateway
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
 “M1 关闭、M2 `STOPPED / NO-PROMOTION`”。`a89e2b0` 的 CI、性能、容量、故障、
-repeat 和 package preflight 可以保留为精确提交证据，但被取消的 24h 快照不能替代
-完整 24h/72h endurance，也不能据此形成 internal candidate。
+repeat 和 package preflight 可以保留为精确提交证据，但被取消的旧门槛快照不能替代
+完整 1h/3h endurance，也不能据此形成 internal candidate。
 
 ---
 
@@ -338,8 +339,8 @@ API manifest
 paired benchmark
 capacity
 fault injection
-24h endurance
-72h endurance
+1h endurance
+3h endurance
 package/SBOM/license
 ```
 
@@ -439,7 +440,8 @@ Milestone 1
 Milestone 2
 停止检查点：
 `a89e2b0` 的同提交 CI / capacity / benchmark / repeat / package preflight 已通过；
-24h 在 21,073.016 秒取消，72h 未启动，故未形成 v0.3.0 internal candidate。
+旧门槛运行在 21,073.016 秒取消且结果验证未完成，新的 1h/3h 证据链尚未执行，
+故未形成 v0.3.0 internal candidate。
 
 Milestone 3
 建立真实 game gateway / Lua runtime reference integration

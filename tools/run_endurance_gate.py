@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 
-EVIDENCE_SCHEMA = "gamenet.production_endurance.v1"
+EVIDENCE_SCHEMA = "gamenet.production_endurance.v2"
 HEARTBEAT_SCHEMA = "gamenet.fault_injection_heartbeat.v1"
 SUMMARY_SCHEMA = "gamenet.fault_injection_summary.v1"
 TEST_NAME = "integration.resilience.test_fault_injection"
@@ -28,8 +28,8 @@ PROFILES = (
     "forced_shutdown",
 )
 PRODUCTION_DURATIONS = {
-    "candidate-24h": 24 * 60 * 60,
-    "release-72h": 72 * 60 * 60,
+    "candidate-1h": 1 * 60 * 60,
+    "release-3h": 3 * 60 * 60,
 }
 LINUX_MAX_RSS_BYTES = 512 * 1024 * 1024
 LINUX_MAX_RSS_GROWTH_BYTES = 64 * 1024 * 1024

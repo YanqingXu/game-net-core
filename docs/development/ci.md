@@ -508,7 +508,7 @@ cannot be bypassed by repository YAML.
 Best-effort success proves only the logged repository guards, build, CTest, and
 package-consumer result. If upload failed, it does not provide retained artifact
 evidence and must not be cited as satisfying a formal artifact or release
-evidence gate. Repeat-soak and actual 24/72-hour production-endurance uploads
+evidence gate. Repeat-soak and actual 1/3-hour production-endurance uploads
 remain strict and are not affected by this input. The separate
 `candidate-waiver` and `release-waiver` modes also use strict uploads, but their
 promotion status is `waived`, never a successful endurance result.
@@ -578,15 +578,15 @@ python3 tools/verify_ctest_repeat_evidence.py --inventory long-soak-evidence/cte
 Use it for phase hardening evidence when mixed-timing lifecycle contracts need
 more iteration than the ordinary PR gate should spend.
 
-The same manual workflow also exposes fixed `candidate-24h` and `release-72h`
+The same manual workflow also exposes fixed `candidate-1h` and `release-3h`
 modes on that dedicated Linux/epoll self-hosted runner. These modes run one
 uninterrupted fault-injection process, retain monotonic heartbeat/checkpoint
 evidence, record the exact workflow run/attempt, and reject shortened duration
 overrides. Both production modes require an exact capacity run/attempt and
 revalidate its paired raw evidence before the long process starts:
-`candidate-24h` consumes `candidate-10k`, while `release-72h` consumes
-`dedicated-100k`. The 72-hour mode additionally downloads the exact successful
-24-hour run/attempt from the same candidate SHA.
+`candidate-1h` consumes `candidate-10k`, while `release-3h` consumes
+`dedicated-100k`. The 3-hour mode additionally downloads the exact successful
+1-hour run/attempt from the same candidate SHA.
 
 When the project owner elects not to run long-duration evidence, the explicit
 `candidate-waiver` and `release-waiver` modes run on `ubuntu-24.04` and skip
@@ -596,13 +596,13 @@ commit paired `candidate-10k` artifacts; release waiver requires the
 `endurance_waiver_reason`; the workflow records `github.actor` as approver and
 emits `status: waived`, `duration_evidence_complete: false`, and
 `owner_authorized_promotion: true`. This lets either stage proceed without
-pretending that a 24-hour or 72-hour test passed.
+pretending that a 1-hour or 3-hour test passed.
 
 After the uninterrupted process passes,
 `tools/verify_production_promotion_evidence.py` revalidates all retained
 capacity samples, pair manifest, endurance results, and logs. It emits
-`gamenet.production_promotion_evidence.v1`, binding 10k + 24h for candidate
-promotion or dedicated 100k + 24/72h for release promotion. The outer
+`gamenet.production_promotion_evidence.v2`, binding 10k + 1h for candidate
+promotion or dedicated 100k + 1/3h for release promotion. The outer
 `gamenet.ci_evidence.v1` manifest hashes that promotion result with the
 remaining job evidence. In either waiver mode the same verifier instead binds
 the stage-appropriate capacity pair to explicit owner/reason metadata, leaves
@@ -732,7 +732,7 @@ different hosts are not compared.
 
 This workflow is an evidence producer, not an automatic release action. The
 10k pair is one candidate-promotion input; the 100k pair is a separate
-dedicated-host gate. Neither replaces the 24/72-hour one-process endurance
+dedicated-host gate. Neither replaces the 1/3-hour one-process endurance
 workflow.
 
 ## Phase 4 Benchmark Evidence Boundary

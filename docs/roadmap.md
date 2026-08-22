@@ -79,11 +79,12 @@ See `migration_status.md` for the current checked state of these phases.
   observation, destruction, and construction-rollback blockers were fixed.
   No public selector, installed io_uring target, or production replacement is
   authorized. M1 is closed; M2 promotion-commit evidence is the unclosed front.
-  Candidate `a89e2b0` passed the non-endurance evidence lanes, but its 24-hour
-  run was cancelled after 21,073.016 seconds during task convergence and the
-  72-hour run did not start. The result is `STOPPED / NO-PROMOTION`, not an
-  internal candidate. CI/performance evidence stays commit-bound; complete
-  endurance and licensing remain promotion gates.
+  Candidate `a89e2b0` passed the non-endurance evidence lanes, but its
+  old-policy endurance run was cancelled after 21,073.016 seconds during task
+  convergence before result verification completed. The current 1h/3h chain
+  has not run. The result is `STOPPED / NO-PROMOTION`, not an internal
+  candidate. CI/performance evidence stays commit-bound; complete endurance
+  and licensing remain promotion gates.
 
 ## Phase 1: Project Skeleton
 
@@ -306,7 +307,7 @@ In progress after production hardening:
 
 M1 is closed. M2 `v0.3.0-internal-candidate.1` remains the next execution
 front, but no evidence task is currently running. The 2026-08-22 convergence
-checkpoint is `NO-PROMOTION` because 24h/72h endurance is incomplete.
+checkpoint is `NO-PROMOTION` because 1h/3h endurance is incomplete.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -342,9 +343,10 @@ checkpoint is `NO-PROMOTION` because 24h/72h endurance is incomplete.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`
   only for later source-private shaping; raw evidence is bound to `f5d39b8`.
 - [ ] M2: select the exact promotion commit and complete dual-platform CI,
-  sanitizers, consumers, performance/capacity/fault, 24h/72h endurance,
+  sanitizers, consumers, performance/capacity/fault, 1h/3h endurance,
   package, SBOM, and notices before naming the internal candidate.
   - [x] Candidate `a89e2b0`: CI, sanitizer/TSan, consumers, paired benchmark,
     10k/100k capacity, fault coverage, and repeat-50 evidence passed.
-  - [ ] Endurance: run `32516260909/1` was cancelled after 21,073.016 seconds;
-    24h was not satisfied and 72h was not dispatched. No waiver was used.
+  - [ ] Endurance: old-policy run `32516260909/1` was cancelled after
+    21,073.016 seconds before result verification; the current 1h/3h chain has
+    not been dispatched. No waiver was used.

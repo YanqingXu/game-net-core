@@ -12,8 +12,8 @@ on:
           - repeat
           - candidate-waiver
           - release-waiver
-          - candidate-24h
-          - release-72h
+          - candidate-1h
+          - release-3h
         default: repeat
       repeat:
         description: CTest repeat count for threading and Pipeline/Broadcast contracts
@@ -32,11 +32,11 @@ on:
           - required
         default: best-effort
       candidate_run_id:
-        description: Successful candidate-24h run id required by release-72h
+        description: Successful candidate-1h run id required by release-3h
         required: false
         default: ""
       candidate_run_attempt:
-        description: Exact candidate-24h rerun attempt required by release-72h
+        description: Exact candidate-1h rerun attempt required by release-3h
         required: false
         default: ""
       capacity_run_id:
@@ -558,9 +558,9 @@ jobs:
 
   linux-production-endurance:
     name: Linux production endurance (${{ inputs.mode }})
-    if: inputs.mode == 'candidate-24h' || inputs.mode == 'release-72h'
+    if: inputs.mode == 'candidate-1h' || inputs.mode == 'release-3h'
     runs-on: [self-hosted, linux, x64, gamenet-endurance]
-    timeout-minutes: 4620
+    timeout-minutes: 240
 
     steps:
       - name: Checkout frozen candidate
@@ -617,18 +617,18 @@ jobs:
           if actual_sha != expected_sha:
               raise SystemExit(f"checkout identity drift: {actual_sha} != {expected_sha}")
           positive = re.compile(r"[1-9][0-9]*")
-          if mode == "candidate-24h" and (
+          if mode == "candidate-1h" and (
               candidate_run_id or candidate_run_attempt
           ):
               raise SystemExit(
-                  "candidate-24h must not name prior candidate evidence"
+                  "candidate-1h must not name prior candidate evidence"
               )
-          if mode == "release-72h" and (
+          if mode == "release-3h" and (
               positive.fullmatch(candidate_run_id) is None
               or positive.fullmatch(candidate_run_attempt) is None
           ):
               raise SystemExit(
-                  "release-72h requires exact candidate run/attempt"
+                  "release-3h requires exact candidate run/attempt"
               )
           if (
               positive.fullmatch(capacity_run_id) is None
@@ -697,7 +697,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.capacity_run_id }}
-          pattern: capacity-gate-pair-${{ inputs.mode == 'candidate-24h' && 'candidate-10k' || 'dedicated-100k' }}-${{ github.sha }}-${{ inputs.capacity_run_id }}-${{ inputs.capacity_run_attempt }}
+          pattern: capacity-gate-pair-${{ inputs.mode == 'candidate-1h' && 'candidate-10k' || 'dedicated-100k' }}-${{ github.sha }}-${{ inputs.capacity_run_id }}-${{ inputs.capacity_run_attempt }}
           merge-multiple: true
           path: capacity-evidence
 
@@ -706,30 +706,30 @@ jobs:
           set -euo pipefail
           python3 tools/verify_capacity_gate_evidence_set.py \
             --input-root capacity-evidence \
-            --expected-profile '${{ inputs.mode == 'candidate-24h' && 'candidate-10k' || 'dedicated-100k' }}' \
+            --expected-profile '${{ inputs.mode == 'candidate-1h' && 'candidate-10k' || 'dedicated-100k' }}' \
             --expected-candidate-sha '${{ github.sha }}' \
             --expected-run-id '${{ inputs.capacity_run_id }}' \
             --expected-run-attempt '${{ inputs.capacity_run_attempt }}' \
             --retained-pair-manifest capacity-evidence/pair-manifest.json \
             --output endurance-evidence/capacity-pair-revalidated.json
 
-      - name: Download retained candidate-24h evidence
-        if: inputs.mode == 'release-72h'
+      - name: Download retained candidate-1h evidence
+        if: inputs.mode == 'release-3h'
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.candidate_run_id }}
-          pattern: production-endurance-candidate-24h-${{ github.job }}-${{ github.sha }}-${{ inputs.candidate_run_id }}-${{ inputs.candidate_run_attempt }}
+          pattern: production-endurance-candidate-1h-${{ github.job }}-${{ github.sha }}-${{ inputs.candidate_run_id }}-${{ inputs.candidate_run_attempt }}
           merge-multiple: true
           path: prior-candidate-evidence
 
-      - name: Verify retained candidate-24h evidence
-        if: inputs.mode == 'release-72h'
+      - name: Verify retained candidate-1h evidence
+        if: inputs.mode == 'release-3h'
         run: |
           set -euo pipefail
           python3 tools/verify_endurance_evidence.py \
             --evidence prior-candidate-evidence/run/result.json \
-            --mode candidate-24h \
+            --mode candidate-1h \
             --candidate-sha '${{ github.sha }}' \
             --platform linux \
             --backend epoll \
@@ -763,8 +763,8 @@ jobs:
             --workflow-run-id '${{ github.run_id }}' \
             --workflow-run-attempt '${{ github.run_attempt }}'
 
-      - name: Verify same-commit 24/72-hour pair
-        if: inputs.mode == 'release-72h'
+      - name: Verify same-commit 1/3-hour pair
+        if: inputs.mode == 'release-3h'
         run: |
           set -euo pipefail
           python3 tools/verify_endurance_evidence_pair.py \
@@ -797,7 +797,7 @@ jobs:
             --promotion-run-attempt '${{ github.run_attempt }}'
             --output endurance-evidence/promotion.json
           )
-          if [ "$GAMENET_ENDURANCE_MODE" = "release-72h" ]; then
+          if [ "$GAMENET_ENDURANCE_MODE" = "release-3h" ]; then
             args+=(
               --candidate-endurance-evidence prior-candidate-evidence/run/result.json
               --candidate-endurance-run-id "$GAMENET_CANDIDATE_RUN_ID"

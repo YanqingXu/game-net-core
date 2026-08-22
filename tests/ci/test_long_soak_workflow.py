@@ -536,6 +536,12 @@ def main() -> None:
         "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
         workflow,
     )
+    require(production_job, "timeout-minutes: 240", workflow)
+    require(
+        production_job,
+        "inputs.mode == 'candidate-1h' || inputs.mode == 'release-3h'",
+        workflow,
+    )
 
     production_checkout = step_block(
         production_job, "Checkout frozen candidate"
@@ -614,11 +620,11 @@ def main() -> None:
     )
 
     candidate_download = step_block(
-        production_job, "Download retained candidate-24h evidence"
+        production_job, "Download retained candidate-1h evidence"
     )
     require(
         candidate_download,
-        "pattern: production-endurance-candidate-24h-${{ github.job }}-"
+        "pattern: production-endurance-candidate-1h-${{ github.job }}-"
         "${{ github.sha }}-${{ inputs.candidate_run_id }}-"
         "${{ inputs.candidate_run_attempt }}",
         workflow,
@@ -628,7 +634,7 @@ def main() -> None:
     )
     require(
         capacity_download,
-        "capacity-gate-pair-${{ inputs.mode == 'candidate-24h' && "
+        "capacity-gate-pair-${{ inputs.mode == 'candidate-1h' && "
         "'candidate-10k' || 'dedicated-100k' }}-${{ github.sha }}-"
         "${{ inputs.capacity_run_id }}-${{ inputs.capacity_run_attempt }}",
         workflow,
@@ -776,7 +782,7 @@ def main() -> None:
     require(ci_docs_text, "does not provide retained artifact\nevidence", ci_docs)
     require(
         ci_docs_text,
-        "Repeat-soak and actual 24/72-hour production-endurance uploads",
+        "Repeat-soak and actual 1/3-hour production-endurance uploads",
         ci_docs,
     )
     require(ci_docs_text, "`candidate-waiver` and `release-waiver`", ci_docs)

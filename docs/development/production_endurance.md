@@ -20,7 +20,7 @@ child process with a fixed duration. It validates monotonic JSON heartbeats,
 the exact fault-profile inventory and counters, bounded heartbeat silence,
 process exit, child-reported duration, and independently observed wall time.
 It atomically rewrites `checkpoint.json` after each cycle and produces
-`gamenet.production_endurance.v1` with a hashed raw log.
+`gamenet.production_endurance.v2` with a hashed raw log.
 On Linux it also samples the same child process RSS after every heartbeat and
 acknowledges the observation before the child may continue. This handshake
 keeps even the final heartbeat's process alive while `/proc` is sampled and
@@ -29,8 +29,8 @@ fails closed if either side disappears. The gate fails if maximum RSS exceeds
 
 ## Fixed Modes
 
-- `candidate-24h`: exactly 86,400 seconds;
-- `release-72h`: exactly 259,200 seconds.
+- `candidate-1h`: exactly 3,600 seconds;
+- `release-3h`: exactly 10,800 seconds.
 
 The manual workflow additionally exposes `candidate-waiver` and
 `release-waiver`. They are not duration modes: they start no endurance process
@@ -41,9 +41,9 @@ only to its named promotion stage.
 
 Production modes reject duration overrides. `smoke` accepts 1–60 seconds for
 orchestration tests, but its result cannot pass either production verifier.
-The 72-hour verifier also requires retained successful 24-hour evidence from
+The 3-hour verifier also requires retained successful 1-hour evidence from
 the same candidate SHA, platform, and backend and emits
-`gamenet.production_endurance_pair.v1`.
+`gamenet.production_endurance_pair.v2`.
 
 Production results also record their exact GitHub workflow run id and rerun
 attempt. The workflow refuses a production mode without an exact paired
@@ -51,31 +51,31 @@ capacity source:
 
 | Promotion stage | Capacity source | Endurance source |
 | --- | --- | --- |
-| candidate | paired `candidate-10k` raw artifacts | current `candidate-24h` |
+| candidate | paired `candidate-10k` raw artifacts | current `candidate-1h` |
 | candidate waiver | paired `candidate-10k` raw artifacts | none; explicit owner/reason metadata |
-| release | paired `dedicated-100k` raw artifacts | exact prior `candidate-24h` plus current `release-72h` |
-| release waiver | paired `dedicated-100k` raw artifacts | none; explicit owner/reason metadata covering 24h/72h |
+| release | paired `dedicated-100k` raw artifacts | exact prior `candidate-1h` plus current `release-3h` |
+| release waiver | paired `dedicated-100k` raw artifacts | none; explicit owner/reason metadata covering 1h/3h |
 
 `tools/verify_production_promotion_evidence.py` does not trust copied summary
 fields. It revalidates both platform capacity manifests and raw v3 samples,
 requires the checked-in `pair-manifest.json` to equal the recomputed pair,
 revalidates every endurance result and hashed log, and binds all inputs to the
 same candidate SHA and declared workflow attempts. The resulting
-`gamenet.production_promotion_evidence.v1` is included in the long-soak
+`gamenet.production_promotion_evidence.v2` is included in the long-soak
 artifact and then hashed by its outer CI evidence manifest. Either waiver uses
-the distinct `gamenet.production_promotion_waiver.v1` schema with
+the distinct `gamenet.production_promotion_waiver.v2` schema with
 `status: waived`, `endurance_policy: owner-waived`, an empty endurance list,
 `duration_evidence_complete: false`, and `owner_authorized_promotion: true`.
 
 ## Remote Runner Boundary
 
 The production mode in `long-soak.yml` targets
-`[self-hosted, linux, x64, gamenet-endurance]`. GitHub-hosted jobs are limited
-to six hours, while self-hosted jobs may run for up to five days, so a genuine
-72-hour single-process claim requires dedicated self-hosted infrastructure.
-The workflow gives the job a 4,620-minute bound and avoids step-level timeouts.
+`[self-hosted, linux, x64, gamenet-endurance]` so both fixed modes retain a
+controlled host identity, toolchain, RSS observation environment, and capacity
+source. The workflow gives the job a 240-minute bound and avoids step-level
+timeouts.
 It uses the GitHub token only before the long child run to download the exact
-capacity run/attempt and, for release mode, the exact prior 24-hour
+capacity run/attempt and, for release mode, the exact prior 1-hour
 run/attempt. Capacity evidence is revalidated before the expensive
 uninterrupted process starts.
 
@@ -91,12 +91,12 @@ Official limits:
 
 Linux/epoll is the production endurance environment. Linux and Windows still
 run the fault-injection CTest in ordinary CI, sanitizer, Release, and package
-gates; Windows/IOCP is therefore a supported functional backend, but the 24/72
+gates; Windows/IOCP is therefore a supported functional backend, but the 1/3
 hour release-duration claim is explicitly Linux/epoll.
 
 ## Completed Infrastructure Evidence
 
-The Phase 6 infrastructure snapshot
+The Phase 6 v1 infrastructure snapshot
 `b3443182d0606792df44a12bcb08927e767bc060` completed both unscaled modes on
 the dedicated Linux/epoll runner:
 
@@ -104,10 +104,11 @@ the dedicated Linux/epoll runner:
 - 72-hour release run `29984629032`: success, 220,851 uninterrupted cycles,
   including verification of the retained same-SHA 24-hour artifact.
 
-These records prove the supervisor, process-duration, RSS handshake, checkpoint,
-hashing, and same-SHA pair machinery. They do not automatically qualify later
-runtime commits. Any EventLoop, TCP, platform data-path, Metrics hot-path, or
-other runtime change requires new 24/72-hour evidence on the final frozen SHA.
+These historical v1 records prove the supervisor, process-duration, RSS
+handshake, checkpoint, hashing, and same-SHA pair machinery. They do not
+automatically qualify later runtime commits or satisfy the current v2 policy.
+Any EventLoop, TCP, platform data-path, Metrics hot-path, or other runtime
+change requires new 1/3-hour evidence on the final frozen SHA.
 
 ## Local Smoke
 

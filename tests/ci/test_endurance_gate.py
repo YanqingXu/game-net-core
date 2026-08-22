@@ -147,7 +147,7 @@ def write_synthetic_evidence(
     log = root / "fault-injection.log"
     log.write_text("retained synthetic verifier fixture\n", encoding="utf-8")
     evidence = {
-        "schema": "gamenet.production_endurance.v1",
+        "schema": "gamenet.production_endurance.v2",
         "status": "success",
         "mode": mode,
         "candidate_sha": SHA,
@@ -196,12 +196,12 @@ def main() -> None:
     )
 
     for fragment in (
-        "candidate-24h",
+        "candidate-1h",
         "candidate-waiver",
         "release-waiver",
-        "release-72h",
-        "86,400 seconds",
-        "259,200",
+        "release-3h",
+        "3,600 seconds",
+        "10,800",
         "tests/integration/resilience/test_fault_injection.cpp",
         "tests/ci/test_endurance_gate.py",
         "exact retained",
@@ -209,8 +209,8 @@ def main() -> None:
     ):
         require(intent_text, fragment, intent)
     for fragment in (
-        '"candidate-24h": 24 * 60 * 60',
-        '"release-72h": 72 * 60 * 60',
+        '"candidate-1h": 1 * 60 * 60',
+        '"release-3h": 3 * 60 * 60',
         '"supervisor observed a duration shortfall"',
         '"Linux child RSS growth exceeded its budget"',
         '"GAMENET_ENDURANCE_OBSERVATION_ACK"',
@@ -221,7 +221,7 @@ def main() -> None:
         require(runner_text, fragment, runner)
     for fragment in (
         "runs-on: [self-hosted, linux, x64, gamenet-endurance]",
-        "timeout-minutes: 4620",
+        "timeout-minutes: 240",
         "--expected-total 129",
         "--expect-label threading=102",
         "--expect-label fault_injection=1",
@@ -243,13 +243,13 @@ def main() -> None:
         require(workflow_text, fragment, workflow)
     promotion_text = promotion_verifier.read_text(encoding="utf-8")
     for fragment in (
-        "gamenet.production_promotion_evidence.v1",
-        "gamenet.production_promotion_waiver.v1",
+        "gamenet.production_promotion_evidence.v2",
+        "gamenet.production_promotion_waiver.v2",
         '"candidate": "candidate-10k"',
         '"release": "dedicated-100k"',
         "verify_evidence_set",
-        "candidate-24h",
-        "release-72h",
+        "candidate-1h",
+        "release-3h",
         '"owner-waived"',
         '"owner_authorized_promotion"',
         "capacity pair manifest does not match revalidated raw evidence",
@@ -265,6 +265,7 @@ def main() -> None:
         passed = root / "passed"
         run(runner_command(repo_root, build, passed))
         result = json.loads((passed / "result.json").read_text(encoding="utf-8"))
+        assert result["schema"] == "gamenet.production_endurance.v2"
         assert result["status"] == "success"
         assert result["completed_cycles"] == 1
         assert result["child_elapsed_milliseconds"] >= 1000
@@ -291,7 +292,7 @@ def main() -> None:
 
         override = runner_command(repo_root, build, root / "override")
         mode_index = override.index("smoke")
-        override[mode_index] = "candidate-24h"
+        override[mode_index] = "candidate-1h"
         run(override, expected=1)
         missing_identity = runner_command(
             repo_root,
@@ -299,7 +300,7 @@ def main() -> None:
             root / "missing-identity",
         )
         missing_identity[missing_identity.index("smoke")] = (
-            "candidate-24h"
+            "candidate-1h"
         )
         duration_option = missing_identity.index(
             "--duration-seconds"
@@ -315,15 +316,15 @@ def main() -> None:
 
         candidate = write_synthetic_evidence(
             root / "candidate",
-            "candidate-24h",
-            86_400,
+            "candidate-1h",
+            3_600,
             workflow_run_id="9001",
             workflow_run_attempt=2,
         )
         release = write_synthetic_evidence(
             root / "release",
-            "release-72h",
-            259_200,
+            "release-3h",
+            10_800,
             workflow_run_id="9002",
             workflow_run_attempt=1,
         )
@@ -335,7 +336,7 @@ def main() -> None:
             "--evidence",
             str(candidate),
             "--mode",
-            "candidate-24h",
+            "candidate-1h",
             "--candidate-sha",
             SHA,
             "--platform",
@@ -354,7 +355,7 @@ def main() -> None:
                 "--evidence",
                 str(candidate),
                 "--mode",
-                "candidate-24h",
+                "candidate-1h",
                 "--candidate-sha",
                 SHA,
                 "--platform",
@@ -368,6 +369,34 @@ def main() -> None:
             ],
             expected=1,
         )
+        legacy = write_synthetic_evidence(
+            root / "legacy-v1",
+            "candidate-1h",
+            3_600,
+            workflow_run_id="9003",
+            workflow_run_attempt=1,
+        )
+        legacy_document = json.loads(legacy.read_text(encoding="utf-8"))
+        legacy_document["schema"] = "gamenet.production_endurance.v1"
+        legacy.write_text(json.dumps(legacy_document, indent=2) + "\n", encoding="utf-8")
+        legacy_failure = run(
+            [
+                sys.executable,
+                str(verifier),
+                "--evidence",
+                str(legacy),
+                "--mode",
+                "candidate-1h",
+                "--candidate-sha",
+                SHA,
+                "--platform",
+                "linux",
+                "--backend",
+                "epoll",
+            ],
+            expected=1,
+        )
+        assert "unexpected endurance evidence schema" in legacy_failure.stderr
         pair_output = root / "pair.json"
         run([
             sys.executable,
@@ -393,7 +422,10 @@ def main() -> None:
             "--output",
             str(pair_output),
         ])
-        assert json.loads(pair_output.read_text(encoding="utf-8"))["status"] == "success"
+        pair = json.loads(pair_output.read_text(encoding="utf-8"))
+        assert pair["schema"] == "gamenet.production_endurance_pair.v2"
+        assert pair["status"] == "success"
+        assert set(pair) >= {"candidate_1h", "release_3h"}
 
         (release.parent / "fault-injection.log").write_text("tampered\n", encoding="utf-8")
         run([
@@ -402,7 +434,7 @@ def main() -> None:
             "--evidence",
             str(release),
             "--mode",
-            "release-72h",
+            "release-3h",
             "--candidate-sha",
             SHA,
             "--platform",

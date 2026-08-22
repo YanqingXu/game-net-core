@@ -9,7 +9,7 @@ unrelated backend or producing an empty feature toggle.
 
 | Target system | Tier | Backend | Current claim |
 |---|---|---|---|
-| Linux | Tier 1 | epoll | Reference platform for release, sanitizers, performance regression, and 24/72-hour endurance evidence |
+| Linux | Tier 1 | epoll | Reference platform for release, sanitizers, performance regression, and 1/3-hour endurance evidence |
 | Windows | Tier 2 until M3 | IOCP | Required functional, lifecycle, Debug/Release, benchmark, install, and package-consumer coverage |
 | macOS | Unsupported | none | CMake configure fails |
 | FreeBSD, OpenBSD, NetBSD, and other BSD variants | Unsupported | none | CMake configure fails |
