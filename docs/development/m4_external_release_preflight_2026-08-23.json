@@ -1,0 +1,164 @@
+{
+  "schema": "gamenet.m4_external_release_preflight.v1",
+  "status": "complete-awaiting-owner-authorization",
+  "audit_date": "2026-08-23",
+  "audit_base": {
+    "commit": "4b63dac037595551652097f52504d4275a850c45",
+    "tree": "7451b08736590b05eb54c0f70d37751afd8f00c2",
+    "internal_candidate_commit": "0c3012449ae36fa32656da33c4d1161f5129cde7",
+    "post_m3_runtime_fix": "736a0907e90dbd0373cd652283618794c31020df"
+  },
+  "authorization": {
+    "state": "pending",
+    "required_confirmations": [
+      "The project owner confirms authority to license every externally distributed project-owned file under Apache-2.0.",
+      "The project owner explicitly authorizes the Apache-2.0 repository transition.",
+      "The project owner explicitly authorizes v0.3.0 tag, GitHub Release, and asset publication after all exact-commit gates pass."
+    ],
+    "prohibited_until_authorized": [
+      "modify LICENSE or repository licensing metadata",
+      "add Apache-2.0 SPDX declarations as a relicensing act",
+      "create or push v0.3.0 tag",
+      "create a GitHub v0.3.0 Release",
+      "upload externally adoptable packages or release assets"
+    ]
+  },
+  "repository_state": {
+    "name_with_owner": "YanqingXu/game-net-core",
+    "url": "https://github.com/YanqingXu/game-net-core",
+    "visibility": "PUBLIC",
+    "default_branch": "main",
+    "github_license_classification": "Other",
+    "current_release": {
+      "name": "v0.2.0 Phase 4 Preview",
+      "tag": "v0.2.0-phase4-preview",
+      "kind": "prerelease",
+      "published_at": "2026-07-11T21:38:05Z"
+    },
+    "v0_3_0_tag_present": false,
+    "v0_3_0_release_present": false
+  },
+  "license_state": {
+    "classification": "all-rights-reserved-no-license-grant",
+    "license_blob_sha256": "f80b9f62b48cc8d6d075cd7eb24da26881d95dbdd782239475261b0e267e37c8",
+    "copyright_files": 1,
+    "spdx_identifier_files": 0,
+    "internal_candidate_sbom_license": "LicenseRef-Proprietary-All-Rights-Reserved",
+    "internal_candidate_sbom_file_count": 0
+  },
+  "tracked_inventory": {
+    "total_files": 564,
+    "regular_files": 564,
+    "symlinks": 0,
+    "submodules": 0,
+    "git_lfs_files": 0,
+    "tracked_mini_trantor_files": 0,
+    "tracked_archive_or_native_binary_files": 0,
+    "extensions": {
+      ".cpp": 155,
+      ".md": 137,
+      ".h": 91,
+      ".py": 66,
+      ".cc": 52,
+      ".json": 32,
+      ".txt": 13,
+      "<none>": 7,
+      ".yml": 5,
+      ".cmake": 1,
+      ".dict": 1,
+      ".gitattributes": 1,
+      ".gitignore": 1,
+      ".gitkeep": 1,
+      ".in": 1
+    },
+    "git_authors": [
+      "YanqingXu <xyq949587362xyq007@163.com>",
+      "YanqingXu <xyq949587362xyq007@gmail.com>"
+    ]
+  },
+  "generated_and_third_party_audit": {
+    "bundled_third_party_libraries_identified": [],
+    "bundled_external_test_or_benchmark_datasets_identified": [],
+    "deterministic_project_generated_assets": [
+      {
+        "generator": "tests/fuzz/generate_packet_framer_corpus.py",
+        "outputs": [
+          {
+            "path": "tests/fuzz/corpus/packet_framer/oversized-length",
+            "bytes": 4,
+            "sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+          },
+          {
+            "path": "tests/fuzz/corpus/packet_framer/partial-prefix",
+            "bytes": 3,
+            "sha256": "709e80c88487a2411e1ee4dfb9f22a861492d20c4765150c0c794abd70f8147c"
+          },
+          {
+            "path": "tests/fuzz/corpus/packet_framer/sticky-valid-frames",
+            "bytes": 11,
+            "sha256": "3aa71345508f5eaf0cfe4bf8ba3e5f49f3b1b17a431a3da38a9576a06ede94eb"
+          },
+          {
+            "path": "tests/fuzz/corpus/packet_framer/valid-64-byte-frame",
+            "bytes": 68,
+            "sha256": "c9edde03e8fd7bf6161ac30617d29dfb4c2fd80302f45c4669d345185cf7a1ab"
+          },
+          {
+            "path": "tests/fuzz/corpus/packet_framer/valid-empty-frame",
+            "bytes": 4,
+            "sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "path": "tests/fuzz/corpus/packet_framer/valid-one-byte-frame",
+            "bytes": 5,
+            "sha256": "a4f9ae3763eb477590e3fa0a3f4a36752ba3730d2dfdea7b594bde164065f67d"
+          }
+        ]
+      }
+    ],
+    "build_prerequisites_not_bundled": [
+      "CMake",
+      "Ninja",
+      "GCC and binutils",
+      "MSVC and Windows SDK",
+      "system pthread and Winsock"
+    ],
+    "owner_rights_confirmation_still_required": true,
+    "legal_compatibility_conclusion": "not-made-by-engineering-audit"
+  },
+  "post_m3_change_audit": {
+    "public_surface_paths": [
+      "include",
+      "api/public_api_manifest.json",
+      "CMakeLists.txt",
+      "cmake"
+    ],
+    "public_surface_changed_since_internal_candidate": false,
+    "runtime_files_changed_since_internal_candidate": [
+      "src/core/net/TcpConnection.cc",
+      "src/core/net/platform/IocpTcpTransport.h",
+      "src/core/net/platform/IocpTcpTransport_win.cc"
+    ],
+    "runtime_diff_insertions": 45,
+    "runtime_diff_deletions": 24,
+    "fresh_promotion_commit_and_full_matrix_required": true
+  },
+  "release_engineering_gaps": [
+    "No tracked tool currently assembles the final source and binary archives, NOTICE, third-party notices, SPDX SBOM, evidence index, and SHA256SUMS as one reproducible release operation.",
+    "The internal candidate SBOM declares the proprietary LicenseRef and contains no file-level SPDX inventory.",
+    "No tracked source file currently carries an SPDX-License-Identifier declaration.",
+    "Clean external v0.2-to-v0.3 upgrade consumers are not yet part of the final promotion evidence."
+  ],
+  "required_exact_commit_gates": [
+    "Linux Debug and Release plus ASan/UBSan and TSan",
+    "Windows Debug and Release on IOCP",
+    "129-test inventory, repository guards, API manifest, and install consumers",
+    "paired Linux epoll and Windows IOCP benchmark regression matrices",
+    "candidate-10k and dedicated-100k paired capacity gates",
+    "threading and Pipeline/Broadcast repeat-50 plus fault injection",
+    "uninterrupted candidate-1h followed by release-3h on the same promotion commit",
+    "clean Linux and Windows package consumers plus v0.2-to-v0.3 upgrade consumers",
+    "reproducible source and binary packages, Apache-2.0 NOTICE and third-party notices",
+    "SPDX 2.3 SBOM, evidence index, SHA256SUMS, archive path safety, and hash verification"
+  ]
+}

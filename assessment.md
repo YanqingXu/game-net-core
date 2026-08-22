@@ -372,6 +372,11 @@ v0.3.0-internal-candidate.1
 运行时修复重新选择最终 promotion commit，完整重跑双平台、sanitizer、容量、性能、
 fault、repeat、1h/3h、包消费者和 evidence bundle 门。
 
+不改变法律状态的 M4 preflight 已完成：仓库本身已经是 Public，但许可证仍不授予外部
+权利；564 文件的来源/资产清单未发现 vendored library、submodule、LFS 或外部测试数据，
+同时确认源码 SPDX 标识和受跟踪的最终发布组装工具仍缺失。该结果是工程审计而非法律
+意见，Apache-2.0 切换和 `v0.3.0` 发布仍须所有者明确授权。
+
 ## P2：根据真实集成结果决定公共 Runtime API
 
 当前四个 Profile 全部保持 non-installed、共同能力审查为 `NO-PROMOTION`，这一状态暂时不应改变。

@@ -240,8 +240,10 @@ TcpServer
 
 优先级：P1。启动条件：M3 关闭通用 Core blocker。
 
-状态：**待项目所有者明确授权 Apache-2.0 许可切换与公开发布**。授权前只允许只读
-审计和治理准备，不修改许可证、不创建公开 release/tag、不上传分发包。
+状态：**发布前工程审计已完成，待项目所有者明确授权 Apache-2.0 许可切换与公开
+发布**。审计基线、来源/资产清单、M3 后 runtime diff、发布工程缺口和固定重验顺序见
+`docs/development/m4_external_release_preflight_2026-08-23.md` 及同名 JSON。授权前不修改
+许可证、不创建公开 release/tag、不上传分发包。
 
 - 只修复 M3 暴露的通用 Core blocker，不把 Lua、Room、Actor、RPC 或部署拓扑引入 Core；
 - 顶层许可证切换为 Apache-2.0，并同步源码 header、README、package metadata、NOTICE、
@@ -533,7 +535,8 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M4 是下一治理前沿，无后台 Core 证据任务**：M1、M2、M3 已关闭。M3 后存在
+> **M4 是下一治理前沿，无后台 Core 证据任务**：M1、M2、M3 已关闭，M4 preflight
+> 已完成并由 build-governance guard 校验。M3 后存在
 > Core runtime 修复 `736a090`，因此外部发布必须在最终许可证/NOTICE/SBOM 变更后
 > 重新选择 promotion commit，并完整执行 M2 的 Linux/Windows、sanitizer、容量、
 > benchmark、fault、repeat、1h/3h、package 和 evidence 矩阵。Apache-2.0 许可切换

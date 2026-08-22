@@ -50,7 +50,9 @@ grant. M3 real gateway integration is closed: the private gateway closure is
 fix `736a090`, completed 3,743 full replay/fault cycles, and left no unresolved
 Core correctness or reusable-capability blocker. The next governance front is
 M4 external v0.3.0 release; Apache-2.0 relicensing and publication still require
-explicit owner authorization and a fresh same-commit promotion matrix.
+explicit owner authorization and a fresh same-commit promotion matrix. The
+non-mutating source/license/release audit is complete in
+[`docs/development/m4_external_release_preflight_2026-08-23.md`](docs/development/m4_external_release_preflight_2026-08-23.md).
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint
@@ -134,6 +136,9 @@ permission to use, copy, modify, or redistribute this code. Engineering
 candidate work can continue, but an externally adoptable release is blocked
 until the project owner publishes an explicit license and corresponding
 package/SBOM metadata. See [Licensing Status](docs/development/licensing.md).
+The M4 engineering preflight records that the GitHub repository is already
+public while the license still grants no external rights; no `v0.3.0` tag or
+Release has been created.
 
 ## Layout
 

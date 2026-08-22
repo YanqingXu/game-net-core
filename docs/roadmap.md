@@ -310,7 +310,9 @@ M1 and M2 are closed. `v0.3.0-internal-candidate.1@0c30124` passed its complete
 same-commit 1h/3h and package/evidence gates. The 2026-08-22 cancelled
 checkpoint remains historical `NO-PROMOTION` evidence. M3 real gateway
 integration is closed; M4 external release governance is the current front and
-no Core evidence task is running.
+no Core evidence task is running. The M4 engineering preflight is complete and
+machine-guarded; Apache-2.0 relicensing and publication still await explicit
+owner authorization.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.

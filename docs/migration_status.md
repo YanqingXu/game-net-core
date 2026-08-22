@@ -15,7 +15,10 @@ candidate-1h `32576118286/1`, and release-3h `32580658838/1` gates without a
 waiver. M2 is closed and `v0.3.0-internal-candidate.1` is formed as an
 all-rights-reserved internal engineering package. M3 real gateway integration
 is closed at private gateway commit `0a8fe1e`; M4 external release governance
-is the active front.
+is the active front. Its non-mutating source, licensing, asset, runtime-diff,
+and release-tooling preflight is complete at
+`docs/development/m4_external_release_preflight_2026-08-23.md`; Apache-2.0 and
+publication remain unauthorized.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -108,6 +111,10 @@ cancelled `a89e2b0` run remains `NO-PROMOTION` evidence only. The private
 Core `736a090` Linux/epoll process passed the uninterrupted 1-hour gate with
 3,743 complete replay/fault cycles and 32 KiB peak RSS growth. M4 external
 release governance is active, subject to explicit license/publication approval.
+The M4 preflight confirms that the GitHub repository is already public but the
+current all-rights-reserved license grants no external rights, no `v0.3.0` tag
+or Release exists, and a new exact-commit promotion matrix is mandatory after
+the post-M3 runtime correction.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
