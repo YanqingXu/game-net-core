@@ -104,9 +104,10 @@ This module is not business logic.
 - The configured target system must be exactly Linux or Windows.
 - Linux is the Tier 1 reference platform for release, sanitizer, performance,
   and long-duration endurance evidence.
-- Windows is Tier 2 until the M3 IOCP batching, synchronous-error, resource
-  ownership, and capacity gates are complete; it remains a required functional
-  and package-consumer CI platform.
+- Windows is Tier 2 after completing the IOCP batching, synchronous-error,
+  resource-ownership, capacity, package-consumer, and M3 real-gateway gates. It
+  remains required functional CI, while Linux alone owns the fixed
+  long-duration reference claim.
 - macOS, BSD variants, and all other target systems fail at CMake configure
   time instead of selecting Linux sources implicitly.
 - Installed library targets are static-only before version 1.0.

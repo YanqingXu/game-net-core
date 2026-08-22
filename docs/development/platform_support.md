@@ -10,20 +10,19 @@ unrelated backend or producing an empty feature toggle.
 | Target system | Tier | Backend | Current claim |
 |---|---|---|---|
 | Linux | Tier 1 | epoll | Reference platform for release, sanitizers, performance regression, and 1/3-hour endurance evidence |
-| Windows | Tier 2 until M3 | IOCP | Required functional, lifecycle, Debug/Release, benchmark, install, and package-consumer coverage |
+| Windows | Tier 2 | IOCP | Required functional, lifecycle, Debug/Release, benchmark, install, package-consumer, and real-gateway coverage |
 | macOS | Unsupported | none | CMake configure fails |
 | FreeBSD, OpenBSD, NetBSD, and other BSD variants | Unsupported | none | CMake configure fails |
 | Any other target system | Unsupported | none | CMake configure fails |
 
 Tier 2 does not mean that the Windows implementation may be skipped. The IOCP
 path remains a required CI gate. It means the current release and
-long-duration reference claim is Linux, while Windows still needs the M3
-promotion work: batched completions, proven
-overlapped-operation ownership and cancellation at scale, wakeup coalescing,
-an AcceptEx pool, bounded read-buffer ownership, and reviewed
-capacity/performance evidence. Synchronous submit-error convergence is already
-covered by the M1 IOCP contract; that correctness fix alone does not promote
-the backend to Tier 1.
+long-duration reference claim is Linux. Windows has completed the IOCP batching,
+overlapped-operation ownership/cancellation, wakeup, AcceptEx pool, bounded
+read-buffer, capacity/performance, package-consumer, and M3 real-gateway gates,
+including the `736a090` revoked-completion fix. It remains Tier 2 because the
+fixed long-duration reference gate is Linux/epoll rather than Windows/IOCP; M3
+functional completion alone does not change that duration claim.
 
 No Unix-family fallback exists. In particular, macOS and BSD targets must not
 compile the Linux epoll, eventfd, or Linux socket implementation merely because

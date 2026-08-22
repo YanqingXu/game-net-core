@@ -96,7 +96,7 @@ def main() -> None:
     for fragment in (
         "The configured target system must be exactly Linux or Windows.",
         "Linux is the Tier 1 reference platform",
-        "Windows is Tier 2 until the M3 IOCP",
+        "Windows is Tier 2 after completing the IOCP",
         "macOS, BSD variants, and all other target systems fail",
         "`BUILD_SHARED_LIBS=ON` and `GAMENET_ENABLE_TLS=ON`",
         "`GAMENET_ENABLE_EXPERIMENTAL=ON` is supported only on Linux",
@@ -112,7 +112,7 @@ def main() -> None:
     docs_text = platform_docs.read_text(encoding="utf-8")
     for fragment in (
         "Linux | Tier 1 | epoll",
-        "Windows | Tier 2 until M3 | IOCP",
+        "Windows | Tier 2 | IOCP",
         "macOS | Unsupported",
         "FreeBSD, OpenBSD, NetBSD",
         "`BUILD_SHARED_LIBS=ON` is rejected",

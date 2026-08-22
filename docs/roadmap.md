@@ -82,8 +82,10 @@ See `migration_status.md` for the current checked state of these phases.
   complete same-commit CI/capacity/benchmark/repeat/1h/3h chain and produced
   the internally packaged, SPDX-indexed
   `v0.3.0-internal-candidate.1`. It remains all-rights-reserved and is not an
-  external release. M3 real gateway integration is the active front; the
-  cancelled `a89e2b0` endurance checkpoint remains historical only.
+  external release. M3 real gateway integration is closed at private gateway
+  commit `0a8fe1e`; the exact gateway `4e2457e` / Core `736a090` process passed
+  its uninterrupted 1-hour gate. M4 external release governance is the active
+  front; the cancelled `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -307,7 +309,8 @@ In progress after production hardening:
 M1 and M2 are closed. `v0.3.0-internal-candidate.1@0c30124` passed its complete
 same-commit 1h/3h and package/evidence gates. The 2026-08-22 cancelled
 checkpoint remains historical `NO-PROMOTION` evidence. M3 real gateway
-integration is the current execution front; no Core evidence task is running.
+integration is closed; M4 external release governance is the current front and
+no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.

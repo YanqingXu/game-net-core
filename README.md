@@ -45,7 +45,12 @@ uninterrupted 1h/3h endurance chain. The internally packaged result is
 `v0.3.0-internal-candidate.1`; its package/SBOM/evidence identities are recorded
 in [`docs/development/releases/v0.3.0-internal-candidate.1.md`](docs/development/releases/v0.3.0-internal-candidate.1.md).
 It remains an all-rights-reserved engineering candidate with no external-use
-grant. The active implementation front is now M3 real gateway integration.
+grant. M3 real gateway integration is closed: the private gateway closure is
+`0a8fe1e`, its exact uninterrupted 1-hour run used gateway `4e2457e` and Core
+fix `736a090`, completed 3,743 full replay/fault cycles, and left no unresolved
+Core correctness or reusable-capability blocker. The next governance front is
+M4 external v0.3.0 release; Apache-2.0 relicensing and publication still require
+explicit owner authorization and a fresh same-commit promotion matrix.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

@@ -73,9 +73,10 @@ matrix, and immutable evidence are explicit and machine checked.
   from the stable Core promise
 - candidate library targets are static-only; shared-library packaging is not
   supported before version 1.0 and `BUILD_SHARED_LIBS=ON` is rejected
-- Linux is the Tier 1 release-evidence platform; Windows remains Tier 2 until
-  the M3 IOCP promotion gates complete, while still passing required functional
-  and package-consumer CI
+- Linux is the Tier 1 release-evidence platform; Windows remains Tier 2 after
+  completing the M3 IOCP and real-gateway functional gates because the fixed
+  long-duration reference claim remains Linux/epoll, while Windows still passes
+  required functional and package-consumer CI
 - macOS, BSD variants, other target systems, TLS, and experimental modules are
   rejected at configure time rather than represented by empty options or an
   implicit Linux backend

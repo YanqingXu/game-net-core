@@ -37,7 +37,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一实现前沿是 **M3 `gamenet-game-gateway` 真实集成**。
+当前唯一治理前沿是 **M4 Apache-2.0 下的 v0.3.0 外部发布**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -195,6 +195,15 @@ bundle 已形成，内部输出命名为 `v0.3.0-internal-candidate.1`。关闭�
 
 优先级：P1。启动条件：M2 形成内部候选。
 
+状态：**已关闭**。私有网关关闭提交为
+`0a8fe1e43cb11ac32daa8f9266d3b84924736e67`；其 Queued Event 与 Sharded Hybrid
+真实 TCP 场景通过 Linux/Windows Release、Linux ASan/UBSan 和重复门。精确网关提交
+`4e2457e81f0ba2154b6aca2e6cd945daf793fbba` 在 Core
+`736a0907e90dbd0373cd652283618794c31020df` 上完成一个不间断 Linux/epoll 1h
+进程：3,743 个完整回放/故障周期、3,600.023 秒 supervisor monotonic、32 KiB RSS
+增长。M3 发现的唯一 Core correctness blocker 已由 `736a090` 修复；反馈账本没有遗留
+category 1/2 blocker。
+
 在独立仓库中使用安装后的 GameNet targets，禁止依赖 source-private 或 non-installed
 helper。实现相同业务场景的两种运行模型：
 
@@ -230,6 +239,9 @@ TcpServer
 ## 6. M4：Apache-2.0 下的 v0.3.0 外部发布
 
 优先级：P1。启动条件：M3 关闭通用 Core blocker。
+
+状态：**待项目所有者明确授权 Apache-2.0 许可切换与公开发布**。授权前只允许只读
+审计和治理准备，不修改许可证、不创建公开 release/tag、不上传分发包。
 
 - 只修复 M3 暴露的通用 Core blocker，不把 Lua、Room、Actor、RPC 或部署拓扑引入 Core；
 - 顶层许可证切换为 Apache-2.0，并同步源码 header、README、package metadata、NOTICE、
@@ -521,7 +533,9 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M3 已激活，无后台 Core 证据任务**：M1、M2 已关闭；内部候选
-> `v0.3.0-internal-candidate.1@0c30124` 已形成。下一步是在独立私有仓库创建
-> `gamenet-game-gateway`，只使用安装后的 GameNet targets，先落地 Queued Event
-> 业务垂直切片与集成反馈账本，再推进 Sharded Hybrid；不得提前展开 IOE-X11。
+> **M4 是下一治理前沿，无后台 Core 证据任务**：M1、M2、M3 已关闭。M3 后存在
+> Core runtime 修复 `736a090`，因此外部发布必须在最终许可证/NOTICE/SBOM 变更后
+> 重新选择 promotion commit，并完整执行 M2 的 Linux/Windows、sanitizer、容量、
+> benchmark、fault、repeat、1h/3h、package 和 evidence 矩阵。Apache-2.0 许可切换
+> 与公开发布是法律和外部状态变更，执行前必须取得项目所有者明确授权；不得提前展开
+> IOE-X11。

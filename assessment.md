@@ -25,8 +25,10 @@ sanitizer/TSan、10k/100k 容量、paired benchmark、repeat-50、1h/3h enduranc
 Linux/Windows 安装包消费者、SPDX 2.3 SBOM、third-party notices 和完整 evidence
 bundle 均通过。内部输出命名为 `v0.3.0-internal-candidate.1`，但仓库仍为
 all-rights-reserved，不提供外部使用授权。此前 `a89e2b0` 的旧门槛取消运行继续作为
-历史 `NO-PROMOTION` 记录保留，不参与本次通过结论。当前实现前沿已转到 M3
-`gamenet-game-gateway` 真实集成。
+历史 `NO-PROMOTION` 记录保留，不参与本次通过结论。2026-08-23，私有
+`gamenet-game-gateway` 又以关闭提交 `0a8fe1e` 完成 M3；精确网关 `4e2457e` / Core
+`736a090` 的单一 Linux/epoll 进程通过 1h、3,743 个完整故障回放周期和 32 KiB RSS
+增长门。当前前沿已转到 M4 外部发布治理。
 
 ---
 
@@ -309,12 +311,13 @@ Gateway
 
 这会导致很多 API 目前主要经过合同验证，而不是经过真实业务迭代验证。
 
-### 5. M1 与 M2 已关闭，M3 成为真实集成前沿
+### 5. M1、M2 与 M3 已关闭，M4 成为外部发布治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1/M2 关闭、M3 激活”。`0c30124` 的同提交门禁、1h/3h endurance、package、
-SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`。`a89e2b0` 的取消快照
-继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。
+“M1/M2/M3 关闭、M4 待授权”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
+生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
+的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。
 
 ---
 
@@ -355,39 +358,19 @@ v0.3.0-internal-candidate.1
 外部采用仍被当前 all-rights-reserved 许可证阻塞；Apache-2.0、完整第三方审计和
 外部发布属于 M4。
 
-## P1：建立一个真正的游戏网关参考实现
+## P1（已关闭）：建立真正的游戏网关参考实现
 
-结合你后续要把 `game-net-core` 与 Lua、YanGameServer 等项目结合起来，下一项最能提升项目价值的工作，不是再增加一个抽象层，而是建立独立的参考项目，例如：
+私有 `gamenet-game-gateway` 已只通过安装目标完成 Queued Event 与 Sharded Hybrid
+垂直切片，覆盖 Auth/Session、Lua、广播、持久化、饱和恢复、callback re-entry、分片
+隔离、确定性停机、流量回放和故障注入。反馈账本没有遗留通用 Core blocker，也没有
+把 Lua、Actor、房间、数据库或部署拓扑反向引入 Core。
 
-```text
-game-net-runtime-demo
-或
-gamenet-game-gateway
-```
+## P1：完成 M4 外部发布治理
 
-建议采用：
-
-```text
-TcpServer
-→ PacketFramer
-→ Auth/SessionManager
-→ MultiIoQueuedEvent 或 MultiIoShardedHybrid
-→ Lua Runtime
-→ BroadcastDispatcher
-→ TcpTransportEndpoint
-```
-
-这个参考实现应放在 Core 之外，避免把 Lua、Actor、RPC、房间、AOI、数据库和部署拓扑反向塞入 `GameNet::core`。
-
-它主要用来回答当前合同测试回答不了的问题：
-
-* API 是否过于繁琐；
-* Session generation 是否容易正确使用；
-* Lua 回调阻塞如何隔离；
-* 逻辑队列饱和后真实业务如何降级；
-* 玩家断线、重连、踢下线如何映射；
-* Broadcast 与场景分片怎样组合；
-* 停服时网络、逻辑、Lua 和持久化的顺序是否合理。
+下一步不是增加新 runtime 或协议，而是在项目所有者明确授权 Apache-2.0 与公开发布
+后，完成第三方来源审计、LICENSE/NOTICE/header/package/SBOM 同步，并因 `736a090`
+运行时修复重新选择最终 promotion commit，完整重跑双平台、sanitizer、容量、性能、
+fault、repeat、1h/3h、包消费者和 evidence bundle 门。
 
 ## P2：根据真实集成结果决定公共 Runtime API
 
@@ -469,7 +452,8 @@ Milestone 4
 ```text
 M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M2 已关闭（v0.3.0-internal-candidate.1@0c30124）
-→ M3 真实游戏网关/Lua 集成
+→ M3 已关闭（private gateway 0a8fe1e；1h on 4e2457e/Core 736a090）
+→ M4 外部发布治理（待许可证与公开发布授权）
 → 再决定 v0.4 扩展方向
 ```
 
