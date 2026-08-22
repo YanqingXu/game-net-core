@@ -40,6 +40,8 @@ public:
     bool writePending() const noexcept;
     std::size_t bufferedWriteBytes() const noexcept;
     std::size_t discardBufferedWrites() noexcept;
+    // Includes both kernel-pending operations and decoded terminal notices
+    // whose source-private consumers have not run yet.
     bool hasPendingOperations() const noexcept;
     void cancelPendingOperations(SocketFd sockfd) noexcept;
 

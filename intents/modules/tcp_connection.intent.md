@@ -146,6 +146,16 @@ inline inside TcpConnection.
 - on Windows, closing the socket does not release transport operation storage;
   `CompletionDraining` remains attached to the EventLoop lifecycle hub until
   every kernel-owned completion obligation has been consumed
+- on Windows, cancellation is requested before the Channel observer and its
+  numeric Poller registration are revoked, and revocation completes before
+  explicit socket close makes that numeric `SOCKET` reusable. Frozen operation
+  identity/storage remains valid without the Channel registration; a revoked
+  source-private completion consumer may advance terminal close bookkeeping but
+  cannot invoke message, write-complete, or other user callbacks
+- a decoded-but-not-yet-dispatched Windows completion remains an outstanding
+  transport obligation. The connection self-guard and `CompletionDraining`
+  phase remain live until both kernel-pending and dispatch-pending states reach
+  zero
 - on Linux, Channel interest disable and Poller removal complete on the owner
   loop before explicit socket close releases the numeric fd; both operations
   normally converge in the same lifecycle visit, while preserving identical
@@ -248,6 +258,9 @@ inline inside TcpConnection.
 - normal, error, and `ERROR_OPERATION_ABORTED` completion consumption clears
   the corresponding pending obligation once; repeated close/error entry remains
   single-shot
+- a cancellation completion whose Channel observer was revoked still clears
+  the source-private dispatch obligation and re-enters only terminal close
+  bookkeeping. It never interprets canceled bytes or reaches user callbacks
 - Windows synchronous write-submit failure retains the queued segment only
   until normal close cleanup; a pending/canceled write retains its referenced
   front segment until the real completion is consumed, after which close may
@@ -417,8 +430,10 @@ inline inside TcpConnection.
   coherent current totals, and cross-platform zero-or-bounded transport read
   storage without changing connection lifecycle
 - `tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp`
-  verifies explicit socket close precedes disconnected publication, pending
-  operations retain storage, and one final lifecycle detach follows drain
+  verifies cancellation precedes Channel/numeric registration revocation,
+  explicit socket close precedes disconnected publication, a revoked observer
+  still drains source-private completion state, pending operations retain
+  storage, and one final lifecycle detach follows drain
 - `tests/contract/tcp_connection/test_tcp_connection_close_reason.cpp`
   verifies first-reason-wins, native-error preservation, callback failure,
   overload, graceful, forced, peer EOF, and reset mapping

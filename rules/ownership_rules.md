@@ -271,6 +271,12 @@ It must not blur these roles.
   the IOCP transport and/or Poller retain operation storage until every
   completion obligation is consumed; object destruction is not the close
   trigger
+- On Windows, TcpConnection revokes the Poller's non-owning Channel/numeric
+  registration after cancellation is requested and before the `SOCKET` is
+  closed. Frozen operation identity plus retained transport storage owns the
+  remaining completion-drain obligation; numeric handle reuse cannot collide
+  with the old Channel, and a revoked observer cannot regain user-callback
+  ownership
 - On Linux, TcpConnection revokes the Poller's non-owning Channel registration
   before closing and releasing the numeric fd; later connectDestroyed cleanup
   is idempotent and cannot erase a replacement Channel that reused that fd

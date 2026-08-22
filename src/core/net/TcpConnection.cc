@@ -138,11 +138,29 @@ TcpConnection::TcpConnection(
     iocpTransport_ = std::make_unique<IocpTcpTransport>(
         channel_.get(),
         this,
-        +[](void* context, gamenet::base::Timestamp observedAt, bool) {
-            static_cast<TcpConnection*>(context)->handleRead(observedAt);
+        +[](void* context,
+            gamenet::base::Timestamp observedAt,
+            bool observerCurrent) {
+            auto* connection = static_cast<TcpConnection*>(context);
+            if (!observerCurrent) {
+                if (connection->forceClosePending_ &&
+                    !connection->iocpTransport_->hasPendingOperations()) {
+                    connection->beginCloseInLoop();
+                }
+                return;
+            }
+            connection->handleRead(observedAt);
         },
-        +[](void* context, gamenet::base::Timestamp, bool) {
-            static_cast<TcpConnection*>(context)->handleWrite();
+        +[](void* context, gamenet::base::Timestamp, bool observerCurrent) {
+            auto* connection = static_cast<TcpConnection*>(context);
+            if (!observerCurrent) {
+                if (connection->forceClosePending_ &&
+                    !connection->iocpTransport_->hasPendingOperations()) {
+                    connection->beginCloseInLoop();
+                }
+                return;
+            }
+            connection->handleWrite();
         });
 #endif
     channel_->setReadCallback([this](gamenet::base::Timestamp receiveTime) { handleRead(receiveTime); });
@@ -773,16 +791,16 @@ void TcpConnection::beginCloseInLoop() {
     }
 #endif
 
-#ifndef _WIN32
-    // epoll registration bookkeeping is keyed by the numeric descriptor.
-    // Revoke the old Channel identity before close() makes that descriptor
-    // available to a callback-driven reconnect on the same EventLoop.
+    // Poller registration bookkeeping is keyed by the numeric descriptor.
+    // Revoke the old observer identity before close() makes that descriptor
+    // available to a replacement. On Windows, completion operations retain
+    // their frozen identity/storage and a revoked source-private consumer
+    // advances only terminal bookkeeping.
     removeChannelRegistrationInLoop(
         loop_,
         channel_.get(),
         channelAdded_,
         channelRemoved_);
-#endif
 
     if (!socketClosed()) {
         if (!hasPendingOperations && !channel_->isNoneEvent()) {

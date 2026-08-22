@@ -1,3 +1,4 @@
+#include "gamenet/core/net/Channel.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpConnectionClose.h"
@@ -9,36 +10,16 @@
 #include "support/TestAssert.h"
 
 #ifdef _WIN32
+#include "../../../src/core/net/detail/EventLoopIocpAssociationHarness.h"
 #include "../../../src/core/net/platform/IocpTcpTransport.h"
 #endif
 
-#include <atomic>
 #include <chrono>
 #include <memory>
-
-namespace {
-
-#ifdef _WIN32
-std::atomic<int> observedCancelCompletion{0};
-
-void observeCompletion(
-    gamenet::net::IocpOperationKind kind,
-    int error) noexcept {
-    if (kind == gamenet::net::IocpOperationKind::Read &&
-        error == ERROR_OPERATION_ABORTED) {
-        observedCancelCompletion.store(1, std::memory_order_release);
-    }
-}
-#endif
-
-}  // namespace
 
 int main() {
 #ifdef _WIN32
     gamenet::net::detail::resetIocpTcpTransportFaultsForTesting();
-    gamenet::net::detail::setIocpCompletionObserverForTesting(
-        &observeCompletion);
-    observedCancelCompletion.store(0, std::memory_order_relaxed);
 #endif
 
     gamenet::net::EventLoop loop;
@@ -63,10 +44,6 @@ int main() {
             GAMENET_TEST_ASSERT(
                 conn->closePhase() ==
                 gamenet::net::TcpConnectionClosePhase::Closed);
-#ifdef _WIN32
-            GAMENET_TEST_ASSERT(
-                observedCancelCompletion.load(std::memory_order_acquire) == 1);
-#endif
         });
     connection->setCloseCallback(
         [&](const gamenet::net::TcpConnectionPtr& conn) {
@@ -80,9 +57,25 @@ int main() {
     loop.runAfter(std::chrono::milliseconds(0), [&] {
         connection->connectEstablished();
         GAMENET_TEST_ASSERT(loop.attachedLifecycleNodeCount() == 1);
+#ifdef _WIN32
+        GAMENET_TEST_ASSERT(
+            gamenet::net::detail::EventLoopIocpAssociationHarness::tracks(
+                loop,
+                pair.connectionFd));
+#endif
         GAMENET_TEST_ASSERT(
             connection->tryForceClose() ==
             gamenet::net::PostResult::Accepted);
+#ifdef _WIN32
+        GAMENET_TEST_ASSERT(connection->socketClosed());
+        GAMENET_TEST_ASSERT(
+            connection->closePhase() ==
+            gamenet::net::TcpConnectionClosePhase::CompletionDraining);
+        GAMENET_TEST_ASSERT(
+            !gamenet::net::detail::EventLoopIocpAssociationHarness::tracks(
+                loop,
+                pair.connectionFd));
+#endif
     });
 
     gamenet::test::runLoopWithTimeout(

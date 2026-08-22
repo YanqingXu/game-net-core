@@ -1707,6 +1707,28 @@ def main() -> None:
     require(iocp_transport_source_text, "front.offset += completed", iocp_transport_source)
     require(iocp_transport_source_text, "writeSegments_.pop_front()", iocp_transport_source)
     require(iocp_transport_source_text, "std::make_unique_for_overwrite<char[]>", iocp_transport_source)
+    require(
+        iocp_transport_source_text,
+        "readPending_ || writePending_ ||\n"
+        "        readCompletionPending_ || writeCompletionPending_",
+        iocp_transport_source,
+    )
+    require(
+        iocp_transport_source_text,
+        "state.readConsumer(\n"
+        "            state.completionContext,\n"
+        "            observedAt,\n"
+        "            observerCurrent);",
+        iocp_transport_source,
+    )
+    require(
+        iocp_transport_source_text,
+        "state.writeConsumer(\n"
+        "            state.completionContext,\n"
+        "            observedAt,\n"
+        "            observerCurrent);",
+        iocp_transport_source,
+    )
     assert "setRevents" not in iocp_transport_source_text
 
     tcp_connection_source_text = tcp_connection_source.read_text(encoding="utf-8")
@@ -1720,16 +1742,16 @@ def main() -> None:
     )
     require(
         tcp_connection_source_text,
-        "#ifndef _WIN32\n"
-        "    // epoll registration bookkeeping is keyed by the numeric descriptor.\n"
-        "    // Revoke the old Channel identity before close() makes that descriptor\n"
-        "    // available to a callback-driven reconnect on the same EventLoop.\n"
+        "    // Poller registration bookkeeping is keyed by the numeric descriptor.\n"
+        "    // Revoke the old observer identity before close() makes that descriptor\n"
+        "    // available to a replacement. On Windows, completion operations retain\n"
+        "    // their frozen identity/storage and a revoked source-private consumer\n"
+        "    // advances only terminal bookkeeping.\n"
         "    removeChannelRegistrationInLoop(\n"
         "        loop_,\n"
         "        channel_.get(),\n"
         "        channelAdded_,\n"
         "        channelRemoved_);\n"
-        "#endif\n"
         "\n"
         "    if (!socketClosed())",
         tcp_connection_source,

@@ -202,12 +202,17 @@ void IocpTcpTransport::consumeReadCompletion(
     gamenet::base::Timestamp observedAt,
     bool observerCurrent) {
     auto& state = *static_cast<SharedState*>(context);
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    observeCompletion(
+        IocpOperationKind::Read,
+        static_cast<int>(state.readOperation.error));
+#endif
     state.readCompletionPending = false;
-    if (observerCurrent && state.readConsumer != nullptr) {
+    if (state.readConsumer != nullptr) {
         state.readConsumer(
             state.completionContext,
             observedAt,
-            true);
+            observerCurrent);
     }
 }
 
@@ -216,12 +221,17 @@ void IocpTcpTransport::consumeWriteCompletion(
     gamenet::base::Timestamp observedAt,
     bool observerCurrent) {
     auto& state = *static_cast<SharedState*>(context);
+#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
+    observeCompletion(
+        IocpOperationKind::Write,
+        static_cast<int>(state.writeOperation.error));
+#endif
     state.writeCompletionPending = false;
-    if (observerCurrent && state.writeConsumer != nullptr) {
+    if (state.writeConsumer != nullptr) {
         state.writeConsumer(
             state.completionContext,
             observedAt,
-            true);
+            observerCurrent);
     }
 }
 
@@ -333,11 +343,6 @@ ssize_t IocpTcpTransport::completeRead(Buffer* input, int* savedErrno) {
     readPending_ = false;
     readCompletionPending_ = false;
     readBuffer_ = WSABUF{};
-#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
-    observeCompletion(
-        IocpOperationKind::Read,
-        static_cast<int>(readOperation_.error));
-#endif
     if (readOperation_.error != 0) {
         *savedErrno = static_cast<int>(readOperation_.error);
         return -1;
@@ -498,11 +503,6 @@ ssize_t IocpTcpTransport::completeWrite(int* savedErrno) {
     const std::size_t submittedBytes = submittedWriteBytes_;
     writeBuffer_ = WSABUF{};
     submittedWriteBytes_ = 0;
-#ifdef GAMENET_INTERNAL_IOCP_TEST_HOOKS
-    observeCompletion(
-        IocpOperationKind::Write,
-        static_cast<int>(writeOperation_.error));
-#endif
     if (writeOperation_.error != 0) {
         *savedErrno = static_cast<int>(writeOperation_.error);
         return -1;
@@ -566,7 +566,8 @@ std::size_t IocpTcpTransport::discardBufferedWrites() noexcept {
 }
 
 bool IocpTcpTransport::hasPendingOperations() const noexcept {
-    return readPending_ || writePending_;
+    return readPending_ || writePending_ ||
+        readCompletionPending_ || writeCompletionPending_;
 }
 
 void IocpTcpTransport::cancelPendingOperations(SocketFd sockfd) noexcept {

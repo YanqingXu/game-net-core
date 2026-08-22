@@ -411,6 +411,11 @@ No other direct mutation path is allowed for core loop state.
   Buffer or transport fields directly from the management thread
 - TcpConnection socket close, completion-obligation consumption, lifecycle
   detach, Channel removal, and disconnected publication are owner-loop-only
+- on Windows, force-close requests cancellation, removes the Channel observer
+  and numeric Poller registration, then explicitly closes the socket on the
+  owner loop. A later completion with a revoked observer may run only the
+  source-private terminal-retirement path; it cannot invoke connection/user
+  callbacks, and decoded-but-undispatched completions keep final close pending
 - on Linux, TcpConnection disables and removes its Channel registration before
   explicitly closing the socket, so the released numeric fd cannot collide
   with a stale Poller entry during callback-driven reconnect
