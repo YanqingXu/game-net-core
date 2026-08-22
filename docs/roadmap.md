@@ -78,13 +78,12 @@ See `migration_status.md` for the current checked state of these phases.
   source-private shaping. Independent ARCH-G1 is `APPROVE` after owner-
   observation, destruction, and construction-rollback blockers were fixed.
   No public selector, installed io_uring target, or production replacement is
-  authorized. M1 is closed; M2 promotion-commit evidence is the unclosed front.
-  Candidate `a89e2b0` passed the non-endurance evidence lanes, but its
-  old-policy endurance run was cancelled after 21,073.016 seconds during task
-  convergence before result verification completed. The current 1h/3h chain
-  has not run. The result is `STOPPED / NO-PROMOTION`, not an internal
-  candidate. CI/performance evidence stays commit-bound; complete endurance
-  and licensing remain promotion gates.
+  authorized. M1 and M2 are closed. Promotion commit `0c30124` passed the
+  complete same-commit CI/capacity/benchmark/repeat/1h/3h chain and produced
+  the internally packaged, SPDX-indexed
+  `v0.3.0-internal-candidate.1`. It remains all-rights-reserved and is not an
+  external release. M3 real gateway integration is the active front; the
+  cancelled `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -305,9 +304,10 @@ In progress after production hardening:
 
 ## Phase 7: I/O Engine and Runtime Profiles
 
-M1 is closed. M2 `v0.3.0-internal-candidate.1` remains the next execution
-front, but no evidence task is currently running. The 2026-08-22 convergence
-checkpoint is `NO-PROMOTION` because 1h/3h endurance is incomplete.
+M1 and M2 are closed. `v0.3.0-internal-candidate.1@0c30124` passed its complete
+same-commit 1h/3h and package/evidence gates. The 2026-08-22 cancelled
+checkpoint remains historical `NO-PROMOTION` evidence. M3 real gateway
+integration is the current execution front; no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -342,11 +342,14 @@ checkpoint is `NO-PROMOTION` because 1h/3h endurance is incomplete.
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`
   only for later source-private shaping; raw evidence is bound to `f5d39b8`.
-- [ ] M2: select the exact promotion commit and complete dual-platform CI,
+- [x] M2: select the exact promotion commit and complete dual-platform CI,
   sanitizers, consumers, performance/capacity/fault, 1h/3h endurance,
   package, SBOM, and notices before naming the internal candidate.
-  - [x] Candidate `a89e2b0`: CI, sanitizer/TSan, consumers, paired benchmark,
-    10k/100k capacity, fault coverage, and repeat-50 evidence passed.
-  - [ ] Endurance: old-policy run `32516260909/1` was cancelled after
-    21,073.016 seconds before result verification; the current 1h/3h chain has
-    not been dispatched. No waiver was used.
+  - [x] Candidate `0c30124`: main CI `32575344030/1`, candidate/dedicated
+    capacity `32575517520/1` and `32575519054/1`, paired benchmark
+    `32575521055/1`, and repeat-50 `32575522678/1` passed.
+  - [x] Endurance: candidate-1h `32576118286/1` and release-3h
+    `32580658838/1` passed without waiver; same-commit pair and release
+    promotion independently revalidated.
+  - [x] Internal source/binary packages, SPDX 2.3 SBOM, notices,
+    `SHA256SUMS`, and the 723-file complete evidence index passed verification.

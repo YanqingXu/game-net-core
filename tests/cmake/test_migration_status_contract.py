@@ -352,7 +352,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一实现前沿是 **M2", plan)
+    require(plan_text, "当前唯一实现前沿是 **M3", plan)
     assert plan_text.count("当前唯一实现前沿") == 1, (
         "plan must declare exactly one current implementation front"
     )

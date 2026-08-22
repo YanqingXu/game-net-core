@@ -442,3 +442,17 @@ a completed, exact-commit record.
 | Endurance | Candidate-24h `32516260909/1` was cancelled by task-convergence instruction after 21,073.016 seconds and 17,978 balanced fault cycles. Maximum RSS was 14,512,128 bytes with 9,547,776 bytes growth. Wrapper status is `cancelled`; current-result/promotion verification did not run. Release-72h was not dispatched; no waiver was used. |
 | Cleanup | Temporary Linux/Windows runner services and GitHub registrations removed; WSL keepalive stopped; runner directories preserved. |
 | Decision | `STOPPED / NO-PROMOTION`. M2 is not closed, `v0.3.0-internal-candidate.1` is not produced, and M3 remains blocked. The historical cancelled run remains invalid; the current policy requires a fresh complete 1h/3h evidence chain. |
+
+## M2 v0.3.0 Internal Candidate Closure — 2026-08-23
+
+| Field | Evidence |
+| --- | --- |
+| Candidate | Exact promotion commit `0c3012449ae36fa32656da33c4d1161f5129cde7`, tree `28ad31b057f6fa76c744bb9c9cd372b5a4cbbbd8`; no Core runtime path or stable API changed. |
+| Platform/CI | Main run `32575344030/1` passed all seven jobs covering Linux Debug/Release, ASan/UBSan, TSan, Windows Debug/Release/IOCP, install consumers, guards, fuzz, and aggregate. |
+| Capacity/performance | Candidate-10k `32575517520/1`, dedicated-100k `32575519054/1`, and paired benchmark `32575521055/1` passed for Linux/epoll and Windows/IOCP. Raw producer evidence independently regenerated the retained aggregates. |
+| Repeat/fault | Run `32575522678/1` passed threading 5,100/5,100 and Pipeline/Broadcast 600/600; the selection includes the fault-injection integration contract. |
+| Endurance | Candidate-1h `32576118286/1` passed 3,050 balanced cycles and release-3h `32580658838/1` passed 9,158. Same-commit v2 pair and release promotion independently revalidated; no waiver. Release supervisor elapsed 10,800.146 seconds, RSS maximum 14,475,264 bytes, growth 9,547,776 bytes. |
+| Package/SBOM | Reproducible 562-file source tar/zip plus 68-file Linux/Windows binary packages; installed-tree and clean-extracted consumers passed 8/8. SPDX 2.3, notices, GitHub artifact inventory, 723-file evidence index, evidence ZIP, and `SHA256SUMS` passed schema/hash/path verification. Exact hashes are recorded in `docs/development/releases/v0.3.0-internal-candidate.1.md`. |
+| Ownership/lifetime | Evidence/release tooling owns files only. EventLoop/TCP owners, callback affinity/re-entry, cross-thread admission, and release rules are unchanged from the validated runtime tree. |
+| Cleanup | Temporary Linux and Windows repository runners stopped and unregistered after upload; runner directories retained. |
+| Decision | `integrate` the internal engineering candidate and close M2. It grants no external-use permission, creates no GitHub Release/tag, and activates M3 real gateway integration in a separate private repository. |

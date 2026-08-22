@@ -20,11 +20,13 @@ owner-thread ownership
 
 这套语义已经开始贯穿 Linux/epoll、Windows/IOCP、实验性 io_uring，以及上层 Runtime Profile。
 
-2026-08-22 的 M2 执行在精确候选 `a89e2b0` 上完成了 CI、容量、benchmark、
-repeat-50 和安装包预检，但按收敛指令取消了按旧门槛启动、只运行
-21,073.016 秒的 candidate endurance，结果验证步骤未完成。当前 1h/3h 门槛仍须
-针对同一精确候选完整执行。当前结论因此是 `STOPPED / NO-PROMOTION`；这不是
-`v0.3.0-internal-candidate.1` 发布或 M2 关闭。
+2026-08-23，M2 在精确 promotion commit `0c30124` 上关闭：同提交双平台 CI、
+sanitizer/TSan、10k/100k 容量、paired benchmark、repeat-50、1h/3h endurance、
+Linux/Windows 安装包消费者、SPDX 2.3 SBOM、third-party notices 和完整 evidence
+bundle 均通过。内部输出命名为 `v0.3.0-internal-candidate.1`，但仓库仍为
+all-rights-reserved，不提供外部使用授权。此前 `a89e2b0` 的旧门槛取消运行继续作为
+历史 `NO-PROMOTION` 记录保留，不参与本次通过结论。当前实现前沿已转到 M3
+`gamenet-game-gateway` 真实集成。
 
 ---
 
@@ -307,12 +309,12 @@ Gateway
 
 这会导致很多 API 目前主要经过合同验证，而不是经过真实业务迭代验证。
 
-### 5. M1 治理漂移已关闭，M2 已形成未推广停止检查点
+### 5. M1 与 M2 已关闭，M3 成为真实集成前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1 关闭、M2 `STOPPED / NO-PROMOTION`”。`a89e2b0` 的 CI、性能、容量、故障、
-repeat 和 package preflight 可以保留为精确提交证据，但被取消的旧门槛快照不能替代
-完整 1h/3h endurance，也不能据此形成 internal candidate。
+“M1/M2 关闭、M3 激活”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`。`a89e2b0` 的取消快照
+继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。
 
 ---
 
@@ -325,9 +327,9 @@ IOE-X10 listener capacity/performance decision 已输出限定范围的 `PROMOTE
 `APPROVE`。M6 的 IOE-X11–X15 因此获得条件授权，但仍须排在 v0.3 推广和真实网关
 验证之后；当前不得继续横向增加实验功能。
 
-## P1：选择一个 promotion commit，完成真正的 v0.3 证据闭环
+## P1（已关闭）：选择 promotion commit，完成 v0.3 内部证据闭环
 
-M1 已结束。现在应停止继续扩展 IOE-X11/X12，选择一个明确 commit 作为 promotion commit，在该提交上完成：
+Promotion commit `0c30124` 已完成：
 
 ```text
 Linux Debug/Release
@@ -344,13 +346,14 @@ fault injection
 package/SBOM/license
 ```
 
-如果只是内部使用，可以形成：
+内部输出已形成：
 
 ```text
-v0.3.0-internal-candidate
+v0.3.0-internal-candidate.1
 ```
 
-如果准备让外部项目采用，则必须先确定 MIT、Apache-2.0、BSL 或其他明确许可证，并补齐第三方声明和 SBOM。
+外部采用仍被当前 all-rights-reserved 许可证阻塞；Apache-2.0、完整第三方审计和
+外部发布属于 M4。
 
 ## P1：建立一个真正的游戏网关参考实现
 
@@ -438,10 +441,8 @@ Milestone 1
 已关闭：IOE-X10 + ARCH-G1 independent review + 文档状态统一
 
 Milestone 2
-停止检查点：
-`a89e2b0` 的同提交 CI / capacity / benchmark / repeat / package preflight 已通过；
-旧门槛运行在 21,073.016 秒取消且结果验证未完成，新的 1h/3h 证据链尚未执行，
-故未形成 v0.3.0 internal candidate。
+已关闭：`v0.3.0-internal-candidate.1@0c30124`；同提交 CI / capacity /
+benchmark / repeat / 1h/3h / package / SPDX / evidence bundle 全部通过。
 
 Milestone 3
 建立真实 game gateway / Lua runtime reference integration
@@ -467,8 +468,8 @@ Milestone 4
 
 ```text
 M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
-→ M2 v0.3 停止检查点（NO-PROMOTION；等待重新授权完整重跑）
-→ 真实游戏网关/Lua 集成
+→ M2 已关闭（v0.3.0-internal-candidate.1@0c30124）
+→ M3 真实游戏网关/Lua 集成
 → 再决定 v0.4 扩展方向
 ```
 

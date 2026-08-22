@@ -8,18 +8,19 @@ Current production-roadmap audit: 2026-08-20
 
 Current M1 closure audit: 2026-08-22
 
-Current M2 convergence audit: 2026-08-22. Promotion candidate
-`a89e2b0f13242a4cd4b49093f562b93adcd509a4` passed the non-endurance lanes,
-but old-policy endurance run `32516260909/1` was cancelled after 21,073.016
-seconds under the task-convergence instruction before result verification.
-The current 1h/3h chain has not been dispatched. M2 is `STOPPED /
-NO-PROMOTION`, not closed, and no internal candidate is named.
+Current M2 closure audit: 2026-08-23. Promotion commit
+`0c3012449ae36fa32656da33c4d1161f5129cde7` passed the complete same-commit
+CI, sanitizer, 10k/100k capacity, paired benchmark, repeat-50, package,
+candidate-1h `32576118286/1`, and release-3h `32580658838/1` gates without a
+waiver. M2 is closed and `v0.3.0-internal-candidate.1` is formed as an
+all-rights-reserved internal engineering package. M3 real gateway integration
+is the active front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1 is closed and M2 promotion evidence remains the unclosed front;
-there is no running evidence task after the convergence checkpoint above.
+`APPROVE`. M1 and M2 are closed; M3 is the unclosed implementation front.
+There is no running Core evidence task after the internal-candidate closure.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -87,7 +88,7 @@ Current RTM-R1 Profile C MultiIoDedicatedFixedTick checkpoint:
 
 ## Current Task Goal
 
-M1 is closed. IOE-X10 ran the fixed 256-route, 32-pending-Accept, four-by-64
+M1 and M2 are closed. IOE-X10 ran the fixed 256-route, 32-pending-Accept, four-by-64
 churn, 100-by-64-byte RTT protocol with one warm-up and five interleaved formal
 samples per backend. All ten sample hashes, correctness/capacity/recovery
 invariants, and zero-residue summaries validate. Its narrow `PROMOTE` does not
@@ -96,13 +97,14 @@ about 0.499 of epoll, with P50/P99 debts and a better P999 in this workload.
 ARCH-G1 independently approved the reviewed source-private seam after mutable
 Hub observation, fail-fast destruction, and Pump construction rollback blockers
 were fixed. No installed target, public selector, or production replacement was
-introduced. M2 selected exact main candidate `a89e2b0`; its dual-platform
-CI/sanitizer/consumer, performance/capacity/fault, repeat-50, and package
-preflight evidence passed. Its old-policy endurance run was cancelled at
-21,073.016 seconds during task convergence before result verification, and the
-current 1h/3h chain has not started, so the current decision is
-`NO-PROMOTION`. M2 remains the next task if work resumes; package SBOM and a
-complete evidence bundle for `v0.3.0-internal-candidate.1` are not claimed.
+introduced. M2 selected exact main candidate `0c30124`; all same-commit
+CI/sanitizer/consumer, performance/capacity/fault, repeat-50, candidate-1h,
+release-3h, package, SPDX, notices, and complete evidence-bundle gates passed.
+The internal candidate is recorded in
+`docs/development/releases/v0.3.0-internal-candidate.1.md`. The historical
+cancelled `a89e2b0` run remains `NO-PROMOTION` evidence only. The active task is
+M3: build the independent private `gamenet-game-gateway` consumer using only
+installed GameNet targets.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
@@ -378,7 +380,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; the cross-Profile decision remains `NO-PROMOTION`; IOE-X1–X9 are closed, and IOE-X10 at `f5d39b8` is a narrow `PROMOTE` for later source-private shaping. M2 promotion evidence is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
+| 7 | I/O Engine and Runtime Profiles | M1 and M2 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; the cross-Profile decision remains `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, and `v0.3.0-internal-candidate.1@0c30124` passed the full internal promotion chain. M3 gateway integration is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
 
 ## Current Intent Inventory
 

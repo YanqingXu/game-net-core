@@ -38,15 +38,14 @@ epoll. Evidence and review are recorded in
 [`docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/evidence.json`](docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/evidence.json)
 and [`docs/reviews/arch-g1-independent-review.md`](docs/reviews/arch-g1-independent-review.md).
 
-The current unclosed implementation front remains M2. Exact candidate
-`a89e2b0f13242a4cd4b49093f562b93adcd509a4` passed dual-platform CI,
-capacity, benchmark, repeat-50, and install-package preflight, but its
-old-policy endurance run was deliberately cancelled after 21,073.016 seconds
-when the work was converged, before result verification completed. The current
-1h/3h evidence chain has not started. This is a
-`STOPPED / NO-PROMOTION` checkpoint, not
-`v0.3.0-internal-candidate.1`. Details are recorded in
-[`docs/development/m2_internal_candidate_checkpoint_2026-08-22.md`](docs/development/m2_internal_candidate_checkpoint_2026-08-22.md).
+M2 is closed. Exact promotion commit
+`0c3012449ae36fa32656da33c4d1161f5129cde7` passed dual-platform CI,
+sanitizers, capacity, benchmark, repeat-50, package consumers, and a fresh
+uninterrupted 1h/3h endurance chain. The internally packaged result is
+`v0.3.0-internal-candidate.1`; its package/SBOM/evidence identities are recorded
+in [`docs/development/releases/v0.3.0-internal-candidate.1.md`](docs/development/releases/v0.3.0-internal-candidate.1.md).
+It remains an all-rights-reserved engineering candidate with no external-use
+grant. The active implementation front is now M3 real gateway integration.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

@@ -37,7 +37,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一实现前沿是 **M2 v0.3.0 内部候选**。
+当前唯一实现前沿是 **M3 `gamenet-game-gateway` 真实集成**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -170,15 +170,13 @@ Profile C cadence-stop 同一退休被重复计数的问题，新增合同证明
 
 优先级：P1。启动条件：M1 关闭。
 
-状态：`STOPPED / NO-PROMOTION` 检查点。精确候选
-`a89e2b0f13242a4cd4b49093f562b93adcd509a4` 已通过同提交 CI、容量、benchmark、
-repeat-50 和安装包消费者预检；按旧耐久性门槛启动的 candidate run `32516260909/1`
-在 `21,073.016` 秒后按用户收敛指令取消，结果验证步骤未完成，且 3h endurance
-未启动。该取消快照不因门槛缩短而追认为通过。因此 M2 未关闭，
-`v0.3.0-internal-candidate.1` 未形成，M3 启动条件未满足。停止检查点见
-`docs/development/m2_internal_candidate_checkpoint_2026-08-22.md`。恢复时必须执行新的
-完整且不间断的 1h/3h 证据链；取消快照和 waiver 都不能计为通过。在 M2 关闭前不
-展开 IOE-X11 或新的 Runtime 功能。
+状态：**已关闭**。精确 promotion commit
+`0c3012449ae36fa32656da33c4d1161f5129cde7` 已通过同提交 CI、sanitizer/TSan、
+10k/100k 容量、paired benchmark、repeat-50、candidate-1h、release-3h 和双平台
+安装/解压包消费者。SPDX 2.3 SBOM、third-party notices、`SHA256SUMS` 与完整 evidence
+bundle 已形成，内部输出命名为 `v0.3.0-internal-candidate.1`。关闭记录见
+`docs/development/releases/v0.3.0-internal-candidate.1.md`。旧候选 `a89e2b0` 的取消
+运行仍是历史 `NO-PROMOTION`，未被追认为通过。当前许可证仍不允许外部采用。
 
 - 选择 main 上一个精确 promotion commit，停止展开新的 IOE/Runtime 功能；
 - 完成 Linux Debug/Release、ASan/UBSan、TSan、Windows Debug/Release/IOCP；
@@ -523,6 +521,7 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **已收敛，无后台任务**：M1 已关闭；M2 在精确候选 `a89e2b0` 上形成停止检查点，
-> 但新的 1h/3h endurance 未满足，结论为 `NO-PROMOTION`。若重新授权继续，下一步只可
-> 重启完整 M2 promotion evidence，不得越过到 M3 或 IOE-X11。
+> **M3 已激活，无后台 Core 证据任务**：M1、M2 已关闭；内部候选
+> `v0.3.0-internal-candidate.1@0c30124` 已形成。下一步是在独立私有仓库创建
+> `gamenet-game-gateway`，只使用安装后的 GameNet targets，先落地 Queued Event
+> 业务垂直切片与集成反馈账本，再推进 Sharded Hybrid；不得提前展开 IOE-X11。

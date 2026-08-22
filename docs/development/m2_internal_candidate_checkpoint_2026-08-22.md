@@ -1,5 +1,11 @@
 # M2 Internal Candidate Convergence Checkpoint — 2026-08-22
 
+> **Historical checkpoint superseded:** a fresh v2 1h/3h chain later passed on
+> `0c3012449ae36fa32656da33c4d1161f5129cde7`, and M2 closed as
+> `v0.3.0-internal-candidate.1`. See
+> [`releases/v0.3.0-internal-candidate.1.md`](releases/v0.3.0-internal-candidate.1.md).
+> The cancelled evidence below remains invalid and is preserved unchanged.
+
 > **Decision: `STOPPED / NO-PROMOTION`.** This document is an execution
 > checkpoint, not an M2 closure record, internal release, or waiver. The name
 > `v0.3.0-internal-candidate.1` is reserved but was not produced.
