@@ -431,3 +431,14 @@ a completed, exact-commit record.
 | Linux gates | Exact IOE-X10 implementation tree: experimental Release 136/136; focused 7/7; focused repeat 20 rounds (140 passes); ASan/UBSan focused 7/7 with leak detection and halt-on-error. Plain GCC TSan was blocked before test code by WSL's `unexpected memory mapping`; the same binaries under `setarch x86_64 -R` passed focused 7/7 with no race report. Default-off Release passed 129/129. Stable API comparison was zero-diff. |
 | Windows gate/fix-forward | Default-off MSVC Release first passed 128/129 and exposed a legal cadence-stop convergence race that could count one timer retirement twice. Intent/rules and the Profile C contract now require one published cancellation outcome whether the owner callback retires before a post or meets an accepted post. Linux and Windows focused repeats each pass 100/100; complete Linux/Windows default-off Release gates pass 129/129 after the fix. |
 | Decision | `PROMOTE`, narrowly: authorize IOE-X11–X15 only when M6 is reached, after v0.3 promotion and real gateway validation. Preserve the measured throughput/P50/P99 debt. M1 closes; M2 exact-promotion-commit evidence becomes the sole implementation front. |
+
+## M2 Internal Candidate Convergence Checkpoint — 2026-08-22
+
+| Field | Evidence |
+| --- | --- |
+| Candidate | Exact promotion candidate `a89e2b0f13242a4cd4b49093f562b93adcd509a4`; production Linux/epoll and Windows/IOCP unchanged; stable API zero-diff. |
+| Passing lanes | Main CI `32515776695/1` (7/7); dedicated-100k capacity `32515817027/1`; candidate-10k capacity `32515907929/1`; paired benchmark `32515904248/1`; repeat-50 `32515900974/1` with threading 5,100/5,100 and Pipeline/Broadcast 600/600. All canonical artifacts and independent manifest hashes are recorded in `m2_internal_candidate_checkpoint_2026-08-22.md`. |
+| Package preflight | Exact-candidate source and Linux/Windows installed-package drafts were generated locally; archive inventory/path checks passed and extracted-package consumers passed 2/2 on each platform. They remain ignored local drafts, not a release. |
+| Endurance | Candidate-24h `32516260909/1` was cancelled by task-convergence instruction after 21,073.016 seconds and 17,978 balanced fault cycles. Maximum RSS was 14,512,128 bytes with 9,547,776 bytes growth. Wrapper status is `cancelled`; current-result/promotion verification did not run. Release-72h was not dispatched; no waiver was used. |
+| Cleanup | Temporary Linux/Windows runner services and GitHub registrations removed; WSL keepalive stopped; runner directories preserved. |
+| Decision | `STOPPED / NO-PROMOTION`. M2 is not closed, `v0.3.0-internal-candidate.1` is not produced, and M3 remains blocked pending a fresh complete 24h/72h evidence chain. |

@@ -38,10 +38,16 @@ epoll. Evidence and review are recorded in
 [`docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/evidence.json`](docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/evidence.json)
 and [`docs/reviews/arch-g1-independent-review.md`](docs/reviews/arch-g1-independent-review.md).
 
-The current implementation front is M2: select an exact promotion commit and
-build the complete `v0.3.0-internal-candidate.1` evidence bundle before adding
-new IOE or Runtime functionality. Production Linux remains epoll, Windows
-remains IOCP, and the reviewed stable API remains zero-diff. Historical
+The current unclosed implementation front remains M2. Exact candidate
+`a89e2b0f13242a4cd4b49093f562b93adcd509a4` passed dual-platform CI,
+capacity, benchmark, repeat-50, and install-package preflight, but its required
+24-hour endurance run was deliberately cancelled after 21,073.016 seconds
+when the work was converged; the 72-hour run was never started. This is a
+`STOPPED / NO-PROMOTION` checkpoint, not
+`v0.3.0-internal-candidate.1`. Details are recorded in
+[`docs/development/m2_internal_candidate_checkpoint_2026-08-22.md`](docs/development/m2_internal_candidate_checkpoint_2026-08-22.md).
+Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
+API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint
 `669ebb0a7c5c475dea74b12275c66a2ce1876804`, reviewed-surface tag
 `api-r1-perf-r1-reviewed-surface@6b292156e3e94d3389e9f3b8513445e7eb4ab541`,

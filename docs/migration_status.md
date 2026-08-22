@@ -8,10 +8,17 @@ Current production-roadmap audit: 2026-08-20
 
 Current M1 closure audit: 2026-08-22
 
+Current M2 convergence audit: 2026-08-22. Promotion candidate
+`a89e2b0f13242a4cd4b49093f562b93adcd509a4` passed the non-endurance lanes,
+but candidate-24h run `32516260909/1` was cancelled after 21,073.016 seconds
+under the task-convergence instruction; release-72h was not dispatched. M2 is
+`STOPPED / NO-PROMOTION`, not closed, and no internal candidate is named.
+
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1 is closed and M2 promotion evidence is the current front.
+`APPROVE`. M1 is closed and M2 promotion evidence remains the unclosed front;
+there is no running evidence task after the convergence checkpoint above.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -88,10 +95,12 @@ about 0.499 of epoll, with P50/P99 debts and a better P999 in this workload.
 ARCH-G1 independently approved the reviewed source-private seam after mutable
 Hub observation, fail-fast destruction, and Pump construction rollback blockers
 were fixed. No installed target, public selector, or production replacement was
-introduced. The active task is M2: select an exact main promotion commit and
-complete dual-platform CI/sanitizer/consumer, performance/capacity/fault,
-24h/72h endurance, package, SBOM, and notices evidence for
-`v0.3.0-internal-candidate.1`.
+introduced. M2 selected exact main candidate `a89e2b0`; its dual-platform
+CI/sanitizer/consumer, performance/capacity/fault, repeat-50, and package
+preflight evidence passed. The required 24h run was cancelled at 21,073.016
+seconds during task convergence and 72h did not start, so the current decision
+is `NO-PROMOTION`. M2 remains the next task if work resumes; package SBOM and a
+complete evidence bundle for `v0.3.0-internal-candidate.1` are not claimed.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model

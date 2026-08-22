@@ -20,6 +20,11 @@ owner-thread ownership
 
 这套语义已经开始贯穿 Linux/epoll、Windows/IOCP、实验性 io_uring，以及上层 Runtime Profile。
 
+2026-08-22 的 M2 执行在精确候选 `a89e2b0` 上完成了 CI、容量、benchmark、
+repeat-50 和安装包预检，但按收敛指令取消了只运行 21,073.016 秒的 candidate-24h，
+且未启动 release-72h。当前结论因此是 `STOPPED / NO-PROMOTION`；这不是
+`v0.3.0-internal-candidate.1` 发布或 M2 关闭。
+
 ---
 
 # 一、目前已经取得的主要成果
@@ -301,11 +306,12 @@ Gateway
 
 这会导致很多 API 目前主要经过合同验证，而不是经过真实业务迭代验证。
 
-### 5. M1 治理漂移已关闭，推广证据仍开放
+### 5. M1 治理漂移已关闭，M2 已形成未推广停止检查点
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1 关闭、M2 当前”。这只关闭状态漂移；它不替代 M2 在精确 promotion commit 上的
-CI、性能、容量、故障、endurance 和 package 证据。
+“M1 关闭、M2 `STOPPED / NO-PROMOTION`”。`a89e2b0` 的 CI、性能、容量、故障、
+repeat 和 package preflight 可以保留为精确提交证据，但被取消的 24h 快照不能替代
+完整 24h/72h endurance，也不能据此形成 internal candidate。
 
 ---
 
@@ -431,9 +437,9 @@ Milestone 1
 已关闭：IOE-X10 + ARCH-G1 independent review + 文档状态统一
 
 Milestone 2
-当前：
-选择 promotion commit，完成同提交 CI / capacity / benchmark / endurance
-形成 v0.3.0 internal candidate
+停止检查点：
+`a89e2b0` 的同提交 CI / capacity / benchmark / repeat / package preflight 已通过；
+24h 在 21,073.016 秒取消，72h 未启动，故未形成 v0.3.0 internal candidate。
 
 Milestone 3
 建立真实 game gateway / Lua runtime reference integration
@@ -459,7 +465,7 @@ Milestone 4
 
 ```text
 M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
-→ M2 v0.3 同提交证据闭环
+→ M2 v0.3 停止检查点（NO-PROMOTION；等待重新授权完整重跑）
 → 真实游戏网关/Lua 集成
 → 再决定 v0.4 扩展方向
 ```
