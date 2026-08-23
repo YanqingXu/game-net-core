@@ -294,12 +294,15 @@ Runtime Model
   source-private Connect/TcpClient 已在
   `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 关闭，IOE-X14 跨后端 TCP 语义套件已在
   `351b3c0e476a462265016d53361a02b5f2c51611` 关闭，M6/IOE-X15 显式实验安装面已在
-  `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 关闭；当前唯一治理前沿是 M7
-  Lua/typed RPC 外部先行验证；M7-G0 已在
+  `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 关闭；M7-G0 已在
   `44493b1d37c16567990e1660153d6b0843a8eecc` 记录初始外部实现 `DEFER` 与共享 RPC
   `NO-PROMOTION`；Gateway M4 closure `d03cacd5aead885fc61a419c71d5c32a060cb700`
-  及 M7 治理 `92a26072c3300275edc9d069a59fc17913c7614c` 已满足恢复门 1/2，外部实现现为
-  `RESUME`，共享 RPC 仍为 `NO-PROMOTION`，且未增加 RPC/Lua 安装面；
+  及 M7 治理 `92a26072c3300275edc9d069a59fc17913c7614c` 是历史恢复门；Gateway
+  实现 `e43393c85fa37604d340fe866610756c99f4fe4e`、关闭
+  `588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立 `YanGameServer@b525416` RPC
+  8/8 比较已以 `NO-PROMOTION` 关闭 M7，共享 RPC 仍 deferred，且未增加
+  RPC/Lua 安装面或空 v0.6 发布；当前唯一治理前沿是 M8 Async/Coroutine
+  证据审查；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness

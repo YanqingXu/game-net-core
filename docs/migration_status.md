@@ -40,23 +40,26 @@ drift. M6/IOE-X15 then closed at exact implementation checkpoint
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` with an explicit Linux-only
 experimental component, independent manifest/package consumer, default-package
 isolation, and zero stable v0.3 drift. No preview tag or GitHub Release was
-published. M7 external-first Lua/typed RPC validation is the active governance
-front. Its M7-G0 readiness audit at
+published. M7 external-first Lua/typed RPC validation is closed. Its M7-G0
+readiness audit at
 `44493b1d37c16567990e1660153d6b0843a8eecc` records external implementation
 `DEFER` and shared RPC `NO-PROMOTION`: gateway `0a8fe1e` has no RPC consumer
 contract, while independent `YanGameServer@b525416` proves a different
 wire-v2/native-transport lifecycle. Gateway M4 then closed at `d03cacd`, and
-external M7 governance at `92a2607` authorizes the bounded callback/value
-adapter. External implementation is now `RESUME`; M7 remains active,
-`rpc.intent.md` and shared promotion remain deferred/`NO-PROMOTION`, and no
-RPC/Lua Core surface was added.
+external M7 governance at `92a2607` authorized the bounded callback/value
+adapter. Gateway implementation `e43393c` and closure `588acd0`, dual-platform
+package-only 11/11, sanitizer/repeat/fuzz evidence, and exact YanGameServer
+`b525416` RPC 8/8 revalidation prove different wire, correlation, owner, and
+completion contracts. M7 closes as `NO-PROMOTION`; `rpc.intent.md` remains
+deferred, no RPC/Lua Core surface or empty v0.6 release was added, and M8
+Async/Coroutine evidence review is now the governance front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1–M6 and IOE-X11–X15 are closed; M7 Lua/typed RPC external-first
-validation is the unique governance front. There is no running Core evidence
-task after the X15 decision closure.
+`APPROVE`. M1–M7 and IOE-X11–X15 are closed; M8 Async/Coroutine evidence review
+is the unique governance front. There is no running Core evidence task after
+the M7 decision closure.
 
 Current IOE-X15 implementation/evidence checkpoint:
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
@@ -65,8 +68,10 @@ Current M7-G0 readiness-audit checkpoint:
 `44493b1d37c16567990e1660153d6b0843a8eecc` (2026-08-24);
 initial external implementation `DEFER`, shared RPC `NO-PROMOTION`. Gateway
 closure `d03cacd5aead885fc61a419c71d5c32a060cb700` and M7 governance
-`92a26072c3300275edc9d069a59fc17913c7614c` now set external implementation to
-`RESUME`; shared promotion stays closed and M7 remains active.
+`92a26072c3300275edc9d069a59fc17913c7614c` set external implementation to
+historical `RESUME`. Implementation `e43393c85fa37604d340fe866610756c99f4fe4e`
+and closure `588acd079be93de3e230ba4f07dd111f7bec6a3c` now close M7 as
+`NO-PROMOTION`; shared promotion stays closed.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -443,7 +448,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1–M6 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M7 external-first Lua/typed RPC validation is active. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M7 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M7 external Lua/typed RPC closed at gateway `588acd0` as `NO-PROMOTION`; M8 evidence review is active. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
 
 ## Current Intent Inventory
 

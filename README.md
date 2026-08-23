@@ -69,16 +69,20 @@ closed at `351b3c0e476a462265016d53361a02b5f2c51611` with one portable TCP
 semantic suite across epoll, IOCP, and io_uring. M6/IOE-X15 is closed at
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` with an explicit Linux-only
 experimental installation surface and no stable-manifest drift. No preview tag
-or Release was published; the next governance front is M7 external-first Lua
-and typed RPC validation. Its M7-G0 readiness audit at
+or Release was published. The M7-G0 readiness audit at
 `44493b1d37c16567990e1660153d6b0843a8eecc` records external implementation
 `DEFER` and shared RPC `NO-PROMOTION`: the gateway has no RPC consumer contract,
 so no RPC/Lua package surface was added. Gateway M4 later closed at
 `d03cacd5aead885fc61a419c71d5c32a060cb700`, and its external M7
 intent/rules/contract names are authorized at
-`92a26072c3300275edc9d069a59fc17913c7614c`; external implementation is now
-`RESUME`, while shared promotion remains `NO-PROMOTION` and Core RPC stays
-deferred.
+`92a26072c3300275edc9d069a59fc17913c7614c`. The external adapter was then
+implemented at `e43393c85fa37604d340fe866610756c99f4fe4e` and closed at
+`588acd079be93de3e230ba4f07dd111f7bec6a3c`: package-only dual-platform,
+sanitizer, repeat, fuzz, true-TCP, and independent-consumer 8/8 evidence found
+different wire, correlation, owner, and completion contracts. M7 is therefore
+closed as `NO-PROMOTION`; Core RPC stays deferred with no RPC/Lua package
+surface, no empty v0.6 release, and M8 Async/Coroutine evidence review is the
+next governance front.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

@@ -29,8 +29,9 @@ IOE-X15 实现与证据检查点：`43795e841ba2a279ed6a3d5d831d60a9f2a25570`
 M7-G0 外部就绪审计检查点：`44493b1d37c16567990e1660153d6b0843a8eecc`
 （初始外部实现 `DEFER`、共享 RPC `NO-PROMOTION`）；Gateway M4 已在
 `d03cacd5aead885fc61a419c71d5c32a060cb700` 关闭，M7 外部 adapter 治理已在
-`92a26072c3300275edc9d069a59fc17913c7614c` 授权，因此外部实现现为 `RESUME`，共享
-RPC 仍为 `NO-PROMOTION`。
+`92a26072c3300275edc9d069a59fc17913c7614c` 授权；外部实现在 `e43393c85fa37604d340fe866610756c99f4fe4e`
+完成并由 `588acd079be93de3e230ba4f07dd111f7bec6a3c` 关闭。逐字段比较结论为共享 RPC
+`NO-PROMOTION`，Core RPC 继续 deferred。
 
 ## 1. 计划定位与总体顺序
 
@@ -58,7 +59,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M7 v0.6 Lua 与 typed RPC 外部先行验证**。
+当前唯一治理前沿是 **M8 v0.7 Async 与 Coroutine 证据审查**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -386,13 +387,14 @@ v0.3 manifest 零漂移。已准备 v0.5.0 experimental preview 版本说明，�
 
 ## 9. M7：v0.6 Lua 与 typed RPC
 
-状态：**当前治理前沿**。先在 `gamenet-game-gateway` 与第二个独立 consumer 中形成
-真实合同和反馈；在满足双 consumer 提升门前，不激活 Core/RPC 公共实现。
+状态：**已关闭，`NO-PROMOTION`**。`gamenet-game-gateway` 与第二个独立 consumer
+已经形成真实合同、运行证据与逐字段比较；双 consumer 提升门不成立，因此不激活
+Core/RPC 公共实现，也不发布空 v0.6。
 
 ### 9.1 M7-G0：外部就绪审计
 
-状态：**初始 `DEFER / NO-PROMOTION` 已复核为外部 `RESUME` / 共享
-`NO-PROMOTION`，M7 尚未关闭**。精确审计检查点为
+状态：**初始 `DEFER / NO-PROMOTION`、中间外部 `RESUME` 已最终关闭为共享
+`NO-PROMOTION`**。精确审计检查点为
 `44493b1d37c16567990e1660153d6b0843a8eecc`，记录见
 `docs/development/m7_external_rpc_lua_readiness_2026-08-24.md`。Gateway 历史
 `0a8fe1e43cb11ac32daa8f9266d3b84924736e67` 检查点只有受 owner 隔离的 Lua callback
@@ -402,12 +404,17 @@ callback/value adapter。独立 `YanGameServer`
 `b5254165389d762c3f3c63568c24ffab448fc501` 的有界 RPC/Lua owner 合同虽通过聚焦
 Windows Release 8/8，但 wire-v2、native transport/TLS 和生命周期并不构成相同的
 GameNet per-connection RPC 需求。因此 `rpc.intent.md` 保持 deferred，当前仓库不增加
-RPC/Lua target、头文件或 package component。当前只恢复 Gateway 外部实现；共享提升门
-保持关闭。
+RPC/Lua target、头文件或 package component。Gateway 外部实现在
+`e43393c85fa37604d340fe866610756c99f4fe4e` 完成，Windows/IOCP 与 Linux/epoll
+package-only 11/11、Linux ASan/UBSan 11/11、两项 focused test 双平台各 20/20、codec
+fuzz 100,000 次通过；closure `588acd079be93de3e230ba4f07dd111f7bec6a3c`
+记录最终 `NO-PROMOTION`。
 
-恢复条件 1/2 已满足。Gateway 现在实现非 coroutine 前置的 callback/value adapter，
-随后与第二 consumer 逐字段比较 wire/lifecycle；在实现与比较证据完成前，Core
-`rpc.intent.md` 保持 deferred。
+恢复条件 1–4 均已满足；条件 5 的逐字段比较实际执行后发现 wire、correlation key、
+payload、owner、handshake 与 callback/coroutine completion 合同不同。独立
+`YanGameServer@b525416` 精确源码的聚焦 Windows Release RPC 集合再次通过 8/8，
+但它不能作为 Gateway v1 wire 的第二个等价 consumer。Core `rpc.intent.md` 保持
+deferred。
 
 坚持“外部先行、通用能力再提升”。
 
@@ -437,6 +444,10 @@ queue saturation、双平台真实 TCP 和 fuzz coverage。缺少第二个 consu
 `NO-PROMOTION`，RPC 保持外部 adapter。
 
 ## 10. M8：v0.7 Async 与 Coroutine
+
+状态：**当前治理前沿**。先审查 M7 两个外部 consumer、现有 TimerQueue/Executor 与
+全部 deferred async intents 是否证明一个可替代的共同 value/error/cancel/resume
+合同；没有双 consumer 证据时记录 `NO-PROMOTION`，不创建 coroutine 占位 target。
 
 只有 RPC、timer 或第二个适配器证明需要统一异步语义时，按以下固定顺序提升 deferred
 intents：
@@ -612,9 +623,10 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M7 Lua/typed RPC 外部先行验证是下一治理前沿，无后台 Core 证据任务**：M1–M6
+> **M8 Async/Coroutine 证据审查是下一治理前沿，无后台 Core 证据任务**：M1–M7
 > 与 IOE-X11–IOE-X15 已关闭。X15 在
 > `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
-> 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。当前先在独立适配仓库
-> 验证 Lua execution cell 与 callback/value typed RPC，不得在缺少第二个 consumer 时
-> 提升公共 RPC，也不得提前并行展开 coroutine、TLS/WebSocket 或 UDP/KCP。
+> 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。M7 Gateway 实现
+> `e43393c`、closure `588acd0` 与 YanGameServer `b525416` 8/8 比较已以
+> `NO-PROMOTION` 关闭。当前只审查 async/coroutine 共同需求，不得在缺少第二个等价
+> consumer 时提升公共 coroutine，也不得提前并行展开 TLS/WebSocket 或 UDP/KCP。

@@ -604,3 +604,14 @@ a completed, exact-commit record.
 | Independent input | YanGameServer clean checkpoint `b5254165389d762c3f3c63568c24ffab448fc501` remains the focused 8/8 comparison input. Its broader wire-v2/native transport is not copied into the gateway. |
 | Verification | `tests/cmake/test_migration_status_contract.py` binds the original readiness decision plus the two gateway resume checkpoints, keeps `rpc.intent.md` deferred, and rejects any installed Core RPC/Lua header or target. |
 | Decision | External gateway implementation `RESUME`; shared GameNet RPC remains `NO-PROMOTION`. M7 stays active until gateway runtime evidence and a field-by-field two-consumer comparison close it. |
+
+## M7-G0c External Adapter Closure — 2026-08-24
+
+| Field | Evidence |
+| --- | --- |
+| Gateway implementation | Clean gateway commit `e43393c85fa37604d340fe866610756c99f4fe4e` implements the bounded big-endian v1 codec/channel, distinct Lua execution cell, official-package true-TCP adapter, deterministic corpus, and libFuzzer target. Windows/IOCP and Linux/epoll package-only repositories passed 11/11; Linux ASan/UBSan passed 11/11; both RPC tests passed 20/20 on each platform; Clang ASan/UBSan fuzz passed 100,000 runs. |
+| Gateway closure | `588acd079be93de3e230ba4f07dd111f7bec6a3c` closes the external intent, records exact zero-obligation shutdown evidence, and decides `NO-PROMOTION`. |
+| Independent revalidation | YanGameServer `b5254165389d762c3f3c63568c24ffab448fc501` was exported read-only from its dirty current checkout into the gateway's ignored evidence area. Its exact Windows Release contract-fallback RPC set passed 8/8. |
+| Field comparison | Gateway `GRPC` v1 generation/request callback wire differs from YanGame `YGRP` v2 session/request schema, node/service direction, Actor route, runtime causality, allowlisted payload, TLS/node handshake, construction-thread table, and coroutine/waiter lifecycle. Numeric IDs, remaining deadlines, bounds, and exactly-once terminal concepts alone do not form one substitutable contract. |
+| Verification | `tests/cmake/test_migration_status_contract.py` binds both gateway commits, the independent checkpoint, final `NO-PROMOTION`, deferred `rpc.intent.md`, M8 as the next evidence-review front, and the continued absence of installed Core RPC/Lua headers or targets. |
+| Decision | Close M7 as `NO-PROMOTION`; both consumer adapters remain external, no empty v0.6 release is published, and the unique governance front advances to M8 Async/Coroutine evidence review. |

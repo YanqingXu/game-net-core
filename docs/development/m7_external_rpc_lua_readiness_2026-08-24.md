@@ -24,9 +24,21 @@ Resume recheck after gateway M4 closure:
 - M7 remains the governance front while the external callback/value adapter is
   implemented and compared with the independent consumer.
 
-This is a readiness decision, not an implementation or release result. It adds
-no RPC/Lua target, header, package component, wire format, executor, tag, or
-GitHub Release.
+Final closure after external implementation and comparison:
+
+- external adapter validation: `COMPLETE` at gateway implementation checkpoint
+  `e43393c85fa37604d340fe866610756c99f4fe4e`;
+- gateway M7 closure: `NO-PROMOTION` at
+  `588acd079be93de3e230ba4f07dd111f7bec6a3c`;
+- shared GameNet RPC promotion: `NO-PROMOTION`;
+- `intents/modules/rpc.intent.md`: remains `deferred`;
+- M7 is closed and the governance front advances to M8 evidence review without
+  adding a Core RPC/Lua surface.
+
+The initial and resume sections are readiness history. The final section binds
+the external implementation result and comparison decision; none of these
+decisions adds a Core RPC/Lua target, header, package component, wire format,
+executor, tag, or GitHub Release.
 
 ## Audited Consumers
 
@@ -56,6 +68,15 @@ bounded, non-coroutine callback/value adapter and preserve the installed-Core
 boundary. This satisfies resume gates 1 and 2 without creating RPC evidence or
 authorizing shared promotion.
 
+The gateway then implemented the governed slice at clean commit
+`e43393c85fa37604d340fe866610756c99f4fe4e` and closed it at
+`588acd079be93de3e230ba4f07dd111f7bec6a3c`. Package-only Windows/IOCP and
+Linux/epoll repositories passed 11/11, Linux ASan/UBSan passed 11/11, the two
+focused RPC tests passed 20/20 each on both platforms, and the codec fuzz target
+passed 100,000 Clang ASan/UBSan runs. The true-TCP adapter proved the named
+partial-frame, saturation/recovery, terminal-race, callback-re-entry, and zero-
+obligation contracts without a Core source dependency.
+
 ### `YanGameServer`
 
 The independent clean consumer checkpoint is
@@ -64,7 +85,8 @@ source revision `8e4a6edfe22ca43e3308e36ec31bf7f2dea14ac7` for its GameNet trans
 adapter and separately implements an owner-confined, bounded RPC/session layer,
 a native-socket remote adapter, and an owner-cell script runtime.
 
-The current checkpoint was rebuilt in Windows Release configuration and the
+The exact checkpoint was read-only archived away from its dirty current checkout,
+rebuilt in Windows Release contract-fallback configuration, and the
 following focused callback/value, lifecycle, integration, and stress contracts
 passed 8/8:
 
@@ -73,8 +95,8 @@ passed 8/8:
 - `yangame-rpc-dispatch`;
 - `yangame-rpc-session-table`;
 - `yangame-rpc-pending-stress`;
-- `yangame-integration`;
 - `yangame-lua-rpc-await`;
+- `yangame-actor-rpc-flow`;
 - `yangame-remote-rpc-transport`.
 
 This focused local configuration used the dependency-fallback script/TLS
@@ -88,12 +110,12 @@ shared GameNet RPC contract.
 
 | Boundary | Gateway checkpoint | YanGameServer checkpoint | M7 conclusion |
 | --- | --- | --- | --- |
-| Lua ownership | One logic/cell owner; network callbacks never execute the injected Lua seam | One execution-cell/shard owner; VM entry and retained continuation state remain owner-confined | Same ownership principle, but no shared installable runtime abstraction is demonstrated |
-| Wire | No RPC frame | Internal wire v2 with magic/version, numeric service/method/message identities, runtime causation/correlation, and bounded typed payloads | No common wire exists |
-| Transport | Installed GameNet TCP path | RPC remote adapter privately uses native sockets and requires its own TLS/node handshake contract | No shared per-GameNet-connection channel exists |
-| Request state | No RPC pending table | Owner-confined count/byte-bounded dispatcher and pending/history tables | Gateway has not validated the same lifecycle |
-| Terminal behavior | No RPC response/timeout/late-response contract | Exactly-once response/error/timeout/cancel/disconnect/shutdown settlement | Cannot promote from one consumer |
-| Coroutine dependency | Gateway Lua seam is callback/value based | Core RPC values are callback/completion-capable, with a separate Task bridge | A future gateway slice must remain valid without coroutine support |
+| Lua ownership | Distinct bounded Lua-cell owner; network callbacks only submit copied values | Execution-cell/shard owner retains VM and continuation state | Same principle, different mailbox/runtime contract |
+| Wire | `GRPC` v1 request/response/error; generation/request plus one service/method; arbitrary bounded bytes | `YGRP` v2 message/failure; session/request, source/target node/service, message/schema, Actor route, runtime causality, allowlisted business payload | Magic, version, record, identity, routing, causality, and payload fields differ |
+| Deadline | Remaining milliseconds, reduced by Lua queue time | Remaining microseconds with mandatory hop charge | Same no-foreign-clock principle, incompatible wire semantics |
+| Transport | Installed GameNet TCP/PacketFramer; per-connection EventLoop channel | Private endpoint/server workers with TLS 1.3 mutual authentication and node handshake | Owner and handshake contracts differ |
+| Request state | Per-connection count/byte/history bounds; monotonic non-reused ID per generation; callback/value completion | Construction-thread session table with bounded probing/reuse, waiters/coroutine bridge, and Actor-supplied timer | Bounds overlap, but correlation, owner, and completion APIs differ |
+| Terminal behavior | Response/remote-error/timeout/cancel/close/overload/shutdown/owner-unavailable | Response/failure/timeout/cancel/disconnect/shutdown with retained ErrorCode | Exactly-once is shared conceptually, not a substitutable lifecycle API |
 
 The old deferred GameNet RPC intent also describes a different string-method,
 per-connection protocol and mixes callback and coroutine scope. It is a design
@@ -123,24 +145,25 @@ platform real TCP; fuzzing; and zero retained pending/callback state.
 
 ## Resume Gates
 
-External M7 implementation follows these gates:
+External M7 implementation closed these gates:
 
 1. **satisfied** — gateway M4 is closed cleanly at `d03cacd5aead885fc61a419c71d5c32a060cb700`;
 2. **satisfied** — gateway M7 governance at `92a26072c3300275edc9d069a59fc17913c7614c`
    explicitly authorizes callback/value RPC after the historical M3 boundary;
-3. the gateway implements and verifies the bounded non-coroutine adapter and
-   Lua-cell integration described above;
+3. **satisfied** — gateway implementation
+   `e43393c85fa37604d340fe866610756c99f4fe4e` verifies the bounded
+   non-coroutine adapter and Lua-cell integration described above;
 4. **satisfied for comparison input** — the independent clean checkpoint
    remains `b5254165389d762c3f3c63568c24ffab448fc501` with focused 8/8 evidence;
-5. a field-by-field comparison proves the same wire and lifecycle need.
+5. **executed, divergent** — the field-by-field comparison proves different
+   wire, correlation, owner, payload, handshake, and completion contracts.
 
-Only then may `intents/modules/rpc.intent.md` be rewritten against current code,
-promoted to active, and mapped to concrete `GameNet::protocol` tests. If the
-wire/lifecycle comparison still diverges, M7 closes as `NO-PROMOTION` and both
-adapters remain external.
+The final gate diverged, so M7 closes as `NO-PROMOTION` and both adapters remain
+external. `intents/modules/rpc.intent.md` is not rewritten or promoted.
 
 ## Repository Verification
 
 `tests/cmake/test_migration_status_contract.py` verifies this audit, the exact
-external checkpoints and decisions, the deferred RPC intent/catalog state, and
-the absence of installed GameNet RPC/Lua headers or CMake targets.
+external implementation/closure/checkpoint decisions, the deferred RPC intent/
+catalog state, and the absence of installed GameNet RPC/Lua headers or CMake
+targets.

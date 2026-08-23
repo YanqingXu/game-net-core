@@ -247,6 +247,8 @@ def main() -> None:
     x14_implementation_checkpoint = "351b3c0e476a462265016d53361a02b5f2c51611"
     x15_implementation_checkpoint = "43795e841ba2a279ed6a3d5d831d60a9f2a25570"
     m7_readiness_checkpoint = "44493b1d37c16567990e1660153d6b0843a8eecc"
+    gateway_m7_implementation = "e43393c85fa37604d340fe866610756c99f4fe4e"
+    gateway_m7_closure = "588acd079be93de3e230ba4f07dd111f7bec6a3c"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -475,6 +477,7 @@ def main() -> None:
         require(text, "DEFER", source)
         require(text, "NO-PROMOTION", source)
     require(evidence_ledger_text, "M7-G0 External Lua / Typed-RPC Readiness", evidence_ledger)
+    require(evidence_ledger_text, "M7-G0c External Adapter Closure", evidence_ledger)
     gateway_checkpoint = "0a8fe1e43cb11ac32daa8f9266d3b84924736e67"
     gateway_m4_closure = "d03cacd5aead885fc61a419c71d5c32a060cb700"
     gateway_m7_governance = "92a26072c3300275edc9d069a59fc17913c7614c"
@@ -489,6 +492,8 @@ def main() -> None:
     require(m7_readiness_text, gateway_checkpoint, m7_readiness)
     require(m7_readiness_text, gateway_m4_closure, m7_readiness)
     require(m7_readiness_text, gateway_m7_governance, m7_readiness)
+    require(m7_readiness_text, gateway_m7_implementation, m7_readiness)
+    require(m7_readiness_text, gateway_m7_closure, m7_readiness)
     require(m7_readiness_text, independent_consumer_checkpoint, m7_readiness)
     for text, source in (
         (status_text, migration_status),
@@ -501,8 +506,24 @@ def main() -> None:
     ):
         require(text, gateway_m4_closure[:7], source)
         require(text, gateway_m7_governance[:7], source)
-        require(text, "RESUME", source)
+        require(text, gateway_m7_implementation[:7], source)
+        require(text, gateway_m7_closure[:7], source)
+        require(text, "NO-PROMOTION", source)
+        require(text, "M8", source)
+    require(m7_readiness_text, "external adapter validation: `COMPLETE`", m7_readiness)
+    require(m7_readiness_text, "passed 11/11", m7_readiness)
+    require(m7_readiness_text, "passed 20/20 each on both platforms", m7_readiness)
+    require(m7_readiness_text, "passed 100,000", m7_readiness)
     require(m7_readiness_text, "passed 8/8", m7_readiness)
+    for comparison_term in (
+        "Wire",
+        "Deadline",
+        "Transport",
+        "Request state",
+        "Terminal behavior",
+        "executed, divergent",
+    ):
+        require(m7_readiness_text, comparison_term, m7_readiness)
     require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
     require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)
     require(m7_readiness_text, "callback re-entry", m7_readiness)
@@ -528,7 +549,7 @@ def main() -> None:
         )
     ]
     assert not installed_rpc_or_lua_headers, (
-        "M7 readiness audit must not install RPC/Lua headers: "
+        "M7 closure must not install RPC/Lua headers: "
         + ", ".join(str(path) for path in installed_rpc_or_lua_headers)
     )
     tracked_cmake_paths = [
@@ -558,7 +579,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M7", plan)
+    require(plan_text, "当前唯一治理前沿是 **M8", plan)
     assert plan_text.count("当前唯一治理前沿") == 1, (
         "plan must declare exactly one current governance front"
     )
@@ -589,7 +610,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M7 Lua/typed RPC 外部先行验证是下一治理前沿", plan)
+    require(plan_text, "M8 Async/Coroutine 证据审查是下一治理前沿", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)
