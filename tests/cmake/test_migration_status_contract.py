@@ -337,8 +337,8 @@ def main() -> None:
         "Candidate freeze is retired as a development gate",
         roadmap,
     )
-    require(assessment_text, "IOE-X10 实现与证据提交 `f5d39b8`", assessment)
-    require(assessment_text, "production-hardening preview", assessment)
+    require(assessment_text, "stable Apache-2.0 `v0.3.0@8e4a6ed`", assessment)
+    require(assessment_text, "stable v0.3 基线", assessment)
     require(
         assessment_text,
         "IOE-X10 listener capacity/performance decision",
@@ -355,7 +355,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M4", plan)
+    require(plan_text, "当前唯一治理前沿是 **M5", plan)
     assert plan_text.count("当前唯一治理前沿") == 1, (
         "plan must declare exactly one current governance front"
     )

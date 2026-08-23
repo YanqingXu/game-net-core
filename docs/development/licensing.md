@@ -19,7 +19,9 @@ the installed `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`. Every source
 and binary release archive must include those files, and the SPDX 2.3 release
 SBOM must declare and conclude `Apache-2.0` for project packages and files.
 
-The authorization also permits creation and publication of `v0.3.0` only after
-all exact-commit gates pass. The license transition therefore does not claim
-that `v0.3.0` has already been released; no release tag or asset may be
-published before the promotion matrix and final artifact verification succeed.
+The authorization permitted creation and publication of `v0.3.0` only after
+all exact-commit gates passed. Those gates and final artifact verification
+succeeded for promotion commit
+`8e4a6edfe22ca43e3308e36ec31bf7f2dea14ac7`; the annotated tag and stable
+Apache-2.0 GitHub Release were published on 2026-08-23. Exact evidence and
+asset hashes are recorded in `docs/development/releases/v0.3.0.md`.

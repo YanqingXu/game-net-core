@@ -285,6 +285,10 @@ Runtime Model
 
 当前仓库已经具备目标架构的基础：
 
+- stable Apache-2.0 `v0.3.0@8e4a6ed` 已完成同提交双平台、sanitizer、容量、性能、
+  fault/repeat、1h/3h、最终包消费者、SPDX/evidence、annotated tag、GitHub Release
+  与回下载验证；M1–M4 已关闭，当前唯一治理前沿是 M5 v0.4 Runtime 边界审查；
+
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
   路径；
@@ -306,8 +310,9 @@ Runtime Model
   send/shutdown/force 的 payload ownership、线性化顺序、typed saturation、首原因、
   observer revocation 和 quit 核算；source-private listener 又在同一个 shared Pump 内
   证明有限 one-shot Accept、accepted-fd 单一所有权、容量拒绝恢复、route generation
-  复用、回调重入、listener-first stop 与 owner-quit 排空。下一步只对该 listener 拓扑做
-  固定容量和同场景性能决策。这些能力仍不安装，生产默认和 fallback 仍是 epoll；
+  复用、回调重入、listener-first stop 与 owner-quit 排空；其固定容量和同场景性能决策
+  已在 IOE-X10 以限定范围的 `PROMOTE` 关闭。这些能力仍不安装，生产默认和 fallback
+  仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
   多 I/O owner、独立逻辑 owner、有界合并唤醒和 generation-safe 回送；

@@ -456,3 +456,19 @@ a completed, exact-commit record.
 | Ownership/lifetime | Evidence/release tooling owns files only. EventLoop/TCP owners, callback affinity/re-entry, cross-thread admission, and release rules are unchanged from the validated runtime tree. |
 | Cleanup | Temporary Linux and Windows repository runners stopped and unregistered after upload; runner directories retained. |
 | Decision | `integrate` the internal engineering candidate and close M2. It grants no external-use permission, creates no GitHub Release/tag, and activates M3 real gateway integration in a separate private repository. |
+
+## M4 v0.3.0 Stable External Release Closure — 2026-08-23
+
+| Field | Evidence |
+| --- | --- |
+| Release identity | Annotated `v0.3.0` tag object `e71201883a1cb2b92cef052ce0b988ce3a44e247` peels to exact promotion commit `8e4a6edfe22ca43e3308e36ec31bf7f2dea14ac7`, tree `5d6331f7ec12c23d3e3c26712b869bf1ec0f6522`. Stable GitHub Release: `https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.0`. |
+| License/scope | Owner-authorized Apache-2.0 external distribution. Six static installed targets; Linux/epoll Tier 1 and Windows/IOCP Tier 2. No pre-1.0 ABI promise. io_uring remains Linux-only, experimental, non-installed, and outside the stable API. |
+| Platform/CI | Main CI `32610083024/1` passed 7/7 jobs on the exact commit, including Linux Debug/Release, ASan/UBSan, TSan, Windows Debug/Release/IOCP, governance, install, external-package, and upgrade consumers. |
+| Capacity/performance | Candidate-10k `32610085705/1`, dedicated-100k `32610087345/1`, and paired benchmark `32610084449/2` passed on Linux/epoll and Windows/IOCP. Only successful benchmark attempt 2 is accepted. Raw producer evidence independently regenerated each retained aggregate. |
+| Repeat/fault | Run `32610088876/1` passed threading 5,100/5,100 and Pipeline/Broadcast 600/600, including the fault-injection integration contract. |
+| Endurance | Candidate-1h `32610206439/1` passed 3,058 balanced cycles. Release-3h `32614442189/1` passed 9,170 cycles and 10,800.005 child seconds. Release maximum RSS was 14,479,360 bytes and growth 9,551,872 bytes. Same-commit pair and release promotion independently revalidated; no waiver. |
+| Package/consumers | Two final assemblies produced 12/12 byte-identical bundle files: 580-file source tar/zip, 68-file Linux/Windows binary packages, and a 621-file evidence ZIP. Final extracted Linux and Windows current consumers plus pinned v0.2-to-v0.3 upgrade consumers passed again. Exact asset hashes are recorded in `docs/development/releases/v0.3.0.md`. |
+| SBOM/redownload | The 716-file SPDX 2.3 SBOM passed the official schema with SHA-256 `239208b7ac287b3cf5d9a9af23f9d69863971102a5e1587a27a398b43490b89b`. All 12 Release assets were downloaded fresh; `SHA256SUMS`, bundle/path/root checks, SPDX validation, tag/commit binding, and recursive canonical comparison passed 12/12. |
+| Ownership/lifetime | Release governance and tooling own files only. Validated EventLoop/TCP owners, owner threads, callback affinity/re-entry, cross-thread admission/marshal paths, and object release rules are unchanged. |
+| Cleanup | Temporary Windows runner ID 27 and Linux runner ID 28 were stopped and unregistered after evidence and Release download; both runner directories were retained. |
+| Decision | `release` and close M4. `v0.3.0` is the stable external Apache-2.0 release. Advance the unique governance front to M5 v0.4 Runtime boundary review. |

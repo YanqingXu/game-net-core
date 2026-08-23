@@ -37,7 +37,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M4 Apache-2.0 下的 v0.3.0 外部发布**。
+当前唯一治理前沿是 **M5 v0.4 Runtime 边界**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -240,11 +240,12 @@ TcpServer
 
 优先级：P1。启动条件：M3 关闭通用 Core blocker。
 
-状态：**所有者授权、Apache-2.0 切换、确定性发布组装器和双平台当前/升级消费者均已
-完成；冻结最终 promotion commit 并启动完整同提交矩阵是当前任务**。审计基线、来源/资产清单、M3 后 runtime diff、授权和固定重验
-顺序见 `docs/development/m4_external_release_preflight_2026-08-23.md`、同名 JSON 与
-`docs/development/m4_license_authorization_2026-08-23.md`。`v0.3.0` tag/Release/资产仍须
-等待全部同提交门通过。
+状态：**已关闭**。所有者授权与 Apache-2.0 切换、确定性发布组装器、双平台当前/升级
+消费者、最终 promotion commit `8e4a6ed` 的完整同提交矩阵、可复现源码/二进制/SBOM/
+evidence 资产、annotated `v0.3.0` tag、stable GitHub Release 和全资产回下载验证均已
+完成。关闭记录见 `docs/development/releases/v0.3.0.md`；审计与授权基线见
+`docs/development/m4_external_release_preflight_2026-08-23.md`、同名 JSON 与
+`docs/development/m4_license_authorization_2026-08-23.md`。
 
 - 只修复 M3 暴露的通用 Core blocker，不把 Lua、Room、Actor、RPC 或部署拓扑引入 Core；
 - 顶层许可证切换为 Apache-2.0，并同步源码 header、README、package metadata、NOTICE、
@@ -260,6 +261,9 @@ io_uring 不属于 v0.3 stable API。
 ## 7. M5：v0.4 Runtime 边界
 
 优先级：P2。启动条件：M3 的 Queued Event 与 Sharded Hybrid 都有真实证据。
+
+状态：**当前治理前沿**。M3 启动条件和 M4 外部发布门均已满足；当前先重新执行跨
+Profile 共同能力审查，不预设必须提升公共 Runtime API。
 
 重新执行跨 Profile 共同能力审查。允许提升的候选仅限：
 
@@ -536,12 +540,10 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M4 是下一治理前沿，无后台 Core 证据任务**：M1、M2、M3 已关闭，M4 preflight
-> 与所有者授权已完成，Apache-2.0 法律/源码/package metadata 已同步，受跟踪且可复现
-> 的 release assembler、file-level SPDX 2.3、证据索引、独立验证器、Linux/Windows
-> 解压包消费者与 0.2→0.3 升级消费者已经完成；当前立即冻结最终 promotion commit。
-> M3 后存在
-> Core runtime 修复 `736a090`，因此外部发布必须在最终许可证/NOTICE/SBOM 变更后
-> 重新选择 promotion commit，并完整执行 M2 的 Linux/Windows、sanitizer、容量、
-> benchmark、fault、repeat、1h/3h、package 和 evidence 矩阵。只有全部门通过后才能
-> 创建 `v0.3.0` tag/Release 并上传资产；不得提前展开 IOE-X11。
+> **M5 是下一治理前沿，无后台 Core 证据任务**：M1–M4 已关闭。`v0.3.0` 已在精确
+> promotion commit `8e4a6ed` 上完成 Linux/Windows、sanitizer、容量、benchmark、
+> fault、repeat、1h/3h、package、SBOM、evidence、annotated tag、stable Release 和
+> 回下载验证。当前立即重新执行跨 Profile 共同能力审查，只允许从已由至少两个真实
+> Profile 重复证明的 `TransportEndpoint`、typed/bounded `LogicExecutor` admission、
+> 可等待单调 `RuntimeStopFuture` 及语义一致的 shard/cadence 类型中选择；若证据仍不足，
+> 明确记录 `NO-PROMOTION`，不得以 Runtime factory 或通用服务器外壳代替证据。

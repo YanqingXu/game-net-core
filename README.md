@@ -49,14 +49,15 @@ candidate it was built as; it is not retroactively republished. M3 real gateway
 integration is closed: the private gateway closure is
 `0a8fe1e`, its exact uninterrupted 1-hour run used gateway `4e2457e` and Core
 fix `736a090`, completed 3,743 full replay/fault cycles, and left no unresolved
-Core correctness or reusable-capability blocker. The next governance front is
-M4 external v0.3.0 release. The owner has authorized Apache-2.0 and conditional
-publication; the deterministic release assembler, file-level SPDX 2.3 SBOM,
-evidence index, checksums, and tamper verifier are tracked and tested. Clean
-Linux/Windows extracted-package and pinned v0.2-to-v0.3 upgrade consumers are
-also wired and locally functional; their final exact-commit run and the fresh
-promotion matrix are still required. The non-mutating source/license/release audit is complete in
-[`docs/development/m4_external_release_preflight_2026-08-23.md`](docs/development/m4_external_release_preflight_2026-08-23.md).
+Core correctness or reusable-capability blocker. M4 is now closed: exact
+promotion commit `8e4a6edfe22ca43e3308e36ec31bf7f2dea14ac7` passed the complete
+Linux/Windows, sanitizer, capacity, benchmark, repeat/fault, 1h/3h, package,
+consumer, SBOM, and evidence matrix without a waiver. The stable Apache-2.0
+[`v0.3.0`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.0)
+Release and its 12 canonical assets passed fresh-download verification. Exact
+evidence and hashes are recorded in
+[`docs/development/releases/v0.3.0.md`](docs/development/releases/v0.3.0.md).
+The next governance front is M5 v0.4 Runtime boundary review.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint
@@ -141,9 +142,10 @@ boundaries are recorded in [NOTICE](NOTICE) and
 [Third-Party Notices](THIRD_PARTY_NOTICES.md). Installed CMake packages include
 those files and export `GameNetCore_LICENSE=Apache-2.0`. See
 [Licensing Status](docs/development/licensing.md) and
-[Release Packaging](docs/development/release_packaging.md). The license transition does
-not itself constitute the `v0.3.0` release; no final tag or Release is created
-until the complete exact-commit evidence matrix passes.
+[Release Packaging](docs/development/release_packaging.md). The authorized
+transition and complete exact-commit evidence matrix produced the stable
+[`v0.3.0` Release](https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.0)
+on 2026-08-23.
 
 ## Layout
 

@@ -5,7 +5,7 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-22
+## Current Roadmap Checkpoint — 2026-08-23
 
 - Historical REL-C1 implementation checkpoint
   `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled
@@ -84,12 +84,12 @@ See `migration_status.md` for the current checked state of these phases.
   `v0.3.0-internal-candidate.1`. It remains all-rights-reserved and is not an
   external release. M3 real gateway integration is closed at private gateway
   commit `0a8fe1e`; the exact gateway `4e2457e` / Core `736a090` process passed
-  its uninterrupted 1-hour gate. M4 external release governance is the active
-  front. Apache-2.0 metadata and deterministic source/binary/evidence packaging,
-  file-level SPDX 2.3, checksums, tamper verification, and clean Linux/Windows
-  extracted plus v0.2-to-v0.3 upgrade consumers are complete. The final
-  same-commit promotion matrix is next. The cancelled `a89e2b0` endurance
-  checkpoint remains historical only.
+  its uninterrupted 1-hour gate. M4 is closed: final promotion commit
+  `8e4a6ed` passed the full fresh non-waived matrix, deterministic Apache-2.0
+  packaging, final extracted/upgrade consumers, annotated tag, stable Release,
+  and fresh-download verification. M5 v0.4 Runtime boundary review is the
+  active front. The cancelled `a89e2b0` endurance checkpoint remains
+  historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -304,7 +304,7 @@ In progress after production hardening:
   same-line diffs, and enforce zero stable-surface drift (API-R1).
 - [ ] Keep performance validators, capacity and release/endurance tooling green
   as a continuous evidence lane rather than a single frozen-candidate project.
-- [ ] When external promotion is desired, select a current-main promotion
+- [x] When external promotion is desired, select a current-main promotion
   commit, complete Linux/Windows and endurance evidence, decide licensing, and
   publish without stopping subsequent main development.
 
@@ -313,12 +313,11 @@ In progress after production hardening:
 M1 and M2 are closed. `v0.3.0-internal-candidate.1@0c30124` passed its complete
 same-commit 1h/3h and package/evidence gates. The 2026-08-22 cancelled
 checkpoint remains historical `NO-PROMOTION` evidence. M3 real gateway
-integration is closed; M4 external release governance is the current front and
-no Core evidence task is running. The M4 engineering preflight is complete and
-machine-guarded. Owner authorization, the Apache-2.0 license/source/package
-transition, and deterministic release assembly are complete; clean external/
-upgrade consumers are implemented and locally pass on both platforms; their
-frozen-commit runs and the full promotion matrix remain.
+integration is closed. M4 is closed at stable Apache-2.0
+`v0.3.0@8e4a6ed`: the complete promotion matrix, deterministic assets, final
+Linux/Windows extracted and upgrade consumers, annotated tag, stable Release,
+and all-asset redownload verification passed. M5 Runtime boundary review is the
+current front, and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.

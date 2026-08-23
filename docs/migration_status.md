@@ -12,27 +12,24 @@ Current M2 closure audit: 2026-08-23. Promotion commit
 `0c3012449ae36fa32656da33c4d1161f5129cde7` passed the complete same-commit
 CI, sanitizer, 10k/100k capacity, paired benchmark, repeat-50, package,
 candidate-1h `32576118286/1`, and release-3h `32580658838/1` gates without a
-waiver. M2 is closed and `v0.3.0-internal-candidate.1` is formed as an
-all-rights-reserved internal engineering package. M3 real gateway integration
-is closed at private gateway commit `0a8fe1e`; M4 external release governance
-is the active front. Its non-mutating source, licensing, asset, runtime-diff,
-and release-tooling preflight is complete at
-`docs/development/m4_external_release_preflight_2026-08-23.md`. The owner then
-authorized Apache-2.0 and conditional publication; the canonical license,
-NOTICE, source SPDX, installed package metadata, and third-party notices are
-synchronized. The tracked deterministic release assembler, file-level SPDX 2.3
-SBOM, evidence index, checksum manifest, independent verifier, and
-byte-reproducibility/tamper contract are complete. Clean Linux/Windows extracted
-package and v0.2-to-v0.3 upgrade consumers are implemented with independent
-retained-evidence verification and pass local Linux/epoll and Windows/IOCP
-Release diagnostics. Freezing the final promotion commit and executing the
-complete same-commit matrix is the current M4 task.
+waiver. M2 is closed and `v0.3.0-internal-candidate.1` is formed as its
+historical all-rights-reserved internal engineering package. M3 real gateway
+integration is closed at private gateway commit `0a8fe1e`. M4 is also closed:
+owner-authorized Apache-2.0 promotion commit
+`8e4a6edfe22ca43e3308e36ec31bf7f2dea14ac7` passed the complete same-commit
+Linux/Windows, sanitizer, 10k/100k capacity, benchmark, repeat/fault, 1h/3h,
+package, final extracted/upgrade consumer, SPDX, and evidence matrix without a
+waiver. Annotated tag `v0.3.0` and the stable GitHub Release were published on
+2026-08-23; all 12 assets passed fresh-download hash, bundle, path, and official
+SPDX Schema validation. Exact evidence is recorded in
+`docs/development/releases/v0.3.0.md`. M5 v0.4 Runtime boundary review is the
+active governance front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1, M2, and M3 are closed; M4 is the unclosed governance front.
-There is no running Core evidence task after the gateway closure.
+`APPROVE`. M1–M4 are closed; M5 is the unique governance front. There is no
+running Core evidence task after the v0.3.0 publication closure.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -100,7 +97,7 @@ Current RTM-R1 Profile C MultiIoDedicatedFixedTick checkpoint:
 
 ## Current Task Goal
 
-M1 and M2 are closed. IOE-X10 ran the fixed 256-route, 32-pending-Accept, four-by-64
+M1–M4 are closed. IOE-X10 ran the fixed 256-route, 32-pending-Accept, four-by-64
 churn, 100-by-64-byte RTT protocol with one warm-up and five interleaved formal
 samples per backend. All ten sample hashes, correctness/capacity/recovery
 invariants, and zero-residue summaries validate. Its narrow `PROMOTE` does not
@@ -117,15 +114,14 @@ The internal candidate is recorded in
 cancelled `a89e2b0` run remains `NO-PROMOTION` evidence only. The private
 `gamenet-game-gateway` closed M3 at `0a8fe1e`; its exact gateway `4e2457e` /
 Core `736a090` Linux/epoll process passed the uninterrupted 1-hour gate with
-3,743 complete replay/fault cycles and 32 KiB peak RSS growth. M4 external
-release governance is active; owner authorization and the Apache-2.0 metadata
-transition are complete. The release assembler is also complete; external and
-upgrade consumer implementation is complete, so the final same-commit matrix
-and publication sequence are next.
-The M4 preflight confirmed that the GitHub repository was already public. The
-owner has now authorized and executed the Apache-2.0 transition, but no
-`v0.3.0` tag or Release exists and a new exact-commit promotion matrix remains
-mandatory after the post-M3 runtime correction.
+3,743 complete replay/fault cycles and 32 KiB peak RSS growth. M4 selected
+final promotion commit `8e4a6ed`, completed the fresh non-waived same-commit
+matrix, independently revalidated aggregate and promotion evidence, assembled
+byte-reproducible Apache-2.0 source/binary/SBOM/evidence assets, reran final
+Linux/Windows extracted and upgrade consumers, and published `v0.3.0`. Fresh
+download verification passed all 12 assets. M5 Runtime boundary review is now
+the sole current task; it must repeat the cross-Profile common-capability review
+and may still conclude `NO-PROMOTION`.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
@@ -401,7 +397,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1, M2, and M3 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; the cross-Profile decision remains `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, `v0.3.0-internal-candidate.1@0c30124` passed the internal promotion chain, and private gateway `0a8fe1e` closed the real-integration gate against Core `736a090`. M4 external release governance is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M4 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; the prior cross-Profile decision remains `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, `v0.3.0-internal-candidate.1@0c30124` passed the internal chain, private gateway `0a8fe1e` closed real integration against Core `736a090`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. M5 Runtime boundary review is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
 
 ## Current Intent Inventory
 

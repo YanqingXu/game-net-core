@@ -1,10 +1,10 @@
 # 总体判断
 
-本次检查以 IOE-X10 实现与证据提交 `f5d39b8` 及 2026-08-22 的 M1
-治理关闭为当前前沿。`game-net-core` 已经不再只是从 `mini_trantor` 拆出来的
+本次检查以 stable Apache-2.0 `v0.3.0@8e4a6ed` 的 2026-08-23 M4
+发布关闭为当前前沿。`game-net-core` 已经不再只是从 `mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：
 
-> **核心网络语义基本成形、生命周期与过载治理较完善、运行模型得到验证，但尚未完成正式生产推广闭环的 production-hardening preview。**
+> **核心网络语义、生命周期与过载治理、双平台运行证据和外部分发闭环已形成首个 stable v0.3 基线；0.x ABI 与上层 Runtime API 仍保持审慎边界。**
 
 仓库当前最突出的价值不是某个单独的 epoll、IOCP 或 io_uring 实现，而是逐步建立了统一的：
 
@@ -29,7 +29,9 @@ all-rights-reserved，不提供外部使用授权。该句描述内部候选形�
 历史 `NO-PROMOTION` 记录保留，不参与本次通过结论。2026-08-23，私有
 `gamenet-game-gateway` 又以关闭提交 `0a8fe1e` 完成 M3；精确网关 `4e2457e` / Core
 `736a090` 的单一 Linux/epoll 进程通过 1h、3,743 个完整故障回放周期和 32 KiB RSS
-增长门。当前前沿已转到 M4 外部发布治理。
+增长门。M4 随后在精确 promotion commit `8e4a6ed` 上完成全部同提交证据、确定性
+资产、annotated tag、stable Release 和回下载验证；当前前沿已转到 M5 v0.4 Runtime
+边界审查。
 
 ---
 
@@ -312,13 +314,15 @@ Gateway
 
 这会导致很多 API 目前主要经过合同验证，而不是经过真实业务迭代验证。
 
-### 5. M1、M2 与 M3 已关闭，M4 成为外部发布治理前沿
+### 5. M1–M4 已关闭，M5 成为 Runtime 边界治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1/M2/M3 关闭、M4 待授权”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M4 关闭、M5 Runtime 边界审查”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
-的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。
+的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
+`8e4a6ed` 重新完成非豁免矩阵并发布 stable Apache-2.0 `v0.3.0`；12 个 Release
+资产全部通过回下载复核。
 
 ---
 
@@ -356,8 +360,8 @@ package/SBOM/license
 v0.3.0-internal-candidate.1
 ```
 
-内部候选保留其形成时的专有许可证快照。当前仓库已完成 Apache-2.0 切换和第三方来源
-审计；最终外部包、SBOM 与 Release 仍属于 M4 未完成任务。
+内部候选保留其形成时的专有许可证快照。后续 M4 已完成 Apache-2.0 切换、第三方来源
+审计、最终外部包、SBOM、evidence、annotated tag、stable Release 和回下载验证。
 
 ## P1（已关闭）：建立真正的游戏网关参考实现
 
@@ -366,18 +370,18 @@ v0.3.0-internal-candidate.1
 隔离、确定性停机、流量回放和故障注入。反馈账本没有遗留通用 Core blocker，也没有
 把 Lua、Actor、房间、数据库或部署拓扑反向引入 Core。
 
-## P1：完成 M4 外部发布治理
+## P1（已关闭）：完成 M4 外部发布治理
 
-下一步不是增加新 runtime 或协议。所有者已明确授权 Apache-2.0 与通过全部门后的公开
-发布；LICENSE/NOTICE/header/package metadata 已同步。当前先实现受跟踪的可复现发布
-组装工具和升级消费者，再因 `736a090` 运行时修复重新选择最终 promotion commit，完整
-重跑双平台、sanitizer、容量、性能、fault、repeat、1h/3h、包消费者和 evidence bundle
-门。
+所有者授权 Apache-2.0 与通过全部门后的公开发布；LICENSE/NOTICE/header/package
+metadata 已同步。因 `736a090` 运行时修复选择的最终 promotion commit `8e4a6ed`
+完整重跑并通过双平台、sanitizer、容量、性能、fault、repeat、1h/3h、最终包消费者和
+evidence bundle 门，无 waiver。
 
 M4 preflight 已完成：仓库本身已经是 Public，564 文件的来源/资产清单未发现 vendored
 library、submodule、LFS 或外部测试数据。随后所有者授权并完成 Apache-2.0、源码 SPDX、
-NOTICE、third-party notice 与安装包 metadata 切换。受跟踪的最终发布组装工具仍缺失，
-且 `v0.3.0` 发布必须等待全部同提交证据门通过。
+NOTICE、third-party notice 与安装包 metadata 切换。受跟踪的发布组装器两次生成
+12/12 字节一致的最终 bundle，官方 SPDX 2.3 Schema 与全资产回下载验证通过；
+`v0.3.0` 已作为 stable GitHub Release 发布。
 
 ## P2：根据真实集成结果决定公共 Runtime API
 
@@ -435,11 +439,11 @@ Milestone 2
 benchmark / repeat / 1h/3h / package / SPDX / evidence bundle 全部通过。
 
 Milestone 3
-建立真实 game gateway / Lua runtime reference integration
-用实际业务验证 API 和 Runtime Profile
+已关闭：真实 game gateway / Lua runtime reference integration；并在其反馈修复后
+完成 M4 `v0.3.0@8e4a6ed` 外部发布闭环。
 
 Milestone 4
-根据真实重复需求，决定 v0.4：
+当前：根据真实重复需求执行 M5，决定 v0.4：
 - 极窄 Runtime 公共能力
 - io_uring source-private integration
 - RPC/Lua/coroutine 上层适配
@@ -460,8 +464,8 @@ Milestone 4
 M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M2 已关闭（v0.3.0-internal-candidate.1@0c30124）
 → M3 已关闭（private gateway 0a8fe1e；1h on 4e2457e/Core 736a090）
-→ M4 外部发布治理（待许可证与公开发布授权）
-→ 再决定 v0.4 扩展方向
+→ M4 已关闭（stable Apache-2.0 v0.3.0@8e4a6ed）
+→ M5 v0.4 Runtime 边界审查
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

@@ -66,8 +66,20 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
     assert "byte-identical builds" in resolved
     assert "Linux/epoll and Windows/IOCP Release jobs" in resolved
     assert "c2f5f2ece4a147f63f91c86ef3c1dd25bf9d370d22e25889648132985f9af408" in resolved
-    assert not git(repo_root, "tag", "-l", "v0.3.0").strip(), (
-        "pre-authorization governance must be updated before creating v0.3.0"
+    release_commit = b"8e4a6edfe22ca43e3308e36ec31bf7f2dea14ac7"
+    assert git(repo_root, "tag", "-l", "v0.3.0").strip() == b"v0.3.0"
+    assert git(repo_root, "cat-file", "-t", "v0.3.0").strip() == b"tag"
+    assert git(repo_root, "rev-list", "-n", "1", "v0.3.0").strip() == release_commit
+    release_record = (
+        repo_root / "docs" / "development" / "releases" / "v0.3.0.md"
+    )
+    release_record_text = release_record.read_text(encoding="utf-8")
+    require(release_record_text, release_commit.decode(), release_record)
+    require(release_record_text, "M4 is **closed**", release_record)
+    require(
+        release_record_text,
+        "https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.0",
+        release_record,
     )
 
     audit_base = manifest["audit_base"]["commit"]
