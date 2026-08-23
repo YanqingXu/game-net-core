@@ -1,7 +1,7 @@
 // Copyright 2026 Yanqing Xu
 // SPDX-License-Identifier: Apache-2.0
 
-#include "IoUringTcpConnectionAdapter.h"
+#include "gamenet/experimental/io_uring/IoUringTcpConnectionAdapter.h"
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/Socket.h"

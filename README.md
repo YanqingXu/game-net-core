@@ -107,6 +107,11 @@ Phase 4 Foundations:
 - `GameNet::game_logic`: bounded GameCommandQueue and LogicLoop
 - `GameNet::broadcast`: owner-loop routing, bounded dispatch, and backpressure reasons
 
+Linux-only experimental package (explicit opt-in):
+
+- `GameNet::experimental_io_uring`: `IoUringTcpServer` and
+  `IoUringTcpClient` façades with an independent experimental API manifest
+
 Planned / Deferred Modules:
 
 - game packet headers and serialization codecs
@@ -137,11 +142,13 @@ All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
 rejected, and no binary ABI compatibility is promised before 1.0.
 `GAMENET_ENABLE_TLS` remains an `OFF`-only compatibility option. The default-off
 `GAMENET_ENABLE_EXPERIMENTAL=ON` is accepted only on Linux and builds the
-non-installed Linux-only IOE-X1–X14 io_uring Engine/Pump/TCP/Hub/listener,
-semantic Adapter, single-/multi-owner Server, active Client, and cross-backend
-semantic contracts plus benchmark tooling; it
-does not replace epoll or enable deferred transports. Windows rejects that
-option.
+Linux-only IOE-X1–X15 io_uring Engine/Pump/TCP/Hub/listener, semantic Adapter,
+single-/multi-owner Server, active Client, cross-backend semantic contracts,
+and benchmark tooling. It also installs the explicit
+`GameNet::experimental_io_uring` component and Server/Client header closure;
+it does not replace epoll, select a backend automatically, or enable deferred
+transports. Windows rejects that option. Default packages contain no io_uring
+target, library, or header.
 
 See [Platform and Build Support](docs/development/platform_support.md) for the
 support tiers, exact option behavior, commands, and Windows promotion criteria.

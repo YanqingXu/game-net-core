@@ -1,0 +1,34 @@
+{
+  "schema": "gamenet.experimental_io_uring_api_manifest.v1",
+  "component": "experimental_io_uring",
+  "component_api_version": "0.1.0",
+  "package_version": "0.3.0",
+  "release_train": "v0.5.0-experimental-preview",
+  "status": "implementation-preview-not-released",
+  "platform": "Linux",
+  "cmake_option": "GAMENET_ENABLE_EXPERIMENTAL",
+  "default_enabled": false,
+  "target": "GameNet::experimental_io_uring",
+  "compatibility": {
+    "stable_manifest_member": false,
+    "source_compatibility": "not-guaranteed-before-first-experimental-release",
+    "abi_compatibility": "not-guaranteed",
+    "automatic_backend_selection": false
+  },
+  "headers": [
+    "include/gamenet/experimental/io_uring/IoUringCompletionEngine.h",
+    "include/gamenet/experimental/io_uring/IoUringEventLoopPump.h",
+    "include/gamenet/experimental/io_uring/IoUringTcpClient.h",
+    "include/gamenet/experimental/io_uring/IoUringTcpConnectionAdapter.h",
+    "include/gamenet/experimental/io_uring/IoUringTcpConnectionHub.h",
+    "include/gamenet/experimental/io_uring/IoUringTcpServer.h"
+  ],
+  "header_fingerprints": {
+    "include/gamenet/experimental/io_uring/IoUringCompletionEngine.h": "172b54175fb31093056856153f119dbbeb1b54f5f6202a0a7cd64e4a70cc4e48",
+    "include/gamenet/experimental/io_uring/IoUringEventLoopPump.h": "e7bb87df97477d0b46a79edcef9940e3495572f1ad32514c6c2d93be65ab6c76",
+    "include/gamenet/experimental/io_uring/IoUringTcpClient.h": "26d50a06e4b786a5e7d2a0b01f1bed3bbda0a923e273981337f9cbea455b5175",
+    "include/gamenet/experimental/io_uring/IoUringTcpConnectionAdapter.h": "dd490e6e7d400caab7d043efd0a00a31440590a7b7810a58c76f5ced74c3c326",
+    "include/gamenet/experimental/io_uring/IoUringTcpConnectionHub.h": "ab1a66da6010ea2a2904281303beaccded57b7b678fe1e2f7a341d42b37d9653",
+    "include/gamenet/experimental/io_uring/IoUringTcpServer.h": "febcd73be82b527ba8ba5d2718edc7ba4b14cc8fb1622813165b2e991fc8beff"
+  }
+}

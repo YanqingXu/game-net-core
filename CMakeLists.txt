@@ -39,7 +39,7 @@ endif()
 
 if(GAMENET_ENABLE_EXPERIMENTAL AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR
-        "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1 io_uring target."
+        "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1-X15 io_uring target."
     )
 endif()
 

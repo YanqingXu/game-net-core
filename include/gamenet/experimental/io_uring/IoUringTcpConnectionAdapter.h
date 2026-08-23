@@ -57,9 +57,9 @@ struct IoUringTcpConnectionAdapterStopSummary {
 
 class IoUringTcpConnectionAdapterImpl;
 
-// Source-private IOE-X6/X7/X8 bridge that projects one Hub route onto the
-// existing TCP send/close vocabulary. It is not installed and does not select
-// or replace the production TcpConnection backend.
+// Experimental IOE-X6/X7/X8 bridge that projects one Hub route onto the
+// existing TCP send/close vocabulary. Installation does not select or replace
+// the production TcpConnection backend.
 class IoUringTcpConnectionAdapter {
 public:
     using MessageCallback = std::function<void(

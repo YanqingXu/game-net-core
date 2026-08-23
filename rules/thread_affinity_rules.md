@@ -381,6 +381,11 @@ No other direct mutation path is allowed for core loop state.
   The portable trace records their owner and order after the existing backend
   has revalidated its own identity/generation; the trace adds no callback
   forwarding thread or synchronization domain
+- X15 installation creates no execution or callback thread. An installed
+  `IoUringTcpServer` or `IoUringTcpClient` retains the same caller-supplied
+  EventLoop owner, owner-only configuration/lifecycle/observation/destruction,
+  callback re-entry checks, and bounded Adapter-only foreign admission as its
+  build-tree X11–X14 implementation
 - Completion Engine, Pump, Driver, and Hub destruction is owner-only. Pump-
   based destructors require an already-published physical stop and perform no
   wait; a live accepted obligation is a fail-fast precondition violation, not

@@ -30,7 +30,10 @@ def main() -> None:
     cpp_files = sorted(
         path
         for path in (repo_root / "tests").rglob("*.cpp")
-        if "install_consumer" not in path.relative_to(repo_root).parts
+        if not any(
+            part.endswith("install_consumer")
+            for part in path.relative_to(repo_root).parts
+        )
         and "upgrade_consumer" not in path.relative_to(repo_root).parts
         and "fuzz" not in path.relative_to(repo_root).parts
     )

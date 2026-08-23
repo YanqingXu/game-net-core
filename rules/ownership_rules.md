@@ -248,6 +248,12 @@ It must not blur these roles.
   and Client summaries retain their Hub/Adapter state until every listener,
   Connect, Route, operation, notice, socket, timer, command, and byte obligation
   is zero. The normalized trace cannot make early destruction legal
+- X15 package/export metadata owns no runtime object and extends no runtime
+  lifetime. The installed consumer owns and outlives its EventLoop and façade;
+  the façade continues to own its Adapter/Hub/Pump/Engine composition and may
+  release it only after the existing physical stop summary is ready. Installing
+  headers transfers no socket, operation lease, Route, timer, command, or byte
+  ownership
 
 ## 3. Poller
 - Poller does not own Channel

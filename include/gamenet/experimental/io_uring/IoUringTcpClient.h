@@ -3,7 +3,8 @@
 
 #pragma once
 
-// IOE-X13 source-private, owner-loop-only active TCP client composition.
+// IOE-X13 owner-loop-only active TCP client exposed through the explicit
+// Linux-only experimental package component.
 
 #include "IoUringTcpConnectionAdapter.h"
 

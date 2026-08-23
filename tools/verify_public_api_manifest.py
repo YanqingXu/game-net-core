@@ -27,6 +27,10 @@ POLICY = {
 CATEGORIES = ("platform_internal", "provisional", "stable_core")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
+INDEPENDENT_EXPERIMENTAL_TARGETS = {"GameNet::experimental_io_uring"}
+INDEPENDENT_EXPERIMENTAL_HEADER_PREFIXES = (
+    "include/gamenet/experimental/io_uring/",
+)
 
 
 def normalize_cpp_public_surface(text: str) -> str:
@@ -512,7 +516,9 @@ def verify_manifest(
     declared_targets = _classified_inventory(
         manifest.get("targets"), "targets", errors, kind="target"
     )
-    actual_targets = exported_targets(repo_root)
+    actual_targets = sorted(
+        set(exported_targets(repo_root)) - INDEPENDENT_EXPERIMENTAL_TARGETS
+    )
     if sorted(declared_targets) != actual_targets:
         errors.append(
             f"exported target inventory mismatch: declared={sorted(declared_targets)}, "
@@ -526,6 +532,9 @@ def verify_manifest(
     actual_headers = sorted(
         path.relative_to(repo_root).as_posix()
         for path in (repo_root / "include" / "gamenet").rglob("*.h")
+        if not path.relative_to(repo_root).as_posix().startswith(
+            INDEPENDENT_EXPERIMENTAL_HEADER_PREFIXES
+        )
     )
     if sorted(classified_headers) != actual_headers:
         missing = sorted(set(actual_headers) - set(classified_headers))

@@ -94,8 +94,18 @@ def main() -> None:
     )
     assert_clean(
         repo_root,
+        "include/gamenet/experimental/io_uring/IoUringTcpServer.h",
+        "namespace gamenet::experimental::io_uring { class IoUringTcpServer {}; }\n",
+    )
+    assert_clean(
+        repo_root,
         "src/experimental/io_uring/OneShot.cc",
         "namespace gamenet::experimental::io_uring { class OneShot {}; }\n",
+    )
+    assert_clean(
+        repo_root,
+        "benchmarks/io_uring/listener_comparison.cpp",
+        '#include "gamenet/experimental/io_uring/IoUringTcpServer.h"\n',
     )
     assert_violation(
         repo_root,

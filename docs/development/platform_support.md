@@ -38,6 +38,8 @@ All installed libraries are explicitly static:
 - `GameNet::game_session`
 - `GameNet::game_logic`
 - `GameNet::broadcast`
+- `GameNet::experimental_io_uring` only in an explicitly enabled Linux
+  experimental package
 
 `BUILD_SHARED_LIBS=ON` is rejected during configure. The project does not yet
 define DLL/shared-object visibility, symbol export, runtime-library,
@@ -50,7 +52,7 @@ The source-level classes recorded in `api/public_api_manifest.json` are a
 separate promise. A stable source contract in the 0.3 line does not imply a
 stable binary ABI.
 
-## Deferred Options
+## Boundary Options
 
 The following cache options are retained so existing `OFF`-explicit build
 commands remain valid:
@@ -58,11 +60,12 @@ commands remain valid:
 | Option | Supported value | `ON` behavior |
 |---|---|---|
 | `GAMENET_ENABLE_TLS` | `OFF` | Configure fails because TLS is not implemented in the active target graph |
-| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds the non-installed IOE-X1–X14 io_uring Engine, EventLoop pump, one-shot Connect, single-connection driver, shared-Pump Hub/listener, semantic adapter, single-/multi-owner Server and active Client compositions, cross-backend semantic contracts, and optional fixed listener-comparison benchmark; Windows rejects it |
+| `GAMENET_ENABLE_EXPERIMENTAL` | `OFF`, or `ON` on Linux | `ON` builds IOE-X1–X15 and installs the explicit `GameNet::experimental_io_uring` component plus the Server/Client header closure; proof-only Driver/multi-owner headers remain source-private and Windows rejects the option |
 
 An option that has no implementation must not configure successfully. The
-Linux-only IOE-X1–X14 io_uring target is the sole active experimental module;
-it does not replace epoll and is not installed. TLS, UDP, KCP, and other
+Linux-only IOE-X1–X15 io_uring target is the sole active experimental module;
+it does not replace epoll and is installed only when explicitly enabled. The
+default install tree remains free of experimental libraries and headers. TLS, UDP, KCP, and other
 experimental work still require promoted intent, ownership/threading
 contracts, targets, and direct tests before an enabling value can be accepted.
 
@@ -96,7 +99,7 @@ ctest --test-dir build-windows -C Release --output-on-failure
 The default for all three boundary options is `OFF`; spelling them out is
 recommended in reproducible CI and evidence commands.
 
-The dedicated IOE-X1–X14 Engine, EventLoop-pump,
+The dedicated IOE-X1–X15 Engine, EventLoop-pump,
 single-connection-driver, shared-Pump Hub/listener, semantic adapter,
 fixed-capacity, graceful, bounded cross-thread, and listener contract
 configuration is Linux-only:
@@ -110,6 +113,12 @@ cmake --build build-io-uring --target gamenet_io_uring_contracts --parallel
 ctest --test-dir build-io-uring \
   -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)$' \
   --output-on-failure
+cmake --install build-io-uring --prefix "$PWD/build-io-uring/_install"
+cmake -S tests/cmake/experimental_io_uring_install_consumer \
+  -B build-io-uring-install-consumer \
+  -DCMAKE_PREFIX_PATH="$PWD/build-io-uring/_install"
+cmake --build build-io-uring-install-consumer --parallel
+ctest --test-dir build-io-uring-install-consumer --output-on-failure
 ```
 
 ## Contract Enforcement
@@ -119,7 +128,8 @@ ctest --test-dir build-io-uring \
 - the root platform allow-list and explicit Core backend selection;
 - configure-time rejection for shared libraries, TLS, unsupported Windows
   experimental requests, and any unimplemented option;
-- the default-off, Linux-only, non-installed IOE-X1–X14 io_uring target;
+- the default-off, Linux-only IOE-X1–X15 io_uring target and its opt-in-only
+  installed component/consumer boundary;
 - explicit `STATIC` declarations for every installed library target;
 - this support matrix, README/CI documentation, and workflow registration.
 

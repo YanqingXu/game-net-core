@@ -302,7 +302,8 @@ struct IoUringTcpConnectionHubAddOutcome {
 
 class IoUringTcpConnectionHubImpl;
 
-// Linux-only, source-private proof that multiple established stream
+// Linux-only experimental transport used by the installed Server/Client
+// façades. Multiple established stream
 // connections can share one EventLoop/Pump/Engine without per-connection
 // rings, Channels, or worker threads.
 class IoUringTcpConnectionHub {

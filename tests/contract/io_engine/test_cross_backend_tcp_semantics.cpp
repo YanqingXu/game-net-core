@@ -10,8 +10,8 @@
 #include "gamenet/core/net/TcpServer.h"
 
 #ifdef GAMENET_TEST_HAS_IO_URING
-#include "experimental/io_uring/IoUringTcpClient.h"
-#include "experimental/io_uring/IoUringTcpServer.h"
+#include "gamenet/experimental/io_uring/IoUringTcpClient.h"
+#include "gamenet/experimental/io_uring/IoUringTcpServer.h"
 #endif
 
 #include "support/ClientSocket.h"

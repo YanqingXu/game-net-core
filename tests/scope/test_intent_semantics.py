@@ -35,6 +35,10 @@ PHASE4_ARTIFACTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/io_uring_experimental_package.intent.md": (
+        "installed-library",
+        "GameNet::experimental_io_uring",
+    ),
     "intents/usecases/echo_server.intent.md": ("example", "gamenet_echo_server"),
     "intents/usecases/single_loop_inline_event_profile.intent.md": (
         "example",
@@ -85,9 +89,12 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_game_session": {"gamenet_core", "gamenet_transport"},
     "gamenet_game_logic": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
     "gamenet_broadcast": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
+    "gamenet_experimental_io_uring": {"gamenet_core"},
 }
 
 EXPERIMENTAL_VERIFICATION_PATHS = {
+    "tests/cmake/test_experimental_io_uring_install_contract.py",
+    "tests/api/test_experimental_io_uring_api_manifest.py",
     "tests/contract/io_engine/test_io_uring_completion_engine.cpp",
     "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp",
     "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp",
@@ -628,10 +635,18 @@ def validate_intent(
             f"artifact target mismatch in {intent_name}: expected {expected_target}",
         )
 
+    artifact_inventory = inventory
+    experimental_target_without_local_inventory = False
+    if metadata.get("target") == "GameNet::experimental_io_uring":
+        if experimental_inventory is None:
+            experimental_target_without_local_inventory = True
+        else:
+            artifact_inventory = experimental_inventory
+
     if frozen_core:
         validate_frozen_core_artifact(metadata, inventory, intent_name)
-    else:
-        validate_artifact(metadata, inventory, intent_name)
+    elif not experimental_target_without_local_inventory:
+        validate_artifact(metadata, artifact_inventory, intent_name)
     if require_provenance:
         validate_provenance(metadata, repo_root, intent_name)
     validate_verification(
@@ -915,6 +930,8 @@ def main() -> None:
             )
 
         validate_dependency_direction(inventory)
+        if experimental_inventory is not None:
+            validate_dependency_direction(experimental_inventory)
 
         for relative_path in active_paths:
             is_phase4 = relative_path in PHASE4_ARTIFACTS

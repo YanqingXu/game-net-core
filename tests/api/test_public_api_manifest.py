@@ -71,6 +71,20 @@ def main() -> None:
     assert manifest["compatibility_line"] == "0.3"
     assert manifest["targets"]["stable_core"] == ["GameNet::core"]
     assert manifest["targets"]["platform_internal"] == []
+    assert verifier.INDEPENDENT_EXPERIMENTAL_TARGETS == {
+        "GameNet::experimental_io_uring"
+    }
+    assert verifier.INDEPENDENT_EXPERIMENTAL_HEADER_PREFIXES == (
+        "include/gamenet/experimental/io_uring/",
+    )
+    assert "GameNet::experimental_io_uring" not in {
+        target for targets in manifest["targets"].values() for target in targets
+    }
+    assert not any(
+        header.startswith(verifier.INDEPENDENT_EXPERIMENTAL_HEADER_PREFIXES)
+        for headers in manifest["headers"].values()
+        for header in headers
+    )
     assert "GameNet::protocol" in manifest["targets"]["provisional"]
     assert "include/gamenet/core/metrics/MetricsExporter.h" in manifest["headers"][
         "provisional"

@@ -19,6 +19,7 @@ SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
 EXPECTED_CTEST_TOTAL = 130
 EXPECTED_THREADING_TOTAL = 103
 EXPECTED_CONSUMER_TOTAL = 2
+EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_TOTAL = 1
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
     "${{ github.run_id }}-${{ github.run_attempt }}"
@@ -59,8 +60,9 @@ JOB_CONTRACTS = {
             "ci-evidence/ctest-junit.xml",
             "ci-evidence/io-uring-experimental-junit.xml",
             "ci-evidence/install-consumer-junit.xml",
+            "ci-evidence/experimental-io-uring-install-consumer-junit.xml",
         ),
-        14,
+        20,
         package_step="Install and verify package consumer",
     ),
     "linux-asan-ubsan": JobContract(
@@ -370,11 +372,14 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
             for index, name in enumerate(names)
         ]
         if not main:
-            assert total == EXPECTED_CONSUMER_TOTAL
-            names = [
-                "gamenet.install_consumer",
-                "gamenet.provisional_install_consumer",
-            ]
+            if total == EXPECTED_CONSUMER_TOTAL:
+                names = [
+                    "gamenet.install_consumer",
+                    "gamenet.provisional_install_consumer",
+                ]
+            else:
+                assert total == EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_TOTAL
+                names = ["gamenet.experimental_io_uring_install_consumer"]
             tests = [{"name": name, "labels": []} for name in names]
         document = {
             "schema": "gamenet.ctest_inventory.v1",
@@ -435,6 +440,24 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
                 write_junit(artifact / "install-consumer-junit.xml", consumer_names)
                 (artifact / "install-consumer-ctest.log").write_text(
                     "100% tests passed\n", encoding="utf-8"
+                )
+
+            if job == "linux-cmake" and scenario != "missing-experimental-consumer":
+                experimental_names = write_inventory(
+                    artifact / "experimental-io-uring-install-consumer-inventory.json",
+                    EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_TOTAL,
+                    main=False,
+                )
+                write_junit(
+                    artifact / "experimental-io-uring-install-consumer-junit.xml",
+                    experimental_names,
+                )
+                (artifact / "experimental-io-uring-install-consumer-ctest.log").write_text(
+                    "100% tests passed\n", encoding="utf-8"
+                )
+                (artifact / "default-experimental-component-rejection.log").write_text(
+                    "GameNetCore experimental_io_uring component unavailable\n",
+                    encoding="utf-8",
                 )
 
             if job == "linux-asan-ubsan":
@@ -540,6 +563,9 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
         for producer in aggregate["producers"]
         if producer["job"] in consumer_jobs
     )
+    assert next(
+        producer for producer in aggregate["producers"] if producer["job"] == "linux-cmake"
+    )["experimental_consumer_executed_tests"] == EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_TOTAL
 
     negative_cases = {
         "missing-job": "exactly six producer artifact directories",
@@ -548,6 +574,7 @@ def verify_evidence_set_verifier(repo_root: Path) -> None:
         "junit-count": "unexpected JUnit test count",
         "inventory-total": "unexpected inventory total",
         "missing-consumer": "missing install-consumer evidence",
+        "missing-experimental-consumer": "missing experimental io_uring install-consumer evidence",
         "fuzz-short-run": "ASan libFuzzer execution count mismatch",
         "fuzz-missing-done-marker": "ASan libFuzzer log lacks the exact #1000 DONE marker",
     }
@@ -879,7 +906,7 @@ def main() -> None:
     require(workflow, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF")
     linux_io_uring = step_block(
         job_block(workflow, "linux-cmake"),
-        "Build and test experimental IOE-X1–X14 io_uring",
+        "Build and test experimental IOE-X1–X15 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
     require(linux_io_uring, "--expected-total 140")
@@ -897,9 +924,33 @@ def main() -> None:
     require(linux_io_uring, "tcp_multi_owner_server")
     require(linux_io_uring, "tcp_client")
     require(linux_io_uring, "test_cross_backend_tcp_semantics")
+    linux_io_uring_consumer = step_block(
+        job_block(workflow, "linux-cmake"),
+        "Install and verify experimental io_uring package consumer",
+    )
+    require(linux_io_uring_consumer, "build-default-experimental-component-probe")
+    require(linux_io_uring_consumer, "default package unexpectedly exposed")
+    require(linux_io_uring_consumer, "cmake --install build-io-uring-experimental")
+    require(
+        linux_io_uring_consumer,
+        "tests/cmake/experimental_io_uring_install_consumer",
+    )
+    require(linux_io_uring_consumer, "--expected-total 1")
+    require(
+        linux_io_uring_consumer,
+        "experimental-io-uring-install-consumer-inventory.json",
+    )
+    require(
+        linux_io_uring_consumer,
+        "experimental-io-uring-install-consumer-junit.xml",
+    )
+    require(
+        linux_io_uring_consumer,
+        "experimental-io-uring-install-consumer-ctest.log",
+    )
     linux_io_uring_asan = step_block(
         job_block(workflow, "linux-asan-ubsan"),
-        "Build and test experimental IOE-X1–X14 io_uring with ASan/UBSan",
+        "Build and test experimental IOE-X1–X15 io_uring with ASan/UBSan",
     )
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
@@ -1062,6 +1113,12 @@ def main() -> None:
     ) == len(JOB_CONTRACTS) + 2
     assert workflow.count("--artifact-name") == len(JOB_CONTRACTS)
     assert workflow.count("--require-canonical-artifact-name") == len(JOB_CONTRACTS)
+    for line in workflow.splitlines():
+        if "--command '" in line and "experimental_io_uring" in line:
+            assert line.rstrip().endswith("\\"), (
+                "all non-final experimental evidence commands must continue the "
+                "write_ci_evidence invocation"
+            )
     assert workflow.count(f"name: {ARTIFACT_NAME}") == len(JOB_CONTRACTS)
     assert workflow.count("retention-days: 90") == len(JOB_CONTRACTS) + 1
     assert workflow.count(f"--expected-total {EXPECTED_CTEST_TOTAL}") == 2 * len(JOB_CONTRACTS)

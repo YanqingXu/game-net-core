@@ -17,4 +17,16 @@ find_dependency(Threads)
 
 include("${CMAKE_CURRENT_LIST_DIR}/GameNetCoreTargets.cmake")
 
+set(GameNetCore_EXPERIMENTAL_IO_URING_API_VERSION "0.1.0")
+set(GameNetCore_experimental_io_uring_FOUND FALSE)
+if(TARGET GameNet::experimental_io_uring)
+    set(GameNetCore_experimental_io_uring_FOUND TRUE)
+endif()
+if(GameNetCore_FIND_REQUIRED_experimental_io_uring
+   AND NOT GameNetCore_experimental_io_uring_FOUND)
+    set(GameNetCore_NOT_FOUND_MESSAGE
+        "Required component experimental_io_uring is unavailable; install a Linux package configured with GAMENET_ENABLE_EXPERIMENTAL=ON."
+    )
+endif()
+
 check_required_components(GameNetCore)

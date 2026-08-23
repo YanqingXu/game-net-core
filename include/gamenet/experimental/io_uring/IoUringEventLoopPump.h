@@ -43,7 +43,7 @@ struct IoUringEventLoopPumpStopSummary {
 
 class IoUringEventLoopPumpImpl;
 
-// Linux-only, source-private bridge from EventLoop scheduling to the
+// Linux-only experimental bridge from EventLoop scheduling to the
 // experimental one-shot Completion Engine. The completion descriptor Channel
 // is only a readiness trigger; operation identity/result/lease remain typed
 // Engine state and are consumed on the EventLoop owner thread.

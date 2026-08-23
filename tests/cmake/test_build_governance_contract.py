@@ -280,7 +280,7 @@ def main() -> None:
     )
     require(
         root_text,
-        "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1 io_uring target",
+        "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1-X15 io_uring target",
         root_cmake,
     )
     require(root_text, "add_subdirectory(src/experimental/io_uring)", root_cmake)
@@ -354,7 +354,7 @@ def main() -> None:
         "no binary ABI compatibility promise before version 1.0",
         "`GAMENET_ENABLE_TLS`",
         "`GAMENET_ENABLE_EXPERIMENTAL`",
-        "IOE-X1–X14 io_uring",
+        "IOE-X1–X15 io_uring",
     ):
         require(docs_text, fragment, platform_docs)
 
@@ -364,7 +364,8 @@ def main() -> None:
     require(readme_text, "Windows/IOCP is a required Tier 2", readme)
     require(readme_text, "static-only before 1.0", readme)
     require(readme_text, "docs/development/platform_support.md", readme)
-    require(readme_text, "Linux-only IOE-X1–X14 io_uring", readme)
+    require(readme_text, "Linux-only IOE-X1–X15 io_uring", readme)
+    require(readme_text, "GameNet::experimental_io_uring", readme)
     require(readme_text, "## Licensing Status", readme)
     require(readme_text, "Apache License 2.0", readme)
     require(readme_text, "GameNetCore_LICENSE=Apache-2.0", readme)

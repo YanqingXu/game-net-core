@@ -30,6 +30,7 @@ ALLOWED_TARGETS = {
     "GameNet::broadcast",
     "GameNet::game",
     "GameNet::experimental",
+    "GameNet::experimental_io_uring",
     "gamenet_echo_server",
     "gamenet_single_loop_inline_echo",
     "gamenet_multi_io_queued_echo",
@@ -78,6 +79,10 @@ PHASE4_ACTIVE_INTENTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/io_uring_experimental_package.intent.md": (
+        "installed-library",
+        "GameNet::experimental_io_uring",
+    ),
     "intents/usecases/echo_server.intent.md": ("example", "gamenet_echo_server"),
     "intents/usecases/single_loop_inline_event_profile.intent.md": (
         "example",

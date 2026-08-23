@@ -104,7 +104,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_cross_backend_tcp_semantics_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     list(APPEND GAMENET_CROSS_BACKEND_TCP_SEMANTICS_LABELS experimental)
 endif()
@@ -131,7 +131,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_completion_engine
@@ -151,7 +151,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_event_loop_pump_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_event_loop_pump
@@ -171,7 +171,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_connection_driver_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_connection_driver
@@ -191,7 +191,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_connection_hub_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_connection_hub
@@ -211,7 +211,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_connection_hub_capacity_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_connection_hub_capacity
@@ -231,7 +231,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_listener_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_listener
@@ -251,7 +251,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_connection_adapter_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_connection_adapter
@@ -271,7 +271,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_server_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_server
@@ -291,7 +291,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_multi_owner_server_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_multi_owner_server
@@ -311,7 +311,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
     )
     target_link_libraries(
         gamenet_io_uring_tcp_client_contract
-        PRIVATE GameNet::experimental
+        PRIVATE GameNet::experimental_io_uring
     )
     add_test(
         NAME contract.io_engine.test_io_uring_tcp_client

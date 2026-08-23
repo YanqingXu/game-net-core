@@ -76,6 +76,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/api/test_experimental_io_uring_api_manifest.py
           python3 tools/compare_public_api_manifest.py \
             --compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json \
             --fail-on-compatibility-decision \
@@ -112,6 +113,7 @@ jobs:
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_io_uring_completion_engine_contract.py
+          python3 tests/cmake/test_experimental_io_uring_install_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -142,7 +144,7 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
-      - name: Build and test experimental IOE-X1–X14 io_uring
+      - name: Build and test experimental IOE-X1–X15 io_uring
         run: |
           cmake -S . -B build-io-uring-experimental \
             -DCMAKE_BUILD_TYPE=Debug \
@@ -178,6 +180,31 @@ jobs:
             --output-junit "$PWD/ci-evidence/install-consumer-junit.xml" \
             --output-log "$PWD/ci-evidence/install-consumer-ctest.log"
 
+      - name: Install and verify experimental io_uring package consumer
+        run: |
+          if cmake -S tests/cmake/experimental_io_uring_install_consumer \
+            -B build-default-experimental-component-probe \
+            -DCMAKE_PREFIX_PATH="$PWD/build/_install" \
+            > ci-evidence/default-experimental-component-rejection.log 2>&1; then
+            echo "default package unexpectedly exposed experimental_io_uring" >&2
+            exit 1
+          fi
+          cmake --install build-io-uring-experimental \
+            --prefix "$PWD/build-io-uring-experimental/_install"
+          cmake -S tests/cmake/experimental_io_uring_install_consumer \
+            -B build-experimental-io-uring-install-consumer \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH="$PWD/build-io-uring-experimental/_install"
+          python3 tools/verify_ctest_inventory.py \
+            --test-dir build-experimental-io-uring-install-consumer \
+            --expected-total 1 \
+            --output ci-evidence/experimental-io-uring-install-consumer-inventory.json
+          cmake --build build-experimental-io-uring-install-consumer --parallel
+          ctest --test-dir build-experimental-io-uring-install-consumer \
+            --output-on-failure --timeout 60 \
+            --output-junit "$PWD/ci-evidence/experimental-io-uring-install-consumer-junit.xml" \
+            --output-log "$PWD/ci-evidence/experimental-io-uring-install-consumer-ctest.log"
+
       - name: Write CI evidence manifest
         if: always()
         env:
@@ -204,7 +231,13 @@ jobs:
             --command 'cmake -S tests/cmake/install_consumer -B build-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json' \
             --command 'cmake --build build-install-consumer --parallel' \
-            --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log'
+            --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log' \
+            --command 'cmake -S tests/cmake/experimental_io_uring_install_consumer -B build-default-experimental-component-probe -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
+            --command 'cmake --install build-io-uring-experimental --prefix $PWD/build-io-uring-experimental/_install' \
+            --command 'cmake -S tests/cmake/experimental_io_uring_install_consumer -B build-experimental-io-uring-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build-io-uring-experimental/_install' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-experimental-io-uring-install-consumer --expected-total 1 --output ci-evidence/experimental-io-uring-install-consumer-inventory.json' \
+            --command 'cmake --build build-experimental-io-uring-install-consumer --parallel' \
+            --command 'ctest --test-dir build-experimental-io-uring-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/experimental-io-uring-install-consumer-junit.xml --output-log $PWD/ci-evidence/experimental-io-uring-install-consumer-ctest.log'
 
       - name: Upload CI evidence
         id: ci-evidence-upload
@@ -317,6 +350,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/api/test_experimental_io_uring_api_manifest.py
           python3 tests/ci/test_performance_regression.py
           python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
@@ -347,6 +381,7 @@ jobs:
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_io_uring_completion_engine_contract.py
+          python3 tests/cmake/test_experimental_io_uring_install_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -376,7 +411,7 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
-      - name: Build and test experimental IOE-X1–X14 io_uring with ASan/UBSan
+      - name: Build and test experimental IOE-X1–X15 io_uring with ASan/UBSan
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
@@ -546,6 +581,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/api/test_experimental_io_uring_api_manifest.py
           python3 tests/ci/test_performance_regression.py
           python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
@@ -576,6 +612,7 @@ jobs:
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_io_uring_completion_engine_contract.py
+          python3 tests/cmake/test_experimental_io_uring_install_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -706,6 +743,7 @@ jobs:
           python3 tests/scope/test_intent_semantics.py
           python3 tools/check_scope_boundaries.py
           python3 tests/api/test_public_api_manifest.py
+          python3 tests/api/test_experimental_io_uring_api_manifest.py
           python3 tests/ci/test_performance_regression.py
           python3 tests/ci/test_core_capacity_matrix.py
           python3 tests/ci/test_endurance_gate.py
@@ -736,6 +774,7 @@ jobs:
           python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python3 tests/cmake/test_sharded_hybrid_profile_contract.py
           python3 tests/cmake/test_io_uring_completion_engine_contract.py
+          python3 tests/cmake/test_experimental_io_uring_install_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
           python3 tests/ci/test_long_soak_workflow.py
@@ -926,6 +965,7 @@ jobs:
           python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
           python tests/api/test_public_api_manifest.py
+          python tests/api/test_experimental_io_uring_api_manifest.py
           python tests/ci/test_performance_regression.py
           python tests/ci/test_core_capacity_matrix.py
           python tests/ci/test_endurance_gate.py
@@ -956,6 +996,7 @@ jobs:
           python tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python tests/cmake/test_sharded_hybrid_profile_contract.py
           python tests/cmake/test_io_uring_completion_engine_contract.py
+          python tests/cmake/test_experimental_io_uring_install_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py
@@ -1153,6 +1194,7 @@ jobs:
           python tests/scope/test_intent_semantics.py
           python tools/check_scope_boundaries.py
           python tests/api/test_public_api_manifest.py
+          python tests/api/test_experimental_io_uring_api_manifest.py
           python tests/ci/test_performance_regression.py
           python tests/ci/test_core_capacity_matrix.py
           python tests/ci/test_endurance_gate.py
@@ -1183,6 +1225,7 @@ jobs:
           python tests/cmake/test_dedicated_fixed_tick_profile_contract.py
           python tests/cmake/test_sharded_hybrid_profile_contract.py
           python tests/cmake/test_io_uring_completion_engine_contract.py
+          python tests/cmake/test_experimental_io_uring_install_contract.py
           python tests/cmake/test_release_safe_tests.py
           python tests/ci/test_workflow_jobs.py
           python tests/ci/test_long_soak_workflow.py

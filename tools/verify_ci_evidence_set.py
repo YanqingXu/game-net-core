@@ -30,6 +30,7 @@ CONSUMER_JOBS = frozenset({"linux-cmake", "windows-msvc", "windows-msvc-release"
 EXPECTED_MAIN_INVENTORY = 130
 EXPECTED_THREADING_EXECUTION = 103
 EXPECTED_CONSUMER_INVENTORY = 2
+EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_INVENTORY = 1
 EXPECTED_LIBFUZZER_EXECUTIONS = 1000
 
 
@@ -255,6 +256,44 @@ def validate_producer(artifact_dir: Path, manifest_path: Path) -> tuple[str, dic
     else:
         require(not (consumer_paths & set(files)), f"unexpected install-consumer evidence for {job}")
 
+    experimental_consumer_total: int | None = None
+    experimental_consumer_paths = {
+        "default-experimental-component-rejection.log",
+        "experimental-io-uring-install-consumer-inventory.json",
+        "experimental-io-uring-install-consumer-junit.xml",
+        "experimental-io-uring-install-consumer-ctest.log",
+    }
+    if job == "linux-cmake":
+        require(
+            experimental_consumer_paths <= set(files),
+            "linux-cmake is missing experimental io_uring install-consumer evidence",
+        )
+        experimental_inventory, _ = inventory_tests(
+            files["experimental-io-uring-install-consumer-inventory.json"],
+            EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_INVENTORY,
+        )
+        experimental_junit_names = junit_tests(
+            files["experimental-io-uring-install-consumer-junit.xml"],
+            EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_INVENTORY,
+        )
+        require(
+            set(experimental_junit_names) == set(experimental_inventory),
+            "experimental io_uring consumer JUnit mismatch for linux-cmake",
+        )
+        rejection_log = files["default-experimental-component-rejection.log"].read_text(
+            encoding="utf-8", errors="replace"
+        )
+        require(
+            "experimental_io_uring" in rejection_log,
+            "default package component rejection log does not identify experimental_io_uring",
+        )
+        experimental_consumer_total = EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_INVENTORY
+    else:
+        require(
+            not (experimental_consumer_paths & set(files)),
+            f"unexpected experimental io_uring consumer evidence for {job}",
+        )
+
     fuzz_executions: int | None = None
     if job == "linux-asan-ubsan":
         require("fuzz/fuzzer.log" in files, "ASan producer is missing the libFuzzer log")
@@ -291,6 +330,7 @@ def validate_producer(artifact_dir: Path, manifest_path: Path) -> tuple[str, dic
         "configured_tests": EXPECTED_MAIN_INVENTORY,
         "executed_tests": expected_main_total,
         "consumer_executed_tests": consumer_total,
+        "experimental_consumer_executed_tests": experimental_consumer_total,
         "fuzz_executed_units": fuzz_executions,
     }
     return job, identity, summary

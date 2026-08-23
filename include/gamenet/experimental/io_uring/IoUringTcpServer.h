@@ -3,8 +3,9 @@
 
 #pragma once
 
-// IoUringTcpServer 是 IOE-X11 的单 owner、source-private 组合层。
-// 它组合已有 listener、共享 Hub 与语义 Adapter，不改变生产 TcpServer。
+// IoUringTcpServer is the explicit Linux-only experimental façade over the
+// IOE-X11 single-owner listener/Hub/Adapter composition. It does not change or
+// select the production TcpServer backend.
 
 #include "IoUringTcpConnectionAdapter.h"
 

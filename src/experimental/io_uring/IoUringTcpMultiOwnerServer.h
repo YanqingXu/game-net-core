@@ -6,8 +6,8 @@
 // IOE-X12 source-private composition: one accept owner hands accepted sockets
 // to finitely many worker-owned Hub/Pump/Engine instances.
 
-#include "IoUringTcpConnectionAdapter.h"
-#include "IoUringTcpServer.h"
+#include "gamenet/experimental/io_uring/IoUringTcpConnectionAdapter.h"
+#include "gamenet/experimental/io_uring/IoUringTcpServer.h"
 
 #include "gamenet/core/net/Callbacks.h"
 #include "gamenet/core/net/EventLoopExecutor.h"

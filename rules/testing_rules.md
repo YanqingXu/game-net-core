@@ -355,6 +355,16 @@ Contract tests verify:
   socket, timer, command, pending-byte, and Engine-owned-byte residue. The
   focused contract runs repeatedly normally and under the applicable Linux
   ASan/UBSan and TSan gates, while the full default suite runs on Windows IOCP
+- X15 must prove two different install trees: default Linux contains no
+  experimental target/header/library and rejects the requested component;
+  experimental-enabled Linux contains the canonical
+  `GameNet::experimental_io_uring` target plus the exact Server/Client header
+  closure, and its independent consumer configures, builds, links, and runs
+- Windows keeps rejecting `GAMENET_ENABLE_EXPERIMENTAL=ON` and therefore cannot
+  publish an experimental component. The stable manifest and its v0.3
+  compatibility diff remain unchanged; a separate experimental manifest must
+  exactly fingerprint every installed experimental header and reject missing,
+  extra, renamed, or modified entries
 - a deterministic subprocess destruction contract holds a real accepted Recv
   and lease, invokes Pump destruction before physical stop, and requires an
   immediate fail-fast result rather than the historical 250 ms owner wait or

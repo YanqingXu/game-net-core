@@ -21,12 +21,24 @@ SKIP_FILES = {
     "tests/scope/test_intent_metadata.py",
 }
 ACTIVE_EXPERIMENTAL_SOURCE_PREFIX = "src/experimental/io_uring/"
+ACTIVE_EXPERIMENTAL_HEADER_PREFIX = "include/gamenet/experimental/io_uring/"
+ACTIVE_EXPERIMENTAL_REFERENCE_PREFIXES = (
+    ACTIVE_EXPERIMENTAL_SOURCE_PREFIX,
+    ACTIVE_EXPERIMENTAL_HEADER_PREFIX,
+    "benchmarks/io_uring/",
+    "tests/contract/io_engine/test_io_uring_",
+    "tests/cmake/experimental_io_uring_install_consumer/",
+)
 ACTIVE_EXPERIMENTAL_TEST_PATHS = {
     "benchmarks/CMakeLists.txt",
     "benchmarks/io_uring/one_shot.cpp",
     "tests/CMakeLists.txt",
     "tests/cmake/test_io_uring_completion_engine_contract.py",
+    "tests/cmake/test_experimental_io_uring_install_contract.py",
+    "tests/api/test_experimental_io_uring_api_manifest.py",
+    "tests/api/test_public_api_manifest.py",
     "tests/contract/io_engine/test_io_uring_completion_engine.cpp",
+    "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
 }
 TEXT_SUFFIXES = {
     "",
@@ -125,6 +137,8 @@ def check_deferred_path(root: Path, path: Path) -> list[Violation]:
 
     if len(parts) >= 3 and parts[0] == "include" and parts[1] == "gamenet":
         component = parts[2]
+        if component == "experimental" and rel.startswith(ACTIVE_EXPERIMENTAL_HEADER_PREFIX):
+            return violations
         if component in DEFERRED_COMPONENTS and component not in ACTIVE_COMPONENTS:
             violations.append(Violation(rel, 1, "deferred path", f"component {component!r} is not active"))
 
@@ -151,7 +165,7 @@ def check_text(root: Path, path: Path) -> list[Violation]:
         for match in COMPONENT_REFERENCE.finditer(line):
             component = match.group(1)
             active_io_uring_reference = component == "experimental" and (
-                rel.startswith(ACTIVE_EXPERIMENTAL_SOURCE_PREFIX)
+                any(rel.startswith(prefix) for prefix in ACTIVE_EXPERIMENTAL_REFERENCE_PREFIXES)
                 or rel in ACTIVE_EXPERIMENTAL_TEST_PATHS
             )
             if active_io_uring_reference:

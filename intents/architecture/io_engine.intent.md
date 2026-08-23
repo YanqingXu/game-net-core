@@ -172,8 +172,8 @@ IOE-C1's operation-model slice gives Completion its native result vocabulary:
 
 IOE-X1 authorizes one experimental Linux completion vertical slice:
 
-- `GAMENET_ENABLE_EXPERIMENTAL=ON` on Linux builds a non-installed
-  `GameNet::experimental` target containing a real raw-syscall io_uring
+- Before IOE-X15, `GAMENET_ENABLE_EXPERIMENTAL=ON` on Linux builds a
+  non-installed `GameNet::experimental` target containing a real raw-syscall io_uring
   Completion Engine. The default remains `OFF`; Windows rejects the option;
   the production Core continues to select epoll as its default and fallback;
 - the first Engine is owner-thread-only and invokes no user callback. The owner
@@ -201,8 +201,8 @@ IOE-X1 authorizes one experimental Linux completion vertical slice:
 
 IOE-X2 authorizes one source-private EventLoop-driven completion pump:
 
-- the pump remains inside the Linux-only, default-off, non-installed
-  `GameNet::experimental` target. It does not enter the production Poller,
+- through IOE-X14 the pump remains inside the Linux-only, default-off,
+  non-installed `GameNet::experimental` target. It does not enter the production Poller,
   TcpConnection, package export, or backend-selection surface;
 - one EventLoop owner constructs, submits through, cancels through, drives, and
   destroys the pump. The pump owns one IOE-X1 Engine, one borrowed-fd Channel
@@ -721,6 +721,32 @@ production and source-private server/client compositions:
   metrics or performance claims, multishot, provided buffers, fixed files,
   zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
 
+IOE-X15 authorizes the first explicitly installed experimental io_uring
+package surface:
+
+- only Linux with `GAMENET_ENABLE_EXPERIMENTAL=ON` installs the existing static
+  implementation as `GameNet::experimental_io_uring`. The default remains
+  `OFF`; Windows still rejects enablement; production Linux and Windows retain
+  epoll and IOCP respectively;
+- installed headers live under `include/gamenet/experimental/io_uring/` and are
+  limited to the transitive header closure required by `IoUringTcpServer` and
+  `IoUringTcpClient`. The proof-only single-connection Driver and multi-owner
+  Server headers remain source-private;
+- `find_package(GameNetCore REQUIRED COMPONENTS experimental_io_uring)` must
+  succeed only for an experimental-enabled package and expose exactly the
+  canonical target. A default package must fail that component request rather
+  than silently falling back or exposing a build-tree alias;
+- the experimental target and headers use
+  `api/experimental_io_uring_api_manifest.json` and an explicit version note.
+  They remain absent from the stable v0.3 public API manifest and do not create
+  a stable compatibility decision;
+- artifact installation adds no owner, callback thread, lifetime extension,
+  or cross-thread right. The installed façades retain all X11–X14 owner-loop,
+  re-entry, bounded admission, first-close-reason, half-close, and physical
+  final-drain contracts;
+- X15 authorizes no runtime selector, automatic choice, production backend
+  replacement, advanced io_uring operation, TLS/framing, or performance claim.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -769,7 +795,10 @@ production and source-private server/client compositions:
 17. IOE-X14 drives one portable server/client semantic suite across production
     epoll, production IOCP, and source-private io_uring without equating their
     native mechanisms or exposing backend selection.
-18. Only proven, cross-backend concepts may later graduate to a narrow public
+18. IOE-X15 installs the proven Linux composition only as an explicit,
+    separately versioned experimental component while keeping the default and
+    stable package surfaces unchanged.
+19. Only proven, cross-backend concepts may later graduate to a narrow public
     capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -879,6 +908,13 @@ production and source-private server/client compositions:
   compares only send/backpressure, read pause/resume, typed cross-thread
   admission, graceful half-close, first close reason, callback owner/order, and
   final drain, while retaining backend-native accounting as separate evidence.
+- `tests/cmake/test_experimental_io_uring_install_contract.py` verifies the
+  Linux-only option, canonical export name, exact installed header closure,
+  component-aware package discovery, default-package absence, build/run
+  consumer, CI wiring, and lack of a selector or automatic fallback.
+- `tests/api/test_experimental_io_uring_api_manifest.py` verifies the separate
+  experimental target/header manifest and fingerprints while requiring the
+  stable v0.3 manifest to exclude every experimental entry.
 - `benchmarks/io_uring/listener_comparison.cpp` drives the fixed IOE-X10
   256-route/four-wave listener workload through either production epoll or the
   source-private completion listener and emits one validated backend sample.

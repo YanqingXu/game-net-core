@@ -17,7 +17,7 @@ Every `*.intent.md` document starts with this authoritative front matter:
 ```yaml
 ---
 status: active | deferred | legacy
-target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_multi_io_queued_echo | gamenet_multi_io_fixed_tick_echo | gamenet_multi_io_sharded_hybrid_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | historical
+target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | GameNet::experimental_io_uring | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_multi_io_queued_echo | gamenet_multi_io_fixed_tick_echo | gamenet_multi_io_sharded_hybrid_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | historical
 migration_source: mini_trantor | native
 promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundation | post-core-preview | post-phase-4-protocol | experimental-only | never
 ---
@@ -100,6 +100,7 @@ These intents apply to the current migrated core:
 - `intents/modules/buffer.intent.md`
 - `intents/modules/acceptor.intent.md`
 - `intents/modules/connector.intent.md`
+- `intents/modules/io_uring_experimental_package.intent.md`
 - `intents/modules/tcp_connection.intent.md`
 - `intents/modules/connection_backpressure_controller.intent.md`
 - `intents/modules/tcp_server.intent.md`

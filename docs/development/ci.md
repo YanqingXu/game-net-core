@@ -47,12 +47,14 @@ The `ci` workflow validates:
 - Build-governance guard for the Linux/Windows target-system allow-list,
   explicit static installed targets, rejected shared-library builds, and
   configure-time failure for unimplemented TLS and unsupported Windows
-  experimental options, plus a separate default-off Linux IOE-X1/X2/X3 Engine,
-  EventLoop-pump, and single-connection driver gate.
+  experimental options, plus the separate default-off Linux IOE-X1–X15
+  Engine/Pump/TCP contract and installation gate.
 - Public API manifest v2 verification for classified exported targets and
   headers, plus a deterministic diff against the immutable 0.2 preview
   snapshot. Producer checkouts fetch full history so the snapshot inventory
-  and stable fingerprints are recomputed from the declared release tag.
+  and stable fingerprints are recomputed from the declared release tag. The
+  independently versioned experimental io_uring target/header closure is
+  excluded from that stable manifest and checked by its own exact manifest.
 - Scope boundary guard for deferred modules and legacy `mini_trantor` symbols.
 - Intent consistency guard for active module paths and support intents.
 - Intent metadata contract guard for complete active/deferred/legacy catalogs,
@@ -105,7 +107,10 @@ The `ci` workflow validates:
 - Echo and game-server-pipeline examples build.
 - Unit, contract, and integration tests through CTest.
 - Install and `find_package(GameNetCore)` consumer configure, build, and
-  executable-run verification on Linux and Windows.
+  executable-run verification on Linux and Windows. Linux Debug additionally
+  proves that the default package rejects the `experimental_io_uring`
+  component and that an opt-in package exposes exactly one experimental
+  consumer test.
 - ASan/UBSan Debug build and CTest suite on Linux.
 - TSan Debug build and `threading`-labeled CTest suite on Linux.
 - Release build and CTest suite on Linux.
@@ -119,13 +124,14 @@ The `ci` workflow validates:
   package/log/inventory/JUnit hashes before upload.
 
 Ordinary production builds keep optional modules disabled. A separate Linux
-job slice enables only the three non-installed IOE-X1/X2/X3 io_uring contracts.
-Its inventory is exactly 132 tests with 3 experimental entries. Still
+job slice enables the complete IOE-X1–X15 io_uring contract set. Its inventory
+is exactly 140 tests with 11 experimental entries; the target is installed only
+into a separate opt-in package tree and never into the default package. Still
 disabled are:
 
 - TLS
-- experimental transport other than the isolated IOE-X1 Engine, IOE-X2
-  EventLoop pump, and IOE-X3 single-connection driver
+- experimental transport other than the isolated io_uring Engine/Pump/TCP
+  path
 - HTTP, WebSocket, RPC, UDP, KCP, PMTU/FEC, metrics, coroutine, and a formal
   all-in-one game pipeline library
 
@@ -169,6 +175,8 @@ python3 tests/cmake/test_multi_io_queued_profile_contract.py
 python3 tests/cmake/test_dedicated_fixed_tick_profile_contract.py
 python3 tests/cmake/test_sharded_hybrid_profile_contract.py
 python3 tests/cmake/test_io_uring_completion_engine_contract.py
+python3 tests/cmake/test_experimental_io_uring_install_contract.py
+python3 tests/api/test_experimental_io_uring_api_manifest.py
 python3 tests/cmake/test_release_safe_tests.py
 python3 tests/ci/test_workflow_jobs.py
 python3 tests/ci/test_long_soak_workflow.py
@@ -207,11 +215,14 @@ result.
 
 Every main CTest invocation writes `ci-evidence/ctest-junit.xml` with
 `--output-junit` and `ci-evidence/ctest.log` with `--output-log`. Linux jobs use a 60-second per-test timeout; Windows main
-suites use a 30-second lifecycle timeout. Linux Debug and both Windows
-jobs require exactly 2 configured install-consumer tests before building them,
-then write `install-consumer-inventory.json`, `install-consumer-junit.xml`, and
-`install-consumer-ctest.log` with a 60-second timeout for the installed-package
-executables. JUnit records suite and test durations. Total job
+suites use a 30-second lifecycle timeout. Linux Debug and both Windows jobs
+require exactly 2 configured default install-consumer tests before building
+them, then write `install-consumer-inventory.json`,
+`install-consumer-junit.xml`, and `install-consumer-ctest.log` with a 60-second
+timeout for the installed-package executables. Linux Debug also records the
+expected default-component rejection and exactly 1 opt-in
+`experimental_io_uring` install-consumer test in separate inventory, JUnit,
+and CTest log files. JUnit records suite and test durations. Total job
 elapsed time remains authoritative in GitHub Actions job metadata because a
 step running before artifact upload cannot reliably know the final upload
 duration. CTest 3.21 or newer is required for evidence capture through
@@ -912,6 +923,8 @@ py -3 tests\cmake\test_multi_io_queued_profile_contract.py
 py -3 tests\cmake\test_dedicated_fixed_tick_profile_contract.py
 py -3 tests\cmake\test_sharded_hybrid_profile_contract.py
 py -3 tests\cmake\test_io_uring_completion_engine_contract.py
+py -3 tests\cmake\test_experimental_io_uring_install_contract.py
+py -3 tests\api\test_experimental_io_uring_api_manifest.py
 py -3 tests\cmake\test_release_safe_tests.py
 py -3 tests\ci\test_workflow_jobs.py
 py -3 tests\ci\test_long_soak_workflow.py
