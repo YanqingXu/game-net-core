@@ -180,6 +180,14 @@ def main() -> None:
     evidence_ledger = (
         repo_root / "docs" / "development" / "commit_bound_evidence_ledger.md"
     )
+    m7_readiness = (
+        repo_root
+        / "docs"
+        / "development"
+        / "m7_external_rpc_lua_readiness_2026-08-24.md"
+    )
+    rpc_intent = repo_root / "intents" / "modules" / "rpc.intent.md"
+    intents_index = repo_root / "intents" / "README.md"
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     configured_tests = re.findall(
@@ -211,6 +219,9 @@ def main() -> None:
     x10_evidence_record = json.loads(x10_evidence.read_text(encoding="utf-8"))
     arch_g1_review_text = arch_g1_review.read_text(encoding="utf-8")
     evidence_ledger_text = evidence_ledger.read_text(encoding="utf-8")
+    m7_readiness_text = m7_readiness.read_text(encoding="utf-8")
+    rpc_intent_text = rpc_intent.read_text(encoding="utf-8")
+    intents_index_text = intents_index.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
@@ -447,6 +458,55 @@ def main() -> None:
         require(text, x15_implementation_checkpoint, source)
         require(text, "M7", source)
     require(evidence_ledger_text, "IOE-X15 Experimental Installation Surface", evidence_ledger)
+    gateway_checkpoint = "0a8fe1e43cb11ac32daa8f9266d3b84924736e67"
+    independent_consumer_checkpoint = "b5254165389d762c3f3c63568c24ffab448fc501"
+    require(m7_readiness_text, "external implementation: `DEFER`", m7_readiness)
+    require(
+        m7_readiness_text,
+        "shared GameNet RPC promotion: `NO-PROMOTION`",
+        m7_readiness,
+    )
+    require(m7_readiness_text, gateway_checkpoint, m7_readiness)
+    require(m7_readiness_text, independent_consumer_checkpoint, m7_readiness)
+    require(m7_readiness_text, "passed 8/8", m7_readiness)
+    require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
+    require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)
+    require(m7_readiness_text, "callback re-entry", m7_readiness)
+    require(m7_readiness_text, "typed bounded admission", m7_readiness)
+    require(
+        m7_readiness_text,
+        "tests/cmake/test_migration_status_contract.py",
+        m7_readiness,
+    )
+    require(rpc_intent_text, "status: deferred", rpc_intent)
+    require(intents_index_text, "- `intents/modules/rpc.intent.md`", intents_index)
+    deferred_catalog = intents_index_text.split("## Deferred Intent Catalog", 1)[1].split(
+        "## Legacy Intent Catalog", 1
+    )[0]
+    require(deferred_catalog, "- `intents/modules/rpc.intent.md`", intents_index)
+    installed_rpc_or_lua_headers = [
+        path
+        for path in (repo_root / "include" / "gamenet").rglob("*")
+        if path.is_file()
+        and (
+            "rpc" in path.relative_to(repo_root).as_posix().lower()
+            or "lua" in path.relative_to(repo_root).as_posix().lower()
+        )
+    ]
+    assert not installed_rpc_or_lua_headers, (
+        "M7 readiness audit must not install RPC/Lua headers: "
+        + ", ".join(str(path) for path in installed_rpc_or_lua_headers)
+    )
+    tracked_cmake_paths = [
+        path
+        for path in git(repo_root, "ls-files").splitlines()
+        if Path(path).name == "CMakeLists.txt" or Path(path).suffix == ".cmake"
+    ]
+    tracked_cmake_text = "\n".join(
+        (repo_root / path).read_text(encoding="utf-8") for path in tracked_cmake_paths
+    )
+    assert "GameNet::rpc" not in tracked_cmake_text
+    assert "gamenet_rpc" not in tracked_cmake_text
     require(
         roadmap_text,
         "The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14",

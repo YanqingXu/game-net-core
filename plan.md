@@ -383,6 +383,22 @@ v0.3 manifest 零漂移。已准备 v0.5.0 experimental preview 版本说明，�
 状态：**当前治理前沿**。先在 `gamenet-game-gateway` 与第二个独立 consumer 中形成
 真实合同和反馈；在满足双 consumer 提升门前，不激活 Core/RPC 公共实现。
 
+### 9.1 M7-G0：外部就绪审计
+
+状态：**已完成 `DEFER / NO-PROMOTION` 就绪判定，M7 尚未关闭**。审计记录见
+`docs/development/m7_external_rpc_lua_readiness_2026-08-24.md`。Gateway 的干净
+`0a8fe1e43cb11ac32daa8f9266d3b84924736e67` 检查点只有受 owner 隔离的 Lua callback
+seam，提交范围仍禁止 RPC；独立 `YanGameServer`
+`b5254165389d762c3f3c63568c24ffab448fc501` 的有界 RPC/Lua owner 合同虽通过聚焦
+Windows Release 8/8，但 wire-v2、native transport/TLS 和生命周期并不构成相同的
+GameNet per-connection RPC 需求。因此 `rpc.intent.md` 保持 deferred，当前仓库不增加
+RPC/Lua target、头文件或 package component。
+
+恢复外部实现前，Gateway 必须先有无冲突任务/工作树修改的干净精确提交，并新增明确
+授权 M7 的 intent/rules/合同测试；随后才实现非 coroutine 前置的 callback/value
+adapter，并与第二 consumer 逐字段比较 wire/lifecycle。就绪审计不授权覆盖 Gateway
+现有的用户修改。
+
 坚持“外部先行、通用能力再提升”。
 
 Lua execution cell 保持在 `gamenet-game-gateway`：
