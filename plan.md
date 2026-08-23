@@ -267,7 +267,8 @@ Sharded Hybrid 两条路径中只使用已安装 v0.3 能力，未提出缺失�
 Core capability。逐项审查确认 `TransportEndpoint` 已可直接复用，而 Logic admission、
 stop、shard 与 cadence 仍有不同的 owner、Accepted obligation、失败作用域和退休语义。
 因此不激活 Runtime public-surface intent，不增加安装 target/header/ABI，也不发布空
-v0.4.0。完整决策与选择指南见
+v0.4.0。精确决策 checkpoint 是
+`f8cffb6f04e593983db16d23122ed426f8729bf4`。完整决策与选择指南见
 `docs/architecture/runtime_profile_common_capability_review.md` 和
 `docs/architecture/runtime_profile_load_selection_guide.md`。
 

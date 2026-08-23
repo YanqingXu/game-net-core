@@ -177,6 +177,9 @@ def main() -> None:
     arch_g1_review = (
         repo_root / "docs" / "reviews" / "arch-g1-independent-review.md"
     )
+    evidence_ledger = (
+        repo_root / "docs" / "development" / "commit_bound_evidence_ledger.md"
+    )
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     configured_tests = re.findall(
@@ -202,6 +205,7 @@ def main() -> None:
     profile_load_guide_text = profile_load_guide.read_text(encoding="utf-8")
     x10_evidence_record = json.loads(x10_evidence.read_text(encoding="utf-8"))
     arch_g1_review_text = arch_g1_review.read_text(encoding="utf-8")
+    evidence_ledger_text = evidence_ledger.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
     normalized_plan_text = " ".join(plan_text.split())
@@ -220,6 +224,7 @@ def main() -> None:
     reviewed_surface_commit = "6b292156e3e94d3389e9f3b8513445e7eb4ab541"
     current_governance_checkpoint = "a5ff7e6d823984a86e89146889f29f6615702ec3"
     current_implementation_checkpoint = "f5d39b800b4dd943531670aa09840c931c3dee4d"
+    m5_decision_checkpoint = "f8cffb6f04e593983db16d23122ed426f8729bf4"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -234,6 +239,8 @@ def main() -> None:
         current_implementation_checkpoint,
     )
     git(repo_root, "merge-base", "--is-ancestor", current_implementation_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{m5_decision_checkpoint}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", m5_decision_checkpoint, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -359,6 +366,10 @@ def main() -> None:
 
     require(plan_text, current_governance_checkpoint, plan)
     require(plan_text, current_implementation_checkpoint, plan)
+    require(plan_text, m5_decision_checkpoint, plan)
+    require(status_text, m5_decision_checkpoint, migration_status)
+    require(evidence_ledger_text, m5_decision_checkpoint, evidence_ledger)
+    require(evidence_ledger_text, "M5 Runtime Boundary Re-review", evidence_ledger)
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)

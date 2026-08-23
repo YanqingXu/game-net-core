@@ -25,7 +25,9 @@ SPDX Schema validation. Exact evidence is recorded in
 `docs/development/releases/v0.3.0.md`. M5 then repeated the cross-Profile review
 against the independent gateway and closed as a second `NO-PROMOTION`; the
 load-selection guide is published, no Runtime API was installed, and no empty
-v0.4 release was created. M6/IOE-X11 is the active governance front.
+v0.4 release was created. Exact M5 decision checkpoint:
+`f8cffb6f04e593983db16d23122ed426f8729bf4`. M6/IOE-X11 is the active
+governance front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
