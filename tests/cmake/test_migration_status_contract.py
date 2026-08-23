@@ -234,6 +234,7 @@ def main() -> None:
     x12_implementation_checkpoint = "5be30e701c61f8d6700bcc4be6bc0ef152120fb8"
     x13_implementation_checkpoint = "5484d7a89b01597824bc860e4d2d3cf3cfd45a82"
     x14_implementation_checkpoint = "351b3c0e476a462265016d53361a02b5f2c51611"
+    x15_implementation_checkpoint = "43795e841ba2a279ed6a3d5d831d60a9f2a25570"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -258,6 +259,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", x13_implementation_checkpoint, "HEAD")
     git(repo_root, "cat-file", "-e", f"{x14_implementation_checkpoint}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", x14_implementation_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{x15_implementation_checkpoint}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", x15_implementation_checkpoint, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -441,6 +444,9 @@ def main() -> None:
         (evidence_ledger_text, evidence_ledger),
     ):
         require(text, "M6/IOE-X15", source)
+        require(text, x15_implementation_checkpoint, source)
+        require(text, "M7", source)
+    require(evidence_ledger_text, "IOE-X15 Experimental Installation Surface", evidence_ledger)
     require(
         roadmap_text,
         "The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14",
@@ -458,7 +464,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M6", plan)
+    require(plan_text, "当前唯一治理前沿是 **M7", plan)
     assert plan_text.count("当前唯一治理前沿") == 1, (
         "plan must declare exactly one current governance front"
     )
@@ -489,7 +495,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M6/IOE-X15 是下一治理前沿", plan)
+    require(plan_text, "M7 Lua/typed RPC 外部先行验证是下一治理前沿", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)

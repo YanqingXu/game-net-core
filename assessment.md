@@ -34,8 +34,8 @@ all-rights-reserved，不提供外部使用授权。该句描述内部候选形�
 资产、annotated tag、stable Release 和回下载验证。M5 随后用真实网关重新审查
 Runtime 共同能力，确认没有缺失的通用 Core 能力，发布 Profile 负载选择指南并记录
 第二次 `NO-PROMOTION`；IOE-X11 已在 `013fecf`、IOE-X12 已在 `5be30e7`、
-IOE-X13 已在 `5484d7a`、IOE-X14 已在 `351b3c0` 关闭，当前前沿已转到
-M6/IOE-X15。
+IOE-X13 已在 `5484d7a`、IOE-X14 已在 `351b3c0`、IOE-X15/M6 已在
+`43795e8` 关闭，当前前沿已转到 M7 Lua/typed RPC 外部先行验证。
 
 ---
 
@@ -54,7 +54,7 @@ GameNet::game_logic
 GameNet::broadcast
 ```
 
-Linux 默认使用 epoll，Windows 使用 IOCP；Linux 还可以显式开启 non-installed、default-off 的实验性 io_uring 模块。TLS、其他平台和动态库目前会在配置阶段明确拒绝，而不是静默降级。
+Linux 默认使用 epoll，Windows 使用 IOCP；Linux 还可以显式开启 default-off、独立版本化并可安装的实验性 io_uring 组件，默认包仍不包含任何实验产物。TLS、其他平台和动态库目前会在配置阶段明确拒绝，而不是静默降级。
 
 Core 已经覆盖了比较完整的网络基础设施：
 
@@ -292,9 +292,11 @@ SBOM 和 Release 回下载验证。剩余边界不是“尚未发布”，而是
 声明、源码 SPDX、package metadata 与 SBOM 校验。历史内部候选继续保留其形成时的
 all-rights-reserved 快照，不被追溯改写。
 
-### 3. Runtime Profile 和 io_uring 仍是 provisional/non-installed
+### 3. Runtime Profile 仍是 provisional/non-installed；io_uring 保持独立实验面
 
-它们已经得到验证，但尚未进入稳定安装接口，也没有公共 backend selector。这个状态是刻意保持的，并不代表遗漏。
+Runtime Profile 已得到验证，但尚未进入稳定安装接口。io_uring 则从 IOE-X15 起仅在
+Linux 显式 opt-in 时作为独立版本化的实验组件安装；默认包仍不导出它，也没有公共
+backend selector。两者都不属于 stable API，这个状态是刻意保持的，并不代表遗漏。
 
 ### 4. 已有真实网关闭环，但仍缺少长期生产运营反馈
 
@@ -315,10 +317,10 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M5 与 IOE-X11–IOE-X14 已关闭，M6/IOE-X15 成为治理前沿
+### 5. M1–M6 与 IOE-X11–IOE-X15 已关闭，M7 成为治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M5 与 IOE-X11–IOE-X14 关闭、M6/IOE-X15 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M6 与 IOE-X11–IOE-X15 关闭、M7 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
@@ -333,6 +335,10 @@ IOE-X13 再在 `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 完成 one-shot Connec
 IOCP 与 io_uring 的 send/backpressure、read pause、close、half-close、cross-thread
 admission 和 final drain；它同时关闭 shutdown 请求后的发送准入窗口和 Windows IOCP
 disconnecting 状态不续投读取两个 production correctness 缺口，稳定 API 继续零漂移。
+IOE-X15 随后在 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 导出显式
+`GameNet::experimental_io_uring`、六个受独立 manifest 指纹保护的实验头文件和独立
+package consumer；默认 Linux/Windows 包继续不含实验产物，没有 stable selector、tag
+或 GitHub Release。
 当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
 基线为 140（8 unit、118 contract、14 integration）。
 
@@ -453,14 +459,16 @@ Linux/Windows 默认基线、安装隔离与稳定 API 零漂移门均通过。
 half-close、cross-thread admission 与 final drain；normal、ASan/UBSan、TSan、双平台、
 安装隔离、治理守卫和稳定 API 零漂移门均通过。
 
-## P2（当前）：M6/IOE-X15 实验安装面
+## P2（已关闭）：M6/IOE-X15 实验安装面
 
-下一任务将 io_uring target 作为显式 Linux-only experimental surface 安装，提供
+该切片已在 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 将 io_uring target 作为显式
+Linux-only experimental surface 安装，提供
 `IoUringTcpServer` 与 `IoUringTcpClient` façade、独立 manifest/package consumer 和版本
 说明；保持 opt-in 默认关闭，不给稳定 `TcpServer` 增加 backend selector，也不自动选择
-io_uring。
+io_uring。Linux 默认/实验安装消费者、Windows 默认消费者、140/130 完整门、ASan/UBSan、
+TSan、仓库守卫和稳定 API 零漂移均通过；版本轨道已准备但未发布 tag/Release。
 
-## P2：RPC、Lua 和协程优先放在上层适配仓库
+## P2（当前）：RPC、Lua 和协程优先放在上层适配仓库
 
 对于你的总体游戏服务器目标，TCP Core 稳定后，实际收益更高的顺序应是：
 
@@ -481,7 +489,7 @@ UDP/KCP 应继续等到：
 
 ---
 
-# 四、建议采用的五个里程碑
+# 四、建议采用的六个里程碑
 
 ```text
 Milestone 1
@@ -500,8 +508,12 @@ Milestone 4
 空 v0.4。
 
 Milestone 5
-当前：M6/IOE-X15，只推进显式 Linux-only io_uring experimental 安装面；
-Runtime 公共 API 与 RPC/Lua/coroutine 不并行展开。
+已关闭：M6/IOE-X15 在 `43795e8` 交付显式 Linux-only io_uring experimental 安装面，
+未发布 tag/Release。
+
+Milestone 6
+当前：M7 先在外部网关与第二个独立 consumer 验证 Lua execution cell 和 typed RPC；
+Runtime/Core 公共 API 与 coroutine 不提前并行展开。
 ```
 
 # 最终评价
@@ -524,7 +536,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M6/IOE-X12 已关闭（5be30e7）
 → M6/IOE-X13 已关闭（5484d7a）
 → M6/IOE-X14 已关闭（351b3c0）
-→ M6/IOE-X15（当前）
+→ M6/IOE-X15 已关闭（43795e8；未发布 preview）
+→ M7 Lua/typed RPC 外部先行验证（当前）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

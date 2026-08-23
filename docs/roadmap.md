@@ -90,9 +90,10 @@ See `migration_status.md` for the current checked state of these phases.
   and fresh-download verification. M5 is closed with a second
   `NO-PROMOTION`, an official Profile load-selection guide, zero public API
   drift, and no empty v0.4 release. IOE-X11 is closed at `013fecf`, IOE-X12 at
-  `5be30e7`, IOE-X13 at `5484d7a`, and IOE-X14 at `351b3c0`; M6/IOE-X15 is
-  the active front. The cancelled `a89e2b0` endurance checkpoint remains
-  historical only.
+  `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, and IOE-X15/M6 at
+  `43795e8`. The explicit Linux-only component is prepared but no preview tag
+  or Release was published. M7 external-first Lua/typed RPC validation is the
+  active front. The cancelled `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -326,8 +327,9 @@ non-installed. IOE-X11 is closed at
 `013fecfe81277845eb3e60ccf5fe0205b753858d`, and IOE-X12 is closed at
 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`. IOE-X13 is closed at
 `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`, and IOE-X14 is closed at
-`351b3c0e476a462265016d53361a02b5f2c51611`; M6/IOE-X15 is the current front,
-and no Core evidence task is running.
+`351b3c0e476a462265016d53361a02b5f2c51611`. IOE-X15 and M6 are closed at
+`43795e841ba2a279ed6a3d5d831d60a9f2a25570`; M7 external-first Lua/typed RPC
+validation is the current front, and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -377,9 +379,14 @@ and no Core evidence task is running.
   and io_uring while preserving backend-specific readiness/completion mechanics
   and comparing backpressure, close, half-close, admission, and final drain;
   closed at `351b3c0e476a462265016d53361a02b5f2c51611`.
-- [ ] M6/IOE-X15: install an explicit Linux-only experimental io_uring target,
+- [x] M6/IOE-X15: install an explicit Linux-only experimental io_uring target,
   façades, manifest, package consumer, and version notes while keeping opt-in
-  disabled by default and the stable `TcpServer` free of a backend selector.
+  disabled by default and the stable `TcpServer` free of a backend selector;
+  closed at `43795e841ba2a279ed6a3d5d831d60a9f2a25570` without publishing a tag or
+  GitHub Release.
+- [ ] M7: validate owner-isolated Lua execution cells and callback/value typed
+  RPC in the gateway plus a second independent consumer before promoting any
+  shared protocol surface; do not make coroutine support a prerequisite.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

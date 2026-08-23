@@ -23,6 +23,9 @@ IOE-X13 实现与证据检查点：`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`
 IOE-X14 实现与证据检查点：`351b3c0e476a462265016d53361a02b5f2c51611`
 （epoll、IOCP 与 io_uring 跨后端 TCP 语义套件）
 
+IOE-X15 实现与证据检查点：`43795e841ba2a279ed6a3d5d831d60a9f2a25570`
+（显式 Linux-only experimental 安装组件、独立 manifest 与 package consumer）
+
 ## 1. 计划定位与总体顺序
 
 本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
@@ -49,7 +52,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M6 v0.5 io_uring 可安装实验后端**。
+当前唯一治理前沿是 **M7 v0.6 Lua 与 typed RPC 外部先行验证**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -316,9 +319,9 @@ sharding 证据完整。若没有公共能力被提升，不发布空版本；�
 仅在 `X10=PROMOTE` 且 ARCH-G1 批准时执行；否则整个 M6 标记为
 `skipped-by-evidence`，直接进入 M7。
 
-状态：**当前治理前沿**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；IOE-X11–
-IOE-X14 已关闭，立即任务是 IOE-X15 实验安装面。M5 没有发布空 v0.4，实际
-experimental preview 版本在 M6 发布门前按“下一可交付版本”重新确认。
+M6/IOE-X15 状态：**已关闭**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；IOE-X11–
+IOE-X15 均已关闭。M5 没有发布空 v0.4；X15 准备了 v0.5.0 experimental preview
+轨道，但没有创建 tag 或 GitHub Release，后续发布仍需单独批准。
 
 ### 8.1 IOE-X11：单 owner Server composition
 
@@ -361,7 +364,8 @@ experimental preview 版本在 M6 发布门前按“下一可交付版本”重�
 
 ### 8.5 IOE-X15：实验安装面
 
-状态：**当前治理前沿**。
+状态：**已关闭**，实现与证据检查点
+`43795e841ba2a279ed6a3d5d831d60a9f2a25570`。
 
 - 将 `gamenet_experimental_io_uring` 以 `GameNet::experimental_io_uring` 安装；
 - 提供显式 Linux-only `IoUringTcpServer` 和 `IoUringTcpClient` façade；
@@ -370,9 +374,14 @@ experimental preview 版本在 M6 发布门前按“下一可交付版本”重�
 - experimental API 使用独立 manifest、package consumer 和版本说明，不进入 stable
   compatibility manifest。
 
-完成后可发布 v0.5.0 experimental preview；epoll 仍是 Linux 默认和稳定后端。
+Linux 默认与 Windows 安装树保持无实验产物；Linux 显式实验安装消费者通过，稳定
+v0.3 manifest 零漂移。已准备 v0.5.0 experimental preview 版本说明，但未发布 tag
+或 GitHub Release；epoll 仍是 Linux 默认和稳定后端。
 
 ## 9. M7：v0.6 Lua 与 typed RPC
+
+状态：**当前治理前沿**。先在 `gamenet-game-gateway` 与第二个独立 consumer 中形成
+真实合同和反馈；在满足双 consumer 提升门前，不激活 Core/RPC 公共实现。
 
 坚持“外部先行、通用能力再提升”。
 
@@ -577,10 +586,9 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M6/IOE-X15 是下一治理前沿，无后台 Core 证据任务**：M1–M5 与 IOE-X11–IOE-X14 已关闭。
-> M5 对真实
-> 网关和四个 Profile 重新审查后记录第二次 `NO-PROMOTION`，公共 v0.3 API 零漂移，
-> 未发布空 v0.4。IOE-X14 已用同一合同对齐 epoll、IOCP 与 io_uring 的 TCP 语义；
-> 当前按 `X10=PROMOTE` 与 `ARCH-G1=APPROVE` 的条件授权建立显式 Linux-only
-> experimental 安装面，仍不得修改稳定 `TcpServer`、开放公共 backend selector 或
-> 自动选择 io_uring。
+> **M7 Lua/typed RPC 外部先行验证是下一治理前沿，无后台 Core 证据任务**：M1–M6
+> 与 IOE-X11–IOE-X15 已关闭。X15 在
+> `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
+> 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。当前先在独立适配仓库
+> 验证 Lua execution cell 与 callback/value typed RPC，不得在缺少第二个 consumer 时
+> 提升公共 RPC，也不得提前并行展开 coroutine、TLS/WebSocket 或 UDP/KCP。

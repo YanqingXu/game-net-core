@@ -36,16 +36,22 @@ IOE-X13 then closed at exact implementation checkpoint
 Connect/TcpClient composition and zero stable API drift. IOE-X14 then closed at
 exact implementation checkpoint `351b3c0e476a462265016d53361a02b5f2c51611`
 with one portable epoll/IOCP/io_uring TCP semantic suite and zero stable API
-drift. M6/IOE-X15 is the active governance front.
+drift. M6/IOE-X15 then closed at exact implementation checkpoint
+`43795e841ba2a279ed6a3d5d831d60a9f2a25570` with an explicit Linux-only
+experimental component, independent manifest/package consumer, default-package
+isolation, and zero stable v0.3 drift. No preview tag or GitHub Release was
+published. M7 external-first Lua/typed RPC validation is the active governance
+front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1–M5 and IOE-X11–X14 are closed; M6/IOE-X15 is the unique governance
-front. There is no running Core evidence task after the X14 decision closure.
+`APPROVE`. M1–M6 and IOE-X11–X15 are closed; M7 Lua/typed RPC external-first
+validation is the unique governance front. There is no running Core evidence
+task after the X15 decision closure.
 
-Current IOE-X14 implementation/evidence checkpoint:
-`351b3c0e476a462265016d53361a02b5f2c51611` (2026-08-24)
+Current IOE-X15 implementation/evidence checkpoint:
+`43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -141,7 +147,8 @@ against both the four Profiles and the real gateway. It recorded a second
 `NO-PROMOTION`, retained the non-installed recipes, published the workload
 selection guide, and advanced the sole current task to M6/IOE-X11. X11 then
 closed at `013fecfe81277845eb3e60ccf5fe0205b753858d`; X12 closed at
-`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`; X13 is now current.
+`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`; X13–X15 subsequently closed as
+recorded above.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
@@ -180,7 +187,8 @@ Profile D is closed at `b3b184b1`: its non-installed
 player/room/scene sharding across at least two bounded logic cells, preserves
 cell-local order across event and fixed-tick lanes, keeps established network
 owners immobile, and isolates per-cell saturation. IOE-X1 one-shot completion
-is closed at `d3b31c5`: the Linux-only non-installed raw io_uring Engine proves
+is closed at `d3b31c5`: at that checkpoint, the Linux-only non-installed raw
+io_uring Engine proves
 Accept/Recv/Send, typed SQ-full, cancel/terminal lease, final drain, zero
 fallback, sanitizer execution, and structured directional numbers while epoll
 remains the production default/fallback. The cross-Profile real-TCP contract
@@ -201,7 +209,10 @@ delivery, peer EOF, escalation, and reset/callback/owner-quit terminal cases.
 IOE-X8 closes bounded cross-thread admission, IOE-X9 closes source-private
 listener/Accept ownership, and IOE-X10 closes the fixed listener comparison at
 `f5d39b8`. Candidate freeze, REL-V1 and release packaging are not development
-prerequisites; they become exact-commit M2 promotion evidence.
+prerequisites; they become exact-commit M2 promotion evidence. IOE-X15 later
+promotes six bounded façades into a separately versioned, explicitly requested
+experimental install component while preserving an experiment-free default
+package and leaving proof-only Driver/MultiOwner surfaces source-private.
 
 The IOE-C1 closure checkpoint's directional Windows Release echo check used
 4 connections, one
@@ -417,7 +428,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1–M5 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M6/IOE-X15 is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M6 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M7 external-first Lua/typed RPC validation is active. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
 
 ## Current Intent Inventory
 

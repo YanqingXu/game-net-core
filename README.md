@@ -66,8 +66,11 @@ implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d`, and
 IOE-X12 is closed at `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`.
 IOE-X13 is closed at `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`. IOE-X14 is
 closed at `351b3c0e476a462265016d53361a02b5f2c51611` with one portable TCP
-semantic suite across epoll, IOCP, and io_uring; the next governance front is
-M6/IOE-X15, the explicit experimental installation surface.
+semantic suite across epoll, IOCP, and io_uring. M6/IOE-X15 is closed at
+`43795e841ba2a279ed6a3d5d831d60a9f2a25570` with an explicit Linux-only
+experimental installation surface and no stable-manifest drift. No preview tag
+or Release was published; the next governance front is M7 external-first Lua
+and typed RPC validation.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

@@ -293,15 +293,16 @@ Runtime Model
   TCP topology 已在 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8` 关闭，IOE-X13
   source-private Connect/TcpClient 已在
   `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 关闭，IOE-X14 跨后端 TCP 语义套件已在
-  `351b3c0e476a462265016d53361a02b5f2c51611` 关闭，当前唯一治理前沿是
-  M6/IOE-X15 实验安装面；
+  `351b3c0e476a462265016d53361a02b5f2c51611` 关闭，M6/IOE-X15 显式实验安装面已在
+  `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 关闭；当前唯一治理前沿是 M7
+  Lua/typed RPC 外部先行验证；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
   路径；
 - IOCP 已直接分发带 identity/result/bytes/generation 的 Completion notice，fake
   Channel readiness 兼容路径已退役；
-- Linux 已有 default-off、non-installed 的真实 raw-syscall io_uring one-shot
+- Linux 已有 default-off、显式 opt-in 安装的真实 raw-syscall io_uring one-shot
   Completion Engine，Accept/Connect/Recv/Send、SQ-full、cancel、lease 和 final drain 合同及
   opt-in 数字基准均已闭环；其 source-private EventLoop completion pump 已通过真实
   ring-fd Channel 驱动、独立 dispatch budget、quit 自动取消和 terminal lease 退休
@@ -325,7 +326,8 @@ Runtime Model
   最后，同一 portable server/client contract 已在 epoll、IOCP 和 io_uring 上比较
   send/backpressure、read pause、close reason、half-close、cross-thread admission 和
   final drain，并修复了 shutdown 请求后的发送准入窗口及 IOCP disconnecting 读续投问题。
-  这些能力仍不安装，生产默认和 fallback
+  Server/Client 与必要传递头文件只通过 `GameNet::experimental_io_uring` 独立组件安装；
+  proof-only Driver/多 owner façade 仍不安装，默认包无实验产物，生产默认和 fallback
   仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
@@ -344,12 +346,10 @@ Runtime Model
   后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等
   明确审查的 breaking line；
-- IOE-X1/X2/X3/X4/X5/X6/X7/X8/X9 只证明隔离 one-shot completion、EventLoop 驱动、单连接、
-  固定容量 shared-Pump、source-private forced/graceful/cross-thread adapter 语义以及
-  bounded listener/Accept ownership。
-  capacity/soak 与方向性数字已经允许继续做 adapter contract shaping，但不自动授权
-  production TcpConnection 集成、公共 backend selector、listener/Accept 集成或
-  multishot/provided-buffer 等高级能力；
+- IOE-X1–X15 已证明隔离 one-shot completion、EventLoop 驱动、TCP Server/Client、
+  固定容量 shared-Pump、forced/graceful/cross-thread adapter、bounded listener/Accept、
+  跨后端语义与显式实验安装边界。独立组件不自动授权 production TcpConnection 集成、
+  公共 backend selector、自动 fallback 或 multishot/provided-buffer 等高级能力；
 - 当前 `LogicLoop` 更接近周期性有界 drain，不应被描述为所有游戏适用的权威
   FixedRate Tick。
 
