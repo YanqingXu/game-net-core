@@ -15,8 +15,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 129 CTest tests: 8 unit, 107 contract, and 14
-  integration, with 102 threading and 107 lifecycle labels. The IOE-R2
+- The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14
+  integration, with 103 threading and 108 lifecycle labels. The IOE-R2
   Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
   and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
   the PERF-R1 reviewed-surface diff remains strictly empty.
@@ -90,8 +90,9 @@ See `migration_status.md` for the current checked state of these phases.
   and fresh-download verification. M5 is closed with a second
   `NO-PROMOTION`, an official Profile load-selection guide, zero public API
   drift, and no empty v0.4 release. IOE-X11 is closed at `013fecf`, IOE-X12 at
-  `5be30e7`, and IOE-X13 at `5484d7a`; M6/IOE-X14 is the active front. The
-  cancelled `a89e2b0` endurance checkpoint remains historical only.
+  `5be30e7`, IOE-X13 at `5484d7a`, and IOE-X14 at `351b3c0`; M6/IOE-X15 is
+  the active front. The cancelled `a89e2b0` endurance checkpoint remains
+  historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -324,7 +325,8 @@ Profile load-selection guide is published and all four recipes remain
 non-installed. IOE-X11 is closed at
 `013fecfe81277845eb3e60ccf5fe0205b753858d`, and IOE-X12 is closed at
 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`. IOE-X13 is closed at
-`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`; M6/IOE-X14 is the current front,
+`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`, and IOE-X14 is closed at
+`351b3c0e476a462265016d53361a02b5f2c51611`; M6/IOE-X15 is the current front,
 and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
@@ -371,9 +373,13 @@ and no Core evidence task is running.
   settlement, callback re-entry and owner-quit convergence, then compare the
   source-private client adapter with production `TcpClient` observations;
   closed at `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`.
-- [ ] M6/IOE-X14: drive one semantic server/client contract across epoll, IOCP,
+- [x] M6/IOE-X14: drive one semantic server/client contract across epoll, IOCP,
   and io_uring while preserving backend-specific readiness/completion mechanics
-  and comparing backpressure, close, half-close, admission, and final drain.
+  and comparing backpressure, close, half-close, admission, and final drain;
+  closed at `351b3c0e476a462265016d53361a02b5f2c51611`.
+- [ ] M6/IOE-X15: install an explicit Linux-only experimental io_uring target,
+  façades, manifest, package consumer, and version notes while keeping opt-in
+  disabled by default and the stable `TcpServer` free of a backend selector.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

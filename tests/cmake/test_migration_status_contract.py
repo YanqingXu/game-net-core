@@ -187,6 +187,11 @@ def main() -> None:
         tests_cmake_text,
         re.MULTILINE,
     )
+    cross_backend_test = "NAME contract.io_engine.test_cross_backend_tcp_semantics"
+    assert tests_cmake_text.count(cross_backend_test) == 1, (
+        "the manually linked cross-backend semantic contract must be registered once"
+    )
+    configured_tests.append("contract")
     configured_test_count = len(configured_tests)
     unit_count = configured_tests.count("unit")
     contract_count = configured_tests.count("contract")
@@ -228,6 +233,7 @@ def main() -> None:
     x11_implementation_checkpoint = "013fecfe81277845eb3e60ccf5fe0205b753858d"
     x12_implementation_checkpoint = "5be30e701c61f8d6700bcc4be6bc0ef152120fb8"
     x13_implementation_checkpoint = "5484d7a89b01597824bc860e4d2d3cf3cfd45a82"
+    x14_implementation_checkpoint = "351b3c0e476a462265016d53361a02b5f2c51611"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -250,6 +256,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", x12_implementation_checkpoint, "HEAD")
     git(repo_root, "cat-file", "-e", f"{x13_implementation_checkpoint}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", x13_implementation_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{x14_implementation_checkpoint}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", x14_implementation_checkpoint, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -412,6 +420,41 @@ def main() -> None:
     ):
         require(text, x13_implementation_checkpoint, source)
     require(evidence_ledger_text, "IOE-X13 Active TCP Client", evidence_ledger)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, x14_implementation_checkpoint, source)
+    require(evidence_ledger_text, "IOE-X14 Cross-Backend TCP Semantics", evidence_ledger)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, "M6/IOE-X15", source)
+    require(
+        roadmap_text,
+        "The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14",
+        roadmap,
+    )
+    require(roadmap_text, "103 threading and 108 lifecycle labels", roadmap)
+    require(
+        status_text,
+        "inventory is 130 configured CTest tests: 8 unit tests, 108 contract tests",
+        migration_status,
+    )
+    require(status_text, "103 threading and 108 lifecycle labels", migration_status)
+    require(plan_text, "默认测试基线为 130", plan)
+    require(plan_text, "Linux experimental 基线为 140", plan)
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
@@ -446,7 +489,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M6/IOE-X14 是下一治理前沿", plan)
+    require(plan_text, "M6/IOE-X15 是下一治理前沿", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)
@@ -641,7 +684,7 @@ def main() -> None:
         f"{contract_count} contract、{integration_count} integration）",
         plan,
     )
-    require(plan_text, "Linux experimental 基线为 139", plan)
+    require(plan_text, "Linux experimental 基线为 140", plan)
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(

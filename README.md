@@ -63,9 +63,11 @@ non-installed, and the
 [load-selection guide](docs/architecture/runtime_profile_load_selection_guide.md)
 is published without an empty v0.4 release. IOE-X11 is closed at exact
 implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d`, and
-IOE-X12 is closed at `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`, and
-IOE-X13 is closed at `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`; the next
-governance front is M6/IOE-X14, the cross-backend semantic suite.
+IOE-X12 is closed at `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`.
+IOE-X13 is closed at `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`. IOE-X14 is
+closed at `351b3c0e476a462265016d53361a02b5f2c51611` with one portable TCP
+semantic suite across epoll, IOCP, and io_uring; the next governance front is
+M6/IOE-X15, the explicit experimental installation surface.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

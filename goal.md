@@ -292,8 +292,9 @@ Runtime Model
   `013fecfe81277845eb3e60ccf5fe0205b753858d` 关闭，IOE-X12 source-private 多 owner
   TCP topology 已在 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8` 关闭，IOE-X13
   source-private Connect/TcpClient 已在
-  `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 关闭，当前唯一治理前沿是
-  M6/IOE-X14 跨后端语义套件；
+  `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 关闭，IOE-X14 跨后端 TCP 语义套件已在
+  `351b3c0e476a462265016d53361a02b5f2c51611` 关闭，当前唯一治理前沿是
+  M6/IOE-X15 实验安装面；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
@@ -320,7 +321,10 @@ Runtime Model
   已在 IOE-X10 以限定范围的 `PROMOTE` 关闭；单 owner Server 又完成 bind/listen、
   provisional Adapter settlement、connection/message/close callback、graceful drain、
   force escalation 与零残留 stop composition；多 owner Server 与 active Client 又分别
-  关闭了有界 owner handoff 和 Connect timeout/retry/cancel/stale/re-entry/quit 语义。
+  关闭了有界 owner handoff 和 Connect timeout/retry/cancel/stale/re-entry/quit 语义；
+  最后，同一 portable server/client contract 已在 epoll、IOCP 和 io_uring 上比较
+  send/backpressure、read pause、close reason、half-close、cross-thread admission 和
+  final drain，并修复了 shutdown 请求后的发送准入窗口及 IOCP disconnecting 读续投问题。
   这些能力仍不安装，生产默认和 fallback
   仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；

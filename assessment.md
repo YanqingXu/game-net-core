@@ -1,6 +1,6 @@
 # 总体判断
 
-本次检查以 2026-08-23 M5 Runtime 边界第二次 `NO-PROMOTION` 关闭为当前前沿；
+本次检查以 2026-08-24 IOE-X14 跨后端 TCP 语义套件关闭为当前前沿；
 stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。`game-net-core` 已经不再只是从
 `mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：
@@ -34,7 +34,8 @@ all-rights-reserved，不提供外部使用授权。该句描述内部候选形�
 资产、annotated tag、stable Release 和回下载验证。M5 随后用真实网关重新审查
 Runtime 共同能力，确认没有缺失的通用 Core 能力，发布 Profile 负载选择指南并记录
 第二次 `NO-PROMOTION`；IOE-X11 已在 `013fecf`、IOE-X12 已在 `5be30e7`、
-IOE-X13 已在 `5484d7a` 关闭，当前前沿已转到 M6/IOE-X14。
+IOE-X13 已在 `5484d7a`、IOE-X14 已在 `351b3c0` 关闭，当前前沿已转到
+M6/IOE-X15。
 
 ---
 
@@ -314,10 +315,10 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M5 与 IOE-X11–IOE-X13 已关闭，M6/IOE-X14 成为治理前沿
+### 5. M1–M5 与 IOE-X11–IOE-X14 已关闭，M6/IOE-X15 成为治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M5 与 IOE-X11–IOE-X13 关闭、M6/IOE-X14 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M5 与 IOE-X11–IOE-X14 关闭、M6/IOE-X15 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
@@ -327,7 +328,13 @@ SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关
 在 `013fecfe81277845eb3e60ccf5fe0205b753858d` 完成单 owner Server composition，
 IOE-X12 又在 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8` 完成多 owner topology，
 IOE-X13 再在 `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 完成 one-shot Connect
-与 source-private TcpClient composition，稳定 API 继续零漂移。
+与 source-private TcpClient composition。IOE-X14 最后在
+`351b3c0e476a462265016d53361a02b5f2c51611` 用同一 portable contract 比较 epoll、
+IOCP 与 io_uring 的 send/backpressure、read pause、close、half-close、cross-thread
+admission 和 final drain；它同时关闭 shutdown 请求后的发送准入窗口和 Windows IOCP
+disconnecting 状态不续投读取两个 production correctness 缺口，稳定 API 继续零漂移。
+当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
+基线为 140（8 unit、118 contract、14 integration）。
 
 ---
 
@@ -439,11 +446,19 @@ stale attempt、callback re-entry、foreign-thread rejection 与 owner quit，�
 `TcpClient` 比较 connected/message/disconnected 观察序列。normal、ASan/UBSan、TSan、
 Linux/Windows 默认基线、安装隔离与稳定 API 零漂移门均通过。
 
-## P2（当前）：M6/IOE-X14 跨后端语义套件
+## P2（已关闭）：M6/IOE-X14 跨后端语义套件
 
-下一任务用同一 server/client 合同驱动 epoll、IOCP 与 io_uring，比较 send/backpressure、
-read pause、close reason、half-close、cross-thread admission 与 final drain；不制造虚假
-统一，也不开放公共 backend selector。
+该切片已在 `351b3c0e476a462265016d53361a02b5f2c51611` 关闭：同一 server/client
+合同驱动 epoll、IOCP 与 io_uring，比较 send/backpressure、read pause、close reason、
+half-close、cross-thread admission 与 final drain；normal、ASan/UBSan、TSan、双平台、
+安装隔离、治理守卫和稳定 API 零漂移门均通过。
+
+## P2（当前）：M6/IOE-X15 实验安装面
+
+下一任务将 io_uring target 作为显式 Linux-only experimental surface 安装，提供
+`IoUringTcpServer` 与 `IoUringTcpClient` façade、独立 manifest/package consumer 和版本
+说明；保持 opt-in 默认关闭，不给稳定 `TcpServer` 增加 backend selector，也不自动选择
+io_uring。
 
 ## P2：RPC、Lua 和协程优先放在上层适配仓库
 
@@ -485,7 +500,7 @@ Milestone 4
 空 v0.4。
 
 Milestone 5
-当前：M6/IOE-X14，只推进 epoll、IOCP 与 io_uring 的跨后端语义套件；
+当前：M6/IOE-X15，只推进显式 Linux-only io_uring experimental 安装面；
 Runtime 公共 API 与 RPC/Lua/coroutine 不并行展开。
 ```
 
@@ -508,7 +523,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M6/IOE-X11 已关闭（013fecf）
 → M6/IOE-X12 已关闭（5be30e7）
 → M6/IOE-X13 已关闭（5484d7a）
-→ M6/IOE-X14（当前）
+→ M6/IOE-X14 已关闭（351b3c0）
+→ M6/IOE-X15（当前）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。
