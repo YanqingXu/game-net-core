@@ -62,9 +62,9 @@ new broadly reusable Runtime capability, all Profile compositions remain
 non-installed, and the
 [load-selection guide](docs/architecture/runtime_profile_load_selection_guide.md)
 is published without an empty v0.4 release. IOE-X11 is closed at exact
-implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d`; the
-next governance front is M6/IOE-X12, the source-private multi-owner io_uring
-topology.
+implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d`, and
+IOE-X12 is closed at `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`; the next
+governance front is M6/IOE-X13, source-private io_uring Connect/TcpClient.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

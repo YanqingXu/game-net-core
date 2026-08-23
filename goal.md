@@ -289,8 +289,9 @@ Runtime Model
   fault/repeat、1h/3h、最终包消费者、SPDX/evidence、annotated tag、GitHub Release
   与回下载验证；M1–M5 已关闭，M5 第二次共同能力审查仍为 `NO-PROMOTION` 且未发布空
   v0.4；IOE-X11 source-private 单 owner Server composition 已在
-  `013fecfe81277845eb3e60ccf5fe0205b753858d` 关闭，当前唯一治理前沿是
-  M6/IOE-X12 source-private 多 owner topology；
+  `013fecfe81277845eb3e60ccf5fe0205b753858d` 关闭，IOE-X12 source-private 多 owner
+  TCP topology 已在 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8` 关闭，当前唯一治理前沿是
+  M6/IOE-X13 source-private Connect/TcpClient；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
