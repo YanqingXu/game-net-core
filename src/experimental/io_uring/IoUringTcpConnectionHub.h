@@ -105,6 +105,28 @@ struct IoUringTcpConnectionHubOptions {
     std::size_t maxPendingAccepts{1};
 };
 
+enum class IoUringTcpHubConnectResult : std::uint8_t {
+    Accepted,
+    AlreadyConnecting,
+    RejectedInvalid,
+    EngineRejected,
+    RejectedQuiescing,
+    RejectedShutdown,
+};
+
+enum class IoUringTcpHubConnectCloseReason : std::uint8_t {
+    Connected,
+    Explicit,
+    Timeout,
+    Replaced,
+    ConnectFailed,
+    EngineRejected,
+    CallbackFailed,
+    EventLoopQuiescing,
+    HubStopped,
+    Destroyed,
+};
+
 // Typed result returned by an IOE-X12 accepted-socket ownership consumer.
 // Accepted means the consumer retained or transferred the Socket RAII owner;
 // every other result destroys it before the listener rearms.
@@ -165,6 +187,41 @@ struct IoUringTcpHubListenOutcome {
     IoUringTcpHubListenResult result{
         IoUringTcpHubListenResult::RejectedInvalid};
     std::shared_future<IoUringTcpHubListenerStopSummary> stopFuture{};
+};
+
+struct IoUringTcpHubConnectMetrics {
+    std::uint64_t submissions{};
+    std::uint64_t terminals{};
+    std::uint64_t cancellationRequests{};
+    std::uint64_t cancellations{};
+    std::uint64_t successes{};
+    std::uint64_t failures{};
+    std::uint64_t callbackFailures{};
+    std::uint64_t socketCloseCount{};
+    std::uint64_t socketTransferCount{};
+    std::size_t activeAttempts{};
+    std::size_t maxActiveAttempts{};
+};
+
+struct IoUringTcpHubConnectStopSummary {
+    IoUringTcpHubConnectCloseReason reason{
+        IoUringTcpHubConnectCloseReason::Explicit};
+    int nativeError{};
+    IoUringOperationIdentity operation{};
+    IoUringTcpHubConnectMetrics connect{};
+    IoUringTcpHubAddResult connectionResult{
+        IoUringTcpHubAddResult::RejectedInvalid};
+    IoUringTcpConnectionIdentity connectionIdentity{};
+    bool operationRetired{};
+    bool socketClosed{};
+    bool socketTransferredToConnection{};
+};
+
+struct IoUringTcpHubConnectOutcome {
+    IoUringTcpHubConnectResult result{
+        IoUringTcpHubConnectResult::RejectedInvalid};
+    IoUringOperationIdentity operation{};
+    std::shared_future<IoUringTcpHubConnectStopSummary> stopFuture{};
 };
 
 struct IoUringTcpConnectionHubConnectionMetrics {
@@ -233,6 +290,7 @@ struct IoUringTcpConnectionHubStopSummary {
     IoUringTcpConnectionHubMetrics hub{};
     IoUringEventLoopPumpStopSummary pump{};
     std::optional<IoUringTcpHubListenerStopSummary> listener;
+    std::optional<IoUringTcpHubConnectStopSummary> connect;
     bool allConnectionsStopped{};
 };
 
@@ -268,6 +326,8 @@ public:
             const gamenet::net::InetAddress&)>;
     using ListenerStoppedConsumer =
         std::function<void(const IoUringTcpHubListenerStopSummary&)>;
+    using ConnectStoppedConsumer =
+        std::function<void(const IoUringTcpHubConnectStopSummary&)>;
 
     IoUringTcpConnectionHub(
         gamenet::net::EventLoop* ownerLoop,
@@ -296,6 +356,18 @@ public:
         gamenet::net::SocketFd listeningSocket,
         AcceptedSocketConsumer socketConsumer,
         ListenerStoppedConsumer stoppedConsumer = {});
+    // IOE-X13 one-shot active connect. Socket ownership transfers on every
+    // result. Success moves it directly into one normal Hub Route created from
+    // connectionFactory; all other terminals close it after operation retire.
+    IoUringTcpHubConnectOutcome connect(
+        gamenet::net::SocketFd socket,
+        const gamenet::net::InetAddress& peer,
+        AcceptedConnectionFactory connectionFactory,
+        ConnectStoppedConsumer stoppedConsumer = {});
+    bool cancelConnect(
+        IoUringOperationIdentity operation,
+        IoUringTcpHubConnectCloseReason reason =
+            IoUringTcpHubConnectCloseReason::Explicit);
     bool stopListening();
     // Mutable Hub observations are owner-loop-only and reject foreign reads.
     bool listening() const;

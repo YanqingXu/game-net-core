@@ -15,12 +15,14 @@
 
 namespace gamenet::net {
 class EventLoop;
+class InetAddress;
 }
 
 namespace gamenet::experimental::io_uring {
 
 enum class IoUringOperationKind : std::uint8_t {
     Accept,
+    Connect,
     Receive,
     Send,
 };
@@ -186,6 +188,10 @@ public:
 
     IoUringSubmissionOutcome enqueueAccept(
         gamenet::net::SocketFd listenSocket,
+        std::shared_ptr<void> lease = {});
+    IoUringSubmissionOutcome enqueueConnect(
+        gamenet::net::SocketFd socket,
+        const gamenet::net::InetAddress& peer,
         std::shared_ptr<void> lease = {});
     IoUringSubmissionOutcome enqueueRecv(
         gamenet::net::SocketFd socket,

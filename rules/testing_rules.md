@@ -302,6 +302,33 @@ Contract tests verify:
   of every worker Hub/Pump before thread-pool join, and zero listener, handoff,
   route, operation, notice, fd, pending-byte, and Engine-owned-byte residue
   under normal, focused repeat, ASan/UBSan, and TSan gates
+- the IOE-X13 contract must use real AF_INET loopback sockets and prove the
+  Engine emits `IoUringOperationKind::Connect` as one typed terminal operation,
+  with the copied destination address and attempt lease retained through
+  success, failure, or cancellation. No readiness Channel, blocking connect,
+  detached worker, or borrowed post-submission address is allowed
+- one success/echo case drives production `TcpClient` and the source-private
+  Client against equivalent native peers and compares the common connected,
+  message, disconnected, and terminal ordering. Backend-specific operation
+  metrics remain explicit rather than fabricated for production epoll
+- a refused endpoint must emit ConnectAttempt/ConnectFailed/RetryScheduled,
+  recover after a real listener starts, reset bounded exponential backoff after
+  success, and establish only one Adapter. A terminal no-retry failure must emit
+  TerminalFailure once and allow callback-reentrant fresh connect
+- an explicitly present zero timeout must deterministically cancel its exact
+  submitted Connect before connection publication, emit ConnectTimeout once,
+  and leave the socket owned until the cancellation target terminal. A restart
+  or disconnect racing success must make the old generation stale, close or
+  retire it once, and prevent old settlement, retry, or callback publication
+- ConnectSuccess, ConnectFailed, timeout, connection, message, and close
+  observers must re-enter restart/disconnect/stop without recursive drain or
+  state overwrite. EventLoop quit with a pending attempt or established route
+  must retire timer, Connect, Adapter, Route, Hub, operation, notice, socket,
+  command, pending-byte, and Engine-owned-byte state before Shutdown
+- the X13 focused contract runs repeatedly normally and with ASan/UBSan and
+  TSan. Default Linux/Windows suites, Linux-only option rejection/install
+  isolation, stable API zero-diff, scope, intent, CI inventory, and governance
+  guards remain mandatory
 - a deterministic subprocess destruction contract holds a real accepted Recv
   and lease, invokes Pump destruction before physical stop, and requires an
   immediate fail-fast result rather than the historical 250 ms owner wait or

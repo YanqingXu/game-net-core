@@ -66,6 +66,10 @@ public:
     IoUringSubmissionOutcome enqueueAccept(
         gamenet::net::SocketFd listenSocket,
         std::shared_ptr<void> lease = {});
+    IoUringSubmissionOutcome enqueueConnect(
+        gamenet::net::SocketFd socket,
+        const gamenet::net::InetAddress& peer,
+        std::shared_ptr<void> lease = {});
     IoUringSubmissionOutcome enqueueRecv(
         gamenet::net::SocketFd socket,
         std::size_t maximumBytes,

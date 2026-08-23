@@ -108,6 +108,12 @@ private:
         Closed,
     };
 
+    enum class ConnectPhase : std::uint8_t {
+        Running,
+        Closing,
+        Closed,
+    };
+
     struct Listener {
         Listener(
             gamenet::net::SocketFd socketFd,
@@ -137,6 +143,37 @@ private:
         ListenerPhase phase{ListenerPhase::Running};
         bool retryAcceptSubmission{false};
         bool retryAcceptCancellation{false};
+        bool stopPublished{false};
+    };
+
+    struct ConnectAttempt {
+        ConnectAttempt(
+            gamenet::net::SocketFd socketFd,
+            IoUringTcpConnectionHub::AcceptedConnectionFactory factoryValue,
+            IoUringTcpConnectionHub::ConnectStoppedConsumer stoppedValue)
+            : socket(socketFd),
+              factory(std::move(factoryValue)),
+              stoppedConsumer(std::move(stoppedValue)),
+              stopFuture(stopPromise.get_future().share()),
+              lease(std::make_shared<int>(0)) {}
+
+        gamenet::net::Socket socket;
+        IoUringTcpConnectionHub::AcceptedConnectionFactory factory;
+        IoUringTcpConnectionHub::ConnectStoppedConsumer stoppedConsumer;
+        std::promise<IoUringTcpHubConnectStopSummary> stopPromise;
+        std::shared_future<IoUringTcpHubConnectStopSummary> stopFuture;
+        std::shared_ptr<void> lease;
+        IoUringOperationIdentity operation{};
+        IoUringTcpHubConnectMetrics metrics{};
+        IoUringTcpHubConnectCloseReason closeReason{
+            IoUringTcpHubConnectCloseReason::Explicit};
+        IoUringTcpHubAddResult connectionResult{
+            IoUringTcpHubAddResult::RejectedInvalid};
+        IoUringTcpConnectionIdentity connectionIdentity{};
+        int closeNativeError{};
+        ConnectPhase phase{ConnectPhase::Running};
+        bool retryCancellation{false};
+        bool socketTransferred{false};
         bool stopPublished{false};
     };
 
@@ -341,6 +378,96 @@ public:
         }
         (void)beginListenerStop(reason, 0, false);
         return {.result = result, .stopFuture = std::move(future)};
+    }
+
+    IoUringTcpHubConnectOutcome connect(
+        gamenet::net::SocketFd socket,
+        const gamenet::net::InetAddress& peer,
+        IoUringTcpConnectionHub::AcceptedConnectionFactory factory,
+        IoUringTcpConnectionHub::ConnectStoppedConsumer stoppedConsumer) {
+        gamenet::net::Socket transferred(socket);
+        assertOwner();
+        if (!gamenet::net::sockets::isValid(socket) || !factory ||
+            (peer.family() != AF_INET && peer.family() != AF_INET6)) {
+            return {.result = IoUringTcpHubConnectResult::RejectedInvalid};
+        }
+        if (phase_ == IoUringTcpHubPhase::Quiescing) {
+            return {.result = IoUringTcpHubConnectResult::RejectedQuiescing};
+        }
+        if (phase_ == IoUringTcpHubPhase::Stopped) {
+            return {.result = IoUringTcpHubConnectResult::RejectedShutdown};
+        }
+        if (connector_ &&
+            (connector_->phase != ConnectPhase::Closed ||
+             consumerDepth_ != 0)) {
+            return {.result = IoUringTcpHubConnectResult::AlreadyConnecting};
+        }
+        if (connector_) connector_.reset();
+        lastConnectOperation_ = {};
+
+        connector_ = std::make_unique<ConnectAttempt>(
+            transferred.releaseFd(),
+            std::move(factory),
+            std::move(stoppedConsumer));
+        auto future = connector_->stopFuture;
+        const auto outcome = pump_->enqueueConnect(
+            connector_->socket.fd(), peer, connector_->lease);
+        if (outcome.result == IoUringSubmissionResult::Accepted &&
+            bindConnectOperation(outcome.identity)) {
+            connector_->operation = outcome.identity;
+            lastConnectOperation_ = outcome.identity;
+            ++connector_->metrics.submissions;
+            connector_->metrics.activeAttempts = 1;
+            connector_->metrics.maxActiveAttempts = 1;
+            return {
+                .result = IoUringTcpHubConnectResult::Accepted,
+                .operation = outcome.identity,
+                .stopFuture = std::move(future),
+            };
+        }
+
+        ++metrics_.engineRejections;
+        if (outcome.result == IoUringSubmissionResult::Accepted) {
+            (void)pump_->cancel(outcome.identity);
+            connector_->operation = outcome.identity;
+            lastConnectOperation_ = outcome.identity;
+            connector_->metrics.activeAttempts = 1;
+            (void)beginConnectStop(
+                IoUringTcpHubConnectCloseReason::EngineRejected,
+                0,
+                true);
+            return {
+                .result = IoUringTcpHubConnectResult::EngineRejected,
+                .operation = outcome.identity,
+                .stopFuture = std::move(future),
+            };
+        }
+
+        auto result = IoUringTcpHubConnectResult::EngineRejected;
+        auto reason = IoUringTcpHubConnectCloseReason::EngineRejected;
+        if (outcome.result == IoUringSubmissionResult::RejectedQuiescing) {
+            result = IoUringTcpHubConnectResult::RejectedQuiescing;
+            reason = IoUringTcpHubConnectCloseReason::EventLoopQuiescing;
+        } else if (outcome.result ==
+                   IoUringSubmissionResult::RejectedShutdown) {
+            result = IoUringTcpHubConnectResult::RejectedShutdown;
+            reason = IoUringTcpHubConnectCloseReason::EventLoopQuiescing;
+        } else if (outcome.result == IoUringSubmissionResult::RejectedInvalid) {
+            result = IoUringTcpHubConnectResult::RejectedInvalid;
+        }
+        (void)beginConnectStop(reason, 0, false);
+        return {.result = result, .stopFuture = std::move(future)};
+    }
+
+    bool cancelConnect(
+        IoUringOperationIdentity operation,
+        IoUringTcpHubConnectCloseReason reason) {
+        assertOwner();
+        if (!connector_ || connector_->phase != ConnectPhase::Running ||
+            !sameOperation(connector_->operation, operation)) {
+            return false;
+        }
+        return beginConnectStop(reason, 0, true);
     }
 
     bool stopListening() {
@@ -679,6 +806,116 @@ private:
         return true;
     }
 
+    bool bindConnectOperation(IoUringOperationIdentity operation) noexcept {
+        if (!operation.valid() || operation.slot >= operationRoutes_.size() ||
+            operationRoutes_[operation.slot].active) {
+            ++metrics_.invariantFailures;
+            return false;
+        }
+        operationRoutes_[operation.slot] = {
+            .operation = operation,
+            .connection = {},
+            .kind = IoUringOperationKind::Connect,
+            .active = true,
+        };
+        ++activeOperationRoutes_;
+        metrics_.maxActiveOperationRoutes = (std::max)(
+            metrics_.maxActiveOperationRoutes,
+            activeOperationRoutes_);
+        return true;
+    }
+
+    bool requestConnectCancellation() noexcept {
+        if (!connector_ || !connector_->operation.valid()) return true;
+        auto& attempt = *connector_;
+        try {
+            const auto result = pump_->cancel(attempt.operation);
+            switch (result) {
+            case IoUringCancelResult::Accepted:
+                ++attempt.metrics.cancellationRequests;
+                attempt.retryCancellation = false;
+                return true;
+            case IoUringCancelResult::AlreadyRequested:
+            case IoUringCancelResult::RejectedInvalid:
+            case IoUringCancelResult::RejectedShutdown:
+                attempt.retryCancellation = false;
+                return true;
+            case IoUringCancelResult::SubmissionQueueFull:
+            case IoUringCancelResult::RejectedNotSubmitted:
+                attempt.retryCancellation = true;
+                signalMaintenance();
+                return false;
+            }
+        } catch (...) {
+            ++attempt.metrics.callbackFailures;
+            attempt.retryCancellation = true;
+            signalMaintenance();
+        }
+        return false;
+    }
+
+    bool beginConnectStop(
+        IoUringTcpHubConnectCloseReason reason,
+        int nativeError,
+        bool requestCancellation) noexcept {
+        if (!connector_ || connector_->phase != ConnectPhase::Running) {
+            return false;
+        }
+        auto& attempt = *connector_;
+        attempt.phase = ConnectPhase::Closing;
+        attempt.closeReason = reason;
+        attempt.closeNativeError = nativeError;
+        if (requestCancellation && attempt.operation.valid()) {
+            (void)requestConnectCancellation();
+        }
+        tryPublishConnectStopped();
+        return true;
+    }
+
+    void tryPublishConnectStopped() noexcept {
+        if (!connector_ || connector_->phase != ConnectPhase::Closing ||
+            connector_->operation.valid() || connector_->stopPublished) {
+            return;
+        }
+        auto attempt = std::move(connector_);
+        attempt->phase = ConnectPhase::Closed;
+        attempt->stopPublished = true;
+        attempt->retryCancellation = false;
+        attempt->factory = {};
+        attempt->lease.reset();
+        attempt->metrics.activeAttempts = 0;
+        if (gamenet::net::sockets::isValid(attempt->socket.fd())) {
+            attempt->socket.close();
+            ++attempt->metrics.socketCloseCount;
+        }
+        const auto summary = IoUringTcpHubConnectStopSummary{
+            .reason = attempt->closeReason,
+            .nativeError = attempt->closeNativeError,
+            .operation = lastConnectOperation_,
+            .connect = attempt->metrics,
+            .connectionResult = attempt->connectionResult,
+            .connectionIdentity = attempt->connectionIdentity,
+            .operationRetired = true,
+            .socketClosed =
+                !gamenet::net::sockets::isValid(attempt->socket.fd()) &&
+                !attempt->socketTransferred,
+            .socketTransferredToConnection = attempt->socketTransferred,
+        };
+        lastConnectSummary_ = summary;
+        try {
+            attempt->stopPromise.set_value(summary);
+        } catch (...) {
+            ++metrics_.invariantFailures;
+        }
+        if (attempt->stoppedConsumer) {
+            try {
+                attempt->stoppedConsumer(summary);
+            } catch (...) {
+                ++metrics_.callbackFailures;
+            }
+        }
+    }
+
     IoUringSubmissionResult armAcceptWindow() {
         if (!listener_ || listener_->phase != ListenerPhase::Running ||
             phase_ != IoUringTcpHubPhase::Running) {
@@ -990,6 +1227,12 @@ private:
     bool beginHubStop(IoUringTcpHubCloseReason reason) {
         if (phase_ != IoUringTcpHubPhase::Running) return false;
         (void)beginListenerStop(mapListenerCloseReason(reason), 0, true);
+        (void)beginConnectStop(
+            reason == IoUringTcpHubCloseReason::EventLoopQuiescing
+                ? IoUringTcpHubConnectCloseReason::EventLoopQuiescing
+                : IoUringTcpHubConnectCloseReason::HubStopped,
+            0,
+            true);
         phase_ = IoUringTcpHubPhase::Quiescing;
         hubCloseReason_ = reason;
         for (auto& slot : slots_) {
@@ -1058,6 +1301,19 @@ private:
             tryPublishListenerStopped();
             return;
         }
+        if (kind == IoUringOperationKind::Connect) {
+            if (!connector_ ||
+                !sameOperation(connector_->operation, operation)) {
+                recordRoutingFailure();
+                return;
+            }
+            connector_->operation = {};
+            connector_->retryCancellation = false;
+            connector_->metrics.activeAttempts = 0;
+            handleConnectNotice(notice);
+            tryPublishConnectStopped();
+            return;
+        }
         auto* route = findRoute(connection, false);
         if (route == nullptr) {
             recordRoutingFailure();
@@ -1085,6 +1341,98 @@ private:
             return;
         }
         recordRoutingFailure();
+    }
+
+    void handleConnectNotice(IoUringCompletionNotice& notice) {
+        if (!connector_) {
+            recordRoutingFailure();
+            return;
+        }
+        auto& attempt = *connector_;
+        ++attempt.metrics.terminals;
+        if (notice.status() == IoUringCompletionStatus::Cancelled) {
+            ++attempt.metrics.cancellations;
+        }
+
+        if (attempt.phase == ConnectPhase::Closing ||
+            phase_ != IoUringTcpHubPhase::Running) {
+            if (attempt.phase == ConnectPhase::Running) {
+                attempt.phase = ConnectPhase::Closing;
+                attempt.closeReason =
+                    IoUringTcpHubConnectCloseReason::EventLoopQuiescing;
+            }
+            return;
+        }
+
+        if (notice.status() != IoUringCompletionStatus::Succeeded) {
+            ++attempt.metrics.failures;
+            attempt.phase = ConnectPhase::Closing;
+            attempt.closeReason =
+                notice.status() == IoUringCompletionStatus::Cancelled
+                ? IoUringTcpHubConnectCloseReason::Explicit
+                : IoUringTcpHubConnectCloseReason::ConnectFailed;
+            attempt.closeNativeError = notice.nativeError();
+            return;
+        }
+
+        IoUringTcpHubAcceptedConnectionCallbacks callbacks;
+        try {
+            callbacks = attempt.factory();
+        } catch (...) {
+            ++attempt.metrics.callbackFailures;
+            attempt.phase = ConnectPhase::Closing;
+            attempt.closeReason =
+                IoUringTcpHubConnectCloseReason::CallbackFailed;
+            return;
+        }
+
+        auto added = addConnection(
+            attempt.socket.releaseFd(),
+            std::move(callbacks.messageConsumer),
+            std::move(callbacks.closeConsumer),
+            std::move(callbacks.outputProgressConsumer));
+        attempt.connectionResult = added.result;
+        attempt.connectionIdentity = added.identity;
+        if (added.result == IoUringTcpHubAddResult::Accepted) {
+            attempt.socketTransferred = true;
+            ++attempt.metrics.socketTransferCount;
+        } else {
+            ++attempt.metrics.socketCloseCount;
+        }
+
+        bool settlementSucceeded = true;
+        if (callbacks.settlementConsumer) {
+            try {
+                callbacks.settlementConsumer(added);
+            } catch (...) {
+                settlementSucceeded = false;
+                ++attempt.metrics.callbackFailures;
+            }
+        }
+        if (!settlementSucceeded) {
+            if (added.result == IoUringTcpHubAddResult::Accepted) {
+                (void)closeConnection(
+                    added.identity,
+                    IoUringTcpHubCloseReason::CallbackFailed);
+            }
+            attempt.phase = ConnectPhase::Closing;
+            attempt.closeReason =
+                IoUringTcpHubConnectCloseReason::CallbackFailed;
+            return;
+        }
+
+        attempt.phase = ConnectPhase::Closing;
+        if (added.result == IoUringTcpHubAddResult::Accepted) {
+            ++attempt.metrics.successes;
+            attempt.closeReason = IoUringTcpHubConnectCloseReason::Connected;
+        } else {
+            ++attempt.metrics.failures;
+            attempt.closeReason =
+                added.result == IoUringTcpHubAddResult::RejectedQuiescing ||
+                        added.result == IoUringTcpHubAddResult::RejectedShutdown
+                    ? IoUringTcpHubConnectCloseReason::EventLoopQuiescing
+                    : IoUringTcpHubConnectCloseReason::EngineRejected;
+        }
     }
 
     void recordRoutingFailure() noexcept {
@@ -1549,6 +1897,11 @@ private:
         assertOwner();
         if (phase_ != IoUringTcpHubPhase::Running) return;
         bool retryRemains = false;
+        if (connector_ && connector_->phase == ConnectPhase::Closing &&
+            connector_->retryCancellation) {
+            (void)requestConnectCancellation();
+            retryRemains = connector_->retryCancellation;
+        }
         if (listener_ && listener_->phase == ListenerPhase::Closing &&
             listener_->retryAcceptCancellation) {
             (void)requestListenerCancellations();
@@ -1594,6 +1947,13 @@ private:
                 mapListenerCloseReason(hubCloseReason_),
                 0,
                 false);
+            (void)beginConnectStop(
+                ownerLoop_->phase() ==
+                        gamenet::net::EventLoopPhase::Running
+                    ? IoUringTcpHubConnectCloseReason::EngineRejected
+                    : IoUringTcpHubConnectCloseReason::EventLoopQuiescing,
+                0,
+                false);
             phase_ = IoUringTcpHubPhase::Quiescing;
             for (auto& slot : slots_) {
                 if (slot.route) {
@@ -1615,6 +1975,11 @@ private:
             listener_->acceptIdentities.clear();
             updateListenerAcceptMetrics(*listener_);
         }
+        if (connector_ && connector_->operation.valid()) {
+            ++metrics_.invariantFailures;
+            connector_->operation = {};
+            connector_->metrics.activeAttempts = 0;
+        }
         if (listener_ && listener_->phase == ListenerPhase::Running) {
             (void)beginListenerStop(
                 mapListenerCloseReason(hubCloseReason_),
@@ -1622,6 +1987,13 @@ private:
                 false);
         }
         tryPublishListenerStopped();
+        if (connector_ && connector_->phase == ConnectPhase::Running) {
+            (void)beginConnectStop(
+                IoUringTcpHubConnectCloseReason::EngineRejected,
+                0,
+                false);
+        }
+        tryPublishConnectStopped();
         for (auto& slot : slots_) {
             if (!slot.route) continue;
             slot.route->receiveIdentity = {};
@@ -1639,9 +2011,11 @@ private:
             .hub = metrics(),
             .pump = pumpSummary,
             .listener = lastListenerSummary_,
+            .connect = lastConnectSummary_,
             .allConnectionsStopped = metrics_.activeConnections == 0 &&
                 activeOperationRoutes_ == 0 && pendingSendBytes_ == 0 &&
-                (!listener_ || listener_->phase == ListenerPhase::Closed),
+                (!listener_ || listener_->phase == ListenerPhase::Closed) &&
+                !connector_,
         };
         if (!stopPublished_) {
             stopPublished_ = true;
@@ -1675,7 +2049,10 @@ private:
     std::vector<Slot> slots_;
     std::vector<OperationRoute> operationRoutes_;
     std::unique_ptr<Listener> listener_;
+    std::unique_ptr<ConnectAttempt> connector_;
     std::optional<IoUringTcpHubListenerStopSummary> lastListenerSummary_;
+    std::optional<IoUringTcpHubConnectStopSummary> lastConnectSummary_;
+    IoUringOperationIdentity lastConnectOperation_{};
     std::unique_ptr<IoUringEventLoopPump> pump_;
     gamenet::net::EventLoopLifecycleSource maintenanceSource_;
     IoUringTcpConnectionHubMetrics metrics_{};
@@ -1736,6 +2113,24 @@ IoUringTcpHubListenOutcome IoUringTcpConnectionHub::listenAndHandoff(
         listeningSocket,
         std::move(socketConsumer),
         std::move(stoppedConsumer));
+}
+
+IoUringTcpHubConnectOutcome IoUringTcpConnectionHub::connect(
+    gamenet::net::SocketFd socket,
+    const gamenet::net::InetAddress& peer,
+    AcceptedConnectionFactory connectionFactory,
+    ConnectStoppedConsumer stoppedConsumer) {
+    return impl_->connect(
+        socket,
+        peer,
+        std::move(connectionFactory),
+        std::move(stoppedConsumer));
+}
+
+bool IoUringTcpConnectionHub::cancelConnect(
+    IoUringOperationIdentity operation,
+    IoUringTcpHubConnectCloseReason reason) {
+    return impl_->cancelConnect(operation, reason);
 }
 
 bool IoUringTcpConnectionHub::stopListening() {

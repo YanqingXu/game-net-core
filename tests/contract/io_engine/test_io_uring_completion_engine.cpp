@@ -4,6 +4,7 @@
 #include "experimental/io_uring/IoUringCompletionEngine.h"
 
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/InetAddress.h"
 
 #include "../../support/TestAssert.h"
 
@@ -257,6 +258,51 @@ void testOneShotAcceptRecvSend() {
     GAMENET_TEST_ASSERT(engine.shutdown(2s) == uring::IoUringShutdownResult::Drained);
 }
 
+void testOneShotConnectCopiesAddressAndRetainsLease() {
+    gamenet::net::EventLoop loop;
+    uring::IoUringCompletionEngine engine(
+        &loop,
+        uring::IoUringCompletionEngineOptions{
+            .entries = 8,
+            .maxOperations = 8,
+            .maxCompletionsPerWait = 8,
+            .maxBytesPerOperation = 32,
+            .maxOwnedBytes = 128,
+        });
+    auto listener = makeListener();
+    OwnedFd socket(::socket(
+        AF_INET,
+        SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC,
+        IPPROTO_TCP));
+    GAMENET_TEST_ASSERT(socket.get() >= 0);
+    gamenet::net::InetAddress address(listener.address);
+    auto lease = std::make_shared<int>(13);
+    std::weak_ptr<int> observedLease = lease;
+    const auto connect = engine.enqueueConnect(socket.get(), address, lease);
+    lease.reset();
+    address = gamenet::net::InetAddress(1, true);
+    GAMENET_TEST_ASSERT(
+        connect.result == uring::IoUringSubmissionResult::Accepted);
+    GAMENET_TEST_ASSERT(engine.flush().nativeError == 0);
+    GAMENET_TEST_ASSERT(!observedLease.expired());
+
+    auto notice = waitForNotice(engine, uring::IoUringOperationKind::Connect);
+    GAMENET_TEST_ASSERT(notice.identity() == connect.identity);
+    GAMENET_TEST_ASSERT(
+        notice.status() == uring::IoUringCompletionStatus::Succeeded);
+    GAMENET_TEST_ASSERT(notice.bytesTransferred() == 0);
+    OwnedFd accepted(::accept4(
+        listener.fd.get(), nullptr, nullptr, SOCK_NONBLOCK | SOCK_CLOEXEC));
+    GAMENET_TEST_ASSERT(accepted.get() >= 0);
+    GAMENET_TEST_ASSERT(!observedLease.expired());
+    notice = {};
+    GAMENET_TEST_ASSERT(observedLease.expired());
+    GAMENET_TEST_ASSERT(
+        engine.shutdown(2s) == uring::IoUringShutdownResult::Drained);
+    GAMENET_TEST_ASSERT(engine.metrics().activeOperations == 0);
+    GAMENET_TEST_ASSERT(engine.metrics().readyNotices == 0);
+}
+
 void testSlotGenerationRejectsStaleCancel() {
     gamenet::net::EventLoop loop;
     uring::IoUringCompletionEngine engine(
@@ -417,6 +463,7 @@ int main() {
     testForeignThreadMutationRejected();
     testFiniteSqRejectsWithoutFallback();
     testOneShotAcceptRecvSend();
+    testOneShotConnectCopiesAddressAndRetainsLease();
     testSlotGenerationRejectsStaleCancel();
     testTerminalNoticeRetainsOperationSlotGeneration();
     testCancelLeaseAndFinalDrain();

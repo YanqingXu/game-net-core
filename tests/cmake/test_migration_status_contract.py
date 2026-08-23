@@ -627,7 +627,7 @@ def main() -> None:
         f"{contract_count} contract、{integration_count} integration）",
         plan,
     )
-    require(plan_text, "Linux experimental 基线为 136", plan)
+    require(plan_text, "Linux experimental 基线为 138", plan)
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(

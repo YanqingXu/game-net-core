@@ -631,6 +631,59 @@ vocabulary:
   changes, production backend replacement, multishot, provided buffers, fixed
   files, zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
 
+IOE-X13 authorizes one source-private Connect/TcpClient composition over the
+existing one-shot Engine, shared Hub/Pump, and semantic Adapter:
+
+- `IoUringOperationKind::Connect` is a fourth one-shot operation. One accepted
+  submission copies the destination address into its finite Engine slot and
+  retains the caller-supplied attempt lease until exactly one success, failure,
+  or cancellation notice is consumed. `IORING_OP_CONNECT` adds no readiness
+  translation, blocking fallback, address pointer borrowed past submission, or
+  extra synchronization domain;
+- the Hub owns at most one connecting socket/identity in addition to its finite
+  listener and established Route state. `connect` transfers the socket on every
+  outcome. Success moves that exact socket directly into one normal Hub Route;
+  failure, timeout, replacement, callback failure, Hub stop, or owner quit
+  closes it exactly once after the Connect terminal retires. Exact-generation
+  cancellation cannot affect a replacement attempt;
+- `IoUringTcpClient` remains Linux-only, default-off, non-installed, and
+  source-private. One EventLoop constructs, configures, connects, restarts,
+  disconnects, observes, stops, and destroys the Client, its Hub/Pump/Engine,
+  retry/timeout timers, provisional Adapter, and at most one established
+  Adapter. It does not modify production `Connector`/`TcpClient` or expose a
+  backend selector;
+- one explicit lifecycle generation guards each attempt, timeout, retry timer,
+  Hub terminal, and Adapter settlement. A stale terminal may finish its own fd,
+  operation, timer, and provisional-Adapter cleanup but cannot publish a
+  connection, schedule retry, overwrite a newer phase, or invoke replacement
+  callbacks. At most one Connect is kernel-active at a time;
+- ConnectAttempt, ConnectSuccess, ConnectFailed, RetryScheduled,
+  ConnectTimeout, and TerminalFailure observations use the existing
+  `ConnectorEvent` vocabulary on the owner. Observers and connection/message/
+  close callbacks may re-enter connect, restart, disconnect, stop, or owner-safe
+  Adapter methods; every continuation revalidates generation, phase, and
+  observer identity after return;
+- retry uses one owner TimerQueue identity and bounded exponential backoff.
+  Timeout is an optional owner timer; an explicitly present zero duration is an
+  immediate deterministic deadline, while absence means no user-space timeout.
+  Timer admission failure fails closed by cancelling the exact attempt. Stop,
+  restart, success, and terminal failure cancel only their exact timers;
+- explicit stop or EventLoop quiesce first seals new Client lifecycle work,
+  cancels retry/timeout state, requests exact Connect/Route retirement, and
+  stops the Hub. The Client destroys the stopped Hub on the owner and publishes
+  its stop future only after zero connect, route, operation, notice, socket,
+  timer, command, pending-byte, and Engine-owned-byte residue;
+- the X13 contract drives real loopback success/echo, refused-then-retry,
+  immediate timeout, stale-success restart/cancellation, callback re-entry, and
+  owner quit. It compares the common production `TcpClient` and experimental
+  Client connection/message/close observation order without claiming identical
+  backend mechanics;
+- IOE-X13 does not authorize multiple simultaneous client connections, DNS,
+  cross-thread Client lifecycle admission, installed experimental headers,
+  stable API changes, production backend replacement, multishot, provided
+  buffers, fixed files, zero-copy, SQPOLL, TLS, framing, or game/business state
+  in Core.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -673,7 +726,10 @@ vocabulary:
 15. IOE-X12 composes one accept owner with finitely many worker-owned
     Hub/Pump/Engine instances through bounded, exactly-owned accepted-fd
     handoff while preserving the four production placement policies.
-16. Only proven, cross-backend concepts may later graduate to a narrow public
+16. IOE-X13 adds one-shot Connect and composes one owner-only source-private
+    TcpClient over the existing Hub and semantic Adapter with generation-safe
+    timeout, retry, cancellation, re-entry, and owner-quit convergence.
+17. Only proven, cross-backend concepts may later graduate to a narrow public
     capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -770,6 +826,12 @@ vocabulary:
   placement, keeps every established callback on its immutable worker, closes
   saturation/shutdown/admission failures exactly once, and publishes only
   after listener-first, all-worker zero-residue convergence.
+- `tests/contract/io_engine/test_io_uring_tcp_client.cpp` verifies the IOE-X13
+  fourth one-shot Connect kind and source-private Client over real loopback TCP:
+  successful echo and production observation-order comparison, refused-then-
+  retry recovery, deterministic immediate timeout, stale-attempt restart,
+  callback re-entry, exact cancellation, and owner-quit shutdown all converge
+  with one fd owner and zero timer/Adapter/Hub/Engine residue.
 - `benchmarks/io_uring/listener_comparison.cpp` drives the fixed IOE-X10
   256-route/four-wave listener workload through either production epoll or the
   source-private completion listener and emits one validated backend sample.

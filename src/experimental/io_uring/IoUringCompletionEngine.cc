@@ -4,6 +4,7 @@
 #include "IoUringCompletionEngine.h"
 
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/InetAddress.h"
 
 #include <linux/io_uring.h>
 #include <poll.h>
@@ -180,6 +181,20 @@ public:
             listenSocket,
             {},
             0,
+            nullptr,
+            std::move(lease));
+    }
+
+    IoUringSubmissionOutcome enqueueConnect(
+        gamenet::net::SocketFd socket,
+        const gamenet::net::InetAddress& peer,
+        std::shared_ptr<void> lease) {
+        return enqueue(
+            IoUringOperationKind::Connect,
+            socket,
+            {},
+            0,
+            &peer,
             std::move(lease));
     }
 
@@ -192,6 +207,7 @@ public:
             socket,
             {},
             maximumBytes,
+            nullptr,
             std::move(lease));
     }
 
@@ -204,6 +220,7 @@ public:
             socket,
             payload,
             payload.size(),
+            nullptr,
             std::move(lease));
     }
 
@@ -400,6 +417,7 @@ private:
         if (result < 0) throw systemError("io_uring_register(PROBE)");
         for (const auto required : {
                  IORING_OP_ACCEPT,
+                 IORING_OP_CONNECT,
                  IORING_OP_RECV,
                  IORING_OP_SEND,
                  IORING_OP_ASYNC_CANCEL,
@@ -442,6 +460,7 @@ private:
         gamenet::net::SocketFd socket,
         std::string_view sendPayload,
         std::size_t bytes,
+        const gamenet::net::InetAddress* peer,
         std::shared_ptr<void> lease) {
         assertOwnerThread();
         if (phase_ == IoUringPhase::Quiescing) {
@@ -450,8 +469,16 @@ private:
         if (phase_ == IoUringPhase::Shutdown) {
             return {.result = IoUringSubmissionResult::RejectedShutdown};
         }
+        const bool payloadOperation =
+            kind == IoUringOperationKind::Receive ||
+            kind == IoUringOperationKind::Send;
+        const bool connectOperation =
+            kind == IoUringOperationKind::Connect;
         if (socket == gamenet::net::kInvalidSocket ||
-            (kind != IoUringOperationKind::Accept && bytes == 0)) {
+            (payloadOperation && bytes == 0) ||
+            (connectOperation &&
+             (peer == nullptr ||
+              (peer->family() != AF_INET && peer->family() != AF_INET6)))) {
             return {.result = IoUringSubmissionResult::RejectedInvalid};
         }
         if (bytes > options_.maxBytesPerOperation) {
@@ -498,7 +525,15 @@ private:
         slot.storage = std::move(storage);
         slot.lease = std::move(lease);
         slot.peer = {};
-        slot.peerLength = sizeof(sockaddr_storage);
+        slot.peerLength = connectOperation
+            ? peer->getSockAddrLen()
+            : sizeof(sockaddr_storage);
+        if (connectOperation) {
+            std::memcpy(
+                &slot.peer,
+                peer->getSockAddr(),
+                static_cast<std::size_t>(slot.peerLength));
+        }
         slot.reservedBytes = reservedBytes;
         const IoUringOperationIdentity identity{
             .slot = static_cast<std::uint32_t>(*slotIndex),
@@ -519,6 +554,11 @@ private:
             sqe->addr = reinterpret_cast<std::uint64_t>(&slot.peer);
             sqe->addr2 = reinterpret_cast<std::uint64_t>(&slot.peerLength);
             sqe->accept_flags = SOCK_NONBLOCK | SOCK_CLOEXEC;
+            break;
+        case IoUringOperationKind::Connect:
+            sqe->opcode = IORING_OP_CONNECT;
+            sqe->addr = reinterpret_cast<std::uint64_t>(&slot.peer);
+            sqe->off = slot.peerLength;
             break;
         case IoUringOperationKind::Receive:
             sqe->opcode = IORING_OP_RECV;
@@ -923,6 +963,13 @@ IoUringSubmissionOutcome IoUringCompletionEngine::enqueueAccept(
     gamenet::net::SocketFd listenSocket,
     std::shared_ptr<void> lease) {
     return impl_->enqueueAccept(listenSocket, std::move(lease));
+}
+
+IoUringSubmissionOutcome IoUringCompletionEngine::enqueueConnect(
+    gamenet::net::SocketFd socket,
+    const gamenet::net::InetAddress& peer,
+    std::shared_ptr<void> lease) {
+    return impl_->enqueueConnect(socket, peer, std::move(lease));
 }
 
 IoUringSubmissionOutcome IoUringCompletionEngine::enqueueRecv(

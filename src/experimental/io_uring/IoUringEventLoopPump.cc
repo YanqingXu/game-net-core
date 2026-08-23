@@ -110,6 +110,18 @@ public:
         return outcome;
     }
 
+    IoUringSubmissionOutcome enqueueConnect(
+        gamenet::net::SocketFd socket,
+        const gamenet::net::InetAddress& peer,
+        std::shared_ptr<void> lease) {
+        ownerLoop_->assertInLoopThread();
+        synchronizeLoopPhase();
+        auto outcome = engine_.enqueueConnect(
+            socket, peer, std::move(lease));
+        flushAccepted(outcome);
+        return outcome;
+    }
+
     IoUringSubmissionOutcome enqueueRecv(
         gamenet::net::SocketFd socket,
         std::size_t maximumBytes,
@@ -384,6 +396,13 @@ IoUringSubmissionOutcome IoUringEventLoopPump::enqueueAccept(
     gamenet::net::SocketFd listenSocket,
     std::shared_ptr<void> lease) {
     return impl_->enqueueAccept(listenSocket, std::move(lease));
+}
+
+IoUringSubmissionOutcome IoUringEventLoopPump::enqueueConnect(
+    gamenet::net::SocketFd socket,
+    const gamenet::net::InetAddress& peer,
+    std::shared_ptr<void> lease) {
+    return impl_->enqueueConnect(socket, peer, std::move(lease));
 }
 
 IoUringSubmissionOutcome IoUringEventLoopPump::enqueueRecv(

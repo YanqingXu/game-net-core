@@ -210,6 +210,26 @@ It must not blur these roles.
   retains handoff envelopes until worker settlement, and retains the thread
   pool until every worker reports owner-side Hub destruction. The final future
   precedes only legal base-owner Server destruction and follows pool join
+- an IOE-X13 accepted Connect submission transfers one Socket owner and a
+  copied destination address into the Hub's finite attempt state. The Engine
+  retains only the shared attempt lease; neither the CQE, timer, callback, nor
+  Client keeps a second fd owner. Failure/cancellation closes the attempt Socket
+  after its exact terminal; success releases it once into normal Hub Route
+  ownership, whose `addConnection` consumes accepted and rejected outcomes
+- the Client uniquely owns its Hub plus one provisional or established Adapter,
+  and borrows an outliving EventLoop. The timeout/retry TimerIds, lifecycle
+  source, generation, and callback bundle own no socket or operation lease.
+  Adapter settlement transfers only Route identity/future, never fd ownership
+- restart, disconnect, timeout, stop, callback re-entry, and owner quit may mark
+  an attempt stale and request exact cancellation, but must retain the Hub
+  attempt and Engine lease through the target terminal. A replacement Connect
+  starts only after the older kernel-active attempt is terminal, except that a
+  success notice already being consumed has released its operation identity
+- IOE-X13 Client stop retains provisional/established Adapter observers until
+  Hub settlement/Route retirement, retains the stopped Hub summary until owner-
+  side Hub destruction, detaches its lifecycle source, and only then publishes
+  the Client future. Copied futures own summaries only and cannot mutate Client,
+  Hub, Adapter, socket, timer, or EventLoop state
 
 ## 3. Poller
 - Poller does not own Channel

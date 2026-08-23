@@ -9,6 +9,7 @@ add_library(gamenet_experimental_io_uring STATIC
     IoUringTcpConnectionHub.cc
     IoUringTcpServer.cc
     IoUringTcpMultiOwnerServer.cc
+    IoUringTcpClient.cc
 )
 add_library(GameNet::experimental ALIAS gamenet_experimental_io_uring)
 

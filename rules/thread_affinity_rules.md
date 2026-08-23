@@ -348,6 +348,23 @@ No other direct mutation path is allowed for core loop state.
   pool join, and final publication without blocking inside any worker callback;
   a base-loop quit force-escalates and keeps final drain open until all owners
   report silence
+- IOE-X13 Engine Connect enqueue/cancel/terminal consumption, Hub attempt
+  mutation, Client configuration/connect/restart/disconnect/stop, timer
+  mutation, provisional/established Adapter ownership, observation, final
+  publication, and destruction are one EventLoop-owner-only operations
+- IOE-X13 adds no cross-thread Client facade. Foreign callers must marshal
+  lifecycle work to the owner; only an established Adapter retains the bounded
+  IOE-X8 Send/Shutdown/Force mailbox permission. Connect/timeout/retry work is
+  never posted through a foreign or unbounded queue
+- Connect, timeout, retry, settlement, connection, message, close-info, and
+  connection callbacks execute on the owner and may re-enter Client lifecycle
+  methods. Continuations must revalidate the exact lifecycle generation,
+  current attempt/Adapter identity, desired state, and Client phase after every
+  callback before publishing, retrying, or mutating newer state
+- IOE-X13 owner quit is observed through a pre-attached lifecycle participant,
+  not a pending functor or timer. It force-seals Client admission and drives
+  exact Hub/Connect/Route cleanup through FinalDraining before EventLoop may
+  publish Shutdown
 - Completion Engine, Pump, Driver, and Hub destruction is owner-only. Pump-
   based destructors require an already-published physical stop and perform no
   wait; a live accepted obligation is a fail-fast precondition violation, not

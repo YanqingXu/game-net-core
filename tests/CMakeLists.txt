@@ -262,6 +262,26 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         contract.io_engine.test_io_uring_tcp_multi_owner_server
         PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle;capacity"
     )
+    add_executable(
+        gamenet_io_uring_tcp_client_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_uring_tcp_client.cpp
+    )
+    target_include_directories(
+        gamenet_io_uring_tcp_client_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_io_uring_tcp_client_contract
+        PRIVATE GameNet::experimental
+    )
+    add_test(
+        NAME contract.io_engine.test_io_uring_tcp_client
+        COMMAND gamenet_io_uring_tcp_client_contract
+    )
+    set_tests_properties(
+        contract.io_engine.test_io_uring_tcp_client
+        PROPERTIES LABELS "contract;io_engine;experimental;threading;lifecycle"
+    )
     add_custom_target(gamenet_io_uring_contracts DEPENDS
         gamenet_io_uring_contract
         gamenet_io_uring_event_loop_pump_contract
@@ -272,6 +292,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         gamenet_io_uring_tcp_connection_adapter_contract
         gamenet_io_uring_tcp_server_contract
         gamenet_io_uring_tcp_multi_owner_server_contract
+        gamenet_io_uring_tcp_client_contract
     )
 endif()
 add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)
