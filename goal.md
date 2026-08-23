@@ -301,8 +301,15 @@ Runtime Model
   实现 `e43393c85fa37604d340fe866610756c99f4fe4e`、关闭
   `588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立 `YanGameServer@b525416` RPC
   8/8 比较已以 `NO-PROMOTION` 关闭 M7，共享 RPC 仍 deferred，且未增加
-  RPC/Lua 安装面或空 v0.6 发布；当前唯一治理前沿是 M8 Async/Coroutine
-  证据审查；
+  RPC/Lua 安装面或空 v0.6 发布；M8 在 Core
+  `e5ea9efa71dbe52e841423ec3cac3e9529158b22`、Gateway
+  `588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立
+  `YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` 之间审计后，以 Core
+  EventLoop/TimerQueue 3/3 与 YanGame async/coroutine/timer/RPC/persistence 9/9 证据
+  确认 callback-only Gateway 与 ActorScheduler Task 没有可替代的公共合同，因此
+  以 `NO-PROMOTION` 关闭；六个 async intents 继续 deferred，未增加
+  coroutine/awaiter 安装面或空 v0.7 发布；当前唯一治理前沿是 M9
+  TLS/WebSocket/DNS 证据审查；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness

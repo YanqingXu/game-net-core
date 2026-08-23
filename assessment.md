@@ -37,7 +37,10 @@ Runtime 共同能力，确认没有缺失的通用 Core 能力，发布 Profile 
 IOE-X13 已在 `5484d7a`、IOE-X14 已在 `351b3c0`、IOE-X15/M6 已在
 `43795e8` 关闭。M7 Gateway 实现 `e43393c`、关闭 `588acd0` 与独立
 `YanGameServer@b525416` 8/8 逐字段比较已以 `NO-PROMOTION` 关闭 M7；
-当前唯一治理前沿是 M8 Async/Coroutine 证据审查。
+M8 又以 Core `e5ea9ef` 3/3 与 `YanGameServer@b525416` 9/9 聚焦证据确认
+callback-only Gateway 与 ActorScheduler Task 不构成可替代的双 consumer 合同，
+因此以 `NO-PROMOTION` 关闭；当前唯一治理前沿是 M9
+TLS/WebSocket/DNS 证据审查。
 
 ---
 
@@ -319,10 +322,10 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M7 与 IOE-X11–IOE-X15 已关闭，M8 成为治理前沿
+### 5. M1–M8 与 IOE-X11–IOE-X15 已关闭，M9 成为治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M7 与 IOE-X11–IOE-X15 关闭、M8 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M8 与 IOE-X11–IOE-X15 关闭、M9 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
@@ -353,6 +356,14 @@ focused repeat、100,000 次 fuzz 与独立 `YanGameServer@b525416` RPC 8/8 比�
 两者的 wire、correlation、owner 和 completion 合同不可替代，所以 M7 最终
 以 `NO-PROMOTION` 关闭，`rpc.intent.md` 继续 deferred，且没有 RPC/Lua
 安装面或空 v0.6 发布。
+M8-G0 继续在 Core `e5ea9efa71dbe52e841423ec3cac3e9529158b22`、Gateway
+`588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立
+`YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` 之间比较 async/coroutine
+合同。Core EventLoop/TimerQueue 3/3 与 YanGame coroutine/timer/Actor-RPC/persistence
+9/9 通过，但 Gateway 仍无 coroutine，YanGame Task 的 ActorScheduler 准入、帧共享
+控制状态、continuation token、ActorRef 世代和 owner 销毁也不是 Core 旧 deferred
+`start/detach/co_await` 包装合同。因此 M8 以 `NO-PROMOTION` 关闭，六个
+async intents 保持 deferred，没有 coroutine/awaiter 安装面或空 v0.7 发布。
 当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
 基线为 140（8 unit、118 contract、14 integration）。
 
@@ -530,8 +541,12 @@ Milestone 6
 未加入 RPC/Lua Core 公共 API，未发布空 v0.6。
 
 Milestone 7
-当前：M8 审查 async/coroutine 的双 consumer 证据；没有共同、可替代的
-value/error/cancel/resume 合同时不创建 coroutine 占位 target。
+已关闭：M8 async/coroutine 双 consumer 证据不足，结论为 `NO-PROMOTION`；
+六个 intent 保持 deferred，未创建 coroutine 占位 target 或空 v0.7。
+
+Milestone 8
+当前：M9 审查 TLS/WebSocket/DNS 的外部双 consumer 证据；未提升 intent 之前
+不创建公共 transport 或协议表面。
 ```
 
 # 最终评价
@@ -556,7 +571,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M6/IOE-X14 已关闭（351b3c0）
 → M6/IOE-X15 已关闭（43795e8；未发布 preview）
 → M7 已关闭（Gateway e43393c/588acd0；NO-PROMOTION）
-→ M8 Async/Coroutine 证据审查（当前）
+→ M8 已关闭（Core e5ea9ef / YanGame b525416；NO-PROMOTION）
+→ M9 TLS/WebSocket/DNS 证据审查（当前）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

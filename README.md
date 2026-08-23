@@ -81,8 +81,15 @@ implemented at `e43393c85fa37604d340fe866610756c99f4fe4e` and closed at
 sanitizer, repeat, fuzz, true-TCP, and independent-consumer 8/8 evidence found
 different wire, correlation, owner, and completion contracts. M7 is therefore
 closed as `NO-PROMOTION`; Core RPC stays deferred with no RPC/Lua package
-surface, no empty v0.6 release, and M8 Async/Coroutine evidence review is the
-next governance front.
+surface and no empty v0.6 release. M8 then compared Core
+`e5ea9efa71dbe52e841423ec3cac3e9529158b22`, callback-only gateway
+`588acd079be93de3e230ba4f07dd111f7bec6a3c`, and Actor-bound
+`YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501`. Core EventLoop/
+TimerQueue 3/3 and YanGame async/coroutine/timer/RPC/persistence 9/9 passed,
+but their result, executor, frame, resume, timer, and retirement contracts are
+not substitutable. M8 is closed as `NO-PROMOTION`; all six async intents remain
+deferred, no coroutine/awaiter package surface or empty v0.7 release exists,
+and M9 TLS/WebSocket/DNS evidence review is the next governance front.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

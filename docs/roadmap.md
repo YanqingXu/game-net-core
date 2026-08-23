@@ -98,8 +98,12 @@ See `migration_status.md` for the current checked state of these phases.
   `92a2607` set only the external adapter to historical `RESUME`. Gateway
   implementation `e43393c` and closure `588acd0`, plus exact independent
   `b525416` 8/8 revalidation, close M7 as `NO-PROMOTION`; shared promotion stays
-  closed, no RPC/Lua surface or empty v0.6 release was added, and M8
-  Async/Coroutine evidence review is the active front. The cancelled
+  closed, and no RPC/Lua surface or empty v0.6 release was added. M8 then
+  compared current Core callback/executor/timer semantics, callback-only
+  gateway `588acd0`, and Actor-bound `YanGameServer@b525416`; Core 3/3 and Yan
+  9/9 evidence proved valid but non-substitutable contracts, so M8 closed as
+  `NO-PROMOTION` with all six async intents deferred and no empty v0.7 release.
+  M9 TLS/WebSocket/DNS evidence review is the active front. The cancelled
   `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
@@ -336,8 +340,9 @@ non-installed. IOE-X11 is closed at
 `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`, and IOE-X14 is closed at
 `351b3c0e476a462265016d53361a02b5f2c51611`. IOE-X15 and M6 are closed at
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570`; M7 external-first Lua/typed RPC
-closed as `NO-PROMOTION` at gateway `588acd0`, M8 evidence review is the current
-front, and no Core evidence task is running.
+closed as `NO-PROMOTION` at gateway `588acd0`, M8 async/coroutine promotion
+closed as `NO-PROMOTION` against Core `e5ea9ef` and YanGame `b525416`, M9
+evidence review is the current front, and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -407,6 +412,12 @@ front, and no Core evidence task is running.
   dual-platform/sanitizer/repeat/fuzz evidence, and YanGameServer `b525416` RPC
   8/8 revalidation; field comparison closes shared RPC as `NO-PROMOTION` and
   advances the front to M8 without a Core RPC/Lua surface or empty v0.6 release.
+- [x] M8: compare the current callback-based Core and gateway with the
+  ActorScheduler-bound independent coroutine consumer; Core EventLoop/
+  TimerQueue 3/3 and exact YanGame async/coroutine/timer/RPC/persistence 9/9
+  prove different result, executor, frame, resume, timer, and retirement
+  contracts. Close as `NO-PROMOTION`, keep all six async intents deferred, add
+  no coroutine/awaiter surface or empty v0.7 release, and advance to M9.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

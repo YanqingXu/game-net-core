@@ -33,6 +33,12 @@ M7-G0 外部就绪审计检查点：`44493b1d37c16567990e1660153d6b0843a8eecc`
 完成并由 `588acd079be93de3e230ba4f07dd111f7bec6a3c` 关闭。逐字段比较结论为共享 RPC
 `NO-PROMOTION`，Core RPC 继续 deferred。
 
+M8-G0 Async/Coroutine 提升审计基线：
+`e5ea9efa71dbe52e841423ec3cac3e9529158b22`。Core EventLoop/TimerQueue 3/3 与
+精确 `YanGameServer@b525416` async/coroutine/timer/RPC/persistence 9/9 证明两套
+各自有效但不可替代的合同；Gateway `588acd0` 仍为 callback/value-only。
+M8 因此以 `NO-PROMOTION` 关闭，六个 async intents 继续 deferred。
+
 ## 1. 计划定位与总体顺序
 
 本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
@@ -59,7 +65,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M8 v0.7 Async 与 Coroutine 证据审查**。
+当前唯一治理前沿是 **M9 v0.8 TLS、WebSocket 与 DNS 证据审查**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -445,9 +451,15 @@ queue saturation、双平台真实 TCP 和 fuzz coverage。缺少第二个 consu
 
 ## 10. M8：v0.7 Async 与 Coroutine
 
-状态：**当前治理前沿**。先审查 M7 两个外部 consumer、现有 TimerQueue/Executor 与
-全部 deferred async intents 是否证明一个可替代的共同 value/error/cancel/resume
-合同；没有双 consumer 证据时记录 `NO-PROMOTION`，不创建 coroutine 占位 target。
+状态：**已关闭，`NO-PROMOTION`**。M8-G0 在 Core
+`e5ea9efa71dbe52e841423ec3cac3e9529158b22`、Gateway
+`588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立
+`YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` 之间完成审计。
+Core 聚焦 EventLoop/TimerQueue 3/3 和 YanGame async/coroutine/timer/Actor-RPC/
+persistence 9/9 通过，但 Gateway 无 coroutine，YanGame Task 又是 ActorScheduler
+专属的有界 frame/continuation 合同，没有双 consumer 证明一个可替代的
+value/error/cancel/resume 或 executor 表面。详见
+`docs/development/m8_async_coroutine_readiness_2026-08-24.md`。
 
 只有 RPC、timer 或第二个适配器证明需要统一异步语义时，按以下固定顺序提升 deferred
 intents：
@@ -471,9 +483,14 @@ intents：
 - callback API 继续可用，不强迫稳定 Core 用户采用 coroutine。
 
 若缺少两个真实 consumer，这些能力保持外部 adapter，不为满足版本号而提升，也不发布
-空版本。
+空版本。审计已命中此关闭分支：`async_semantics`、`coroutine_task`、
+`async_timer`、`connection_awaiter_registry`、`when_all` 与 `when_any`
+全部保持 deferred，不创建 Core coroutine 头文件、target、package component 或空 v0.7。
 
 ## 11. M9：v0.8 TLS、WebSocket 与 DNS
+
+状态：**当前治理前沿**。先审查两个真实 consumer 是否共享可替代的
+transport、TLS、WebSocket 或 DNS 合同；在正式提升 deferred intent 之前不创建公共表面。
 
 顺序固定为：
 
@@ -623,10 +640,11 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M8 Async/Coroutine 证据审查是下一治理前沿，无后台 Core 证据任务**：M1–M7
+> **M9 TLS/WebSocket/DNS 证据审查是下一治理前沿，无后台 Core 证据任务**：M1–M8
 > 与 IOE-X11–IOE-X15 已关闭。X15 在
 > `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
 > 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。M7 Gateway 实现
 > `e43393c`、closure `588acd0` 与 YanGameServer `b525416` 8/8 比较已以
-> `NO-PROMOTION` 关闭。当前只审查 async/coroutine 共同需求，不得在缺少第二个等价
-> consumer 时提升公共 coroutine，也不得提前并行展开 TLS/WebSocket 或 UDP/KCP。
+> `NO-PROMOTION` 关闭。M8 Core 3/3 与 YanGame 9/9 证据又因 Gateway 无
+> coroutine、Task/owner/retirement 合同不可替代而以 `NO-PROMOTION` 关闭。当前只审查
+> TLS/WebSocket/DNS 外部共同需求，不得提前并行展开 UDP/KCP。

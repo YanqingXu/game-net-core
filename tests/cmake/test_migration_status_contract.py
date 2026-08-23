@@ -186,7 +186,25 @@ def main() -> None:
         / "development"
         / "m7_external_rpc_lua_readiness_2026-08-24.md"
     )
+    m8_readiness = (
+        repo_root
+        / "docs"
+        / "development"
+        / "m8_async_coroutine_readiness_2026-08-24.md"
+    )
     rpc_intent = repo_root / "intents" / "modules" / "rpc.intent.md"
+    async_intent_names = (
+        "async_semantics",
+        "coroutine_task",
+        "async_timer",
+        "connection_awaiter_registry",
+        "when_all",
+        "when_any",
+    )
+    async_intents = {
+        name: repo_root / "intents" / "modules" / f"{name}.intent.md"
+        for name in async_intent_names
+    }
     intents_index = repo_root / "intents" / "README.md"
 
     tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
@@ -220,7 +238,12 @@ def main() -> None:
     arch_g1_review_text = arch_g1_review.read_text(encoding="utf-8")
     evidence_ledger_text = evidence_ledger.read_text(encoding="utf-8")
     m7_readiness_text = m7_readiness.read_text(encoding="utf-8")
+    m8_readiness_text = m8_readiness.read_text(encoding="utf-8")
     rpc_intent_text = rpc_intent.read_text(encoding="utf-8")
+    async_intent_texts = {
+        name: path.read_text(encoding="utf-8")
+        for name, path in async_intents.items()
+    }
     intents_index_text = intents_index.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
     normalized_roadmap_text = " ".join(roadmap_text.split())
@@ -249,6 +272,7 @@ def main() -> None:
     m7_readiness_checkpoint = "44493b1d37c16567990e1660153d6b0843a8eecc"
     gateway_m7_implementation = "e43393c85fa37604d340fe866610756c99f4fe4e"
     gateway_m7_closure = "588acd079be93de3e230ba4f07dd111f7bec6a3c"
+    m8_core_baseline = "e5ea9efa71dbe52e841423ec3cac3e9529158b22"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -277,6 +301,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", x15_implementation_checkpoint, "HEAD")
     git(repo_root, "cat-file", "-e", f"{m7_readiness_checkpoint}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", m7_readiness_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{m8_core_baseline}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", m8_core_baseline, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -524,6 +550,40 @@ def main() -> None:
         "executed, divergent",
     ):
         require(m7_readiness_text, comparison_term, m7_readiness)
+    deferred_catalog = intents_index_text.split("## Deferred Intent Catalog", 1)[1].split(
+        "## Legacy Intent Catalog", 1
+    )[0]
+    require(evidence_ledger_text, "M8-G0 Async / Coroutine Promotion Audit", evidence_ledger)
+    require(m8_readiness_text, m8_core_baseline, m8_readiness)
+    require(m8_readiness_text, gateway_m7_implementation, m8_readiness)
+    require(m8_readiness_text, gateway_m7_closure, m8_readiness)
+    require(m8_readiness_text, independent_consumer_checkpoint, m8_readiness)
+    require(m8_readiness_text, "passed the directly relevant contracts 3/3", m8_readiness)
+    require(m8_readiness_text, "contract-fallback set passed 9/9", m8_readiness)
+    require(m8_readiness_text, "shared async/coroutine promotion: `NO-PROMOTION`", m8_readiness)
+    require(m8_readiness_text, "Result carrier", m8_readiness)
+    require(m8_readiness_text, "Frame ownership", m8_readiness)
+    require(m8_readiness_text, "TCP awaiters", m8_readiness)
+    require(m8_readiness_text, "Composition", m8_readiness)
+    require(m8_readiness_text, "advances to M9", m8_readiness)
+    for name, path in async_intents.items():
+        require(async_intent_texts[name], "status: deferred", path)
+        require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
+        require(m8_readiness_text, f"`{name}`", m8_readiness)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, m8_core_baseline[:7], source)
+        require(text, gateway_m7_closure[:7], source)
+        require(text, independent_consumer_checkpoint[:7], source)
+        require(text, "NO-PROMOTION", source)
+        require(text, "M9", source)
     require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
     require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)
     require(m7_readiness_text, "callback re-entry", m7_readiness)
@@ -535,9 +595,6 @@ def main() -> None:
     )
     require(rpc_intent_text, "status: deferred", rpc_intent)
     require(intents_index_text, "- `intents/modules/rpc.intent.md`", intents_index)
-    deferred_catalog = intents_index_text.split("## Deferred Intent Catalog", 1)[1].split(
-        "## Legacy Intent Catalog", 1
-    )[0]
     require(deferred_catalog, "- `intents/modules/rpc.intent.md`", intents_index)
     installed_rpc_or_lua_headers = [
         path
@@ -562,6 +619,21 @@ def main() -> None:
     )
     assert "GameNet::rpc" not in tracked_cmake_text
     assert "gamenet_rpc" not in tracked_cmake_text
+    installed_coroutine_or_awaiter_headers = [
+        path
+        for path in (repo_root / "include" / "gamenet").rglob("*")
+        if path.is_file()
+        and any(
+            term in path.relative_to(repo_root).as_posix().lower()
+            for term in ("coroutine", "awaiter", "when_all", "when_any")
+        )
+    ]
+    assert not installed_coroutine_or_awaiter_headers, (
+        "M8 closure must not install coroutine/awaiter headers: "
+        + ", ".join(str(path) for path in installed_coroutine_or_awaiter_headers)
+    )
+    assert "GameNet::coroutine" not in tracked_cmake_text
+    assert "gamenet_coroutine" not in tracked_cmake_text
     require(
         roadmap_text,
         "The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14",
@@ -579,7 +651,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M8", plan)
+    require(plan_text, "当前唯一治理前沿是 **M9", plan)
     assert plan_text.count("当前唯一治理前沿") == 1, (
         "plan must declare exactly one current governance front"
     )
@@ -610,7 +682,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M8 Async/Coroutine 证据审查是下一治理前沿", plan)
+    require(plan_text, "M9 TLS/WebSocket/DNS 证据审查是下一治理前沿", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)
