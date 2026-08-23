@@ -1,7 +1,8 @@
 # 总体判断
 
-本次检查以 stable Apache-2.0 `v0.3.0@8e4a6ed` 的 2026-08-23 M4
-发布关闭为当前前沿。`game-net-core` 已经不再只是从 `mini_trantor` 拆出来的
+本次检查以 2026-08-23 M5 Runtime 边界第二次 `NO-PROMOTION` 关闭为当前前沿；
+stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。`game-net-core` 已经不再只是从
+`mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：
 
 > **核心网络语义、生命周期与过载治理、双平台运行证据和外部分发闭环已形成首个 stable v0.3 基线；0.x ABI 与上层 Runtime API 仍保持审慎边界。**
@@ -30,8 +31,9 @@ all-rights-reserved，不提供外部使用授权。该句描述内部候选形�
 `gamenet-game-gateway` 又以关闭提交 `0a8fe1e` 完成 M3；精确网关 `4e2457e` / Core
 `736a090` 的单一 Linux/epoll 进程通过 1h、3,743 个完整故障回放周期和 32 KiB RSS
 增长门。M4 随后在精确 promotion commit `8e4a6ed` 上完成全部同提交证据、确定性
-资产、annotated tag、stable Release 和回下载验证；当前前沿已转到 M5 v0.4 Runtime
-边界审查。
+资产、annotated tag、stable Release 和回下载验证。M5 随后用真实网关重新审查
+Runtime 共同能力，确认没有缺失的通用 Core 能力，发布 Profile 负载选择指南并记录
+第二次 `NO-PROMOTION`；当前前沿已转到 M6/IOE-X11。
 
 ---
 
@@ -276,30 +278,25 @@ intent
 
 ## 尚未完成的部分
 
-### 1. 还不能称为正式 production release
+### 1. stable v0.3 已发布，但 1.0 承诺尚未形成
 
-仓库自身的审计结论仍是 production-hardening preview，而不是 production-ready。当前 `main` 尚缺少一个明确 promotion commit 上完整的同提交：
+`v0.3.0@8e4a6ed` 已完成同提交 CI、benchmark、capacity、fault、1h/3h、package、
+SBOM 和 Release 回下载验证。剩余边界不是“尚未发布”，而是 0.x 期间 ABI 仍可按审查
+演进，Runtime Profile 和 experimental io_uring 仍不属于 stable API。
 
-```text
-CI
-+ benchmark
-+ capacity
-+ fault injection
-+ 1/3 小时 endurance
-+ package/release evidence
-```
+### 2. 外部采用许可证阻塞已关闭
 
-### 2. 外部采用仍被许可证阻塞
-
-当前许可证明确写明不授予使用、复制、修改或分发许可。因此即使代码公开，外部项目也不能把它当作普通开源库合法采用。
+所有者授权后，仓库和 v0.3.0 分发资产已切换为 Apache-2.0，并完成 NOTICE、第三方
+声明、源码 SPDX、package metadata 与 SBOM 校验。历史内部候选继续保留其形成时的
+all-rights-reserved 快照，不被追溯改写。
 
 ### 3. Runtime Profile 和 io_uring 仍是 provisional/non-installed
 
 它们已经得到验证，但尚未进入稳定安装接口，也没有公共 backend selector。这个状态是刻意保持的，并不代表遗漏。
 
-### 4. 还缺少真实游戏服务器的长期使用反馈
+### 4. 已有真实网关闭环，但仍缺少长期生产运营反馈
 
-目前已有 echo、pipeline 和 runtime profile demo，但仍缺少一个真正覆盖以下路径的参考服务器：
+私有 `gamenet-game-gateway` 已覆盖以下完整参考路径：
 
 ```text
 Gateway
@@ -312,17 +309,20 @@ Gateway
 → Graceful shutdown
 ```
 
-这会导致很多 API 目前主要经过合同验证，而不是经过真实业务迭代验证。
+它已完成双平台、sanitizer、故障回放和一小时连续运行，并直接触发过一个 IOCP
+correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
+这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M4 已关闭，M5 成为 Runtime 边界治理前沿
+### 5. M1–M5 已关闭，M6/IOE-X11 成为治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M4 关闭、M5 Runtime 边界审查”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M5 关闭、M6/IOE-X11 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
 `8e4a6ed` 重新完成非豁免矩阵并发布 stable Apache-2.0 `v0.3.0`；12 个 Release
-资产全部通过回下载复核。
+资产全部通过回下载复核。M5 对四个候选边界逐项复核后记录第二次
+`NO-PROMOTION`，未增加公共 API、未发布空 v0.4，并交付负载选择指南。
 
 ---
 
@@ -383,19 +383,18 @@ NOTICE、third-party notice 与安装包 metadata 切换。受跟踪的发布组
 12/12 字节一致的最终 bundle，官方 SPDX 2.3 Schema 与全资产回下载验证通过；
 `v0.3.0` 已作为 stable GitHub Release 发布。
 
-## P2：根据真实集成结果决定公共 Runtime API
+## P2（已关闭）：根据真实集成结果决定公共 Runtime API
 
-当前四个 Profile 全部保持 non-installed、共同能力审查为 `NO-PROMOTION`，这一状态暂时不应改变。
+M5 已逐项审查现有 `TransportEndpoint`、typed/bounded `LogicExecutor` admission、
+可等待单调 `RuntimeStopFuture` 和 shard/cadence 类型。真实网关的 Queued Event 与
+Sharded Hybrid 只使用已安装 v0.3 能力，没有提出 missing broadly reusable
+capability；对应概念的 owner、Accepted obligation、失败作用域和退休语义也仍不同。
+因此第二次结论是 `NO-PROMOTION`，四个 Profile 继续保持 non-installed recipe/example。
 
-只有参考网关或实际游戏服证明至少两个 Profile 重复需要某些概念时，才考虑提升极窄的公共接口，例如：
-
-```cpp
-RuntimeEndpoint
-LogicExecutor
-RuntimeStopFuture
-ShardKey
-TickCadence
-```
+- `TransportEndpoint`：已安装并由网关直接复用，不增加 Runtime alias；
+- `LogicExecutor`：Queued、fixed-tick、Hybrid 的 admission/terminal obligation 不同；
+- `RuntimeStopFuture`：network、logic、cadence 与多 cell 的完成义务不能无损归一；
+- shard/cadence 类型：key vocabulary、ordering、catch-up 与 retirement 仍不一致。
 
 不建议现在创建：
 
@@ -405,7 +404,15 @@ RuntimeProfileFactory
 AnyTransportAnyLogicRuntime
 ```
 
-否则很容易形成配置复杂、热路径动态多态严重、生命周期难以推导的“万能框架”。
+这些形状继续禁止，避免形成配置复杂、热路径动态多态严重、生命周期难以推导的
+“万能框架”。负载选择改由连接数、包频率、逻辑成本、tick、handoff、广播和背压
+测量驱动；M5 不发布空 v0.4。
+
+## P2（当前）：M6/IOE-X11 source-private io_uring Server composition
+
+`X10=PROMOTE` 与 `ARCH-G1=APPROVE` 条件已满足。下一任务只组合现有 listener、Hub
+和 semantic adapter，证明单 owner bind/listen、callback、admission 与 graceful/
+forced stop；不修改 production `TcpServer`，不开放公共 backend selector。
 
 ## P2：RPC、Lua 和协程优先放在上层适配仓库
 
@@ -428,7 +435,7 @@ UDP/KCP 应继续等到：
 
 ---
 
-# 四、建议采用的四个里程碑
+# 四、建议采用的五个里程碑
 
 ```text
 Milestone 1
@@ -443,11 +450,12 @@ Milestone 3
 完成 M4 `v0.3.0@8e4a6ed` 外部发布闭环。
 
 Milestone 4
-当前：根据真实重复需求执行 M5，决定 v0.4：
-- 极窄 Runtime 公共能力
-- io_uring source-private integration
-- RPC/Lua/coroutine 上层适配
-三者中选择一条主线，而不是同时展开
+已关闭：M5 第二次 Runtime 共同能力审查为 `NO-PROMOTION`；发布负载选择指南，未发布
+空 v0.4。
+
+Milestone 5
+当前：M6/IOE-X11，只推进 source-private 单 owner io_uring Server composition；
+Runtime 公共 API 与 RPC/Lua/coroutine 不并行展开。
 ```
 
 # 最终评价
@@ -465,7 +473,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M2 已关闭（v0.3.0-internal-candidate.1@0c30124）
 → M3 已关闭（private gateway 0a8fe1e；1h on 4e2457e/Core 736a090）
 → M4 已关闭（stable Apache-2.0 v0.3.0@8e4a6ed）
-→ M5 v0.4 Runtime 边界审查
+→ M5 已关闭（第二次 NO-PROMOTION；无空 v0.4）
+→ M6/IOE-X11（当前）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

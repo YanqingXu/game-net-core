@@ -22,14 +22,16 @@ package, final extracted/upgrade consumer, SPDX, and evidence matrix without a
 waiver. Annotated tag `v0.3.0` and the stable GitHub Release were published on
 2026-08-23; all 12 assets passed fresh-download hash, bundle, path, and official
 SPDX Schema validation. Exact evidence is recorded in
-`docs/development/releases/v0.3.0.md`. M5 v0.4 Runtime boundary review is the
-active governance front.
+`docs/development/releases/v0.3.0.md`. M5 then repeated the cross-Profile review
+against the independent gateway and closed as a second `NO-PROMOTION`; the
+load-selection guide is published, no Runtime API was installed, and no empty
+v0.4 release was created. M6/IOE-X11 is the active governance front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1–M4 are closed; M5 is the unique governance front. There is no
-running Core evidence task after the v0.3.0 publication closure.
+`APPROVE`. M1–M5 are closed; M6/IOE-X11 is the unique governance front. There
+is no running Core evidence task after the M5 decision closure.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -97,7 +99,7 @@ Current RTM-R1 Profile C MultiIoDedicatedFixedTick checkpoint:
 
 ## Current Task Goal
 
-M1–M4 are closed. IOE-X10 ran the fixed 256-route, 32-pending-Accept, four-by-64
+M1–M5 are closed. IOE-X10 ran the fixed 256-route, 32-pending-Accept, four-by-64
 churn, 100-by-64-byte RTT protocol with one warm-up and five interleaved formal
 samples per backend. All ten sample hashes, correctness/capacity/recovery
 invariants, and zero-residue summaries validate. Its narrow `PROMOTE` does not
@@ -119,9 +121,11 @@ final promotion commit `8e4a6ed`, completed the fresh non-waived same-commit
 matrix, independently revalidated aggregate and promotion evidence, assembled
 byte-reproducible Apache-2.0 source/binary/SBOM/evidence assets, reran final
 Linux/Windows extracted and upgrade consumers, and published `v0.3.0`. Fresh
-download verification passed all 12 assets. M5 Runtime boundary review is now
-the sole current task; it must repeat the cross-Profile common-capability review
-and may still conclude `NO-PROMOTION`.
+download verification passed all 12 assets. M5 then audited `TransportEndpoint`,
+typed bounded Logic admission, waitable stop, shard, and cadence candidates
+against both the four Profiles and the real gateway. It recorded a second
+`NO-PROMOTION`, retained the non-installed recipes, published the workload
+selection guide, and advanced the sole current task to M6/IOE-X11.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
@@ -397,7 +401,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1–M4 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; the prior cross-Profile decision remains `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, `v0.3.0-internal-candidate.1@0c30124` passed the internal chain, private gateway `0a8fe1e` closed real integration against Core `736a090`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. M5 Runtime boundary review is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M5 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M6/IOE-X11 is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
 
 ## Current Intent Inventory
 

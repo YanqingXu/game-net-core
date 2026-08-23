@@ -1,21 +1,48 @@
 # Runtime Profile Common-Capability Review
 
-Review date: 2026-08-20
+Review dates: 2026-08-20 (first review), 2026-08-23 (M5 re-review)
 
 Scope: the four non-installed TCP Runtime Profile vertical slices at Profile A
-`adb8b483`, Profile B `633d613`, Profile C `da57edc`, and Profile D `b3b184b1`,
-plus the combined real-TCP lifecycle contract added after those checkpoints.
+`adb8b483`, Profile B `633d613`, Profile C `da57edc`, and Profile D `b3b184b1`;
+the combined real-TCP lifecycle contract at `1c4c58f`; and the independent
+private `gamenet-game-gateway` closure at `0a8fe1e` against installed Core
+`736a090`.
 
-## Decision
+## M5 Decision
 
 Do not promote an installed Runtime Profile interface now.
 
-The four Profiles prove one semantic family: explicit owner placement, bounded
-admission, generation-safe transport return, observable overload, and terminal
-shutdown. They do not yet prove one source-level configuration, handler,
-metrics, or stop-result interface. A least-common-denominator base class would
-erase the cadence, sharding, cell-retirement, and zero-handoff differences that
-the architecture requires the project to keep visible.
+Disposition: second `NO-PROMOTION`.
+
+First-review Disposition: `NO-PROMOTION`; M5 independently repeats rather than
+retroactively replacing that historical decision.
+
+M3 supplied the missing real-consumer evidence: Queued Event and Sharded Hybrid
+both ran as true-TCP gateway compositions on Linux/epoll and Windows/IOCP, and
+the exact Sharded Hybrid gateway completed its one-hour replay/fault run. That
+consumer used only installed GameNet 0.3.0 targets. Its feedback ledger found no
+missing broadly reusable capability and requested no Core source-private helper
+for either Runtime model.
+
+The new evidence therefore strengthens the lower-level boundary instead of
+authorizing a new one. `TransportEndpoint` is already installed and reused.
+Admission, stop, shard, and cadence concepts still have different owner,
+obligation, failure, and retirement semantics. M5 adds no target, header, enum,
+factory, backend selector, or ABI surface, and no empty v0.4 release is created.
+
+## M5 Candidate Audit
+
+| Candidate | Evidence comparison | M5 disposition |
+| --- | --- | --- |
+| existing `TransportEndpoint` | Profiles A/B/C/D and the gateway use the installed endpoint plus captured `EventLoopExecutor`; the gateway adds its own binding-aware capability where business replacement policy needs another generation check | reuse as-is; no new Runtime alias or wrapper |
+| typed bounded `LogicExecutor` admission | Profile B uses coalesced event drains, C admits without a per-command wake and drains only on fixed-rate ticks, D owns independent cell FIFOs with event/fixed no-overtake, while the gateway uses installed `LogicLoop` for one path and a gateway-owned cell executor for another | `NO-PROMOTION`; common names do not imply the same Accepted obligation or terminal failure scope |
+| waitable monotonic `RuntimeStopFuture` | A has one network future; B has network plus logic-drain completion; C adds cadence-post publication and timer retirement; D aggregates all cell callbacks/timers; the gateway exposes synchronous aggregate stop around private owners and a Core network future internally | `NO-PROMOTION`; a common future would either erase obligations or become an untyped bag |
+| shard types | Core D hashes key kind plus bytes; the gateway hashes its validated business key bytes and owns its routing grammar and duplicate/session policy | `NO-PROMOTION`; key vocabulary and invalid-key policy are consumer-specific |
+| cadence types | C supports skip-missed or bounded catch-up; D and the gateway Hybrid use a fixed-rate timer within a cell-local no-overtake protocol; installed `LogicLoop` remains fixed-delay compatibility behavior | `NO-PROMOTION`; cadence cannot be separated from queue ordering, catch-up, and retirement semantics yet |
+
+The prohibited catch-all shapes remain prohibited:
+`UniversalGameServer`, `RuntimeProfileFactory`, `AnyTransportAnyLogicRuntime`,
+and one Server class per strategy combination.
 
 ## Proven Common Capabilities
 
@@ -61,22 +88,43 @@ them behind a single virtual `RuntimeProfile`, variant options object, generic
 callback, or generic metrics bag would create invalid states and hide ownership
 and terminal obligations.
 
+## Ownership, Re-entry, and Cross-Thread Answers
+
+- The base/accept EventLoop owns each Profile lifecycle call. TcpServer-selected
+  network loops own connection, framing, endpoint mutation, and route
+  revocation. Caller-owned logic loops outlive B/C/D stop and destruction.
+- Connection context releases its finite framing/route state on the network
+  owner. Profile shared state owns bounded queues, metrics, callback gates, and
+  stop promises. C/D timer metadata retires on the corresponding logic owner.
+- Router and handler callbacks may re-enter stop. No callback runs under a
+  queue/route lock; admission and generation are revalidated after it returns.
+- Every cross-thread operation uses an installed typed bounded queue or
+  `EventLoopExecutor`; output returns through the captured endpoint owner and
+  is generation-checked there. No inline or unbounded rejection fallback exists.
+- The exact Core verification is
+  `tests/integration/runtime_model/test_tcp_runtime_profiles.cpp`; the independent
+  consumer verification is recorded by
+  `docs/development/m3_gateway_closure_2026-08-23.md`. The M5 documentation/API
+  boundary is guarded by `tests/cmake/test_migration_status_contract.py`.
+
 ## Compatibility Decision
 
 - Keep all four Profile classes, options, metrics, handlers, stop handles,
   examples, and benchmarks non-installed.
 - Reuse the already installed lower-level primitives; add no new stable target,
   header, enum, factory, backend selector, or ABI surface.
-- Keep `ConnectionPlacementPolicy` separate from `LogicShardPolicy`; do not
-  infer logic placement from a network-worker index.
+- Keep `ConnectionPlacementPolicy` separate from logic sharding; do not infer
+  logic placement from a network-worker index.
 - Treat the normalized integration observation as a test vocabulary only. It
-  is not a proposed runtime API and must not enter production headers.
-- Reconsider an additive installed surface only after at least two independent
-  non-example consumers need the same typed construction and stop protocol,
-  and paired Linux/Windows evidence shows that the abstraction does not add a
-  packet-path allocation, virtual dispatch, hidden wakeup, or lifecycle gap.
+  is not a proposed Runtime API and must not enter production headers.
+- Publish the Profile load-selection guide as an official recipe guide. Profile
+  D's real-sharding evidence gate is satisfied, but it remains provisional and
+  non-installed under this decision.
+- Reconsider an additive installed surface only after another independent
+  non-example consumer needs the same typed construction or stop protocol and
+  paired Linux/Windows evidence shows that it adds no packet-path allocation,
+  virtual dispatch, hidden wakeup, or lifecycle gap.
 
-Disposition: `NO-PROMOTION`; continue implementation through lower-level
-capabilities and explicit Profiles. This closes the current common-capability
-review without freezing main or blocking the separate ARCH-G1 independent
-review.
+This closes M5 without freezing main. Because no public capability was
+promoted, v0.4.0 is not published; the next deliverable capability may take the
+v0.4 version number.

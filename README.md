@@ -57,7 +57,12 @@ consumer, SBOM, and evidence matrix without a waiver. The stable Apache-2.0
 Release and its 12 canonical assets passed fresh-download verification. Exact
 evidence and hashes are recorded in
 [`docs/development/releases/v0.3.0.md`](docs/development/releases/v0.3.0.md).
-The next governance front is M5 v0.4 Runtime boundary review.
+M5 is closed with a second `NO-PROMOTION`: the independent gateway needed no
+new broadly reusable Runtime capability, all Profile compositions remain
+non-installed, and the
+[load-selection guide](docs/architecture/runtime_profile_load_selection_guide.md)
+is published without an empty v0.4 release. The next governance front is
+M6/IOE-X11, the source-private single-owner io_uring server composition.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

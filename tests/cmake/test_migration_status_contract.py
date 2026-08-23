@@ -160,6 +160,12 @@ def main() -> None:
         / "architecture"
         / "runtime_profile_common_capability_review.md"
     )
+    profile_load_guide = (
+        repo_root
+        / "docs"
+        / "architecture"
+        / "runtime_profile_load_selection_guide.md"
+    )
     x10_evidence_dir = (
         repo_root
         / "docs"
@@ -193,6 +199,7 @@ def main() -> None:
     api_review_text = api_review.read_text(encoding="utf-8")
     perf_api_review_text = perf_api_review.read_text(encoding="utf-8")
     common_profile_review_text = common_profile_review.read_text(encoding="utf-8")
+    profile_load_guide_text = profile_load_guide.read_text(encoding="utf-8")
     x10_evidence_record = json.loads(x10_evidence.read_text(encoding="utf-8"))
     arch_g1_review_text = arch_g1_review.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
@@ -355,7 +362,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M5", plan)
+    require(plan_text, "当前唯一治理前沿是 **M6", plan)
     assert plan_text.count("当前唯一治理前沿") == 1, (
         "plan must declare exactly one current governance front"
     )
@@ -384,6 +391,10 @@ def main() -> None:
     require(plan_text, "v0.3.0-internal-candidate", plan)
     require(plan_text, "gamenet-game-gateway", plan)
     require(plan_text, "NO-PROMOTION", plan)
+    require(plan_text, "M5：v0.4 Runtime 边界", plan)
+    require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
+    require(plan_text, "M6/IOE-X11 是下一治理前沿", plan)
+    require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)
     require(plan_text, "X10=DEFER 或 ARCH-G1 要求暂停", plan)
@@ -437,6 +448,54 @@ def main() -> None:
         "Disposition: `NO-PROMOTION`",
         common_profile_review,
     )
+    require(
+        common_profile_review_text,
+        "Disposition: second `NO-PROMOTION`",
+        common_profile_review,
+    )
+    for candidate in (
+        "existing `TransportEndpoint`",
+        "typed bounded `LogicExecutor` admission",
+        "waitable monotonic `RuntimeStopFuture`",
+        "shard types",
+        "cadence types",
+    ):
+        require(common_profile_review_text, candidate, common_profile_review)
+    for forbidden_runtime_shape in (
+        "UniversalGameServer",
+        "RuntimeProfileFactory",
+        "AnyTransportAnyLogicRuntime",
+    ):
+        require(
+            common_profile_review_text,
+            forbidden_runtime_shape,
+            common_profile_review,
+        )
+    require(common_profile_review_text, "`0a8fe1e`", common_profile_review)
+    require(common_profile_review_text, "`736a090`", common_profile_review)
+    require(common_profile_review_text, "no empty v0.4 release", common_profile_review)
+    assert not (repo_root / "include" / "gamenet" / "runtime_profile").exists(), (
+        "M5 NO-PROMOTION must not create an installed Runtime Profile surface"
+    )
+    for profile in (
+        "A `SingleLoopInlineEvent`",
+        "B `MultiIoQueuedEvent`",
+        "C `MultiIoDedicatedFixedTick`",
+        "D `MultiIoShardedHybrid`",
+    ):
+        require(profile_load_guide_text, profile, profile_load_guide)
+    for workload_dimension in (
+        "Connections",
+        "Packet frequency and burst shape",
+        "Logic cost",
+        "Tick and cadence",
+        "Handoff",
+        "Broadcast",
+        "Backpressure",
+    ):
+        require(profile_load_guide_text, workload_dimension, profile_load_guide)
+    require(profile_load_guide_text, "provisional and non-installed", profile_load_guide)
+    require(profile_load_guide_text, "paired ranking", profile_load_guide)
     require(status_text, "Current IOE-C1 typed operation-model checkpoint", migration_status)
     require(status_text, "Current IOE-C1 direct read/write checkpoint", migration_status)
     require(status_text, "Current IOE-C1 all-kind direct consumer checkpoint", migration_status)
@@ -485,7 +544,7 @@ def main() -> None:
     require(goal_text, "owner-loop 并发与生命周期内核", goal)
     require(goal_text, "Readiness 与 Completion", goal)
     require(goal_text, "不把候选冻结或发布决定作为架构演进前置条件", goal)
-    require(assessment_text, "外部采用仍被许可证阻塞", assessment)
+    require(assessment_text, "外部采用许可证阻塞已关闭", assessment)
     assert "stable surface review 未完成" not in assessment_text, (
         "assessment must not contradict the recorded API-R1 APPROVE decision"
     )

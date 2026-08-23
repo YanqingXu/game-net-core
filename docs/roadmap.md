@@ -87,9 +87,10 @@ See `migration_status.md` for the current checked state of these phases.
   its uninterrupted 1-hour gate. M4 is closed: final promotion commit
   `8e4a6ed` passed the full fresh non-waived matrix, deterministic Apache-2.0
   packaging, final extracted/upgrade consumers, annotated tag, stable Release,
-  and fresh-download verification. M5 v0.4 Runtime boundary review is the
-  active front. The cancelled `a89e2b0` endurance checkpoint remains
-  historical only.
+  and fresh-download verification. M5 is closed with a second
+  `NO-PROMOTION`, an official Profile load-selection guide, zero public API
+  drift, and no empty v0.4 release. M6/IOE-X11 is the active front. The
+  cancelled `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -316,8 +317,11 @@ checkpoint remains historical `NO-PROMOTION` evidence. M3 real gateway
 integration is closed. M4 is closed at stable Apache-2.0
 `v0.3.0@8e4a6ed`: the complete promotion matrix, deterministic assets, final
 Linux/Windows extracted and upgrade consumers, annotated tag, stable Release,
-and all-asset redownload verification passed. M5 Runtime boundary review is the
-current front, and no Core evidence task is running.
+and all-asset redownload verification passed. M5 repeated the common-capability
+review against the real gateway and closed as a second `NO-PROMOTION`; the
+Profile load-selection guide is published and all four recipes remain
+non-installed. M6/IOE-X11 is the current front, and no Core evidence task is
+running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -348,6 +352,12 @@ current front, and no Core evidence task is running.
 - [x] RTM-R2: bounded logic sharding and Hybrid execution are integrated as the
   non-installed Profile D vertical slice after Profiles A/B/C established
   contract and performance evidence.
+- [x] M5: repeat the cross-Profile review against private gateway `0a8fe1e` and
+  installed Core `736a090`; close as a second `NO-PROMOTION`, publish the
+  workload-based Profile guide, retain zero installed Runtime API, and create
+  no empty v0.4 release.
+- [ ] M6/IOE-X11: compose the listener, Hub, and semantic adapter into one
+  source-private single-owner server without changing production `TcpServer`.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

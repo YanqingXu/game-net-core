@@ -287,7 +287,8 @@ Runtime Model
 
 - stable Apache-2.0 `v0.3.0@8e4a6ed` 已完成同提交双平台、sanitizer、容量、性能、
   fault/repeat、1h/3h、最终包消费者、SPDX/evidence、annotated tag、GitHub Release
-  与回下载验证；M1–M4 已关闭，当前唯一治理前沿是 M5 v0.4 Runtime 边界审查；
+  与回下载验证；M1–M5 已关闭，M5 第二次共同能力审查仍为 `NO-PROMOTION` 且未发布空
+  v0.4，当前唯一治理前沿是 M6/IOE-X11 source-private 单 owner Server composition；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
@@ -323,8 +324,9 @@ Runtime Model
 
 当前张力也已经明确：
 
-- 四个 TCP Runtime Profile 已完成垂直合同；跨 Profile 共同能力审查以
-  `NO-PROMOTION` 关闭，Profile D 的 logic sharding 与 Hybrid 合同不自动授权公共抽象；
+- 四个 TCP Runtime Profile 已完成垂直合同；M3 真实网关证据后的第二次跨 Profile
+  共同能力审查仍以 `NO-PROMOTION` 关闭，Profile D 的 logic sharding 与 Hybrid
+  合同不自动授权公共抽象；
 - Profile A/B/C/D 的组合接口仍故意留在非安装 example/support 层；四个 Profile 只触发
   后续共同能力审查，不自动授权提升公共抽象；
 - I/O Engine 的部分兼容 ABI/layout 仍保留在 0.3 stable surface，物理清理必须等

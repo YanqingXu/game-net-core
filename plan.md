@@ -14,7 +14,7 @@ M1 实现与证据检查点：`f5d39b800b4dd943531670aa09840c931c3dee4d`
 ## 1. 计划定位与总体顺序
 
 本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
-M0–M6、IOE-R1/R2/C1、IOE-X1–X9 和 Runtime Profile A/B/C/D 不再逐项展开；
+M0–M5、IOE-R1/R2/C1、IOE-X1–X9 和 Runtime Profile A/B/C/D 不再逐项展开；
 完整历史结论分别见：
 
 - `docs/migration_status.md`；
@@ -37,7 +37,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M5 v0.4 Runtime 边界**。
+当前唯一治理前沿是 **M6 v0.5 io_uring 可安装实验后端**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -262,8 +262,14 @@ io_uring 不属于 v0.3 stable API。
 
 优先级：P2。启动条件：M3 的 Queued Event 与 Sharded Hybrid 都有真实证据。
 
-状态：**当前治理前沿**。M3 启动条件和 M4 外部发布门均已满足；当前先重新执行跨
-Profile 共同能力审查，不预设必须提升公共 Runtime API。
+状态：**已关闭，第二次 `NO-PROMOTION`**。M3 的独立真实网关在 Queued Event 与
+Sharded Hybrid 两条路径中只使用已安装 v0.3 能力，未提出缺失的 broadly reusable
+Core capability。逐项审查确认 `TransportEndpoint` 已可直接复用，而 Logic admission、
+stop、shard 与 cadence 仍有不同的 owner、Accepted obligation、失败作用域和退休语义。
+因此不激活 Runtime public-surface intent，不增加安装 target/header/ABI，也不发布空
+v0.4.0。完整决策与选择指南见
+`docs/architecture/runtime_profile_common_capability_review.md` 和
+`docs/architecture/runtime_profile_load_selection_guide.md`。
 
 重新执行跨 Profile 共同能力审查。允许提升的候选仅限：
 
@@ -296,6 +302,10 @@ sharding 证据完整。若没有公共能力被提升，不发布空版本；�
 
 仅在 `X10=PROMOTE` 且 ARCH-G1 批准时执行；否则整个 M6 标记为
 `skipped-by-evidence`，直接进入 M7。
+
+状态：**当前治理前沿**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；立即任务是
+IOE-X11 source-private 单 owner Server composition。M5 没有发布空 v0.4，实际
+experimental preview 版本在 M6 发布门前按“下一可交付版本”重新确认。
 
 ### 8.1 IOE-X11：单 owner Server composition
 
@@ -540,10 +550,8 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M5 是下一治理前沿，无后台 Core 证据任务**：M1–M4 已关闭。`v0.3.0` 已在精确
-> promotion commit `8e4a6ed` 上完成 Linux/Windows、sanitizer、容量、benchmark、
-> fault、repeat、1h/3h、package、SBOM、evidence、annotated tag、stable Release 和
-> 回下载验证。当前立即重新执行跨 Profile 共同能力审查，只允许从已由至少两个真实
-> Profile 重复证明的 `TransportEndpoint`、typed/bounded `LogicExecutor` admission、
-> 可等待单调 `RuntimeStopFuture` 及语义一致的 shard/cadence 类型中选择；若证据仍不足，
-> 明确记录 `NO-PROMOTION`，不得以 Runtime factory 或通用服务器外壳代替证据。
+> **M6/IOE-X11 是下一治理前沿，无后台 Core 证据任务**：M1–M5 已关闭。M5 对真实
+> 网关和四个 Profile 重新审查后记录第二次 `NO-PROMOTION`，公共 v0.3 API 零漂移，
+> 未发布空 v0.4。当前按 `X10=PROMOTE` 与 `ARCH-G1=APPROVE` 的条件授权，先建立
+> source-private 单 owner io_uring Server composition；仍不得修改 production
+> `TcpServer`、开放公共 backend selector 或提前安装 experimental target。
