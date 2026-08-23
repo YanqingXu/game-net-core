@@ -65,7 +65,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M10 v0.9 UDP/KCP 实验能力证据审查**。
+当前唯一治理前沿是 **M11 v1.0 稳定化与发布就绪审查**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -523,9 +523,13 @@ MINI/coroutine、fragmentation、无界 DNS 生命周期和完整 HTTP server �
 
 ## 12. M10：v0.9 UDP/KCP 实验能力
 
-状态：**当前治理前沿**。先按启动条件审查 UDP、KCP、PMTU intents 与两个真实
-consumer 的共同需求；未完成 intent promotion 和 owner/lifecycle 合同评审前不创建
-实验 target 或占位 v0.9。
+状态：**已关闭，`NO-PROMOTION`**。精确审计记录见
+`docs/development/m10_udp_kcp_readiness_2026-08-24.md`。Core baseline
+`f1f89f0e66642b4be3c988400213783e5120536c` 的 active SessionManager 3/3
+只证明 generation-safe 单 endpoint；Gateway `588acd0` 与独立
+`YanGameServer@b525416` 均无 datagram runtime。历史迁移源
+`mini_trantor@3eba368` 虽有 UDP/KCP/PMTU 代码，但缺少当前 typed admission、peer
+generation、所有 retained 容量上限和双平台合同，不能充当第二 consumer。
 
 启动条件：
 
@@ -570,10 +574,21 @@ consumer 的共同需求；未完成 intent promotion 和 owner/lifecycle 合同
 - UDP/KCP headers 使用 experimental versioning；
 - 不作为 v1 稳定传输，不自动与 TCP 组成双通道。
 
+启动门审计已命中关闭分支：`udp`、`kcp_transport`、`path_mtu_cache`、
+`platform_path_mtu_signal` 与 `path_mtu_signal_authentication` 保持 deferred；
+DGM-U1/U2/K1/K2 均为 `NO-PROMOTION`，DGM-X1 为 `skipped-by-evidence`。未创建
+`GameNet::experimental_datagram`、manifest、package component 或空 v0.9。未来恢复
+必须先缩小旧源中过量的 raw-ICMP/FEC 范围、补齐有界 typed 生命周期并获得两个真实
+consumer 与 Windows/Linux 证据。
+
 raw ICMP、authenticated PMTU signal、FEC、advanced congestion control、zero-copy
 和跨进程 Session migration 全部留到 v1 后。
 
 ## 13. M11：v1.0 稳定化与发布
+
+状态：**当前治理前沿**。先审查 stable API/ABI、0.3→1.0 consumer、同提交
+Linux/Windows/sanitizer/fuzz/fault/endurance、包/SBOM/许可证和兼容性证据；全部门禁
+满足前不得创建 v1.0 tag、Release 或稳定性承诺。
 
 ### 13.1 v1 稳定范围
 
@@ -656,7 +671,7 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M10 UDP/KCP 实验能力证据审查是下一治理前沿，无后台 Core 证据任务**：M1–M9
+> **M11 v1.0 稳定化与发布就绪审查是下一治理前沿，无后台 Core 证据任务**：M1–M10
 > 与 IOE-X11–IOE-X15 已关闭。X15 在
 > `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
 > 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。M7 Gateway 实现
@@ -665,4 +680,6 @@ planned -> contract-ready -> implemented -> verified -> integrated
 > coroutine、Task/owner/retirement 合同不可替代而以 `NO-PROMOTION` 关闭。M9 又因
 > Gateway 无 TLS/WebSocket/DNS、YanGame native-worker mTLS 明确排除 GameNet
 > EventLoop TLS、且不存在第二个 WebSocket/DNS consumer 而以 `NO-PROMOTION` 关闭。
-> 当前只审查 UDP/KCP/PMTU 的外部共同需求，不得提前并行展开 v1 稳定发布。
+> M10 又因两个外部 consumer 均无 datagram runtime、五个 intent 未提升、旧迁移源
+> 缺少当前 typed/generation/bounds/双平台合同而以 `NO-PROMOTION` 关闭。当前只审查
+> v1.0 稳定化与发布门禁；证据未闭环前不得创建 tag 或 GitHub Release。

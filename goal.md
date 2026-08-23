@@ -314,8 +314,13 @@ Runtime Model
   `TransportEndpoint` 3/3 通过，YanGame fallback TLS 4/4 通过且两项真实 OpenSSL
   测试明确 skipped，但 Gateway 无实现且 YanGame 明确排除 GameNet EventLoop TLS，
   因此 M9 以 `NO-PROMOTION` 关闭；五个相关 intents 继续 deferred，未增加
-  TLS/WebSocket/DNS/HTTP 安装面或空 v0.8 发布；当前唯一治理前沿是 M10 UDP/KCP
-  实验能力证据审查；
+  TLS/WebSocket/DNS/HTTP 安装面或空 v0.8 发布；M10 又以 Core
+  `f1f89f0e66642b4be3c988400213783e5120536c`、Gateway `588acd0`、独立
+  `YanGameServer@b525416` 和迁移源 `mini_trantor@3eba368` 审查 UDP/KCP/PMTU。
+  两个外部 consumer 均无 datagram runtime，五个 intents 仍 deferred，旧源也缺少
+  当前 typed、generation-safe、有界和双平台合同，因此 M10 以 `NO-PROMOTION`
+  关闭；未增加 experimental datagram 安装面或空 v0.9 发布；当前唯一治理前沿是
+  M11 v1.0 稳定化与发布就绪审查；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness

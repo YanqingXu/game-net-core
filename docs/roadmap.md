@@ -108,8 +108,13 @@ See `migration_status.md` for the current checked state of these phases.
   4/4 plus two explicit real-OpenSSL skips do not form a shared EventLoop TLS,
   WebSocket, or DNS contract. M9 closed as `NO-PROMOTION` with all five related
   intents deferred and no empty v0.8 release. M10 UDP/KCP evidence review is
-  the active front. The cancelled `a89e2b0` endurance checkpoint remains
-  historical only.
+  then closed as `NO-PROMOTION` against Core `f1f89f0`, gateway `588acd0`,
+  `YanGameServer@b525416`, and historical `mini_trantor@3eba368`: both external
+  consumers have no datagram runtime and the old source lacks the current
+  typed/generation/bounds/dual-platform contract. All five intents remain
+  deferred and no empty v0.9 release exists. M11 v1.0 stabilization/release
+  readiness is the active front. The cancelled `a89e2b0` endurance checkpoint
+  remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -348,7 +353,9 @@ non-installed. IOE-X11 is closed at
 closed as `NO-PROMOTION` at gateway `588acd0`, M8 async/coroutine promotion
 closed as `NO-PROMOTION` against Core `e5ea9ef` and YanGame `b525416`, and M9
 transport/TLS/WebSocket/DNS promotion closed as `NO-PROMOTION` against Core
-`fff4162`, gateway `588acd0`, and YanGame `b525416`. M10 UDP/KCP evidence review
+`fff4162`, gateway `588acd0`, and YanGame `b525416`; M10 UDP/KCP promotion then
+closed as `NO-PROMOTION` against Core `f1f89f0`, the same external checkpoints,
+and historical mini-trantor `3eba368`. M11 v1.0 stabilization/release readiness
 is the current front, and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
@@ -432,6 +439,13 @@ is the current front, and no Core evidence task is running.
   and DNS have no consumer pair. Close as `NO-PROMOTION`, keep all five related
   intents deferred, add no TLS/WebSocket/DNS/HTTP surface or empty v0.8 release,
   and advance to M10.
+- [x] M10: audit the five deferred UDP/KCP/PMTU intents, both external
+  consumers, active single-endpoint SessionManager, and historical
+  `mini_trantor@3eba368`. No real external datagram consumer exists, and the old
+  source lacks typed admission, peer generation, retained-work bounds, and
+  dual-platform runtime/package evidence. Close DGM-U1/U2/K1/K2 as
+  `NO-PROMOTION`, DGM-X1 as `skipped-by-evidence`, create no empty v0.9 release,
+  and advance to M11.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

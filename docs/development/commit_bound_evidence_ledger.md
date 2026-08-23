@@ -638,3 +638,15 @@ a completed, exact-commit record.
 | Intent decision | Keep `connection_transport`, `tls`, `websocket`, `dns_resolver`, and `http` deferred. Their old MINI/coroutine, incomplete fragmentation, undefined/unbounded DNS retirement, and full-HTTP assumptions require rewrite before a future promotion review. Preserve active `TransportEndpoint` unchanged. |
 | Verification | `tests/cmake/test_migration_status_contract.py` binds `docs/development/m9_tls_websocket_dns_readiness_2026-08-24.md`, the five deferred intent/catalog entries, exact external checkpoints, focused evidence, M9 `NO-PROMOTION`, M10 as the next front, and absence of installed TLS/WebSocket/DNS/HTTP headers or targets. |
 | Decision | Close M9 as `NO-PROMOTION`; publish no empty v0.8 release and advance the unique governance front to M10 UDP/KCP experimental-capability evidence review. |
+
+## M10-G0 UDP / KCP Experimental Promotion Audit — 2026-08-24
+
+| Field | Evidence |
+| --- | --- |
+| Core baseline | `f1f89f0e66642b4be3c988400213783e5120536c` closes M9 without transport/protocol promotion. Core has no UDP/KCP/PMTU runtime or `GameNet::experimental_datagram`. Active SessionManager contract/lifecycle/dispatch tests passed 3/3 and retain one generation-safe current endpoint rather than automatic mutable TCP/UDP dual ownership. |
+| External inputs | Exact gateway `588acd079be93de3e230ba4f07dd111f7bec6a3c` and independent `YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` have no UDP, KCP, PMTU, or datagram runtime/test path. Neither supplies even a first external consumer. |
+| Historical source | Clean nested `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57` contains the old preview, but its void/silent-drop APIs, address-only session mapping, absent peer generation, unbounded send/in-flight/fragment/cache containers, and mixed raw-ICMP/FEC scope do not meet current gates. Its Windows graph registers only the KCP codec; a fresh TLS-off Windows build failed on an unrelated unconditional OpenSSL include, and fresh TLS-on WSL configure failed because OpenSSL development files were unavailable. No runtime pass is claimed. |
+| Startup gates | Stable v0.3 and two M3 TCP profiles exist. Mandatory intent promotion and reviewed owner/session-generation/MTU/retransmission/backpressure/dual-close contracts do not: all five formal intents remain deferred and the broad scope text is legacy. |
+| Slice decision | DGM-U1, DGM-U2, DGM-K1, and DGM-K2 are `NO-PROMOTION`; DGM-X1 is `skipped-by-evidence`. No implementation, manifest, component, tag, Release, or empty v0.9 is created. |
+| Verification | `tests/cmake/test_migration_status_contract.py` binds `docs/development/m10_udp_kcp_readiness_2026-08-24.md`, all five deferred intent/catalog entries, exact checkpoints, focused 3/3 Core evidence, setup-attempt truthfulness, slice decisions, M11 as the next front, and absence of installed UDP/KCP/PMTU/datagram headers or targets. |
+| Decision | Close M10 as `NO-PROMOTION`; preserve active TCP/session contracts and advance the unique governance front to M11 v1.0 stabilization and release readiness. |

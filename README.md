@@ -97,7 +97,13 @@ YanGame's native-worker internal-RPC mTLS explicitly excludes GameNet
 EventLoop TLS, so no substitutable two-consumer contract exists. M9 closes as
 `NO-PROMOTION`; all five transport/protocol intents remain deferred, no empty
 v0.8 release exists, and M10 UDP/KCP evidence review is the next governance
-front.
+front. M10 then audited Core `f1f89f0`, gateway `588acd0`, independent
+`YanGameServer@b525416`, and historical migration source
+`mini_trantor@3eba368`. Both external consumers have no datagram runtime, all
+five intents remain deferred, and the old source lacks the current typed,
+generation-safe, bounded, dual-platform contract. M10 closes as
+`NO-PROMOTION`; no experimental datagram package or empty v0.9 release exists,
+and M11 v1.0 stabilization/release readiness is the next governance front.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

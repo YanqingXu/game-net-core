@@ -66,14 +66,21 @@ TLS/WebSocket/DNS runtime and YanGame's native-worker internal-RPC mTLS
 explicitly excludes GameNet EventLoop TLS, so no substitutable two-consumer
 contract exists. M9 closes as `NO-PROMOTION`; the five related intents remain
 deferred, no TLS/WebSocket/DNS/HTTP surface or empty v0.8 release was added,
-and M10 UDP/KCP evidence review is now the governance front.
+and M10 UDP/KCP evidence review became the governance front. M10 then audited
+Core `f1f89f0`, gateway `588acd0`, independent `YanGameServer@b525416`, and
+historical `mini_trantor@3eba368`. Both external consumers have no datagram
+runtime, all five intents remain deferred, and the old source lacks the current
+typed, generation-safe, bounded, dual-platform contract. M10 closes as
+`NO-PROMOTION`; no experimental datagram component or empty v0.9 release was
+added, and M11 v1.0 stabilization/release readiness is now the governance
+front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1–M9 and IOE-X11–X15 are closed; M10 UDP/KCP experimental-capability
-evidence review is the unique governance front. There is no running Core
-evidence task after the M9 decision closure.
+`APPROVE`. M1–M10 and IOE-X11–X15 are closed; M11 v1.0 stabilization/release
+readiness is the unique governance front. There is no running Core evidence
+task after the M10 decision closure.
 
 Current IOE-X15 implementation/evidence checkpoint:
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
@@ -106,6 +113,18 @@ TLS fallback contracts passed 4/4 with two real-OpenSSL cases explicitly
 skipped. The comparison closes M9 as `NO-PROMOTION` and keeps
 `connection_transport`, `tls`, `websocket`, `dns_resolver`, and `http`
 deferred.
+
+Current M10-G0 UDP/KCP audit baseline:
+`f1f89f0e66642b4be3c988400213783e5120536c` (2026-08-24). Gateway
+`588acd079be93de3e230ba4f07dd111f7bec6a3c` and exact
+`YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` have no datagram
+runtime. Historical source
+`mini_trantor@3eba368475a68f677aae920d4f299b155db23d57` contains an old UDP/KCP/
+PMTU preview but not the current typed admission, peer generation, retained-
+capacity, dual-platform, or installed-package contract. Core SessionManager
+passed 3/3 and remains a single-endpoint binding. The comparison closes M10 as
+`NO-PROMOTION` and keeps `udp`, `kcp_transport`, `path_mtu_cache`,
+`platform_path_mtu_signal`, and `path_mtu_signal_authentication` deferred.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -482,7 +501,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1–M9 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, M7 external Lua/typed RPC closed at gateway `588acd0`, M8 async/coroutine promotion closed against Core `e5ea9ef` / YanGame `b525416`, and M9 transport/TLS/WebSocket/DNS promotion closed against Core `fff4162` / gateway `588acd0` / YanGame `b525416`; all are `NO-PROMOTION`. M10 UDP/KCP evidence review is active. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M10 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, M7 external Lua/typed RPC closed at gateway `588acd0`, M8 async/coroutine promotion closed against Core `e5ea9ef` / YanGame `b525416`, M9 transport/TLS/WebSocket/DNS promotion closed against Core `fff4162` / gateway `588acd0` / YanGame `b525416`, and M10 UDP/KCP promotion closed against Core `f1f89f0` / gateway `588acd0` / YanGame `b525416` / historical mini-trantor `3eba368`; all are `NO-PROMOTION`. M11 v1.0 stabilization/release readiness is active. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
 
 ## Current Intent Inventory
 
