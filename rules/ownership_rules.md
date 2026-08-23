@@ -190,6 +190,26 @@ It must not blur these roles.
   the listener future and every Adapter terminal are ready may the Server stop
   its Hub; the Server future is published after the Hub future and before any
   legal owner-side destruction
+- the IOE-X12 accept Hub uniquely owns its listening socket and Accept
+  operations but owns no established connection route. Each successful Accept
+  is held by one RAII Socket until a bounded worker post accepts a shared
+  handoff envelope; rejected posts destroy that envelope on the accept owner
+- an accepted worker post uniquely owns the envelope and fd until its exact
+  worker callback runs. That callback releases the fd only into its worker Hub,
+  whose `addConnection` consumes both accepted and rejected descriptors. No
+  raw fd is copied into placement metrics, retry storage, or another worker
+- one worker load reservation is created with an accepted handoff post. It is
+  rolled back on worker admission rejection and otherwise remains paired with
+  the Adapter until physical close publication. Pending handoff settlement and
+  load retirement are exact-once even during Server or EventLoop shutdown
+- every IOE-X12 worker uniquely owns one Hub/Pump/Engine and its Adapter set.
+  The base Server retains only shared worker-control state and immutable stop
+  summaries; it cannot destroy a live Hub. Worker lifecycle continuation first
+  observes Hub stop, then destroys it on that worker before reporting cleanup
+- IOE-X12 Server stop retains the accept Hub until its listener and Pump stop,
+  retains handoff envelopes until worker settlement, and retains the thread
+  pool until every worker reports owner-side Hub destruction. The final future
+  precedes only legal base-owner Server destruction and follows pool join
 
 ## 3. Poller
 - Poller does not own Channel

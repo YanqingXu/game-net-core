@@ -13,6 +13,11 @@
 #include <optional>
 #include <string_view>
 
+namespace gamenet::net {
+class InetAddress;
+class Socket;
+}
+
 namespace gamenet::experimental::io_uring {
 
 struct IoUringTcpConnectionIdentity {
@@ -100,6 +105,16 @@ struct IoUringTcpConnectionHubOptions {
     std::size_t maxPendingAccepts{1};
 };
 
+// Typed result returned by an IOE-X12 accepted-socket ownership consumer.
+// Accepted means the consumer retained or transferred the Socket RAII owner;
+// every other result destroys it before the listener rearms.
+enum class IoUringTcpHubAcceptedSocketResult : std::uint8_t {
+    Accepted,
+    QueueFull,
+    WorkerShutdown,
+    RejectedInvalid,
+};
+
 struct IoUringTcpConnectionHubAddOutcome;
 
 struct IoUringTcpHubAcceptedConnectionCallbacks {
@@ -125,6 +140,9 @@ struct IoUringTcpHubListenerMetrics {
     std::uint64_t connectionsAdmitted{};
     std::uint64_t acceptedSocketRejections{};
     std::uint64_t connectionLimitRejections{};
+    std::uint64_t acceptedSocketHandoffs{};
+    std::uint64_t handoffQueueFullRejections{};
+    std::uint64_t handoffShutdownRejections{};
     std::uint64_t transientAcceptFailures{};
     std::uint64_t engineRejections{};
     std::uint64_t callbackFailures{};
@@ -244,6 +262,10 @@ public:
         std::function<void(const IoUringTcpConnectionHubStopSummary&)>;
     using AcceptedConnectionFactory =
         std::function<IoUringTcpHubAcceptedConnectionCallbacks()>;
+    using AcceptedSocketConsumer = std::function<
+        IoUringTcpHubAcceptedSocketResult(
+            std::unique_ptr<gamenet::net::Socket>,
+            const gamenet::net::InetAddress&)>;
     using ListenerStoppedConsumer =
         std::function<void(const IoUringTcpHubListenerStopSummary&)>;
 
@@ -266,6 +288,13 @@ public:
     IoUringTcpHubListenOutcome listen(
         gamenet::net::SocketFd listeningSocket,
         AcceptedConnectionFactory connectionFactory,
+        ListenerStoppedConsumer stoppedConsumer = {});
+    // IOE-X12 listener-only mode. The accepted Socket is uniquely owned by the
+    // consumer call. Returning Accepted requires the consumer to retain or
+    // transfer that RAII owner; rejection and unwinding close it exactly once.
+    IoUringTcpHubListenOutcome listenAndHandoff(
+        gamenet::net::SocketFd listeningSocket,
+        AcceptedSocketConsumer socketConsumer,
         ListenerStoppedConsumer stoppedConsumer = {});
     bool stopListening();
     // Mutable Hub observations are owner-loop-only and reject foreign reads.

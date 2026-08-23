@@ -38,6 +38,14 @@ def main() -> None:
     )
     server_header = repo_root / "src/experimental/io_uring/IoUringTcpServer.h"
     server_source = repo_root / "src/experimental/io_uring/IoUringTcpServer.cc"
+    multi_owner_server_header = (
+        repo_root
+        / "src/experimental/io_uring/IoUringTcpMultiOwnerServer.h"
+    )
+    multi_owner_server_source = (
+        repo_root
+        / "src/experimental/io_uring/IoUringTcpMultiOwnerServer.cc"
+    )
     lifecycle_registry = (
         repo_root / "src/core/net/detail/EventLoopLifecycleRegistry.h"
     )
@@ -71,6 +79,10 @@ def main() -> None:
     )
     server_contract = (
         repo_root / "tests/contract/io_engine/test_io_uring_tcp_server.cpp"
+    )
+    multi_owner_server_contract = (
+        repo_root
+        / "tests/contract/io_engine/test_io_uring_tcp_multi_owner_server.cpp"
     )
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     benchmark = repo_root / "benchmarks" / "io_uring" / "one_shot.cpp"
@@ -112,6 +124,8 @@ def main() -> None:
         adapter_source,
         server_header,
         server_source,
+        multi_owner_server_header,
+        multi_owner_server_source,
         contract,
         pump_contract,
         driver_contract,
@@ -120,6 +134,7 @@ def main() -> None:
         listener_contract,
         adapter_contract,
         server_contract,
+        multi_owner_server_contract,
         benchmark,
         benchmark_validator,
         shared_hub_benchmark,
@@ -144,6 +159,7 @@ def main() -> None:
     require(cmake_text, "IoUringTcpConnectionHub.cc", experimental_cmake)
     require(cmake_text, "IoUringTcpConnectionAdapter.cc", experimental_cmake)
     require(cmake_text, "IoUringTcpServer.cc", experimental_cmake)
+    require(cmake_text, "IoUringTcpMultiOwnerServer.cc", experimental_cmake)
     require(cmake_text, "gamenet_configure_sanitizers", experimental_cmake)
     assert "install(" not in cmake_text, "IOE-X1 target must remain non-installed"
 
@@ -408,6 +424,11 @@ def main() -> None:
         "gamenet_io_uring_tcp_server_contract",
         tests_cmake,
     )
+    require(
+        tests_text,
+        "gamenet_io_uring_tcp_multi_owner_server_contract",
+        tests_cmake,
+    )
     require(tests_text, "gamenet_io_uring_contracts", tests_cmake)
     require(tests_text, "test_io_uring_event_loop_pump.cpp", tests_cmake)
     require(tests_text, "test_io_uring_tcp_connection_driver.cpp", tests_cmake)
@@ -428,6 +449,11 @@ def main() -> None:
         tests_cmake,
     )
     require(tests_text, "test_io_uring_tcp_server.cpp", tests_cmake)
+    require(
+        tests_text,
+        "test_io_uring_tcp_multi_owner_server.cpp",
+        tests_cmake,
+    )
     require(tests_text, "contract.io_engine.test_io_uring_completion_engine", tests_cmake)
     require(tests_text, "GameNet::experimental", tests_cmake)
     require(tests_text, "experimental;threading;lifecycle", tests_cmake)
@@ -792,6 +818,7 @@ def main() -> None:
     require(intent_text, "IOE-X8 authorizes bounded cross-thread command admission", intent)
     require(intent_text, "IOE-X9 authorizes one source-private listener", intent)
     require(intent_text, "IOE-X11 authorizes one source-private single-owner server", intent)
+    require(intent_text, "IOE-X12 authorizes one source-private multi-owner server", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_completion_engine.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp", intent)
@@ -816,6 +843,11 @@ def main() -> None:
         "tests/contract/io_engine/test_io_uring_tcp_server.cpp",
         intent,
     )
+    require(
+        intent_text,
+        "tests/contract/io_engine/test_io_uring_tcp_multi_owner_server.cpp",
+        intent,
+    )
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X1's raw io_uring Engine", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X2's non-installed completion pump", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X3 single-connection driver", thread_rules)
@@ -826,6 +858,7 @@ def main() -> None:
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X8 permits only Adapter", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X9 listener construction", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X11 Server construction", thread_rules)
+    require(thread_rules.read_text(encoding="utf-8"), "IOE-X12 Server configuration", thread_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X1 experimental target owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X2 pump owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X3 driver uniquely owns", ownership_rules)
@@ -836,6 +869,7 @@ def main() -> None:
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X8 foreign Send admission", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X9 `listen` transfers", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X11 Server uniquely owns", ownership_rules)
+    require(ownership_rules.read_text(encoding="utf-8"), "IOE-X12 accept Hub uniquely owns", ownership_rules)
     require(testing_rules.read_text(encoding="utf-8"), "real Linux io_uring fd", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X2 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X3 contract", testing_rules)
@@ -846,6 +880,44 @@ def main() -> None:
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X8 cross-thread contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X9 listener contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X11 contract", testing_rules)
+    require(testing_rules.read_text(encoding="utf-8"), "IOE-X12 contract", testing_rules)
+
+    multi_owner_text = (
+        multi_owner_server_header.read_text(encoding="utf-8")
+        + multi_owner_server_source.read_text(encoding="utf-8")
+    )
+    for fragment in (
+        "IoUringTcpMultiOwnerServer",
+        "maxPendingHandoffs",
+        "EventLoopSelectionPolicy::LeastConnections",
+        "pool_->selectLoop",
+        "worker->executor().post",
+        "releasePlacement",
+        "attachQuiesceParticipant",
+        "listenerStoppedBeforeWorkers",
+        "ownerDestroyedHub",
+    ):
+        require(multi_owner_text, fragment, multi_owner_server_source)
+
+    multi_owner_contract_text = multi_owner_server_contract.read_text(
+        encoding="utf-8"
+    )
+    for fragment in (
+        "testRoundRobinHandoffKeepsWorkerOwnership",
+        "testLeastConnectionsUsesReservedAndPhysicalLoads",
+        "testQueueLagAvoidsWorkerWithOlderPendingWork",
+        "testConsistentHashKeepsPeerIpStable",
+        "testBoundedHandoffRejectsWithoutOverflowQueue",
+        "testEventLoopQueueFullRetainsAcceptOwnerUntilClose",
+        "testWorkerHubAdmissionFailureRollsBackPlacementLoad",
+        "testWorkerShutdownRejectsNewAcceptedSocket",
+        "testAcceptOwnerQuitForcesAllWorkerResidueToZero",
+    ):
+        require(
+            multi_owner_contract_text,
+            fragment,
+            multi_owner_server_contract,
+        )
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "test_io_uring_completion_engine_contract.py", workflow)
@@ -857,13 +929,14 @@ def main() -> None:
     require(workflow_text, "tcp_connection_hub_capacity", workflow)
     require(workflow_text, "tcp_listener", workflow)
     require(workflow_text, "tcp_connection_adapter", workflow)
+    require(workflow_text, "tcp_multi_owner_server", workflow)
     require(
         platform_docs.read_text(encoding="utf-8"),
-        "IOE-X1–X11 io_uring",
+        "IOE-X1–X12 io_uring",
         platform_docs,
     )
 
-    print("IOE-X1–X11 Engine, Pump, driver, Hub, capacity, adapter, listener, Server, and comparison contracts verified")
+    print("IOE-X1–X12 Engine, Pump, driver, Hub, capacity, adapter, listener, single-/multi-owner Server, and comparison contracts verified")
 
 
 if __name__ == "__main__":

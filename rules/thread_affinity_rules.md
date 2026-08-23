@@ -325,6 +325,29 @@ No other direct mutation path is allowed for core loop state.
   observe immutable futures and self-signal while physical listener/route drain
   remains, but it carries no CQE or business data, invokes no user callback,
   never blocks, and detaches before requesting final Hub stop
+- IOE-X12 Server configuration, start/bind/listen, placement selection,
+  listener control, aggregate observation, pool join, final publication, and
+  destruction are accept/base-owner-only. Cross-thread callers receive no new
+  Server mutation path; only the existing Adapter Send/Shutdown/Force mailbox
+  remains cross-thread capable while an Adapter facade is alive
+- the accept owner may obtain peer address and post one ownership envelope but
+  never establishes an Adapter or invokes connection/message callbacks. The
+  selected worker is immutable after accepted post; only that worker may
+  create, bind, mutate, stop, and destroy its Hub routes and Adapter observers
+- RoundRobin, QueueLag, and ConsistentHash selection call the existing
+  EventLoopThreadPool selector on the base owner. LeastConnections reads atomic
+  worker reservations on the base owner and uses the same rotating tie cursor;
+  workers may only decrement their own reservation after admission rejection or
+  physical close, never choose or migrate placement
+- each worker pre-attaches one quiesce participant during pool startup. Stop
+  signals coalesce without pending-functor admission, drain bounded owner work,
+  may self-signal until Adapter/Hub retirement, and detach only after Hub/Pump
+  destruction on that worker. A worker-loop quit forces the same path
+- the base pre-attaches one quiesce participant before start. It sequences
+  listener retirement, handoff settlement, worker stop, accept-Hub destruction,
+  pool join, and final publication without blocking inside any worker callback;
+  a base-loop quit force-escalates and keeps final drain open until all owners
+  report silence
 - Completion Engine, Pump, Driver, and Hub destruction is owner-only. Pump-
   based destructors require an already-published physical stop and perform no
   wait; a live accepted obligation is a fail-fast precondition violation, not

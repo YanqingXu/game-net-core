@@ -283,6 +283,25 @@ Contract tests verify:
   Server convergence with zero operation/notice/socket/pending-byte/owned-byte
   residue. Typed bind/listen failure and foreign-thread mutation must leave the
   Server capable of a complete owner-side stop
+- the IOE-X12 contract uses one real loopback accept owner and at least two real
+  worker EventLoops. It records worker identity from callbacks and proves four
+  RoundRobin connections alternate owners, established echo/close callbacks
+  never return to the accept owner, and physical close retires each exact load
+- separate deterministic cases prove rotating-tie LeastConnections after one
+  worker stays loaded, QueueLag avoids a worker with older queued work, and
+  ConsistentHash maps repeated connections from the same peer IP to one stable
+  worker. Tests must exercise the production selector for all policies except
+  the explicitly mirrored LeastConnections load accounting
+- with `maxPendingHandoffs == 1`, a blocked worker keeps one accepted envelope
+  pending while the next accepted fd is rejected and closed without an
+  overflow queue. A separately quiesced worker makes EventLoop post return a
+  shutdown result; both cases must reconcile pending/load metrics and allow
+  later listener-first stop
+- X12 graceful/force and owner-quit cases require listener retirement before
+  worker stop, exact settlement of all accepted posts, owner-side destruction
+  of every worker Hub/Pump before thread-pool join, and zero listener, handoff,
+  route, operation, notice, fd, pending-byte, and Engine-owned-byte residue
+  under normal, focused repeat, ASan/UBSan, and TSan gates
 - a deterministic subprocess destruction contract holds a real accepted Recv
   and lease, invokes Pump destruction before physical stop, and requires an
   immediate fail-fast result rather than the historical 250 ms owner wait or

@@ -585,6 +585,52 @@ existing listener, shared Hub, and semantic Adapter:
   production backend replacement, multishot, provided buffers, fixed files,
   zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
 
+IOE-X12 authorizes one source-private multi-owner server topology over the
+proven X9 listener, X4 Hub, X8 Adapter, and production EventLoop placement
+vocabulary:
+
+- `IoUringTcpMultiOwnerServer` remains Linux-only, default-off, non-installed,
+  and source-private. Its base EventLoop owns configuration, listener, worker
+  selection, lifecycle coordination, observations, and final publication;
+  each worker EventLoop exclusively owns one Hub/Pump/Engine and every Adapter
+  placed on that worker;
+- one successful Accept completion is first wrapped by listener-owner RAII.
+  The listener obtains the peer address, chooses exactly one worker, reserves
+  one finite handoff slot and worker load, then posts one copyable envelope to
+  that worker's bounded `EventLoopExecutor`. Only an accepted post releases the
+  fd from listener-owner RAII into the envelope; the worker releases it only
+  into its own Hub `addConnection` call, which consumes all outcomes;
+- handoff-limit saturation, EventLoop queue saturation, closed worker
+  admission, worker Hub rejection, callback failure, and shutdown races retain
+  one identifiable current owner that closes the fd exactly once. There is no
+  retry queue, fallback worker, blocking post, raw-fd side table, or recursive
+  drain;
+- RoundRobin and rotating-tie LeastConnections preserve production
+  EventLoopThreadPool order. QueueLag uses the production pending-functor
+  depth/oldest-ready selector, and ConsistentHash uses the production stable
+  peer-IP key mapping. LeastConnections counts accepted handoff reservations
+  plus established routes, rolls back rejected handoffs, and decrements only
+  after physical Adapter retirement;
+- successful establishment binds Adapter identity/future before invoking the
+  worker connection callback. Message, high-water, write-complete, close-info,
+  and connection callbacks execute on that immutable worker owner and may
+  re-enter owner-safe Adapter operations. An established connection never
+  migrates, and no callback is forwarded through the accept owner;
+- graceful or forced Server stop seals and physically retires the listener
+  first. Only after every already-accepted handoff has settled does the base
+  owner signal each worker's pre-attached bounded lifecycle participant.
+  Workers retire Adapters, stop their Hubs, destroy Hub/Pump state on their own
+  owner, and report physical cleanup before the base owner joins the pool and
+  publishes the Server future;
+- base-loop or worker-loop quiesce escalates the same topology to force stop
+  through lifecycle sources that do not depend on normal pending-functor
+  capacity. Final publication requires zero listener, handoff, Adapter, Hub,
+  operation, notice, socket, and byte residue on every owner;
+- IOE-X12 does not authorize Connect/TcpClient, connection migration,
+  work-stealing after admission, installed experimental headers, stable API
+  changes, production backend replacement, multishot, provided buffers, fixed
+  files, zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -624,7 +670,10 @@ existing listener, shared Hub, and semantic Adapter:
 14. IOE-X11 composes the listener, shared Hub, and semantic Adapter into one
     source-private single-owner server with typed start, callback re-entry,
     graceful drain, force escalation, and physical stop convergence.
-15. Only proven, cross-backend concepts may later graduate to a narrow public
+15. IOE-X12 composes one accept owner with finitely many worker-owned
+    Hub/Pump/Engine instances through bounded, exactly-owned accepted-fd
+    handoff while preserving the four production placement policies.
+16. Only proven, cross-backend concepts may later graduate to a narrow public
     capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -714,6 +763,13 @@ existing listener, shared Hub, and semantic Adapter:
   half-close, preserves the first reason under force escalation, reports typed
   bind/listen/admission failure, rejects foreign mutation, and publishes its
   stop future only after zero listener/Adapter/Hub/Engine residue.
+- `tests/contract/io_engine/test_io_uring_tcp_multi_owner_server.cpp` verifies
+  the IOE-X12 source-private Server hands real accepted fds from one accept
+  owner to worker-owned Hubs through bounded EventLoop admission, preserves
+  RoundRobin, rotating-tie LeastConnections, QueueLag, and ConsistentHash
+  placement, keeps every established callback on its immutable worker, closes
+  saturation/shutdown/admission failures exactly once, and publishes only
+  after listener-first, all-worker zero-residue convergence.
 - `benchmarks/io_uring/listener_comparison.cpp` drives the fixed IOE-X10
   256-route/four-wave listener workload through either production epoll or the
   source-private completion listener and emits one validated backend sample.

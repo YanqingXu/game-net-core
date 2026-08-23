@@ -112,10 +112,12 @@ private:
         Listener(
             gamenet::net::SocketFd socketFd,
             IoUringTcpConnectionHub::AcceptedConnectionFactory factoryValue,
+            IoUringTcpConnectionHub::AcceptedSocketConsumer consumerValue,
             IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedValue,
             std::size_t acceptDepth)
             : socket(socketFd),
               factory(std::move(factoryValue)),
+              socketConsumer(std::move(consumerValue)),
               stoppedConsumer(std::move(stoppedValue)),
               stopFuture(stopPromise.get_future().share()) {
             acceptIdentities.reserve(acceptDepth);
@@ -123,6 +125,7 @@ private:
 
         gamenet::net::Socket socket;
         IoUringTcpConnectionHub::AcceptedConnectionFactory factory;
+        IoUringTcpConnectionHub::AcceptedSocketConsumer socketConsumer;
         IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedConsumer;
         std::promise<IoUringTcpHubListenerStopSummary> stopPromise;
         std::shared_future<IoUringTcpHubListenerStopSummary> stopFuture;
@@ -265,9 +268,33 @@ public:
         gamenet::net::SocketFd listeningSocket,
         IoUringTcpConnectionHub::AcceptedConnectionFactory factory,
         IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedConsumer) {
+        return listenImpl(
+            listeningSocket,
+            std::move(factory),
+            {},
+            std::move(stoppedConsumer));
+    }
+
+    IoUringTcpHubListenOutcome listenAndHandoff(
+        gamenet::net::SocketFd listeningSocket,
+        IoUringTcpConnectionHub::AcceptedSocketConsumer consumer,
+        IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedConsumer) {
+        return listenImpl(
+            listeningSocket,
+            {},
+            std::move(consumer),
+            std::move(stoppedConsumer));
+    }
+
+    IoUringTcpHubListenOutcome listenImpl(
+        gamenet::net::SocketFd listeningSocket,
+        IoUringTcpConnectionHub::AcceptedConnectionFactory factory,
+        IoUringTcpConnectionHub::AcceptedSocketConsumer consumer,
+        IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedConsumer) {
         gamenet::net::Socket transferred(listeningSocket);
         assertOwner();
-        if (!isListeningSocket(listeningSocket) || !factory) {
+        if (!isListeningSocket(listeningSocket) ||
+            (static_cast<bool>(factory) == static_cast<bool>(consumer))) {
             return {.result = IoUringTcpHubListenResult::RejectedInvalid};
         }
         if (phase_ == IoUringTcpHubPhase::Quiescing) {
@@ -285,6 +312,7 @@ public:
         listener_ = std::make_unique<Listener>(
             transferred.releaseFd(),
             std::move(factory),
+            std::move(consumer),
             std::move(stoppedConsumer),
             options_.maxPendingAccepts);
         auto future = listener_->stopFuture;
@@ -742,6 +770,7 @@ private:
         listener.stopPublished = true;
         listener.retryAcceptCancellation = false;
         listener.factory = {};
+        listener.socketConsumer = {};
         updateListenerAcceptMetrics(listener);
         const auto summary = IoUringTcpHubListenerStopSummary{
             .reason = listener.closeReason,
@@ -1111,6 +1140,50 @@ private:
         if (listener.phase != ListenerPhase::Running ||
             phase_ != IoUringTcpHubPhase::Running) {
             ++listener.metrics.acceptedSocketRejections;
+            return;
+        }
+
+        if (listener.socketConsumer) {
+            sockaddr_storage peerStorage{};
+            if (!gamenet::net::sockets::tryGetPeerAddr(
+                    accepted.fd(), &peerStorage)) {
+                ++listener.metrics.engineRejections;
+                ++listener.metrics.acceptedSocketRejections;
+                (void)beginListenerStop(
+                    IoUringTcpHubListenerCloseReason::EngineRejected,
+                    gamenet::net::sockets::lastError(),
+                    true);
+                return;
+            }
+            IoUringTcpHubAcceptedSocketResult result{
+                IoUringTcpHubAcceptedSocketResult::RejectedInvalid};
+            try {
+                result = listener.socketConsumer(
+                    std::make_unique<gamenet::net::Socket>(
+                        accepted.releaseFd()),
+                    gamenet::net::InetAddress(peerStorage));
+            } catch (...) {
+                ++listener.metrics.callbackFailures;
+                ++listener.metrics.acceptedSocketRejections;
+                (void)beginListenerStop(
+                    IoUringTcpHubListenerCloseReason::CallbackFailed,
+                    0,
+                    true);
+                return;
+            }
+            if (result == IoUringTcpHubAcceptedSocketResult::Accepted) {
+                ++listener.metrics.acceptedSocketHandoffs;
+            } else {
+                ++listener.metrics.acceptedSocketRejections;
+                if (result == IoUringTcpHubAcceptedSocketResult::QueueFull) {
+                    ++listener.metrics.handoffQueueFullRejections;
+                } else if (
+                    result ==
+                    IoUringTcpHubAcceptedSocketResult::WorkerShutdown) {
+                    ++listener.metrics.handoffShutdownRejections;
+                }
+            }
+            maintainAcceptWindow();
             return;
         }
 
@@ -1652,6 +1725,16 @@ IoUringTcpHubListenOutcome IoUringTcpConnectionHub::listen(
     return impl_->listen(
         listeningSocket,
         std::move(connectionFactory),
+        std::move(stoppedConsumer));
+}
+
+IoUringTcpHubListenOutcome IoUringTcpConnectionHub::listenAndHandoff(
+    gamenet::net::SocketFd listeningSocket,
+    AcceptedSocketConsumer socketConsumer,
+    ListenerStoppedConsumer stoppedConsumer) {
+    return impl_->listenAndHandoff(
+        listeningSocket,
+        std::move(socketConsumer),
         std::move(stoppedConsumer));
 }
 
