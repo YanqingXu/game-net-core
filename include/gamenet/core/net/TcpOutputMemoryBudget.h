@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // TcpOutputMemoryBudget 是跨连接共享的 TCP 待发送字节预算。

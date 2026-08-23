@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // Lightweight EventLoop metrics kept inside core without importing TCP/game hooks.

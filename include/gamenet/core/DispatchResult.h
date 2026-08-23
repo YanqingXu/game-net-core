@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // DispatchResult 统一描述上层跨线程投递和 endpoint 准入结果。

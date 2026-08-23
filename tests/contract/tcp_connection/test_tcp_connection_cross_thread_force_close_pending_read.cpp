@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #include "gamenet/core/net/TcpConnection.h"
 
 #include "gamenet/core/net/EventLoop.h"

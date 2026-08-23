@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // EventLoopThreadPool 提供 one-loop-per-thread 的扩展模型。

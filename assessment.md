@@ -24,7 +24,8 @@ owner-thread ownership
 sanitizer/TSan、10k/100k 容量、paired benchmark、repeat-50、1h/3h endurance、
 Linux/Windows 安装包消费者、SPDX 2.3 SBOM、third-party notices 和完整 evidence
 bundle 均通过。内部输出命名为 `v0.3.0-internal-candidate.1`，但仓库仍为
-all-rights-reserved，不提供外部使用授权。此前 `a89e2b0` 的旧门槛取消运行继续作为
+all-rights-reserved，不提供外部使用授权。该句描述内部候选形成时的历史边界；仓库已在
+后续 M4 中经所有者授权切换为 Apache-2.0。此前 `a89e2b0` 的旧门槛取消运行继续作为
 历史 `NO-PROMOTION` 记录保留，不参与本次通过结论。2026-08-23，私有
 `gamenet-game-gateway` 又以关闭提交 `0a8fe1e` 完成 M3；精确网关 `4e2457e` / Core
 `736a090` 的单一 Linux/epoll 进程通过 1h、3,743 个完整故障回放周期和 32 KiB RSS
@@ -355,8 +356,8 @@ package/SBOM/license
 v0.3.0-internal-candidate.1
 ```
 
-外部采用仍被当前 all-rights-reserved 许可证阻塞；Apache-2.0、完整第三方审计和
-外部发布属于 M4。
+内部候选保留其形成时的专有许可证快照。当前仓库已完成 Apache-2.0 切换和第三方来源
+审计；最终外部包、SBOM 与 Release 仍属于 M4 未完成任务。
 
 ## P1（已关闭）：建立真正的游戏网关参考实现
 
@@ -367,15 +368,16 @@ v0.3.0-internal-candidate.1
 
 ## P1：完成 M4 外部发布治理
 
-下一步不是增加新 runtime 或协议，而是在项目所有者明确授权 Apache-2.0 与公开发布
-后，完成第三方来源审计、LICENSE/NOTICE/header/package/SBOM 同步，并因 `736a090`
-运行时修复重新选择最终 promotion commit，完整重跑双平台、sanitizer、容量、性能、
-fault、repeat、1h/3h、包消费者和 evidence bundle 门。
+下一步不是增加新 runtime 或协议。所有者已明确授权 Apache-2.0 与通过全部门后的公开
+发布；LICENSE/NOTICE/header/package metadata 已同步。当前先实现受跟踪的可复现发布
+组装工具和升级消费者，再因 `736a090` 运行时修复重新选择最终 promotion commit，完整
+重跑双平台、sanitizer、容量、性能、fault、repeat、1h/3h、包消费者和 evidence bundle
+门。
 
-不改变法律状态的 M4 preflight 已完成：仓库本身已经是 Public，但许可证仍不授予外部
-权利；564 文件的来源/资产清单未发现 vendored library、submodule、LFS 或外部测试数据，
-同时确认源码 SPDX 标识和受跟踪的最终发布组装工具仍缺失。该结果是工程审计而非法律
-意见，Apache-2.0 切换和 `v0.3.0` 发布仍须所有者明确授权。
+M4 preflight 已完成：仓库本身已经是 Public，564 文件的来源/资产清单未发现 vendored
+library、submodule、LFS 或外部测试数据。随后所有者授权并完成 Apache-2.0、源码 SPDX、
+NOTICE、third-party notice 与安装包 metadata 切换。受跟踪的最终发布组装工具仍缺失，
+且 `v0.3.0` 发布必须等待全部同提交证据门通过。
 
 ## P2：根据真实集成结果决定公共 Runtime API
 

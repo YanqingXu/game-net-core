@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // TestAssert 是测试专用断言工具，确保合同测试在 Release/NDEBUG 下仍会执行。

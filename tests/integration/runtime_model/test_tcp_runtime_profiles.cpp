@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #include "runtime_profiles/MultiIoDedicatedFixedTick.h"
 #include "runtime_profiles/MultiIoQueuedEvent.h"
 #include "runtime_profiles/MultiIoShardedHybrid.h"

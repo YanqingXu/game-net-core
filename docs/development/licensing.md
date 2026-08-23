@@ -1,21 +1,25 @@
 # Licensing Status
 
-The repository's current `LICENSE` is an all-rights-reserved notice:
+The project owner confirmed licensing authority and authorized the repository
+transition to the Apache License, Version 2.0 on 2026-08-23. The current
+top-level `LICENSE` contains the canonical Apache-2.0 text. `NOTICE` records the
+project attribution, and `THIRD_PARTY_NOTICES.md` records the audited dependency
+and generated-asset boundary.
 
-- copyright remains with the project owner;
-- no permission to use, copy, modify, redistribute, or incorporate the code
-  into another project is granted by the repository today;
-- passing the engineering release gates does not change that legal boundary.
+The Apache-2.0 scope covers project-owned source, headers, tests, build and CI
+configuration, tools, documentation, and deterministic test assets unless a
+file explicitly states another license. C/C++, Python, CMake, shell/PowerShell,
+and workflow source files carry canonical copyright and
+`SPDX-License-Identifier: Apache-2.0` headers. Formats that do not admit comments
+are covered by the repository license and release SBOM instead of receiving an
+invalid inline field.
 
-Development, CI, packaging, and internal candidate evidence may continue under
-the owner's control. A release intended for adoption by external projects is
-blocked until the project owner deliberately selects and publishes a license.
-That decision may be an open-source license such as MIT or Apache-2.0, a
-commercial/proprietary license, or another owner-approved policy; this
-repository does not choose one implicitly.
+Installed CMake packages export `GameNetCore_LICENSE=Apache-2.0` and paths to
+the installed `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`. Every source
+and binary release archive must include those files, and the SPDX 2.3 release
+SBOM must declare and conclude `Apache-2.0` for project packages and files.
 
-When the owner makes that decision, the release change must update the
-top-level `LICENSE`, README notice, package/release metadata, SPDX identifiers,
-SBOM licensing fields, and known limitations together. Until then, release
-notes must describe artifacts as engineering previews without an external-use
-grant.
+The authorization also permits creation and publication of `v0.3.0` only after
+all exact-commit gates pass. The license transition therefore does not claim
+that `v0.3.0` has already been released; no release tag or asset may be
+published before the promotion matrix and final artifact verification succeed.

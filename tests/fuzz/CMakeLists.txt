@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "GAMENET_BUILD_FUZZING requires Clang/libFuzzer")
 endif()

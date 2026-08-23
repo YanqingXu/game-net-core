@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 cmake_minimum_required(VERSION 3.20)
 
 project(GameNetInstallConsumer LANGUAGES CXX)
@@ -7,6 +10,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(GameNetCore 0.3.0 EXACT REQUIRED)
+
+if(NOT GameNetCore_LICENSE STREQUAL "Apache-2.0")
+    message(FATAL_ERROR
+        "GameNetCore package license mismatch: '${GameNetCore_LICENSE}'"
+    )
+endif()
+foreach(metadata_path IN ITEMS
+    "${GameNetCore_LICENSE_FILE}"
+    "${GameNetCore_NOTICE_FILE}"
+    "${GameNetCore_THIRD_PARTY_NOTICES_FILE}"
+)
+    if(NOT EXISTS "${metadata_path}")
+        message(FATAL_ERROR "GameNetCore package metadata is missing: ${metadata_path}")
+    endif()
+endforeach()
 
 add_executable(gamenet_install_consumer main.cpp)
 target_link_libraries(gamenet_install_consumer

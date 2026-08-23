@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import argparse
@@ -14,6 +17,7 @@ from typing import Any
 
 MANIFEST_SCHEMA = "gamenet.public_api_manifest.v2"
 SNAPSHOT_SCHEMA = "gamenet.public_api_snapshot.v1"
+PACKAGE_LICENSE = "Apache-2.0"
 POLICY = {
     "stable_core_source_compatibility": "required-within-compatibility-line",
     "abi_compatibility": "not-guaranteed-before-1.0",
@@ -481,6 +485,8 @@ def verify_manifest(
             f"package_version must match CMake ({expected_version}), "
             f"got {manifest.get('package_version')!r}"
         )
+    if manifest.get("package_license") != PACKAGE_LICENSE:
+        errors.append(f"package_license must be {PACKAGE_LICENSE}")
     if expected_version is not None:
         expected_line = compatibility_line(expected_version)
         if manifest.get("compatibility_line") != expected_line:

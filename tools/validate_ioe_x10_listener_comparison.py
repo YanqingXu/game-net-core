@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 """Validate one fixed IOE-X10 listener comparison sample."""
 
 from __future__ import annotations

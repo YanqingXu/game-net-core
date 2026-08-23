@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // TimerQueue 为单个 EventLoop 提供 poll-timeout 驱动的定时任务能力。

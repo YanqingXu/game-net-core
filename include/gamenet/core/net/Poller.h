@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // Poller 抽象 I/O 多路复用后端，只维护注册关系与活跃 Channel 收集。

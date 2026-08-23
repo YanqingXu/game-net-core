@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #include "experimental/io_uring/IoUringEventLoopPump.h"
 
 #include "gamenet/core/net/EventLoop.h"

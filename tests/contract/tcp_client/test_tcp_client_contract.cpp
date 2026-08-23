@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #include "gamenet/core/net/Acceptor.h"
 #include "gamenet/core/net/Connector.h"
 #include "gamenet/core/net/SocketsOps.h"

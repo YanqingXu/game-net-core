@@ -44,13 +44,14 @@ sanitizers, capacity, benchmark, repeat-50, package consumers, and a fresh
 uninterrupted 1h/3h endurance chain. The internally packaged result is
 `v0.3.0-internal-candidate.1`; its package/SBOM/evidence identities are recorded
 in [`docs/development/releases/v0.3.0-internal-candidate.1.md`](docs/development/releases/v0.3.0-internal-candidate.1.md).
-It remains an all-rights-reserved engineering candidate with no external-use
-grant. M3 real gateway integration is closed: the private gateway closure is
+That retained internal bundle remains the historical all-rights-reserved
+candidate it was built as; it is not retroactively republished. M3 real gateway
+integration is closed: the private gateway closure is
 `0a8fe1e`, its exact uninterrupted 1-hour run used gateway `4e2457e` and Core
 fix `736a090`, completed 3,743 full replay/fault cycles, and left no unresolved
 Core correctness or reusable-capability blocker. The next governance front is
-M4 external v0.3.0 release; Apache-2.0 relicensing and publication still require
-explicit owner authorization and a fresh same-commit promotion matrix. The
+M4 external v0.3.0 release. The owner has authorized Apache-2.0 and conditional
+publication; a fresh same-commit promotion matrix is still required. The
 non-mutating source/license/release audit is complete in
 [`docs/development/m4_external_release_preflight_2026-08-23.md`](docs/development/m4_external_release_preflight_2026-08-23.md).
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
@@ -131,14 +132,14 @@ support tiers, exact option behavior, commands, and Windows promotion criteria.
 
 ## Licensing Status
 
-The current top-level `LICENSE` is all-rights-reserved and grants no external
-permission to use, copy, modify, or redistribute this code. Engineering
-candidate work can continue, but an externally adoptable release is blocked
-until the project owner publishes an explicit license and corresponding
-package/SBOM metadata. See [Licensing Status](docs/development/licensing.md).
-The M4 engineering preflight records that the GitHub repository is already
-public while the license still grants no external rights; no `v0.3.0` tag or
-Release has been created.
+game-net-core is licensed under the [Apache License 2.0](LICENSE). The owner
+authorized this transition on 2026-08-23; project attribution and dependency
+boundaries are recorded in [NOTICE](NOTICE) and
+[Third-Party Notices](THIRD_PARTY_NOTICES.md). Installed CMake packages include
+those files and export `GameNetCore_LICENSE=Apache-2.0`. See
+[Licensing Status](docs/development/licensing.md). The license transition does
+not itself constitute the `v0.3.0` release; no final tag or Release is created
+until the complete exact-commit evidence matrix passes.
 
 ## Layout
 

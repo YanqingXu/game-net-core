@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import json
@@ -31,6 +34,7 @@ def main() -> None:
     require(root_text, "include(GNUInstallDirs)", root_cmake)
     require(root_text, "include(CMakePackageConfigHelpers)", root_cmake)
     require(root_text, "GAMENET_INSTALL_CMAKEDIR", root_cmake)
+    require(root_text, "GAMENET_INSTALL_DOCDIR", root_cmake)
     require(root_text, "configure_package_config_file(", root_cmake)
     require(root_text, "write_basic_package_version_file(", root_cmake)
     require(root_text, "COMPATIBILITY SameMinorVersion", root_cmake)
@@ -42,6 +46,9 @@ def main() -> None:
         "install package must not copy deferred include/gamenet namespace directories"
     )
     require(root_text, "install(EXPORT GameNetCoreTargets", root_cmake)
+    for metadata_file in ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"):
+        require(root_text, metadata_file, root_cmake)
+    require(root_text, "DESTINATION ${GAMENET_INSTALL_DOCDIR}", root_cmake)
 
     require(core_text, "install(TARGETS gamenet_core", core_cmake)
     require(core_text, "EXPORT_NAME core", core_cmake)
@@ -51,6 +58,10 @@ def main() -> None:
     assert config_template.exists(), f"missing package config template: {config_template}"
     config_text = config_template.read_text(encoding="utf-8")
     require(config_text, "@PACKAGE_INIT@", config_template)
+    require(config_text, 'set(GameNetCore_LICENSE "Apache-2.0")', config_template)
+    require(config_text, "GameNetCore_LICENSE_FILE", config_template)
+    require(config_text, "GameNetCore_NOTICE_FILE", config_template)
+    require(config_text, "GameNetCore_THIRD_PARTY_NOTICES_FILE", config_template)
     require(config_text, "find_dependency(Threads)", config_template)
     require(config_text, "include(\"${CMAKE_CURRENT_LIST_DIR}/GameNetCoreTargets.cmake\")", config_template)
     require(config_text, "check_required_components(GameNetCore)", config_template)
@@ -58,6 +69,13 @@ def main() -> None:
     assert consumer_cmake.exists(), f"missing install consumer CMake fixture: {consumer_cmake}"
     consumer_cmake_text = consumer_cmake.read_text(encoding="utf-8")
     require(consumer_cmake_text, "find_package(GameNetCore 0.3.0 EXACT REQUIRED)", consumer_cmake)
+    require(consumer_cmake_text, 'GameNetCore_LICENSE STREQUAL "Apache-2.0"', consumer_cmake)
+    for variable in (
+        "GameNetCore_LICENSE_FILE",
+        "GameNetCore_NOTICE_FILE",
+        "GameNetCore_THIRD_PARTY_NOTICES_FILE",
+    ):
+        require(consumer_cmake_text, variable, consumer_cmake)
     require(consumer_cmake_text, "target_link_libraries(gamenet_install_consumer", consumer_cmake)
     core_link = re.search(
         r"target_link_libraries\(gamenet_install_consumer(.*?)\n\)",

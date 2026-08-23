@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // InetAddress 是 IPv4/IPv6 双栈地址的轻量封装。

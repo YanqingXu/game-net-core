@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #include "game_server_pipeline_demo/GameServerPipeline.h"
 
 #include "gamenet/core/net/EventLoop.h"

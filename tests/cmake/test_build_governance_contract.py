@@ -1,9 +1,13 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -38,16 +42,23 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
     normalized_record_text = " ".join(record_text.split())
 
     assert manifest["schema"] == "gamenet.m4_external_release_preflight.v1"
-    assert manifest["status"] == "complete-awaiting-owner-authorization"
-    assert manifest["authorization"]["state"] == "pending"
+    assert manifest["status"] == "complete-owner-authorized-license-transition"
+    assert manifest["authorization"]["state"] == "granted"
+    assert manifest["authorization"]["confirmed_at"] == "2026-08-23"
     assert manifest["repository_state"]["visibility"] == "PUBLIC"
     assert manifest["repository_state"]["v0_3_0_tag_present"] is False
     assert manifest["repository_state"]["v0_3_0_release_present"] is False
     assert manifest["license_state"]["classification"] == (
         "all-rights-reserved-no-license-grant"
     )
-    assert "All rights reserved." in license_text
-    assert "No license is granted" in license_text
+    transition = manifest["authorized_license_transition"]
+    assert transition["license"] == "Apache-2.0"
+    canonical_license = license_text.replace("\r\n", "\n").rstrip("\r\n") + "\n"
+    assert hashlib.sha256(canonical_license.encode("utf-8")).hexdigest() == transition[
+        "canonical_license_sha256_lf"
+    ]
+    assert "Apache License" in license_text
+    assert "Version 2.0, January 2004" in license_text
     assert not git(repo_root, "tag", "-l", "v0.3.0").strip(), (
         "pre-authorization governance must be updated before creating v0.3.0"
     )
@@ -189,13 +200,13 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
     assert runtime_files == post_m3["runtime_files_changed_since_internal_candidate"]
 
     for fragment in (
-        "PREFLIGHT COMPLETE / AWAITING OWNER AUTHORIZATION / NO RELEASE",
+        "PREFLIGHT COMPLETE / OWNER AUTHORIZED / LICENSE TRANSITION ACTIVE / NO RELEASE",
         "already a **public** GitHub repository",
         "not a legal opinion",
         "No vendored third-party library",
         "no tracked file contains `SPDX-License-Identifier`",
         "uninterrupted `candidate-1h`, then `release-3h`",
-        "Until then, the repository remains all-rights-reserved",
+        "The repository license transition is now authorized and implemented",
     ):
         require(normalized_record_text, fragment, record_path)
 
@@ -216,7 +227,12 @@ def main() -> None:
     release_intent = repo_root / "intents" / "usecases" / "production_candidate_release.intent.md"
     platform_docs = repo_root / "docs" / "development" / "platform_support.md"
     licensing_docs = repo_root / "docs" / "development" / "licensing.md"
+    authorization_docs = (
+        repo_root / "docs" / "development" / "m4_license_authorization_2026-08-23.md"
+    )
     license_file = repo_root / "LICENSE"
+    notice_file = repo_root / "NOTICE"
+    third_party_notices = repo_root / "THIRD_PARTY_NOTICES.md"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     readme = repo_root / "README.md"
     ci_workflow = repo_root / ".github" / "workflows" / "ci.yml"
@@ -300,6 +316,8 @@ def main() -> None:
     require(release_text, "candidate library targets are static-only", release_intent)
     require(release_text, "Linux is the Tier 1 release-evidence platform", release_intent)
     require(release_text, "macOS, BSD variants, other target systems", release_intent)
+    require(release_text, "authorized Apache-2.0 on 2026-08-23", release_intent)
+    require(release_text, "inconsistent licensing metadata is a", release_intent)
 
     docs_text = platform_docs.read_text(encoding="utf-8")
     for fragment in (
@@ -323,17 +341,50 @@ def main() -> None:
     require(readme_text, "docs/development/platform_support.md", readme)
     require(readme_text, "Linux-only IOE-X1–X10 io_uring", readme)
     require(readme_text, "## Licensing Status", readme)
-    require(readme_text, "all-rights-reserved", readme)
+    require(readme_text, "Apache License 2.0", readme)
+    require(readme_text, "GameNetCore_LICENSE=Apache-2.0", readme)
     require(readme_text, "docs/development/licensing.md", readme)
 
     license_text = license_file.read_text(encoding="utf-8")
-    require(license_text, "All rights reserved.", license_file)
-    require(license_text, "No license is granted", license_file)
+    require(license_text, "Apache License", license_file)
+    require(license_text, "Version 2.0, January 2004", license_file)
+    assert notice_file.read_text(encoding="utf-8").splitlines() == [
+        "game-net-core",
+        "Copyright 2026 Yanqing Xu",
+    ]
+    third_party_text = third_party_notices.read_text(encoding="utf-8")
+    require(third_party_text, "do not bundle third-party", third_party_notices)
+    require(third_party_text, "PacketFramer fuzz corpus", third_party_notices)
     licensing_text = licensing_docs.read_text(encoding="utf-8")
-    require(licensing_text, "all-rights-reserved", licensing_docs)
-    require(licensing_text, "blocked until the project owner", licensing_docs)
-    require(licensing_text, "SPDX identifiers", licensing_docs)
+    normalized_licensing_text = " ".join(licensing_text.split())
+    require(
+        normalized_licensing_text,
+        "authorized the repository transition",
+        licensing_docs,
+    )
+    require(
+        normalized_licensing_text,
+        "SPDX-License-Identifier: Apache-2.0",
+        licensing_docs,
+    )
+    require(normalized_licensing_text, "GameNetCore_LICENSE=Apache-2.0", licensing_docs)
+    authorization_text = authorization_docs.read_text(encoding="utf-8")
+    require(authorization_text, "OWNER AUTHORIZED", authorization_docs)
+    require(authorization_text, "我确认有权将 v0.3.0", authorization_docs)
     verify_m4_preflight(repo_root, license_text)
+    spdx_check = subprocess.run(
+        [sys.executable, str(repo_root / "tools" / "check_spdx_headers.py")],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    assert spdx_check.returncode == 0, spdx_check.stdout + spdx_check.stderr
+    assert re.fullmatch(
+        r"validated \d+ Apache-2\.0 source headers\n?", spdx_check.stdout
+    ), spdx_check.stdout
 
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, guard_command_linux, ci_docs)

@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 cmake_minimum_required(VERSION 3.20)
 
 project(GameNetCore VERSION 0.3.0 LANGUAGES CXX)
@@ -49,6 +52,10 @@ include(Sanitizers)
 set(GAMENET_INSTALL_CMAKEDIR
     "${CMAKE_INSTALL_LIBDIR}/cmake/GameNetCore"
     CACHE STRING "Install destination for GameNetCore CMake package files"
+)
+set(GAMENET_INSTALL_DOCDIR
+    "${CMAKE_INSTALL_DATAROOTDIR}/doc/GameNetCore"
+    CACHE STRING "Install destination for GameNetCore license and notice files"
 )
 
 add_subdirectory(src/core)
@@ -103,6 +110,7 @@ configure_package_config_file(
     cmake/GameNetCoreConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/GameNetCoreConfig.cmake"
     INSTALL_DESTINATION ${GAMENET_INSTALL_CMAKEDIR}
+    PATH_VARS GAMENET_INSTALL_DOCDIR
 )
 
 write_basic_package_version_file(
@@ -121,4 +129,12 @@ install(
 install(EXPORT GameNetCoreTargets
     NAMESPACE GameNet::
     DESTINATION ${GAMENET_INSTALL_CMAKEDIR}
+)
+
+install(
+    FILES
+        LICENSE
+        NOTICE
+        THIRD_PARTY_NOTICES.md
+    DESTINATION ${GAMENET_INSTALL_DOCDIR}
 )

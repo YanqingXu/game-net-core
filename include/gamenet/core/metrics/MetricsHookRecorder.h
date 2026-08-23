@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // MetricsHookRecorder 将 Core hook 映射到 provisional 指标 schema。

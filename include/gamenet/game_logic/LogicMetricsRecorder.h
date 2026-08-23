@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // Provisional adapter：同步将 LogicLoop tick 样本记录到共享 MetricsExporter；

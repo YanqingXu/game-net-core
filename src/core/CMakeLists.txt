@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 set(GAMENET_CORE_SOURCES
     net/Acceptor.cc
     net/Buffer.cc

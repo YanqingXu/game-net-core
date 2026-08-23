@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 """Run the fixed, warm, interleaved IOE-X10 listener protocol."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 function(gamenet_configure_sanitizers target_name)
     if(GAMENET_ENABLE_ASAN_UBSAN AND GAMENET_ENABLE_TSAN)
         message(FATAL_ERROR "ASan/UBSan and TSan cannot be enabled together.")

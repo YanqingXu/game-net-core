@@ -17,8 +17,10 @@ all-rights-reserved internal engineering package. M3 real gateway integration
 is closed at private gateway commit `0a8fe1e`; M4 external release governance
 is the active front. Its non-mutating source, licensing, asset, runtime-diff,
 and release-tooling preflight is complete at
-`docs/development/m4_external_release_preflight_2026-08-23.md`; Apache-2.0 and
-publication remain unauthorized.
+`docs/development/m4_external_release_preflight_2026-08-23.md`. The owner then
+authorized Apache-2.0 and conditional publication; the canonical license,
+NOTICE, source SPDX, installed package metadata, and third-party notices are
+synchronized. The tracked release assembler is the current M4 task.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -110,11 +112,12 @@ cancelled `a89e2b0` run remains `NO-PROMOTION` evidence only. The private
 `gamenet-game-gateway` closed M3 at `0a8fe1e`; its exact gateway `4e2457e` /
 Core `736a090` Linux/epoll process passed the uninterrupted 1-hour gate with
 3,743 complete replay/fault cycles and 32 KiB peak RSS growth. M4 external
-release governance is active, subject to explicit license/publication approval.
-The M4 preflight confirms that the GitHub repository is already public but the
-current all-rights-reserved license grants no external rights, no `v0.3.0` tag
-or Release exists, and a new exact-commit promotion matrix is mandatory after
-the post-M3 runtime correction.
+release governance is active; owner authorization and the Apache-2.0 metadata
+transition are complete, while release evidence and publication remain open.
+The M4 preflight confirmed that the GitHub repository was already public. The
+owner has now authorized and executed the Apache-2.0 transition, but no
+`v0.3.0` tag or Release exists and a new exact-commit promotion matrix remains
+mandatory after the post-M3 runtime correction.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model

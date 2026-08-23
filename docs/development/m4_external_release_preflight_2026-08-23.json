@@ -1,6 +1,6 @@
 {
   "schema": "gamenet.m4_external_release_preflight.v1",
-  "status": "complete-awaiting-owner-authorization",
+  "status": "complete-owner-authorized-license-transition",
   "audit_date": "2026-08-23",
   "audit_base": {
     "commit": "4b63dac037595551652097f52504d4275a850c45",
@@ -9,18 +9,18 @@
     "post_m3_runtime_fix": "736a0907e90dbd0373cd652283618794c31020df"
   },
   "authorization": {
-    "state": "pending",
-    "required_confirmations": [
+    "state": "granted",
+    "confirmed_at": "2026-08-23",
+    "owner_statement": "我确认有权将 v0.3.0 拟分发范围内的项目文件以 Apache-2.0 许可；授权进行 Apache-2.0 许可证切换；并授权在全部证据门通过后创建和推送 v0.3.0 tag、发布 GitHub Release 及其资产。",
+    "confirmed_scope": [
       "The project owner confirms authority to license every externally distributed project-owned file under Apache-2.0.",
       "The project owner explicitly authorizes the Apache-2.0 repository transition.",
       "The project owner explicitly authorizes v0.3.0 tag, GitHub Release, and asset publication after all exact-commit gates pass."
     ],
-    "prohibited_until_authorized": [
-      "modify LICENSE or repository licensing metadata",
-      "add Apache-2.0 SPDX declarations as a relicensing act",
-      "create or push v0.3.0 tag",
-      "create a GitHub v0.3.0 Release",
-      "upload externally adoptable packages or release assets"
+    "publication_conditions": [
+      "all exact-commit M4 gates pass without a release waiver",
+      "release packages, Apache-2.0 SPDX SBOM, notices, evidence index, and SHA256SUMS verify",
+      "the v0.3.0 tag and GitHub Release are created only after those gates"
     ]
   },
   "repository_state": {
@@ -45,6 +45,15 @@
     "spdx_identifier_files": 0,
     "internal_candidate_sbom_license": "LicenseRef-Proprietary-All-Rights-Reserved",
     "internal_candidate_sbom_file_count": 0
+  },
+  "authorized_license_transition": {
+    "license": "Apache-2.0",
+    "canonical_license_sha256_lf": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "notice": "NOTICE",
+    "third_party_notices": "THIRD_PARTY_NOTICES.md",
+    "source_header_checker": "tools/check_spdx_headers.py",
+    "package_manifest": "api/public_api_manifest.json",
+    "release_sbom_status": "pending-final-promotion-commit"
   },
   "tracked_inventory": {
     "total_files": 564,
@@ -143,11 +152,16 @@
     "runtime_diff_deletions": 24,
     "fresh_promotion_commit_and_full_matrix_required": true
   },
-  "release_engineering_gaps": [
+  "release_engineering_gaps_at_audit": [
     "No tracked tool currently assembles the final source and binary archives, NOTICE, third-party notices, SPDX SBOM, evidence index, and SHA256SUMS as one reproducible release operation.",
     "The internal candidate SBOM declares the proprietary LicenseRef and contains no file-level SPDX inventory.",
     "No tracked source file currently carries an SPDX-License-Identifier declaration.",
     "Clean external v0.2-to-v0.3 upgrade consumers are not yet part of the final promotion evidence."
+  ],
+  "resolved_after_authorization": [
+    "The canonical Apache-2.0 LICENSE, NOTICE, and THIRD_PARTY_NOTICES.md are tracked and installed.",
+    "Project C/C++, Python, CMake, and workflow source files carry machine-checked Apache-2.0 SPDX headers.",
+    "The CMake package and public API manifest declare Apache-2.0."
   ],
   "required_exact_commit_gates": [
     "Linux Debug and Release plus ASan/UBSan and TSan",

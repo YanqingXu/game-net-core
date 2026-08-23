@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // MetricsExporter 是 provisional、与 EventLoop 无关的指标聚合接口。

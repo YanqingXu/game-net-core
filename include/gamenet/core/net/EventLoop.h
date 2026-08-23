@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // EventLoop 是单线程 Reactor 调度核心，负责 poll、事件分发与跨线程任务回流。

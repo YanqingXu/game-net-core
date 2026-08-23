@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 add_library(gamenet_experimental_io_uring STATIC
     IoUringCompletionEngine.cc
     IoUringEventLoopPump.cc

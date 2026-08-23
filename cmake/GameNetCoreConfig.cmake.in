@@ -1,6 +1,17 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
+
+set(GameNetCore_LICENSE "Apache-2.0")
+set_and_check(GameNetCore_LICENSE_FILE "@PACKAGE_GAMENET_INSTALL_DOCDIR@/LICENSE")
+set_and_check(GameNetCore_NOTICE_FILE "@PACKAGE_GAMENET_INSTALL_DOCDIR@/NOTICE")
+set_and_check(
+    GameNetCore_THIRD_PARTY_NOTICES_FILE
+    "@PACKAGE_GAMENET_INSTALL_DOCDIR@/THIRD_PARTY_NOTICES.md"
+)
 
 find_dependency(Threads)
 

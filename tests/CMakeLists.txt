@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 set(GAMENET_TEST_RUNTIME_ENVIRONMENT "")
 if(MSVC AND GAMENET_ENABLE_ASAN_UBSAN)
     get_filename_component(

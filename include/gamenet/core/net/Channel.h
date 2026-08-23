@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // Channel 表示一个 fd 在所属 EventLoop 中的事件订阅与回调分发实体。

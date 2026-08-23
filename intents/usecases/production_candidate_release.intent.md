@@ -80,9 +80,13 @@ matrix, and immutable evidence are explicit and machine checked.
 - macOS, BSD variants, other target systems, TLS, and experimental modules are
   rejected at configure time rather than represented by empty options or an
   implicit Linux backend
-- the current all-rights-reserved `LICENSE` grants no external-use permission;
-  an externally adoptable release remains blocked until the project owner
-  deliberately publishes a license and matching package/SBOM metadata
+- the project owner authorized Apache-2.0 on 2026-08-23; the canonical
+  `LICENSE`, `NOTICE`, source SPDX headers, installed package metadata,
+  third-party notices, and release SBOM must consistently declare
+  `Apache-2.0`
+- authorization permits publication only after the exact-commit release gates
+  pass; an Apache-2.0 working tree is not by itself a successful `v0.3.0`
+  release
 
 ## 5. Threading and Ownership Rules
 - compatibility verification is a build-time repository guard and owns no
@@ -123,8 +127,10 @@ matrix, and immutable evidence are explicit and machine checked.
    - a failed capacity executable must retain its structured stdout sample and
      surface its reported error/check failures; toolchain-only failure artifacts
      are insufficient for remediation review
-10. any release offered for external adoption has an explicit owner-approved
-   license; otherwise artifacts remain engineering previews with no use grant
+10. any release offered for external adoption has the owner-approved
+    Apache-2.0 license, matching `NOTICE`, source SPDX headers, package metadata,
+    third-party notices, and SPDX SBOM; inconsistent licensing metadata is a
+    non-waivable release failure
 
 ## 7. Verification
 - `tests/api/test_public_api_manifest.py` verifies the installed inventory,

@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // Acceptor 负责监听 socket 的注册与 accept 路径，是 TCP 服务端的薄适配层。

@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // EventLoopThread 管理一个后台线程中的单个 EventLoop 生命周期。

@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #include "runtime_profiles/SingleLoopInlineEvent.h"
 
 #include "gamenet/core/net/Buffer.h"

@@ -1,22 +1,24 @@
 # M4 External Release Preflight — 2026-08-23
 
-Status: **PREFLIGHT COMPLETE / AWAITING OWNER AUTHORIZATION / NO RELEASE**
+Status: **PREFLIGHT COMPLETE / OWNER AUTHORIZED / LICENSE TRANSITION ACTIVE / NO RELEASE**
 
 Audit base: `4b63dac037595551652097f52504d4275a850c45`
 
 Audit tree: `7451b08736590b05eb54c0f70d37751afd8f00c2`
 
-This record completes the engineering work that can be performed before a
-licensing decision. It does not change the repository license, grant external
-use rights, approve Apache-2.0, create a tag or GitHub Release, or authorize
-asset publication. The machine-readable inventory is
+This record captures the immutable engineering audit performed before the
+licensing decision. The owner subsequently authorized Apache-2.0 and
+conditional publication on 2026-08-23; the exact statement and its non-waived
+release conditions are recorded in
+[`m4_license_authorization_2026-08-23.md`](m4_license_authorization_2026-08-23.md).
+The machine-readable inventory and authorization state are
 [`m4_external_release_preflight_2026-08-23.json`](m4_external_release_preflight_2026-08-23.json).
 
 This is an engineering provenance and release-readiness audit, not a legal
-opinion. The project owner must still confirm ownership or licensing authority
-over every file that will be distributed.
+opinion. The project owner has supplied the required confirmation of licensing
+authority; final release evidence remains an engineering gate.
 
-## Current external state
+## Audited external state before authorization
 
 - `YanqingXu/game-net-core` is already a **public** GitHub repository with
   `main` as its default branch. Making the source repository public is therefore
@@ -120,10 +122,9 @@ freeze selects a new promotion commit and restarts the applicable matrix. A
 failed non-waivable gate produces `NO-PROMOTION`; it is not converted into a
 release waiver.
 
-## Authorization still required
+## Authorization received
 
-The next mutation requires an explicit owner statement covering all three
-points:
+On 2026-08-23 the owner explicitly confirmed all three points:
 
 1. the owner confirms authority to license every distributed project-owned
    file under Apache-2.0;
@@ -131,4 +132,6 @@ points:
 3. the owner authorizes creation and publication of `v0.3.0` only after the
    exact-commit gates above pass.
 
-Until then, the repository remains all-rights-reserved and M4 remains open.
+The repository license transition is now authorized and implemented. M4 remains
+open until the release assembler, consumers, complete promotion matrix, final
+packages, SBOM, tag, GitHub Release, and redownload verification all pass.

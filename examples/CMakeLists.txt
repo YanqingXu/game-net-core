@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 add_executable(gamenet_echo_server
     echo_server/main.cpp
 )

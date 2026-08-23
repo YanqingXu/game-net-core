@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import copy
@@ -64,6 +67,7 @@ def main() -> None:
         "stable_header_fingerprints"
     ]
     assert manifest["schema"] == "gamenet.public_api_manifest.v2"
+    assert manifest["package_license"] == "Apache-2.0"
     assert manifest["compatibility_line"] == "0.3"
     assert manifest["targets"]["stable_core"] == ["GameNet::core"]
     assert manifest["targets"]["platform_internal"] == []
@@ -282,6 +286,12 @@ def main() -> None:
         temporary.write_text(json.dumps(wrong_version), encoding="utf-8")
         errors = verifier.verify_manifest(repo_root, temporary)
         assert any("package_version must match CMake" in error for error in errors)
+
+        wrong_license = copy.deepcopy(manifest)
+        wrong_license["package_license"] = "LicenseRef-Proprietary"
+        temporary.write_text(json.dumps(wrong_license), encoding="utf-8")
+        errors = verifier.verify_manifest(repo_root, temporary)
+        assert any("package_license must be Apache-2.0" in error for error in errors)
 
         wrong_line = copy.deepcopy(manifest)
         wrong_line["compatibility_line"] = "0.2"

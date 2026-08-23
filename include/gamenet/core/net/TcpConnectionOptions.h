@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // TcpConnectionOptions 定义连接输入/输出准入和读反压的值类型配置。

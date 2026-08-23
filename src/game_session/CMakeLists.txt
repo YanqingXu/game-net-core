@@ -1,3 +1,6 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
 add_library(gamenet_game_session STATIC
     PlayerSession.cc
     SessionManager.cc

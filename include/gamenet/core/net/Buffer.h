@@ -1,3 +1,6 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
 // Buffer 是连接读写路径上的字节容器，负责维护可读/可写/可预留区域。
