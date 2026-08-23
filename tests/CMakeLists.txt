@@ -81,6 +81,45 @@ add_gamenet_test(contract event_loop ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_
 add_gamenet_test(contract io_engine ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_io_engine_poller_adapter.cpp threading lifecycle)
 add_gamenet_test(contract io_engine ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_readiness_engine.cpp threading lifecycle)
 add_gamenet_test(contract io_engine ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_completion_engine.cpp threading lifecycle)
+
+add_executable(
+    gamenet_cross_backend_tcp_semantics_contract
+    ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_cross_backend_tcp_semantics.cpp
+)
+target_include_directories(
+    gamenet_cross_backend_tcp_semantics_contract
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(
+    gamenet_cross_backend_tcp_semantics_contract
+    PRIVATE GameNet::core
+)
+set(GAMENET_CROSS_BACKEND_TCP_SEMANTICS_LABELS
+    contract io_engine threading lifecycle backpressure
+)
+if(GAMENET_ENABLE_EXPERIMENTAL)
+    target_compile_definitions(
+        gamenet_cross_backend_tcp_semantics_contract
+        PRIVATE GAMENET_TEST_HAS_IO_URING=1
+    )
+    target_link_libraries(
+        gamenet_cross_backend_tcp_semantics_contract
+        PRIVATE GameNet::experimental
+    )
+    list(APPEND GAMENET_CROSS_BACKEND_TCP_SEMANTICS_LABELS experimental)
+endif()
+add_test(
+    NAME contract.io_engine.test_cross_backend_tcp_semantics
+    COMMAND gamenet_cross_backend_tcp_semantics_contract
+)
+set_tests_properties(
+    contract.io_engine.test_cross_backend_tcp_semantics
+    PROPERTIES LABELS "${GAMENET_CROSS_BACKEND_TCP_SEMANTICS_LABELS}"
+)
+gamenet_configure_test_runtime(
+    contract.io_engine.test_cross_backend_tcp_semantics
+)
+
 if(GAMENET_ENABLE_EXPERIMENTAL)
     add_executable(
         gamenet_io_uring_contract
@@ -293,6 +332,7 @@ if(GAMENET_ENABLE_EXPERIMENTAL)
         gamenet_io_uring_tcp_server_contract
         gamenet_io_uring_tcp_multi_owner_server_contract
         gamenet_io_uring_tcp_client_contract
+        gamenet_cross_backend_tcp_semantics_contract
     )
 endif()
 add_gamenet_test(contract event_loop_thread ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop_thread/test_event_loop_thread.cpp threading lifecycle)

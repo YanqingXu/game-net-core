@@ -135,8 +135,9 @@ All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
 rejected, and no binary ABI compatibility is promised before 1.0.
 `GAMENET_ENABLE_TLS` remains an `OFF`-only compatibility option. The default-off
 `GAMENET_ENABLE_EXPERIMENTAL=ON` is accepted only on Linux and builds the
-non-installed Linux-only IOE-X1–X13 io_uring Engine/Pump/TCP/Hub/listener,
-semantic Adapter, single-/multi-owner Server, and active Client contracts plus benchmark tooling; it
+non-installed Linux-only IOE-X1–X14 io_uring Engine/Pump/TCP/Hub/listener,
+semantic Adapter, single-/multi-owner Server, active Client, and cross-backend
+semantic contracts plus benchmark tooling; it
 does not replace epoll or enable deferred transports. Windows rejects that
 option.
 

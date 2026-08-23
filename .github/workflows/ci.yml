@@ -130,7 +130,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build \
-            --expected-total 129 \
+            --expected-total 130 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -142,7 +142,7 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
-      - name: Build and test experimental IOE-X1–X13 io_uring
+      - name: Build and test experimental IOE-X1–X14 io_uring
         run: |
           cmake -S . -B build-io-uring-experimental \
             -DCMAKE_BUILD_TYPE=Debug \
@@ -152,13 +152,13 @@ jobs:
             -DGAMENET_ENABLE_EXPERIMENTAL=ON
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-io-uring-experimental \
-            --expected-total 139 \
-            --expect-label experimental=10 \
+            --expected-total 140 \
+            --expect-label experimental=11 \
             --output ci-evidence/io-uring-experimental-inventory.json
           cmake --build build-io-uring-experimental \
             --target gamenet_io_uring_contracts --parallel
           ctest --test-dir build-io-uring-experimental \
-          -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)$' \
+          -R '^contract.io_engine.(test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)|test_cross_backend_tcp_semantics)$' \
             --output-on-failure --timeout 10 \
             --output-junit "$PWD/ci-evidence/io-uring-experimental-junit.xml" \
             --output-log "$PWD/ci-evidence/io-uring-experimental-ctest.log"
@@ -193,13 +193,13 @@ jobs:
             --require-canonical-artifact-name \
             --command 'python3 tools/compare_public_api_manifest.py --compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json --fail-on-compatibility-decision --fail-on-stable-surface-review --compatibility-output ci-evidence/public-api-compatibility-diff.json --output ci-evidence/public-api-diff.json' \
             --command 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 129 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 130 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build --parallel' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-io-uring-experimental -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-experimental --expected-total 139 --expect-label experimental=10 --output ci-evidence/io-uring-experimental-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-experimental --expected-total 140 --expect-label experimental=11 --output ci-evidence/io-uring-experimental-inventory.json' \
             --command 'cmake --build build-io-uring-experimental --target gamenet_io_uring_contracts --parallel' \
-            --command 'ctest --test-dir build-io-uring-experimental -R ^contract.io_engine.test_io_uring_ --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-experimental-junit.xml --output-log $PWD/ci-evidence/io-uring-experimental-ctest.log' \
+            --command 'ctest --test-dir build-io-uring-experimental -R ^contract.io_engine.(test_io_uring_|test_cross_backend_tcp_semantics) --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-experimental-junit.xml --output-log $PWD/ci-evidence/io-uring-experimental-ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
             --command 'cmake -S tests/cmake/install_consumer -B build-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json' \
@@ -364,7 +364,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-asan \
-            --expected-total 129 \
+            --expected-total 130 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -376,7 +376,7 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
-      - name: Build and test experimental IOE-X1–X13 io_uring with ASan/UBSan
+      - name: Build and test experimental IOE-X1–X14 io_uring with ASan/UBSan
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
@@ -390,13 +390,13 @@ jobs:
             -DGAMENET_ENABLE_EXPERIMENTAL=ON
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-io-uring-asan \
-            --expected-total 139 \
-            --expect-label experimental=10 \
+            --expected-total 140 \
+            --expect-label experimental=11 \
             --output ci-evidence/io-uring-asan-inventory.json
           cmake --build build-io-uring-asan \
             --target gamenet_io_uring_contracts --parallel
           ctest --test-dir build-io-uring-asan \
-          -R '^contract.io_engine.test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)$' \
+          -R '^contract.io_engine.(test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)|test_cross_backend_tcp_semantics)$' \
             --output-on-failure --timeout 10 \
             --output-junit "$PWD/ci-evidence/io-uring-asan-junit.xml" \
             --output-log "$PWD/ci-evidence/io-uring-asan-ctest.log"
@@ -449,13 +449,13 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 129 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 130 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-asan --parallel' \
             --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-io-uring-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-asan --expected-total 139 --expect-label experimental=10 --output ci-evidence/io-uring-asan-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-asan --expected-total 140 --expect-label experimental=11 --output ci-evidence/io-uring-asan-inventory.json' \
             --command 'cmake --build build-io-uring-asan --target gamenet_io_uring_contracts --parallel' \
-            --command 'ctest --test-dir build-io-uring-asan -R ^contract.io_engine.test_io_uring_ --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-asan-junit.xml --output-log $PWD/ci-evidence/io-uring-asan-ctest.log' \
+            --command 'ctest --test-dir build-io-uring-asan -R ^contract.io_engine.(test_io_uring_|test_cross_backend_tcp_semantics) --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-asan-junit.xml --output-log $PWD/ci-evidence/io-uring-asan-ctest.log' \
             --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'cmake --build build-fuzz --target gamenet_fuzz_packet_framer --parallel' \
             --command 'cmake -E make_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus ci-evidence/fuzz/artifacts' \
@@ -593,8 +593,8 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-tsan \
-            --expected-total 129 \
-            --expect-label threading=102 \
+            --expected-total 130 \
+            --expect-label threading=103 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -620,7 +620,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 129 --expect-label threading=102 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 130 --expect-label threading=103 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-tsan --parallel' \
             --command 'ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
@@ -752,7 +752,7 @@ jobs:
         run: |
           python3 tools/verify_ctest_inventory.py \
             --test-dir build-release \
-            --expected-total 129 \
+            --expected-total 130 \
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -800,7 +800,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' \
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 129 --output ci-evidence/ctest-inventory.json' \
+            --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 130 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-release --parallel' \
             --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'curl --fail --location --retry 3 --output build-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz' \
@@ -978,7 +978,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows `
             --config Debug `
-            --expected-total 129 `
+            --expected-total 130 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
@@ -1025,7 +1025,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 129 --output ci-evidence/ctest-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 130 --output ci-evidence/ctest-inventory.json' `
             --command 'cmake --build build-windows --config Debug --parallel' `
             --command 'ctest --test-dir build-windows -C Debug --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows --config Debug --prefix $pwd/build-windows/_install' `
@@ -1205,7 +1205,7 @@ jobs:
           python tools/verify_ctest_inventory.py `
             --test-dir build-windows-release `
             --config Release `
-            --expected-total 129 `
+            --expected-total 130 `
             --output ci-evidence/ctest-inventory.json
 
       - name: Build Release
@@ -1282,7 +1282,7 @@ jobs:
             --artifact-name 'ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' `
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows-release -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
-            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 129 --output ci-evidence/ctest-inventory.json' `
+            --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release --config Release --expected-total 130 --output ci-evidence/ctest-inventory.json' `
             --command 'cmake --build build-windows-release --config Release --parallel' `
             --command 'ctest --test-dir build-windows-release -C Release --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows-release --config Release --prefix $pwd/build-windows-release/_install' `

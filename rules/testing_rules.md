@@ -329,6 +329,32 @@ Contract tests verify:
   TSan. Default Linux/Windows suites, Linux-only option rejection/install
   isolation, stable API zero-diff, scope, intent, CI inventory, and governance
   guards remain mandatory
+- the IOE-X14 contract is one portable source registered in every default
+  Linux and Windows test inventory. It must exercise the production
+  `TcpServer`/`TcpClient` path selected by that platform and, only when Linux
+  experimental support is enabled, execute equivalent source-private io_uring
+  Server/Client runners in the same binary
+- each X14 backend runner uses real AF_INET loopback and a single-operator raw
+  peer socket to create deterministic finite output pressure. Any fixture that
+  hands the socket between an owner callback and peer thread must prove that
+  transfer with explicit release/acquire synchronization. The runner proves one
+  typed overload rejection, accepted foreign Send before accepted foreign
+  graceful Shutdown, high-water read pause, no inbound callback while paused,
+  low-water resume, complete accepted-output delivery before peer-observed EOF,
+  continued inbound delivery, one immutable `GracefulShutdown` close reason,
+  and rejection of post-shutdown Send
+- the portable comparison is semantic, not structural: callback owner/order,
+  admission class, bytes, pause/resume, half-close, close reason, and terminal
+  publication must agree. Readiness masks, IOCP packets, CQEs, operation counts,
+  batching, native buffer sizes, and backend diagnostics must remain separately
+  asserted or explicitly unavailable, never filled with invented equivalents
+- X14 Server stop and Client stop/destruction must follow terminal connection
+  observation. Production stop futures must be ready with zero active
+  connections and pending output; experimental summaries must additionally
+  reconcile zero listener, Connect, Adapter, Route, Hub, operation, notice,
+  socket, timer, command, pending-byte, and Engine-owned-byte residue. The
+  focused contract runs repeatedly normally and under the applicable Linux
+  ASan/UBSan and TSan gates, while the full default suite runs on Windows IOCP
 - a deterministic subprocess destruction contract holds a real accepted Recv
   and lease, invokes Pump destruction before physical stop, and requires an
   immediate fail-fast result rather than the historical 250 ms owner wait or

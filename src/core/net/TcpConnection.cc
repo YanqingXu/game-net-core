@@ -233,6 +233,10 @@ TcpSendResult TcpConnection::trySend(std::string_view message) {
 }
 
 TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
+    if (gracefulShutdownRequested_.load(std::memory_order_acquire) ||
+        forceCloseRequested_.load(std::memory_order_acquire)) {
+        return TcpSendResult::Closed;
+    }
     if (len == 0) {
         return connected() ? TcpSendResult::Accepted : TcpSendResult::Closed;
     }
@@ -680,7 +684,8 @@ void TcpConnection::handleRead(gamenet::base::Timestamp receiveTime) {
             handleClose();
             return;
         }
-        if (state_.load(std::memory_order_relaxed) == kConnected &&
+        const StateE state = state_.load(std::memory_order_relaxed);
+        if ((state == kConnected || state == kDisconnecting) &&
             backpressure_->readingEnabled()) {
             const int submitError =
                 iocpTransport_->startRead(remainingInputCapacity());
@@ -1005,16 +1010,19 @@ void TcpConnection::forceCloseInLoop() {
 
 void TcpConnection::driveLifecycleInLoop() {
     loop_->assertInLoopThread();
-    if (forceCloseRequested_.exchange(false, std::memory_order_acq_rel)) {
+    // Keep each request published until the owner state has advanced. Clearing
+    // it first would briefly reopen cross-thread output admission while the
+    // connection still reports kConnected.
+    if (forceCloseRequested_.load(std::memory_order_acquire)) {
         forceCloseInLoop();
+        forceCloseRequested_.store(false, std::memory_order_release);
     }
-    if (gracefulShutdownRequested_.exchange(
-            false,
-            std::memory_order_acq_rel)) {
+    if (gracefulShutdownRequested_.load(std::memory_order_acquire)) {
         if (state_.load(std::memory_order_relaxed) == kConnected) {
             setState(kDisconnecting);
             shutdownInLoop();
         }
+        gracefulShutdownRequested_.store(false, std::memory_order_release);
     }
 }
 
@@ -1335,7 +1343,8 @@ void TcpConnection::detachLifecycleNode() {
 void TcpConnection::resumeWindowsReadAfterBackpressure() {
     loop_->assertInLoopThread();
     auto self = shared_from_this();
-    if (state_.load(std::memory_order_relaxed) != kConnected ||
+    const StateE state = state_.load(std::memory_order_relaxed);
+    if ((state != kConnected && state != kDisconnecting) ||
         !backpressure_->readingEnabled()) {
         return;
     }
@@ -1355,8 +1364,9 @@ void TcpConnection::resumeWindowsReadAfterBackpressure() {
     if (closeOnInputLimitInLoop()) {
         return;
     }
+    const StateE resumedState = state_.load(std::memory_order_relaxed);
     if (forceClosePending_ ||
-        state_.load(std::memory_order_relaxed) != kConnected ||
+        (resumedState != kConnected && resumedState != kDisconnecting) ||
         !backpressure_->readingEnabled()) {
         return;
     }

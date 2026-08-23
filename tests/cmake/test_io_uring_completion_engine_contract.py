@@ -89,6 +89,9 @@ def main() -> None:
     client_contract = (
         repo_root / "tests/contract/io_engine/test_io_uring_tcp_client.cpp"
     )
+    cross_backend_contract = (
+        repo_root / "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp"
+    )
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     benchmark = repo_root / "benchmarks" / "io_uring" / "one_shot.cpp"
     benchmark_validator = repo_root / "tools" / "validate_io_uring_benchmark.py"
@@ -143,6 +146,7 @@ def main() -> None:
         server_contract,
         multi_owner_server_contract,
         client_contract,
+        cross_backend_contract,
         benchmark,
         benchmark_validator,
         shared_hub_benchmark,
@@ -466,6 +470,12 @@ def main() -> None:
         tests_cmake,
     )
     require(tests_text, "test_io_uring_tcp_client.cpp", tests_cmake)
+    require(tests_text, "test_cross_backend_tcp_semantics.cpp", tests_cmake)
+    require(
+        tests_text,
+        "gamenet_cross_backend_tcp_semantics_contract",
+        tests_cmake,
+    )
     require(tests_text, "contract.io_engine.test_io_uring_completion_engine", tests_cmake)
     require(tests_text, "GameNet::experimental", tests_cmake)
     require(tests_text, "experimental;threading;lifecycle", tests_cmake)
@@ -833,6 +843,7 @@ def main() -> None:
     require(intent_text, "IOE-X11 authorizes one source-private single-owner server", intent)
     require(intent_text, "IOE-X12 authorizes one source-private multi-owner server", intent)
     require(intent_text, "IOE-X13 authorizes one source-private Connect/TcpClient", intent)
+    require(intent_text, "IOE-X14 authorizes one portable, test-only semantic suite", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_completion_engine.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp", intent)
@@ -867,6 +878,11 @@ def main() -> None:
         "tests/contract/io_engine/test_io_uring_tcp_client.cpp",
         intent,
     )
+    require(
+        intent_text,
+        "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
+        intent,
+    )
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X1's raw io_uring Engine", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X2's non-installed completion pump", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X3 single-connection driver", thread_rules)
@@ -879,6 +895,7 @@ def main() -> None:
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X11 Server construction", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X12 Server configuration", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X13 Engine Connect", thread_rules)
+    require(thread_rules.read_text(encoding="utf-8"), "IOE-X14 portable contract", thread_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X1 experimental target owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X2 pump owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X3 driver uniquely owns", ownership_rules)
@@ -891,6 +908,7 @@ def main() -> None:
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X11 Server uniquely owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X12 accept Hub uniquely owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X13 accepted Connect submission", ownership_rules)
+    require(ownership_rules.read_text(encoding="utf-8"), "IOE-X14 semantic driver", ownership_rules)
     require(testing_rules.read_text(encoding="utf-8"), "real Linux io_uring fd", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X2 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X3 contract", testing_rules)
@@ -903,6 +921,7 @@ def main() -> None:
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X11 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X12 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X13 contract", testing_rules)
+    require(testing_rules.read_text(encoding="utf-8"), "IOE-X14 contract", testing_rules)
 
     multi_owner_text = (
         multi_owner_server_header.read_text(encoding="utf-8")
@@ -971,10 +990,22 @@ def main() -> None:
     ):
         require(client_contract_text, fragment, client_contract)
 
+    cross_backend_text = cross_backend_contract.read_text(encoding="utf-8")
+    for fragment in (
+        "runProductionServerSemantics",
+        "runProductionClientSemantics",
+        "runIoUringServerSemantics",
+        "runIoUringClientSemantics",
+        "postShutdownSendRejected",
+        "peerSawCompletePayloadBeforeEof",
+    ):
+        require(cross_backend_text, fragment, cross_backend_contract)
+
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "test_io_uring_completion_engine_contract.py", workflow)
     require(workflow_text, "GAMENET_ENABLE_EXPERIMENTAL=ON", workflow)
-    require(workflow_text, "contract.io_engine.test_io_uring_", workflow)
+    require(workflow_text, "test_io_uring_", workflow)
+    require(workflow_text, "test_cross_backend_tcp_semantics", workflow)
     require(workflow_text, "event_loop_pump", workflow)
     require(workflow_text, "tcp_connection_driver", workflow)
     require(workflow_text, "tcp_connection_hub", workflow)
@@ -985,11 +1016,11 @@ def main() -> None:
     require(workflow_text, "tcp_client", workflow)
     require(
         platform_docs.read_text(encoding="utf-8"),
-        "IOE-X1–X13 io_uring",
+        "IOE-X1–X14 io_uring",
         platform_docs,
     )
 
-    print("IOE-X1–X13 Engine, Pump, driver, Hub, capacity, adapter, listener, Server, Client, and comparison contracts verified")
+    print("IOE-X1–X14 Engine, Pump, driver, Hub, capacity, adapter, listener, Server, Client, and cross-backend comparison contracts verified")
 
 
 if __name__ == "__main__":

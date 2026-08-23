@@ -365,6 +365,22 @@ No other direct mutation path is allowed for core loop state.
   not a pending functor or timer. It force-seals Client admission and drives
   exact Hub/Connect/Route cleanup through FinalDraining before EventLoop may
   publish Shutdown
+- the IOE-X14 portable contract does not create a shared backend execution
+  thread. Each production or experimental Server/Client, its connection state,
+  callbacks, lifecycle transitions, observations, and final publication remain
+  on that runner's documented EventLoop owner
+- X14 native peer operations touch only their raw socket. They normally run on
+  the peer thread; the Windows pressure fixture permits one bounded inbound
+  write from an owner callback before release/acquire synchronization hands all
+  later raw-socket work to the peer thread. No raw socket operation overlaps
+  that handoff, and neither operator inspects or mutates connection-owned state.
+  The only foreign connection calls are the existing bounded `trySend`,
+  `tryShutdown`, and `tryForceClose` admissions
+- X14 connection, message, high-water, write-complete, close-info, and
+  disconnect callbacks may re-enter owner-safe Server/Client/connection methods.
+  The portable trace records their owner and order after the existing backend
+  has revalidated its own identity/generation; the trace adds no callback
+  forwarding thread or synchronization domain
 - Completion Engine, Pump, Driver, and Hub destruction is owner-only. Pump-
   based destructors require an already-published physical stop and perform no
   wait; a live accepted obligation is a fail-fast precondition violation, not

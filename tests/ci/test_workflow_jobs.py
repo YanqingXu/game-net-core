@@ -16,8 +16,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 129
-EXPECTED_THREADING_TOTAL = 102
+EXPECTED_CTEST_TOTAL = 130
+EXPECTED_THREADING_TOTAL = 103
 EXPECTED_CONSUMER_TOTAL = 2
 ARTIFACT_NAME = (
     "ci-evidence-${{ github.job }}-${{ github.sha }}-"
@@ -718,7 +718,7 @@ def main() -> None:
     require(self_hosted_job, '"tests/ci/test_workflow_jobs.py"')
     require(self_hosted_job, "& py -3 $guard")
     require(self_hosted_job, '-G "Visual Studio 18 2026"')
-    require(self_hosted_job, "--expected-total 129")
+    require(self_hosted_job, "--expected-total 130")
     require(self_hosted_job, "--timeout 30")
     require(self_hosted_job, "- name: Install and verify package consumer")
     require(self_hosted_job, "--expected-total 2")
@@ -879,15 +879,15 @@ def main() -> None:
     require(workflow, "-DGAMENET_ENABLE_EXPERIMENTAL=OFF")
     linux_io_uring = step_block(
         job_block(workflow, "linux-cmake"),
-        "Build and test experimental IOE-X1–X13 io_uring",
+        "Build and test experimental IOE-X1–X14 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
-    require(linux_io_uring, "--expected-total 139")
-    require(linux_io_uring, "--expect-label experimental=10")
+    require(linux_io_uring, "--expected-total 140")
+    require(linux_io_uring, "--expect-label experimental=11")
     require(linux_io_uring, "--target gamenet_io_uring_contracts")
     require(
         linux_io_uring,
-        "contract.io_engine.test_io_uring_",
+        "test_io_uring_",
     )
     require(linux_io_uring, "event_loop_pump")
     require(linux_io_uring, "tcp_connection_driver")
@@ -896,20 +896,22 @@ def main() -> None:
     require(linux_io_uring, "tcp_connection_adapter")
     require(linux_io_uring, "tcp_multi_owner_server")
     require(linux_io_uring, "tcp_client")
+    require(linux_io_uring, "test_cross_backend_tcp_semantics")
     linux_io_uring_asan = step_block(
         job_block(workflow, "linux-asan-ubsan"),
-        "Build and test experimental IOE-X1–X13 io_uring with ASan/UBSan",
+        "Build and test experimental IOE-X1–X14 io_uring with ASan/UBSan",
     )
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
     require(linux_io_uring_asan, "detect_leaks=1:halt_on_error=1")
-    require(linux_io_uring_asan, "--expected-total 139")
-    require(linux_io_uring_asan, "--expect-label experimental=10")
+    require(linux_io_uring_asan, "--expected-total 140")
+    require(linux_io_uring_asan, "--expect-label experimental=11")
     require(linux_io_uring_asan, "tcp_connection_hub")
     require(linux_io_uring_asan, "tcp_connection_hub_capacity")
     require(linux_io_uring_asan, "tcp_connection_adapter")
     require(linux_io_uring_asan, "tcp_multi_owner_server")
     require(linux_io_uring_asan, "tcp_client")
+    require(linux_io_uring_asan, "test_cross_backend_tcp_semantics")
     require(linux_io_uring_asan, "--target gamenet_io_uring_contracts")
     assert "\n      -R '^contract.io_engine.test_io_uring_" not in workflow, (
         "io_uring CTest regex must remain inside its YAML run block"
@@ -1079,8 +1081,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 129")
-    require(ci_docs, "threading=102")
+    require(ci_docs, "exactly 130")
+    require(ci_docs, "threading=103")
     require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")

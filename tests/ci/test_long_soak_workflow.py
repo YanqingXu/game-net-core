@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 
-EXPECTED_THREADING_TESTS = 102
+EXPECTED_THREADING_TESTS = 103
 EXPECTED_PHASE4_SOAK_TESTS = 12
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
@@ -264,7 +264,7 @@ def main() -> None:
     inventory = step_block(job, "Verify long-soak test inventory")
     require(inventory, "set -euo pipefail", workflow)
     require(inventory, "python3 tools/verify_ctest_inventory.py", workflow)
-    require(inventory, "--expected-total 129", workflow)
+    require(inventory, "--expected-total 130", workflow)
     require(inventory, f"--expect-label threading={EXPECTED_THREADING_TESTS}", workflow)
     require(inventory, "--expect-label game_pipeline=7", workflow)
     require(inventory, "--expect-label broadcast=5", workflow)
@@ -317,7 +317,7 @@ def main() -> None:
     require(manifest, 'GAMENET_CI_STATUS: "${{ job.status }}"', workflow)
     require(
         manifest,
-        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 129",
+        "python3 tools/verify_ctest_inventory.py --test-dir build-long-soak --expected-total 130",
         workflow,
     )
     assert "ctest --test-dir build-long-soak -N" not in manifest
@@ -441,8 +441,8 @@ def main() -> None:
     assert self_hosted_ci.index(self_hosted_sanitizer_preflight) < self_hosted_ci.index(
         "      - name: Check repository guards"
     ), "ASan/UBSan ptrace preflight must run before repository guards and the build"
-    require(self_hosted_ci, "--expected-total 129", workflow)
-    require(self_hosted_ci, "inventory+=(--expect-label threading=102)", workflow)
+    require(self_hosted_ci, "--expected-total 130", workflow)
+    require(self_hosted_ci, "inventory+=(--expect-label threading=103)", workflow)
     require(self_hosted_ci, 'test_command+=(-L "${GAMENET_CTEST_LABEL}")', workflow)
     require(self_hosted_ci, "if: matrix.install_consumer", workflow)
     require(self_hosted_ci, "--expected-total 2", workflow)
@@ -736,12 +736,21 @@ def main() -> None:
     require(waiver_upload, f"name: {waiver_artifact_name}", workflow)
     require(waiver_upload, "if-no-files-found: error", workflow)
 
+    tests_cmake_text = tests_cmake.read_text(encoding="utf-8")
     cmake_calls = re.findall(
         r"^add_gamenet_(?:component_)?test\(([^\n]*)\)$",
-        tests_cmake.read_text(encoding="utf-8"),
+        tests_cmake_text,
         flags=re.MULTILINE,
     )
-    threading_count = sum("threading" in call.split() for call in cmake_calls)
+    cross_backend_labels = re.findall(
+        r"set\(GAMENET_CROSS_BACKEND_TCP_SEMANTICS_LABELS\s+([^)]*)\)",
+        tests_cmake_text,
+        flags=re.MULTILINE,
+    )
+    assert len(cross_backend_labels) == 1
+    threading_count = sum("threading" in call.split() for call in cmake_calls) + sum(
+        "threading" in labels.split() for labels in cross_backend_labels
+    )
     phase4_soak_count = sum(
         len(call.split()) >= 2 and call.split()[1] in {"game_pipeline", "broadcast"}
         for call in cmake_calls
@@ -771,7 +780,7 @@ def main() -> None:
     require(ci_docs_text, "--repeat until-fail:", ci_docs)
     require(ci_docs_text, "defaults to repeat 50", ci_docs)
     require(ci_docs_text, "60-second per-test timeout", ci_docs)
-    require(ci_docs_text, "102 threading-labeled tests", ci_docs)
+    require(ci_docs_text, "103 threading-labeled tests", ci_docs)
     require(ci_docs_text, "12 Pipeline/Broadcast tests", ci_docs)
     require(ci_docs_text, "`ci_artifact_policy`", ci_docs)
     require(ci_docs_text, "defaults to `best-effort`", ci_docs)

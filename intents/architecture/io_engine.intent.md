@@ -684,6 +684,43 @@ existing one-shot Engine, shared Hub/Pump, and semantic Adapter:
   buffers, fixed files, zero-copy, SQPOLL, TLS, framing, or game/business state
   in Core.
 
+IOE-X14 authorizes one portable, test-only semantic suite over the completed
+production and source-private server/client compositions:
+
+- `tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp` is one source
+  contract. A normal Linux build drives the production epoll TCP path, a normal
+  Windows build drives the production IOCP TCP path, and a Linux experimental
+  build additionally drives `IoUringTcpServer` and `IoUringTcpClient`. The test
+  does not add a runtime backend selector or compile io_uring on Windows;
+- each backend executes equivalent real AF_INET loopback server and client
+  scenarios with finite output, input, command, connection, operation, and
+  deadline budgets. A test-owned native peer may delay reads to create output
+  pressure. Its raw socket has one sequential operator at a time and may be
+  handed to the peer thread only through explicit test synchronization; it
+  cannot observe or mutate EventLoop, Adapter, Engine, Hub, route, or production
+  connection state;
+- the shared result vocabulary is limited to semantic observations: callback
+  owner/order, typed Send/Shutdown/Force admission class, high/low-water read
+  pause and resume, accepted-output drain before one write half-close,
+  continued inbound delivery until peer EOF, immutable first close reason, and
+  ready final-stop publication with zero logical pending output. Backend-
+  specific CQE, readiness mask, operation count, buffer layout, batching, and
+  native diagnostic fields remain explicit and are never synthesized;
+- production `TcpServer`/`TcpClient` and experimental Server/Client retain their
+  existing ownership and lifecycle APIs. The suite may invoke only the already
+  authorized bounded cross-thread connection Send/Shutdown/Force facades;
+  server/client configuration, lifecycle, observation, callback re-entry, and
+  destruction remain on their documented EventLoop owner;
+- every runner must fail closed on timeout, peer I/O failure, callback thread
+  drift, missing pause/resume, altered first close reason, accepted-byte loss,
+  premature half-close, or non-terminal final drain. Experimental summaries
+  additionally reconcile listener, Connect, Adapter, Route, Hub, operation,
+  notice, socket, command, timer, pending-byte, and Engine-owned-byte residue;
+- IOE-X14 does not authorize a stable or experimental installed API change,
+  production backend replacement, public backend selection, identical backend
+  metrics or performance claims, multishot, provided buffers, fixed files,
+  zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -729,7 +766,10 @@ existing one-shot Engine, shared Hub/Pump, and semantic Adapter:
 16. IOE-X13 adds one-shot Connect and composes one owner-only source-private
     TcpClient over the existing Hub and semantic Adapter with generation-safe
     timeout, retry, cancellation, re-entry, and owner-quit convergence.
-17. Only proven, cross-backend concepts may later graduate to a narrow public
+17. IOE-X14 drives one portable server/client semantic suite across production
+    epoll, production IOCP, and source-private io_uring without equating their
+    native mechanisms or exposing backend selection.
+18. Only proven, cross-backend concepts may later graduate to a narrow public
     capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -832,6 +872,13 @@ existing one-shot Engine, shared Hub/Pump, and semantic Adapter:
   retry recovery, deterministic immediate timeout, stale-attempt restart,
   callback re-entry, exact cancellation, and owner-quit shutdown all converge
   with one fd owner and zero timer/Adapter/Hub/Engine residue.
+- `tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp` is the IOE-X14
+  portable semantic driver. It runs equivalent real loopback Server and Client
+  cases through Linux epoll or Windows IOCP in every default build and through
+  source-private io_uring when the Linux experimental target is enabled. It
+  compares only send/backpressure, read pause/resume, typed cross-thread
+  admission, graceful half-close, first close reason, callback owner/order, and
+  final drain, while retaining backend-native accounting as separate evidence.
 - `benchmarks/io_uring/listener_comparison.cpp` drives the fixed IOE-X10
   256-route/four-wave listener workload through either production epoll or the
   source-private completion listener and emits one validated backend sample.

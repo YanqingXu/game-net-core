@@ -92,6 +92,11 @@ inline inside TcpConnection.
 - every accepted output byte is reserved exactly once and released exactly once
   after write completion or close-time discard; the configured hard limit is
   never exceeded even by concurrent cross-thread send admission
+- once a graceful or forced close request is atomically published, a later
+  `trySend()` observes that sealed output admission and returns `Closed` even
+  before the owner loop advances the public connection state. A send whose
+  reservation won before that publication remains accepted and drains or is
+  reconciled exactly once by the normal owner lifecycle
 - a hierarchical reservation never exceeds any configured hard limit. Failure
   at a later scope rolls back every earlier scope before `trySend()` returns,
   and an accepted byte releases every scope exactly once
@@ -270,6 +275,10 @@ inline inside TcpConnection.
 - disconnected state should block unsafe user-visible actions
 - shutdown waits for pending output to drain before issuing the socket
   half-close
+- graceful or forced shutdown seals new output admission at request
+  publication, not only after the owner loop changes `kConnected`; this keeps
+  sequential cross-thread Send/Shutdown ordering observable without mutating
+  Buffer, Channel, or transport state off-owner
 - repeated shutdown requests are idempotent and must not duplicate the
   owner-loop half-close, write-complete, disconnected, or close callbacks
 - high-water callback fires once when output crosses the threshold and is
@@ -356,6 +365,10 @@ inline inside TcpConnection.
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`
   verifies cross-thread shutdown marshals to the owner loop, drains pending
   output, and then half-closes exactly once
+- `tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp` verifies that
+  an accepted foreign Send reaches the peer before EOF while a Send issued
+  after the same thread's accepted graceful request returns `Closed` on Linux
+  epoll, Windows IOCP, and the Linux source-private io_uring adapter
 - `tests/contract/tcp_connection/test_tcp_connection_repeated_shutdown.cpp`
   verifies repeated owner and non-owner shutdown requests drain pending output
   and converge on one owner-loop half-close

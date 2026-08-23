@@ -230,6 +230,24 @@ It must not blur these roles.
   side Hub destruction, detaches its lifecycle source, and only then publishes
   the Client future. Copied futures own summaries only and cannot mutate Client,
   Hub, Adapter, socket, timer, or EventLoop state
+- the IOE-X14 semantic driver owns only test synchronization, immutable payloads,
+  normalized observations, copied stable connection handles where the existing
+  API permits them, and final summary values. It never owns or transfers a
+  production Channel/IOCP operation or experimental Connect/Route/Engine lease
+- each X14 raw peer socket has exactly one test operator at a time. The normal
+  peer thread retains it through close; the Windows IOCP pressure fixture first
+  permits one bounded owner-callback inbound write, then release/acquire
+  synchronization transfers all subsequent peer read/half-close work to the
+  peer thread. An accepted backend connection remains owned by
+  `TcpServer`/`TcpConnection` or the io_uring Hub/Adapter topology; publishing a
+  pointer or shared facade for bounded foreign admission does not transfer
+  transport ownership
+- final X14 publication follows backend-native physical retirement. Production
+  Server stop follows connection removal and worker convergence; production
+  Client destruction follows its disconnected observation; experimental Server
+  and Client summaries retain their Hub/Adapter state until every listener,
+  Connect, Route, operation, notice, socket, timer, command, and byte obligation
+  is zero. The normalized trace cannot make early destruction legal
 
 ## 3. Poller
 - Poller does not own Channel
