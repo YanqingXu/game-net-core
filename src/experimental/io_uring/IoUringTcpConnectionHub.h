@@ -100,6 +100,8 @@ struct IoUringTcpConnectionHubOptions {
     std::size_t maxPendingAccepts{1};
 };
 
+struct IoUringTcpConnectionHubAddOutcome;
+
 struct IoUringTcpHubAcceptedConnectionCallbacks {
     std::function<void(IoUringTcpConnectionIdentity, std::string_view)>
         messageConsumer;
@@ -108,6 +110,10 @@ struct IoUringTcpHubAcceptedConnectionCallbacks {
         IoUringTcpHubCloseReason)> closeConsumer;
     std::function<void(IoUringTcpConnectionIdentity, std::size_t)>
         outputProgressConsumer;
+    // Called exactly once after the factory result is either admitted as one
+    // Hub route or rejected. It transfers no socket ownership.
+    std::function<void(const IoUringTcpConnectionHubAddOutcome&)>
+        settlementConsumer;
 };
 
 struct IoUringTcpHubListenerMetrics {
@@ -238,6 +244,8 @@ public:
         std::function<void(const IoUringTcpConnectionHubStopSummary&)>;
     using AcceptedConnectionFactory =
         std::function<IoUringTcpHubAcceptedConnectionCallbacks()>;
+    using ListenerStoppedConsumer =
+        std::function<void(const IoUringTcpHubListenerStopSummary&)>;
 
     IoUringTcpConnectionHub(
         gamenet::net::EventLoop* ownerLoop,
@@ -257,7 +265,8 @@ public:
     // returns callbacks only; accepted descriptors never escape Hub ownership.
     IoUringTcpHubListenOutcome listen(
         gamenet::net::SocketFd listeningSocket,
-        AcceptedConnectionFactory connectionFactory);
+        AcceptedConnectionFactory connectionFactory,
+        ListenerStoppedConsumer stoppedConsumer = {});
     bool stopListening();
     // Mutable Hub observations are owner-loop-only and reject foreign reads.
     bool listening() const;

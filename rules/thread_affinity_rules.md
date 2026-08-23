@@ -310,6 +310,21 @@ No other direct mutation path is allowed for core loop state.
   before route close and Pump quiesce. Explicit listener stop may retry a
   temporarily full cancellation SQ through the existing owner maintenance
   source; it never blocks, spins, or adds a pending functor
+- IOE-X11 Server construction, configuration, start/bind/listen, connection-set
+  mutation, lifecycle observation, graceful stop, force escalation, stop-future
+  publication, and destruction are one EventLoop-owner-only operations. The
+  Server adds no cross-thread lifecycle method; foreign callers must marshal to
+  that owner, while established Adapter Send/Shutdown/Force calls retain only
+  their existing IOE-X8 mailbox permission
+- listener settlement binds Adapter identity and future before the owner
+  connection callback. Connection, message, high-water, write-complete,
+  close-info, and close callbacks may re-enter Server/Adapter owner operations;
+  each outer frame revalidates Server phase and observer membership before
+  accepting more work or touching a provisional Adapter
+- the Server lifecycle continuation is bounded owner control work. It may
+  observe immutable futures and self-signal while physical listener/route drain
+  remains, but it carries no CQE or business data, invokes no user callback,
+  never blocks, and detaches before requesting final Hub stop
 - Completion Engine, Pump, Driver, and Hub destruction is owner-only. Pump-
   based destructors require an already-published physical stop and perform no
   wait; a live accepted obligation is a fail-fast precondition violation, not

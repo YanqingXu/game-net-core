@@ -95,6 +95,7 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
     "tests/contract/io_engine/test_io_uring_tcp_connection_hub_capacity.cpp",
     "tests/contract/io_engine/test_io_uring_tcp_listener.cpp",
     "tests/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp",
+    "tests/contract/io_engine/test_io_uring_tcp_server.cpp",
 }
 
 ARTIFACT_KINDS = {"installed-library", "example", "benchmark"}

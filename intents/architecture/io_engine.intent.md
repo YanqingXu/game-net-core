@@ -544,6 +544,47 @@ changing either backend's runtime semantics or public surface:
   by measurement requires a separate intent/rules/contract fix-forward slice
   followed by a complete rerun of the fixed X10 protocol.
 
+IOE-X11 authorizes one source-private single-owner server composition over the
+existing listener, shared Hub, and semantic Adapter:
+
+- `IoUringTcpServer` remains Linux-only, default-off, non-installed, and
+  source-private. One EventLoop owner constructs, configures, starts, observes,
+  stops, and destroys the Server, its one Hub/Pump/Engine, its listener, and
+  every Server-owned Adapter facade. It does not modify or substitute
+  production `TcpServer` and does not expose a backend selector;
+- `start()` creates one nonblocking stream socket, applies the configured reuse
+  policy, binds the configured `InetAddress`, records the actual bound address,
+  calls native listen, and transfers the socket exactly once into the Hub
+  listener. Socket creation, bind, native listen, and Hub-listen failures are
+  typed and retain no descriptor outside RAII or the Hub;
+- the Hub listener factory creates one bounded Server-owned Adapter observer
+  without receiving the accepted fd. A settlement callback binds the exact Hub
+  route identity and physical stop future to that Adapter only after successful
+  `addConnection`; every rejection settles and removes the provisional Adapter.
+  The Hub remains the sole owner of accepted sockets and operation leases;
+- connection, message, high-water, write-complete, close-info, and close
+  callbacks execute only on the owner loop and may re-enter Server or Adapter
+  owner-safe operations. Establishment identity/future binding happens before
+  the connection callback. Terminal future publication and physical socket
+  retirement happen before the close callback and Server observer removal;
+- Server admission is bounded by the existing Hub connection, operation, byte,
+  segment, Accept-window, Pump-dispatch, and Adapter-mailbox limits. It adds no
+  overflow connection queue, worker, per-connection Pump, or recursive drain;
+- graceful stop first seals and retires the listener, then requests graceful
+  shutdown on every established Adapter. Sends accepted before that request
+  drain through one native write half-close, while receive remains live until
+  peer EOF or explicit force escalation. Force escalation cancels remaining
+  work but cannot replace an already-published first close reason;
+- one bounded source-private lifecycle continuation observes listener and
+  Adapter physical futures. It stops the Hub only after listener retirement and
+  all Adapter observers have retired, and publishes the Server stop future only
+  after the Hub reports zero listener/route/operation/notice/socket/byte
+  residue. Destruction is owner-only and requires that future to be ready;
+- IOE-X11 does not authorize multiple I/O owners, accepted-fd handoff,
+  Connect/TcpClient, installed experimental headers, stable API changes,
+  production backend replacement, multishot, provided buffers, fixed files,
+  zero-copy, SQPOLL, TLS, framing, or game/business state in Core.
+
 ## 7. Compatibility Sequence
 
 1. IOE-R1 introduces a source-private Engine contract and an adapter around the
@@ -580,7 +621,10 @@ changing either backend's runtime semantics or public surface:
 13. IOE-X10 compares that listener topology with production epoll under one
     fixed, interleaved Release protocol and records `PROMOTE` or `DEFER` only
     for later source-private shaping.
-14. Only proven, cross-backend concepts may later graduate to a narrow public
+14. IOE-X11 composes the listener, shared Hub, and semantic Adapter into one
+    source-private single-owner server with typed start, callback re-entry,
+    graceful drain, force escalation, and physical stop convergence.
+15. Only proven, cross-backend concepts may later graduate to a narrow public
     capability surface. Platform-specific controls remain source-private.
 
 ## 8. Test Contracts
@@ -663,6 +707,13 @@ changing either backend's runtime semantics or public surface:
   verifies finite Accept depth, capacity rejection/recovery, generation churn,
   first-arm Engine pressure, callback re-entry, explicit stop, owner quit,
   accepted-fd reconciliation, and zero listener/Hub/Engine residue.
+- `tests/contract/io_engine/test_io_uring_tcp_server.cpp` verifies the IOE-X11
+  source-private Server creates and binds its listener, settles each provisional
+  Adapter exactly once, invokes connection/message/close callbacks on the one
+  owner with callback re-entry, drains accepted output through graceful
+  half-close, preserves the first reason under force escalation, reports typed
+  bind/listen/admission failure, rejects foreign mutation, and publishes its
+  stop future only after zero listener/Adapter/Hub/Engine residue.
 - `benchmarks/io_uring/listener_comparison.cpp` drives the fixed IOE-X10
   256-route/four-wave listener workload through either production epoll or the
   source-private completion listener and emits one validated backend sample.

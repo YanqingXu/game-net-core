@@ -4,6 +4,7 @@
 #include "IoUringTcpConnectionAdapter.h"
 
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/Socket.h"
 
 #include "core/net/detail/EventLoopLifecycleRegistry.h"
 
@@ -394,6 +395,39 @@ void publishRejected(
         .transport = {},
         .established = false,
     });
+}
+
+void bindEstablished(
+    const std::shared_ptr<AdapterState>& state,
+    const IoUringTcpConnectionHubAddOutcome& outcome) {
+    if (outcome.result != IoUringTcpHubAddResult::Accepted ||
+        !outcome.identity.valid() || !outcome.stopFuture.valid()) {
+        throw std::logic_error(
+            "io_uring TCP adapter received an invalid accepted settlement");
+    }
+    state->identity = outcome.identity;
+    state->transportFuture = outcome.stopFuture;
+    state->established = true;
+    state->phase = ClosePhase::Open;
+    {
+        std::lock_guard lock(state->command->mutex);
+        state->command->phase = AdapterAdmissionPhase::Open;
+        state->command->firstCloseInfo.reset();
+        state->command->reservedOutputBytes = 0;
+        state->command->overloadLatched = false;
+        state->command->gracefulAdmitted = false;
+        state->command->forceAdmitted = false;
+    }
+}
+
+void settleAdapter(
+    const std::shared_ptr<AdapterState>& state,
+    const IoUringTcpConnectionHubAddOutcome& outcome) {
+    if (outcome.result == IoUringTcpHubAddResult::Accepted) {
+        bindEstablished(state, outcome);
+    } else {
+        publishRejected(state, outcome.result);
+    }
 }
 
 gamenet::net::TcpSendResult mapSendResult(
@@ -918,47 +952,60 @@ public:
     }
 
     IoUringTcpHubAddResult establish(gamenet::net::SocketFd socket) {
+        gamenet::net::Socket transferred(socket);
         assertOwner(*state_);
-        if (!state_->configured) return IoUringTcpHubAddResult::RejectedInvalid;
+        if (!state_->configured) {
+            return IoUringTcpHubAddResult::RejectedInvalid;
+        }
+        auto callbacks = prepareAcceptedConnection({});
+        auto outcome = state_->hub->addConnection(
+            transferred.releaseFd(),
+            std::move(callbacks.messageConsumer),
+            std::move(callbacks.closeConsumer),
+            std::move(callbacks.outputProgressConsumer));
+        callbacks.settlementConsumer(outcome);
+        return outcome.result;
+    }
+
+    IoUringTcpHubAcceptedConnectionCallbacks prepareAcceptedConnection(
+        IoUringTcpConnectionAdapter::AcceptedSettlementCallback callback) {
+        assertOwner(*state_);
+        if (!state_->configured) {
+            throw std::logic_error(
+                "io_uring TCP adapter may be established only once");
+        }
         state_->configured = false;
         const auto state = state_;
-        auto outcome = state_->hub->addConnection(
-            socket,
-            [state](IoUringTcpConnectionIdentity identity,
-                    std::string_view payload) {
-                handleMessage(state, identity, payload);
-            },
-            [state](IoUringTcpConnectionIdentity identity,
-                    IoUringTcpHubCloseReason) {
-                if (identity != state->identity ||
-                    !state->transportFuture.valid()) {
-                    requestCallbackFailure(state);
-                    return;
-                }
-                publishTerminal(state, state->transportFuture.get());
-            },
-            [state](IoUringTcpConnectionIdentity identity,
-                    std::size_t pendingBytes) {
-                handleOutputProgress(state, identity, pendingBytes);
-            });
-        if (outcome.result != IoUringTcpHubAddResult::Accepted) {
-            publishRejected(state_, outcome.result);
-            return outcome.result;
-        }
-        state_->identity = outcome.identity;
-        state_->transportFuture = std::move(outcome.stopFuture);
-        state_->established = true;
-        state_->phase = ClosePhase::Open;
-        {
-            std::lock_guard lock(state_->command->mutex);
-            state_->command->phase = AdapterAdmissionPhase::Open;
-            state_->command->firstCloseInfo.reset();
-            state_->command->reservedOutputBytes = 0;
-            state_->command->overloadLatched = false;
-            state_->command->gracefulAdmitted = false;
-            state_->command->forceAdmitted = false;
-        }
-        return outcome.result;
+        return {
+            .messageConsumer =
+                [state](IoUringTcpConnectionIdentity identity,
+                        std::string_view payload) {
+                    handleMessage(state, identity, payload);
+                },
+            .closeConsumer =
+                [state](IoUringTcpConnectionIdentity identity,
+                        IoUringTcpHubCloseReason) {
+                    if (identity != state->identity ||
+                        !state->transportFuture.valid()) {
+                        requestCallbackFailure(state);
+                        return;
+                    }
+                    publishTerminal(state, state->transportFuture.get());
+                },
+            .outputProgressConsumer =
+                [state](IoUringTcpConnectionIdentity identity,
+                        std::size_t pendingBytes) {
+                    handleOutputProgress(state, identity, pendingBytes);
+                },
+            .settlementConsumer =
+                [state, callback = std::move(callback)](
+                    const IoUringTcpConnectionHubAddOutcome& outcome) mutable {
+                    settleAdapter(state, outcome);
+                    if (callback && state->observer != nullptr) {
+                        callback(*state->observer, outcome.result);
+                    }
+                },
+        };
     }
 
     gamenet::net::TcpSendResult trySend(std::string_view payload) {
@@ -1021,6 +1068,12 @@ void IoUringTcpConnectionAdapter::setCloseCallback(
 IoUringTcpHubAddResult IoUringTcpConnectionAdapter::establish(
     gamenet::net::SocketFd establishedSocket) {
     return impl_->establish(establishedSocket);
+}
+
+IoUringTcpHubAcceptedConnectionCallbacks
+IoUringTcpConnectionAdapter::prepareAcceptedConnection(
+    AcceptedSettlementCallback settlementCallback) {
+    return impl_->prepareAcceptedConnection(std::move(settlementCallback));
 }
 
 gamenet::net::TcpSendResult IoUringTcpConnectionAdapter::trySend(

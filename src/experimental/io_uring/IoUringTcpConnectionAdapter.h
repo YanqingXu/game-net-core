@@ -75,6 +75,9 @@ public:
         const gamenet::net::TcpConnectionCloseInfo&)>;
     using CloseCallback =
         std::function<void(IoUringTcpConnectionAdapter&)>;
+    using AcceptedSettlementCallback = std::function<void(
+        IoUringTcpConnectionAdapter&,
+        IoUringTcpHubAddResult)>;
 
     IoUringTcpConnectionAdapter(
         gamenet::net::EventLoop* ownerLoop,
@@ -95,6 +98,11 @@ public:
     // accepted and rejected descriptors. Configuration is sealed afterward.
     IoUringTcpHubAddResult establish(
         gamenet::net::SocketFd establishedSocket);
+    // IOE-X11: prepares callbacks for one fd that remains owned by the Hub
+    // listener. The settlement callback binds the admitted route identity and
+    // stop future, or publishes a rejected terminal, exactly once.
+    IoUringTcpHubAcceptedConnectionCallbacks prepareAcceptedConnection(
+        AcceptedSettlementCallback settlementCallback = {});
     // IOE-X8: these three admission methods are safe from a foreign thread
     // while the caller keeps this facade alive. All Hub mutation and callbacks
     // remain serialized on the owner loop.

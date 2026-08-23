@@ -112,15 +112,18 @@ private:
         Listener(
             gamenet::net::SocketFd socketFd,
             IoUringTcpConnectionHub::AcceptedConnectionFactory factoryValue,
+            IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedValue,
             std::size_t acceptDepth)
             : socket(socketFd),
               factory(std::move(factoryValue)),
+              stoppedConsumer(std::move(stoppedValue)),
               stopFuture(stopPromise.get_future().share()) {
             acceptIdentities.reserve(acceptDepth);
         }
 
         gamenet::net::Socket socket;
         IoUringTcpConnectionHub::AcceptedConnectionFactory factory;
+        IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedConsumer;
         std::promise<IoUringTcpHubListenerStopSummary> stopPromise;
         std::shared_future<IoUringTcpHubListenerStopSummary> stopFuture;
         std::vector<IoUringOperationIdentity> acceptIdentities;
@@ -260,7 +263,8 @@ public:
 
     IoUringTcpHubListenOutcome listen(
         gamenet::net::SocketFd listeningSocket,
-        IoUringTcpConnectionHub::AcceptedConnectionFactory factory) {
+        IoUringTcpConnectionHub::AcceptedConnectionFactory factory,
+        IoUringTcpConnectionHub::ListenerStoppedConsumer stoppedConsumer) {
         gamenet::net::Socket transferred(listeningSocket);
         assertOwner();
         if (!isListeningSocket(listeningSocket) || !factory) {
@@ -281,6 +285,7 @@ public:
         listener_ = std::make_unique<Listener>(
             transferred.releaseFd(),
             std::move(factory),
+            std::move(stoppedConsumer),
             options_.maxPendingAccepts);
         auto future = listener_->stopFuture;
         const auto armResult = armAcceptWindow();
@@ -752,6 +757,13 @@ private:
         } catch (...) {
             ++metrics_.invariantFailures;
         }
+        if (listener.stoppedConsumer) {
+            try {
+                listener.stoppedConsumer(summary);
+            } catch (...) {
+                ++metrics_.callbackFailures;
+            }
+        }
     }
 
     bool removeAcceptIdentity(IoUringOperationIdentity operation) noexcept {
@@ -1117,11 +1129,17 @@ private:
         if (listener.phase != ListenerPhase::Running ||
             phase_ != IoUringTcpHubPhase::Running) {
             ++listener.metrics.acceptedSocketRejections;
+            settleAcceptedCallbacks(
+                callbacks,
+                {.result = IoUringTcpHubAddResult::RejectedQuiescing});
             return;
         }
         if (!callbacks.messageConsumer) {
             ++listener.metrics.callbackFailures;
             ++listener.metrics.acceptedSocketRejections;
+            settleAcceptedCallbacks(
+                callbacks,
+                {.result = IoUringTcpHubAddResult::RejectedInvalid});
             (void)beginListenerStop(
                 IoUringTcpHubListenerCloseReason::CallbackFailed,
                 0,
@@ -1145,6 +1163,7 @@ private:
                 true);
             return;
         }
+        bool stopForAdmissionFailure = false;
         if (added.result == IoUringTcpHubAddResult::Accepted) {
             ++listener.metrics.connectionsAdmitted;
         } else {
@@ -1153,14 +1172,42 @@ private:
                 ++listener.metrics.connectionLimitRejections;
             } else if (listener.phase == ListenerPhase::Running &&
                        phase_ == IoUringTcpHubPhase::Running) {
-                (void)beginListenerStop(
-                    IoUringTcpHubListenerCloseReason::EngineRejected,
-                    0,
-                    true);
-                return;
+                stopForAdmissionFailure = true;
             }
         }
+        if (!settleAcceptedCallbacks(callbacks, added)) {
+            if (added.result == IoUringTcpHubAddResult::Accepted) {
+                (void)closeConnection(
+                    added.identity,
+                    IoUringTcpHubCloseReason::CallbackFailed);
+            }
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::CallbackFailed,
+                0,
+                true);
+            return;
+        }
+        if (stopForAdmissionFailure) {
+            (void)beginListenerStop(
+                IoUringTcpHubListenerCloseReason::EngineRejected,
+                0,
+                true);
+            return;
+        }
         maintainAcceptWindow();
+    }
+
+    bool settleAcceptedCallbacks(
+        IoUringTcpHubAcceptedConnectionCallbacks& callbacks,
+        const IoUringTcpConnectionHubAddOutcome& outcome) noexcept {
+        if (!callbacks.settlementConsumer) return true;
+        try {
+            callbacks.settlementConsumer(outcome);
+            return true;
+        } catch (...) {
+            if (listener_) ++listener_->metrics.callbackFailures;
+            return false;
+        }
     }
 
     void handleReceiveNotice(
@@ -1600,8 +1647,12 @@ IoUringTcpConnectionHubAddOutcome IoUringTcpConnectionHub::addConnection(
 
 IoUringTcpHubListenOutcome IoUringTcpConnectionHub::listen(
     gamenet::net::SocketFd listeningSocket,
-    AcceptedConnectionFactory connectionFactory) {
-    return impl_->listen(listeningSocket, std::move(connectionFactory));
+    AcceptedConnectionFactory connectionFactory,
+    ListenerStoppedConsumer stoppedConsumer) {
+    return impl_->listen(
+        listeningSocket,
+        std::move(connectionFactory),
+        std::move(stoppedConsumer));
 }
 
 bool IoUringTcpConnectionHub::stopListening() {

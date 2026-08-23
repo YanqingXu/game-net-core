@@ -272,6 +272,17 @@ Contract tests verify:
   `listenerMetrics`, `phase`, and `metrics` from a real foreign thread and
   requires every call to reject before reading owner state; owner-side queries
   and shutdown must remain valid afterward
+- the IOE-X11 contract must use a real loopback TCP listener created by the
+  source-private Server. It proves the recorded ephemeral bind address accepts,
+  each accepted socket settles into exactly one semantic Adapter, echo and
+  connection callbacks remain on the owner, and callback-reentrant graceful
+  stop drains accepted bytes through peer-observed EOF before terminal close
+- the same Server contract force-escalates a graceful stop with a pending Recv,
+  preserves the first graceful close reason, retires provisional/active
+  Adapters exactly once, and publishes listener-before-Adapter-before-Hub-before-
+  Server convergence with zero operation/notice/socket/pending-byte/owned-byte
+  residue. Typed bind/listen failure and foreign-thread mutation must leave the
+  Server capable of a complete owner-side stop
 - a deterministic subprocess destruction contract holds a real accepted Recv
   and lease, invokes Pump destruction before physical stop, and requires an
   immediate fail-fast result rather than the historical 250 ms owner wait or

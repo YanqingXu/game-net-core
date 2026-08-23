@@ -175,6 +175,21 @@ It must not blur these roles.
   erase those obligations. Hub/Pump stop publication requires zero active
   Accept routes, a closed listener socket, all connection routes retired, and
   zero Engine notices/leases/owned bytes
+- the IOE-X11 Server uniquely owns one Hub and every provisional or established
+  Adapter facade. It borrows and is outlived by its EventLoop. The Server-created
+  listening socket transfers exactly once to the Hub on `listen`; accepted fds
+  still transfer directly from completion-notice RAII to Hub route ownership
+  and are never owned by the Server or Adapter callback
+- an accepted-connection settlement owns no fd. It transfers only the exact Hub
+  route identity and shared physical stop future into one provisional Adapter,
+  then transfers that Adapter into the Server's bounded active set. Every
+  rejected settlement publishes the Adapter's rejected terminal state before
+  the Server releases the provisional observer
+- graceful Server stop retains all established Adapters until their Hub route
+  futures prove accepted-byte reconciliation and socket retirement. Only after
+  the listener future and every Adapter terminal are ready may the Server stop
+  its Hub; the Server future is published after the Hub future and before any
+  legal owner-side destruction
 
 ## 3. Poller
 - Poller does not own Channel

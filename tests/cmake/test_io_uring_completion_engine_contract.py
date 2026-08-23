@@ -36,6 +36,8 @@ def main() -> None:
     adapter_source = (
         repo_root / "src/experimental/io_uring/IoUringTcpConnectionAdapter.cc"
     )
+    server_header = repo_root / "src/experimental/io_uring/IoUringTcpServer.h"
+    server_source = repo_root / "src/experimental/io_uring/IoUringTcpServer.cc"
     lifecycle_registry = (
         repo_root / "src/core/net/detail/EventLoopLifecycleRegistry.h"
     )
@@ -66,6 +68,9 @@ def main() -> None:
     adapter_contract = (
         repo_root
         / "tests/contract/io_engine/test_io_uring_tcp_connection_adapter.cpp"
+    )
+    server_contract = (
+        repo_root / "tests/contract/io_engine/test_io_uring_tcp_server.cpp"
     )
     benchmark_cmake = repo_root / "benchmarks" / "CMakeLists.txt"
     benchmark = repo_root / "benchmarks" / "io_uring" / "one_shot.cpp"
@@ -105,6 +110,8 @@ def main() -> None:
         hub_source,
         adapter_header,
         adapter_source,
+        server_header,
+        server_source,
         contract,
         pump_contract,
         driver_contract,
@@ -112,6 +119,7 @@ def main() -> None:
         hub_capacity_contract,
         listener_contract,
         adapter_contract,
+        server_contract,
         benchmark,
         benchmark_validator,
         shared_hub_benchmark,
@@ -135,6 +143,7 @@ def main() -> None:
     require(cmake_text, "add_library(GameNet::experimental ALIAS", experimental_cmake)
     require(cmake_text, "IoUringTcpConnectionHub.cc", experimental_cmake)
     require(cmake_text, "IoUringTcpConnectionAdapter.cc", experimental_cmake)
+    require(cmake_text, "IoUringTcpServer.cc", experimental_cmake)
     require(cmake_text, "gamenet_configure_sanitizers", experimental_cmake)
     assert "install(" not in cmake_text, "IOE-X1 target must remain non-installed"
 
@@ -336,6 +345,37 @@ def main() -> None:
     ):
         assert forbidden not in adapter_text, f"IOE-X6/X7/X8 scope escape: {forbidden}"
 
+    server_text = server_header.read_text(encoding="utf-8") + server_source.read_text(
+        encoding="utf-8"
+    )
+    for fragment in (
+        "IoUringTcpServer",
+        "IoUringTcpConnectionHub",
+        "IoUringTcpConnectionAdapter",
+        "createNonblocking",
+        "tryBindAddress",
+        "tryListen",
+        "prepareAcceptedConnection",
+        "stopGracefully",
+        "forceStop",
+        "listenerStoppedBeforeHub",
+        "allAdaptersRetired",
+    ):
+        require(server_text, fragment, server_source)
+    for forbidden in (
+        '"gamenet/core/net/TcpServer.h"',
+        "EventLoopThread",
+        "queueInLoop(",
+        "runInLoop(",
+        "std::thread",
+        "IORING_RECV_MULTISHOT",
+        "IORING_OP_SEND_ZC",
+        "IORING_REGISTER_BUFFERS",
+        "IORING_REGISTER_FILES",
+        "IORING_SETUP_SQPOLL",
+    ):
+        assert forbidden not in server_text, f"IOE-X11 scope escape: {forbidden}"
+
     registry_text = lifecycle_registry.read_text(encoding="utf-8")
     event_loop_text = event_loop_source.read_text(encoding="utf-8")
     require(registry_text, "attachQuiesceParticipant", lifecycle_registry)
@@ -363,6 +403,11 @@ def main() -> None:
         "gamenet_io_uring_tcp_connection_adapter_contract",
         tests_cmake,
     )
+    require(
+        tests_text,
+        "gamenet_io_uring_tcp_server_contract",
+        tests_cmake,
+    )
     require(tests_text, "gamenet_io_uring_contracts", tests_cmake)
     require(tests_text, "test_io_uring_event_loop_pump.cpp", tests_cmake)
     require(tests_text, "test_io_uring_tcp_connection_driver.cpp", tests_cmake)
@@ -382,6 +427,7 @@ def main() -> None:
         "test_io_uring_tcp_connection_adapter.cpp",
         tests_cmake,
     )
+    require(tests_text, "test_io_uring_tcp_server.cpp", tests_cmake)
     require(tests_text, "contract.io_engine.test_io_uring_completion_engine", tests_cmake)
     require(tests_text, "GameNet::experimental", tests_cmake)
     require(tests_text, "experimental;threading;lifecycle", tests_cmake)
@@ -745,6 +791,7 @@ def main() -> None:
     require(intent_text, "IOE-X7 authorizes that missing graceful-drain", intent)
     require(intent_text, "IOE-X8 authorizes bounded cross-thread command admission", intent)
     require(intent_text, "IOE-X9 authorizes one source-private listener", intent)
+    require(intent_text, "IOE-X11 authorizes one source-private single-owner server", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_completion_engine.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_event_loop_pump.cpp", intent)
     require(intent_text, "tests/contract/io_engine/test_io_uring_tcp_connection_driver.cpp", intent)
@@ -764,6 +811,11 @@ def main() -> None:
         "tests/contract/io_engine/test_io_uring_tcp_listener.cpp",
         intent,
     )
+    require(
+        intent_text,
+        "tests/contract/io_engine/test_io_uring_tcp_server.cpp",
+        intent,
+    )
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X1's raw io_uring Engine", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X2's non-installed completion pump", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X3 single-connection driver", thread_rules)
@@ -773,6 +825,7 @@ def main() -> None:
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X7 graceful request", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X8 permits only Adapter", thread_rules)
     require(thread_rules.read_text(encoding="utf-8"), "IOE-X9 listener construction", thread_rules)
+    require(thread_rules.read_text(encoding="utf-8"), "IOE-X11 Server construction", thread_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X1 experimental target owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X2 pump owns", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X3 driver uniquely owns", ownership_rules)
@@ -782,6 +835,7 @@ def main() -> None:
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X7 graceful shutdown", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X8 foreign Send admission", ownership_rules)
     require(ownership_rules.read_text(encoding="utf-8"), "IOE-X9 `listen` transfers", ownership_rules)
+    require(ownership_rules.read_text(encoding="utf-8"), "IOE-X11 Server uniquely owns", ownership_rules)
     require(testing_rules.read_text(encoding="utf-8"), "real Linux io_uring fd", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X2 contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X3 contract", testing_rules)
@@ -791,6 +845,7 @@ def main() -> None:
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X7 graceful case", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X8 cross-thread contract", testing_rules)
     require(testing_rules.read_text(encoding="utf-8"), "IOE-X9 listener contract", testing_rules)
+    require(testing_rules.read_text(encoding="utf-8"), "IOE-X11 contract", testing_rules)
 
     workflow_text = workflow.read_text(encoding="utf-8")
     require(workflow_text, "test_io_uring_completion_engine_contract.py", workflow)
@@ -804,11 +859,11 @@ def main() -> None:
     require(workflow_text, "tcp_connection_adapter", workflow)
     require(
         platform_docs.read_text(encoding="utf-8"),
-        "IOE-X1–X10 io_uring",
+        "IOE-X1–X11 io_uring",
         platform_docs,
     )
 
-    print("IOE-X1–X10 Engine, Pump, driver, Hub, capacity, adapter, graceful, cross-thread, listener, and comparison contracts verified")
+    print("IOE-X1–X11 Engine, Pump, driver, Hub, capacity, adapter, listener, Server, and comparison contracts verified")
 
 
 if __name__ == "__main__":
