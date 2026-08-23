@@ -113,11 +113,13 @@ def main() -> None:
     workflow = repo_root / ".github" / "workflows" / "ci.yml"
     consumer_cmake = repo_root / "tests" / "cmake" / "upgrade_consumer" / "CMakeLists.txt"
     consumer_source = consumer_cmake.with_name("main.cpp")
+    release_safe_guard = repo_root / "tests" / "cmake" / "test_release_safe_tests.py"
     tool_text = tool.read_text(encoding="utf-8")
     verifier_text = verifier.read_text(encoding="utf-8")
     workflow_text = workflow.read_text(encoding="utf-8")
     cmake_text = consumer_cmake.read_text(encoding="utf-8")
     source_text = consumer_source.read_text(encoding="utf-8")
+    release_safe_text = release_safe_guard.read_text(encoding="utf-8")
 
     for fragment in (
         "c2f5f2ece4a147f63f91c86ef3c1dd25bf9d370d22e25889648132985f9af408",
@@ -144,6 +146,11 @@ def main() -> None:
         'buffer.append("upgrade", 7)',
     ):
         require(source_text, fragment, consumer_source)
+    require(
+        release_safe_text,
+        'and "upgrade_consumer" not in path.relative_to(repo_root).parts',
+        release_safe_guard,
+    )
     assert workflow_text.count("python3 tools/run_release_consumer_gate.py") == 2
     assert workflow_text.count("python tools/run_release_consumer_gate.py") == 2
     assert workflow_text.count("python3 tools/verify_release_consumer_evidence.py") == 2
