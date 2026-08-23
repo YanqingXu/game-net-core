@@ -17,6 +17,9 @@ IOE-X11 实现与证据检查点：`013fecfe81277845eb3e60ccf5fe0205b753858d`
 IOE-X12 实现与证据检查点：`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`
 （source-private 多 owner TCP topology）
 
+IOE-X13 实现与证据检查点：`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`
+（source-private one-shot Connect/TcpClient composition）
+
 ## 1. 计划定位与总体顺序
 
 本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
@@ -54,7 +57,7 @@ M11 v1.0 稳定发布
 - `f5d39b800b4dd943531670aa09840c931c3dee4d` 已实现 IOE-X10 固定协议、
   结构化比较、验证器和 ARCH-G1 fix-forward；
 - 当前仓库留存的默认测试基线为 129（8 unit、107 contract、14 integration），
-  Linux experimental 基线为 138（8 unit、116 contract、14 integration）。这些是
+  Linux experimental 基线为 139（8 unit、117 contract、14 integration）。这些是
   已记录证据，不表示本次计划重制重新执行了测试；
 - Profile A/B/C/D 的共同能力审查结论保持 `NO-PROMOTION`；
 - main 持续前进，证据绑定精确 commit，需要推广时再选择 promotion commit；
@@ -310,8 +313,8 @@ sharding 证据完整。若没有公共能力被提升，不发布空版本；�
 仅在 `X10=PROMOTE` 且 ARCH-G1 批准时执行；否则整个 M6 标记为
 `skipped-by-evidence`，直接进入 M7。
 
-状态：**当前治理前沿**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；IOE-X11、
-IOE-X12 已关闭，立即任务是 IOE-X13 source-private Connect/TcpClient。M5 没有发布空 v0.4，实际
+状态：**当前治理前沿**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；IOE-X11–
+IOE-X13 已关闭，立即任务是 IOE-X14 跨后端语义套件。M5 没有发布空 v0.4，实际
 experimental preview 版本在 M6 发布门前按“下一可交付版本”重新确认。
 
 ### 8.1 IOE-X11：单 owner Server composition
@@ -336,13 +339,16 @@ experimental preview 版本在 M6 发布门前按“下一可交付版本”重�
 
 ### 8.3 IOE-X13：Connect/TcpClient
 
-状态：**当前治理前沿**。
+状态：**已关闭**，实现与证据检查点
+`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`。
 
 - 增加 one-shot Connect operation；
 - 覆盖 timeout、retry、cancel、stale attempt、callback re-entry 和 owner quit；
 - 完成 source-private client adapter 与 production `TcpClient` 观察序列对比。
 
 ### 8.4 IOE-X14：跨后端语义套件
+
+状态：**当前治理前沿**。
 
 - 同一 server/client 合同驱动 epoll、IOCP 和 io_uring；
 - 比较 send/backpressure、read pause、close reason、half-close、cross-thread admission
@@ -565,9 +571,9 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M6/IOE-X13 是下一治理前沿，无后台 Core 证据任务**：M1–M5 与 IOE-X11、IOE-X12 已关闭。
+> **M6/IOE-X14 是下一治理前沿，无后台 Core 证据任务**：M1–M5 与 IOE-X11–IOE-X13 已关闭。
 > M5 对真实
 > 网关和四个 Profile 重新审查后记录第二次 `NO-PROMOTION`，公共 v0.3 API 零漂移，
 > 未发布空 v0.4。当前按 `X10=PROMOTE` 与 `ARCH-G1=APPROVE` 的条件授权，建立
-> source-private io_uring Connect/TcpClient；仍不得修改 production
+> epoll、IOCP 与 io_uring 的同合同跨后端语义套件；仍不得修改 production
 > `TcpServer`、开放公共 backend selector 或提前安装 experimental target。

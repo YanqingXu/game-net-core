@@ -5,7 +5,7 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-23
+## Current Roadmap Checkpoint — 2026-08-24
 
 - Historical REL-C1 implementation checkpoint
   `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled
@@ -90,7 +90,7 @@ See `migration_status.md` for the current checked state of these phases.
   and fresh-download verification. M5 is closed with a second
   `NO-PROMOTION`, an official Profile load-selection guide, zero public API
   drift, and no empty v0.4 release. IOE-X11 is closed at `013fecf`, IOE-X12 at
-  `5be30e7`; M6/IOE-X13 is the active front. The
+  `5be30e7`, and IOE-X13 at `5484d7a`; M6/IOE-X14 is the active front. The
   cancelled `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
@@ -323,7 +323,8 @@ review against the real gateway and closed as a second `NO-PROMOTION`; the
 Profile load-selection guide is published and all four recipes remain
 non-installed. IOE-X11 is closed at
 `013fecfe81277845eb3e60ccf5fe0205b753858d`, and IOE-X12 is closed at
-`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`; M6/IOE-X13 is the current front,
+`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`. IOE-X13 is closed at
+`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`; M6/IOE-X14 is the current front,
 and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
@@ -366,9 +367,13 @@ and no Core evidence task is running.
   through bounded admission to one worker-owned Hub, with typed rollback on
   post/admission/shutdown failure and no established-connection owner migration;
   closed at `5be30e701c61f8d6700bcc4be6bc0ef152120fb8`.
-- [ ] M6/IOE-X13: add one-shot Connect, timeout/retry/cancel/stale-attempt
+- [x] M6/IOE-X13: add one-shot Connect, timeout/retry/cancel/stale-attempt
   settlement, callback re-entry and owner-quit convergence, then compare the
-  source-private client adapter with production `TcpClient` observations.
+  source-private client adapter with production `TcpClient` observations;
+  closed at `5484d7a89b01597824bc860e4d2d3cf3cfd45a82`.
+- [ ] M6/IOE-X14: drive one semantic server/client contract across epoll, IOCP,
+  and io_uring while preserving backend-specific readiness/completion mechanics
+  and comparing backpressure, close, half-close, admission, and final drain.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

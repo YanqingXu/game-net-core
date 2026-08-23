@@ -227,6 +227,7 @@ def main() -> None:
     m5_decision_checkpoint = "f8cffb6f04e593983db16d23122ed426f8729bf4"
     x11_implementation_checkpoint = "013fecfe81277845eb3e60ccf5fe0205b753858d"
     x12_implementation_checkpoint = "5be30e701c61f8d6700bcc4be6bc0ef152120fb8"
+    x13_implementation_checkpoint = "5484d7a89b01597824bc860e4d2d3cf3cfd45a82"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -247,6 +248,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", x11_implementation_checkpoint, "HEAD")
     git(repo_root, "cat-file", "-e", f"{x12_implementation_checkpoint}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", x12_implementation_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{x13_implementation_checkpoint}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", x13_implementation_checkpoint, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -398,6 +401,17 @@ def main() -> None:
     ):
         require(text, x12_implementation_checkpoint, source)
     require(evidence_ledger_text, "IOE-X12 Multi-Owner TCP Server", evidence_ledger)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, x13_implementation_checkpoint, source)
+    require(evidence_ledger_text, "IOE-X13 Active TCP Client", evidence_ledger)
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
@@ -432,7 +446,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M6/IOE-X13 是下一治理前沿", plan)
+    require(plan_text, "M6/IOE-X14 是下一治理前沿", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)
@@ -627,7 +641,7 @@ def main() -> None:
         f"{contract_count} contract、{integration_count} integration）",
         plan,
     )
-    require(plan_text, "Linux experimental 基线为 138", plan)
+    require(plan_text, "Linux experimental 基线为 139", plan)
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(

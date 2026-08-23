@@ -290,8 +290,10 @@ Runtime Model
   与回下载验证；M1–M5 已关闭，M5 第二次共同能力审查仍为 `NO-PROMOTION` 且未发布空
   v0.4；IOE-X11 source-private 单 owner Server composition 已在
   `013fecfe81277845eb3e60ccf5fe0205b753858d` 关闭，IOE-X12 source-private 多 owner
-  TCP topology 已在 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8` 关闭，当前唯一治理前沿是
-  M6/IOE-X13 source-private Connect/TcpClient；
+  TCP topology 已在 `5be30e701c61f8d6700bcc4be6bc0ef152120fb8` 关闭，IOE-X13
+  source-private Connect/TcpClient 已在
+  `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 关闭，当前唯一治理前沿是
+  M6/IOE-X14 跨后端语义套件；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
@@ -299,7 +301,7 @@ Runtime Model
 - IOCP 已直接分发带 identity/result/bytes/generation 的 Completion notice，fake
   Channel readiness 兼容路径已退役；
 - Linux 已有 default-off、non-installed 的真实 raw-syscall io_uring one-shot
-  Completion Engine，Accept/Recv/Send、SQ-full、cancel、lease 和 final drain 合同及
+  Completion Engine，Accept/Connect/Recv/Send、SQ-full、cancel、lease 和 final drain 合同及
   opt-in 数字基准均已闭环；其 source-private EventLoop completion pump 已通过真实
   ring-fd Channel 驱动、独立 dispatch budget、quit 自动取消和 terminal lease 退休
   合同；其单连接 Completion TCP driver 又在真实 loopback TCP 上证明 one-recv-in-flight、
@@ -317,7 +319,9 @@ Runtime Model
   复用、回调重入、listener-first stop 与 owner-quit 排空；其固定容量和同场景性能决策
   已在 IOE-X10 以限定范围的 `PROMOTE` 关闭；单 owner Server 又完成 bind/listen、
   provisional Adapter settlement、connection/message/close callback、graceful drain、
-  force escalation 与零残留 stop composition。这些能力仍不安装，生产默认和 fallback
+  force escalation 与零残留 stop composition；多 owner Server 与 active Client 又分别
+  关闭了有界 owner handoff 和 Connect timeout/retry/cancel/stale/re-entry/quit 语义。
+  这些能力仍不安装，生产默认和 fallback
   仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明
