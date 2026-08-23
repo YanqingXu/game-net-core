@@ -319,8 +319,13 @@ Runtime Model
   `YanGameServer@b525416` 和迁移源 `mini_trantor@3eba368` 审查 UDP/KCP/PMTU。
   两个外部 consumer 均无 datagram runtime，五个 intents 仍 deferred，旧源也缺少
   当前 typed、generation-safe、有界和双平台合同，因此 M10 以 `NO-PROMOTION`
-  关闭；未增加 experimental datagram 安装面或空 v0.9 发布；当前唯一治理前沿是
-  M11 v1.0 稳定化与发布就绪审查；
+  关闭；未增加 experimental datagram 安装面或空 v0.9 发布；M11 最后以 Core
+  `a2977c90374aa6c08a54d2d569ff369c51717345` 完成 v1.0 发布就绪审计。当前
+  Windows Release 130/130、fixed-tick 20/20、安装 consumer 2/2、v0.3 工具合同
+  10/10 和 stable surface 零差异均通过，但 v1 API/ABI policy、0.3→1.0 consumer、
+  同提交双平台/sanitizer/capacity/endurance 与 v1 资产均缺失，因此 M11 以 `DEFER` /
+  `NO-RELEASE` 关闭；stable v0.3 保持当前版本，未创建 v1 tag/Release。M1–M11 已
+  全部作出证据绑定的终态决策，当前没有开放的治理前沿；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness

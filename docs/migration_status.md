@@ -72,15 +72,22 @@ historical `mini_trantor@3eba368`. Both external consumers have no datagram
 runtime, all five intents remain deferred, and the old source lacks the current
 typed, generation-safe, bounded, dual-platform contract. M10 closes as
 `NO-PROMOTION`; no experimental datagram component or empty v0.9 release was
-added, and M11 v1.0 stabilization/release readiness is now the governance
-front.
+added. M11 then audited v1.0 stabilization/release readiness against Core
+`a2977c9`. Current Windows Release passed 130/130 after rebuild, the fixed-tick
+contract passed 20/20, install consumers passed 2/2, governance tooling passed
+10/10, and the reviewed v0.3 stable surface has zero drift. The repository has
+no v1 API/ABI policy, 0.3-to-1.0 consumer, same-commit cross-platform quality/
+capacity/endurance evidence, or v1 release assets. M11 therefore closes as
+`DEFER` / `NO-RELEASE`; stable v0.3 remains current and no v1 tag, Release, or
+package is created.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1–M10 and IOE-X11–X15 are closed; M11 v1.0 stabilization/release
-readiness is the unique governance front. There is no running Core evidence
-task after the M10 decision closure.
+`APPROVE`. M1–M11 and IOE-X11–X15 are closed. There is no open implementation
+or governance front and no running Core evidence task after the M11 decision
+closure. Any future v1 effort must begin with a new active release intent and
+exact evidence plan.
 
 Current IOE-X15 implementation/evidence checkpoint:
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
@@ -125,6 +132,21 @@ capacity, dual-platform, or installed-package contract. Core SessionManager
 passed 3/3 and remains a single-endpoint binding. The comparison closes M10 as
 `NO-PROMOTION` and keeps `udp`, `kcp_transport`, `path_mtu_cache`,
 `platform_path_mtu_signal`, and `path_mtu_signal_authentication` deferred.
+
+Current M11-G0 v1.0 release-readiness audit baseline:
+`a2977c90374aa6c08a54d2d569ff369c51717345` (2026-08-24). The stale
+pre-reconfigure graph honestly recorded 128/129; current-source rebuild then
+passed the fixed-tick contract 20/20 and Windows Release 130/130. A fresh
+Windows install passed both consumers 2/2, ten release/governance tooling
+contracts passed 10/10, and the v0.3 public surface reports
+`has_changes=false`. These results validate the current v0.3 tree, not v1.
+Because the active version/intent/manifest remain v0.3, pre-1.0 ABI is
+unsupported, and the 0.3-to-1.0 migration consumer, independent v1 API/ABI
+review, same-commit platform/sanitizer/fuzz/performance/capacity/endurance
+matrix, packages, SBOM, checksums, and fresh-download evidence are absent, M11
+closes as `DEFER` / `NO-RELEASE`. No local or remote `v1*` tag was found or
+created; stable `v0.3.0@8e4a6ed` remains current and the planned M1–M11 route
+has no open implementation or governance front.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -501,7 +523,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1–M10 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, M7 external Lua/typed RPC closed at gateway `588acd0`, M8 async/coroutine promotion closed against Core `e5ea9ef` / YanGame `b525416`, M9 transport/TLS/WebSocket/DNS promotion closed against Core `fff4162` / gateway `588acd0` / YanGame `b525416`, and M10 UDP/KCP promotion closed against Core `f1f89f0` / gateway `588acd0` / YanGame `b525416` / historical mini-trantor `3eba368`; all are `NO-PROMOTION`. M11 v1.0 stabilization/release readiness is active. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M11 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, IOE-X12 at `5be30e7`, IOE-X13 at `5484d7a`, IOE-X14 at `351b3c0`, IOE-X15 at `43795e8`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, M7 external Lua/typed RPC closed at gateway `588acd0`, M8 async/coroutine promotion closed against Core `e5ea9ef` / YanGame `b525416`, M9 transport/TLS/WebSocket/DNS promotion closed against Core `fff4162` / gateway `588acd0` / YanGame `b525416`, and M10 UDP/KCP promotion closed against Core `f1f89f0` / gateway `588acd0` / YanGame `b525416` / historical mini-trantor `3eba368`; all are `NO-PROMOTION`. M11 v1.0 readiness closes as `DEFER` / `NO-RELEASE` against Core `a2977c9`; stable v0.3 remains current and there is no open governance front. Production epoll/IOCP and the stable surface remain unchanged; the io_uring component is Linux-only, explicit opt-in, independently versioned, and has no public selector |
 
 ## Current Intent Inventory
 

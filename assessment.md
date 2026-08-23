@@ -1,7 +1,7 @@
 # 总体判断
 
-本次检查以 2026-08-24 M10 UDP/KCP/PMTU `NO-PROMOTION` 关闭、M11 v1.0
-稳定化与发布就绪审查成为当前前沿；
+本次检查以 2026-08-24 M11 v1.0 稳定化与发布就绪审查
+`DEFER` / `NO-RELEASE` 关闭；M1–M11 已全部完成证据审计，当前没有开放的治理前沿，
 stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。`game-net-core` 已经不再只是从
 `mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：
@@ -46,8 +46,12 @@ callback-only Gateway 与 ActorScheduler Task 不构成可替代的双 consumer 
 也没有 consumer pair，因此 M9 以 `NO-PROMOTION` 关闭。M10 又审计 Core
 `f1f89f0`、Gateway `588acd0`、YanGame `b525416` 与旧迁移源 `3eba368`；两个外部
 consumer 均无 datagram runtime，旧源也不满足当前 typed/generation/bounds/双平台
-门禁，因此 M10 以 `NO-PROMOTION` 关闭。当前唯一治理前沿是 M11 v1.0 稳定化与
-发布就绪审查。
+门禁，因此 M10 以 `NO-PROMOTION` 关闭。M11 最后以 Core
+`a2977c90374aa6c08a54d2d569ff369c51717345` 审计 v1.0 发布就绪性：当前 Windows
+Release 重建后专项 20/20、全量 130/130、安装消费者 2/2、治理工具合同 10/10，
+v0.3 稳定面零漂移；但 v1 API/ABI 政策、0.3-to-1.0 consumer、同提交双平台与
+sanitizer/capacity/endurance 证据及 v1 资产均不存在。因此 M11 以 `DEFER` /
+`NO-RELEASE` 关闭，不创建版本、tag、Release 或空 v1.0 包；stable v0.3 保持当前。
 
 ---
 
@@ -329,10 +333,10 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M10 与 IOE-X11–IOE-X15 已关闭，M11 成为治理前沿
+### 5. M1–M11 与 IOE-X11–IOE-X15 已关闭，当前计划已收口
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M10 与 IOE-X11–IOE-X15 关闭、M11 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M11 与 IOE-X11–IOE-X15 关闭、当前无开放前沿”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
@@ -388,6 +392,14 @@ Core SessionManager 3/3 只证明 generation-safe 单 endpoint；两个外部 co
 send/in-flight/fragment/cache 容器、Windows 缺失运行合同和过量 raw-ICMP/FEC 范围不满足
 M10 门禁。因此 M10 以 `NO-PROMOTION` 关闭，五个 intents 保持 deferred，未创建
 experimental datagram 安装面或空 v0.9 发布。
+M11-G0 最后以 Core `a2977c90374aa6c08a54d2d569ff369c51717345` 审计 v1.0。
+预重配置旧构建如实记录为 128/129；当前源码重建后 fixed-tick 20/20、Windows Release
+全量 130/130、安装消费者 2/2、治理工具合同 10/10，v0.3 API 比较为
+`has_changes=false`。但仓库仍是 `0.3.0` / `SameMinorVersion`，当前 release intent
+明确面向 v0.3 且 1.0 前不承诺 ABI；0.3-to-1.0 迁移 consumer、v1 独立 API/ABI 审查、
+同提交 Linux/Windows/sanitizer/fuzz/performance/capacity/1h/3h 证据和 v1 发布资产均
+缺失。因此 M11 以 `DEFER` / `NO-RELEASE` 关闭，未创建 v1 tag/Release/package，
+stable `v0.3.0@8e4a6ed` 保持发布基线，当前计划无开放治理前沿。
 当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
 基线为 140（8 unit、118 contract、14 integration）。
 
@@ -517,7 +529,7 @@ Linux-only experimental surface 安装，提供
 io_uring。Linux 默认/实验安装消费者、Windows 默认消费者、140/130 完整门、ASan/UBSan、
 TSan、仓库守卫和稳定 API 零漂移均通过；版本轨道已准备但未发布 tag/Release。
 
-## P2（当前）：RPC、Lua 和协程优先放在上层适配仓库
+## P2（后续新计划）：RPC、Lua 和协程优先放在上层适配仓库
 
 对于你的总体游戏服务器目标，TCP Core 稳定后，实际收益更高的顺序应是：
 
@@ -538,7 +550,7 @@ UDP/KCP 应继续等到：
 
 ---
 
-# 四、建议采用的六个里程碑
+# 四、当前计划的关闭里程碑
 
 ```text
 Milestone 1
@@ -578,8 +590,12 @@ Milestone 9
 或空 v0.9。
 
 Milestone 10
-当前：M11 审查 v1.0 稳定 API/ABI、迁移 consumer、同提交验证与发布证据；门禁未
-闭环前不创建 tag/Release。
+已关闭：M11 审查确认当前 v0.3 代码与工具健康，但 v1 API/ABI、迁移 consumer、
+同提交验证与发布资产门禁未闭环；结论为 `DEFER` / `NO-RELEASE`，未创建
+tag/Release/package。
+
+Milestone 11
+已关闭：M1–M11 已全部作出终态决策，stable v0.3 保持当前，执行计划无开放治理前沿。
 ```
 
 # 最终评价
@@ -607,7 +623,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M8 已关闭（Core e5ea9ef / YanGame b525416；NO-PROMOTION）
 → M9 已关闭（Core fff4162 / Gateway 588acd0 / YanGame b525416；NO-PROMOTION）
 → M10 已关闭（Core f1f89f0 / Gateway 588acd0 / YanGame b525416；NO-PROMOTION）
-→ M11 v1.0 稳定化与发布就绪审查（当前）
+→ M11 已关闭（Core a2977c9；DEFER / NO-RELEASE；无 v1 发布）
+→ 当前计划已收口（M1–M11 全部判定；无开放治理前沿）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

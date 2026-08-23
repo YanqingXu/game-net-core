@@ -103,7 +103,15 @@ front. M10 then audited Core `f1f89f0`, gateway `588acd0`, independent
 five intents remain deferred, and the old source lacks the current typed,
 generation-safe, bounded, dual-platform contract. M10 closes as
 `NO-PROMOTION`; no experimental datagram package or empty v0.9 release exists,
-and M11 v1.0 stabilization/release readiness is the next governance front.
+and M11 v1.0 stabilization/release readiness becomes the final planned audit.
+M11 then audited Core `a2977c9`; after rebuilding the current tree, Windows
+Release passed 130/130, fixed-tick passed 20/20, Windows install consumers
+passed 2/2, and v0.3 tooling contracts passed 10/10;
+the reviewed v0.3 stable surface remains zero-diff. The repository still has
+no v1 API/ABI policy, 0.3-to-1.0 consumer, same-commit dual-platform/
+sanitizer/capacity/endurance evidence, or v1 artifacts. M11 therefore closes
+as `DEFER` / `NO-RELEASE`: stable v0.3 remains current, no v1 tag or package is
+created, and M1–M11 are fully adjudicated with no open governance front.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

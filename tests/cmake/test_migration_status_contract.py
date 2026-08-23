@@ -204,6 +204,12 @@ def main() -> None:
         / "development"
         / "m10_udp_kcp_readiness_2026-08-24.md"
     )
+    m11_readiness = (
+        repo_root
+        / "docs"
+        / "development"
+        / "m11_v1_release_readiness_2026-08-24.md"
+    )
     rpc_intent = repo_root / "intents" / "modules" / "rpc.intent.md"
     async_intent_names = (
         "async_semantics",
@@ -275,6 +281,7 @@ def main() -> None:
     m8_readiness_text = m8_readiness.read_text(encoding="utf-8")
     m9_readiness_text = m9_readiness.read_text(encoding="utf-8")
     m10_readiness_text = m10_readiness.read_text(encoding="utf-8")
+    m11_readiness_text = m11_readiness.read_text(encoding="utf-8")
     rpc_intent_text = rpc_intent.read_text(encoding="utf-8")
     async_intent_texts = {
         name: path.read_text(encoding="utf-8")
@@ -319,6 +326,7 @@ def main() -> None:
     m8_core_baseline = "e5ea9efa71dbe52e841423ec3cac3e9529158b22"
     m9_core_baseline = "fff41622ffc1d2e0d047d3938529d9eb7919e5af"
     m10_core_baseline = "f1f89f0e66642b4be3c988400213783e5120536c"
+    m11_core_baseline = "a2977c90374aa6c08a54d2d569ff369c51717345"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -353,6 +361,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", m9_core_baseline, "HEAD")
     git(repo_root, "cat-file", "-e", f"{m10_core_baseline}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", m10_core_baseline, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{m11_core_baseline}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", m11_core_baseline, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -715,6 +725,66 @@ def main() -> None:
         require(text, "3eba368", source)
         require(text, "NO-PROMOTION", source)
         require(text, "M11", source)
+    require(
+        evidence_ledger_text,
+        "M11-G0 v1.0 Stabilization / Release Readiness Audit",
+        evidence_ledger,
+    )
+    require(m11_readiness_text, m11_core_baseline, m11_readiness)
+    require(
+        m11_readiness_text,
+        "v1.0 release: `DEFER` / `NO-RELEASE`",
+        m11_readiness,
+    )
+    for evidence_term in (
+        "128/129",
+        "20/20",
+        "130/130",
+        "passed 2/2",
+        "passed 10/10",
+        "has_changes=false",
+        "0.3 -> 1.0",
+        "no `v1*` tag",
+    ):
+        require(m11_readiness_text, evidence_term, m11_readiness)
+    require(
+        " ".join(m11_readiness_text.split()).lower(),
+        "no open implementation or governance front",
+        m11_readiness,
+    )
+    for blocker_term in (
+        "Version and compatibility contract",
+        "Migration consumer",
+        "Same-commit platform and quality matrix",
+        "Release artifacts and publication",
+        "gateway 1h / Core 3h",
+    ):
+        require(m11_readiness_text, blocker_term, m11_readiness)
+    assert not git(repo_root, "tag", "-l", "v1*"), (
+        "M11 NO-RELEASE closure must not create a local v1 tag"
+    )
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, m11_core_baseline[:7], source)
+        require(text, "M11", source)
+        require(text, "DEFER", source)
+        require(text, "NO-RELEASE", source)
+        assert any(
+            phrase in text
+            for phrase in (
+                "no open implementation or governance front",
+                "no open governance front",
+                "当前没有开放的治理前沿",
+                "无开放治理前沿",
+            )
+        ), f"{source} must record the M11 no-open-front closure"
     require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
     require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)
     require(m7_readiness_text, "callback re-entry", m7_readiness)
@@ -826,9 +896,9 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M11", plan)
-    assert plan_text.count("当前唯一治理前沿") == 1, (
-        "plan must declare exactly one current governance front"
+    require(plan_text, "当前没有开放的治理前沿", plan)
+    assert plan_text.count("当前唯一治理前沿") == 0, (
+        "closed plan must not declare a current governance front"
     )
     for milestone in (
         "M1：IOE-X10、ARCH-G1 与治理统一",
@@ -857,7 +927,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M11 v1.0 稳定化与发布就绪审查是下一治理前沿", plan)
+    require(plan_text, "当前执行计划已关闭，无后台 Core 证据任务", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)

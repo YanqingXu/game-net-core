@@ -113,8 +113,13 @@ See `migration_status.md` for the current checked state of these phases.
   consumers have no datagram runtime and the old source lacks the current
   typed/generation/bounds/dual-platform contract. All five intents remain
   deferred and no empty v0.9 release exists. M11 v1.0 stabilization/release
-  readiness is the active front. The cancelled `a89e2b0` endurance checkpoint
-  remains historical only.
+  readiness then closed as `DEFER` / `NO-RELEASE` against Core `a2977c9`:
+  current Windows Release 130/130, fixed-tick 20/20, install consumers 2/2,
+  tooling contracts 10/10, and zero v0.3 API drift do not replace the missing
+  v1 API/ABI policy, 0.3-to-1.0 consumer, same-commit matrix, endurance, and
+  artifacts. Stable v0.3 remains current; no v1 tag/Release/package exists and
+  M1–M11 are fully adjudicated with no open governance front. The cancelled
+  `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -356,7 +361,12 @@ transport/TLS/WebSocket/DNS promotion closed as `NO-PROMOTION` against Core
 `fff4162`, gateway `588acd0`, and YanGame `b525416`; M10 UDP/KCP promotion then
 closed as `NO-PROMOTION` against Core `f1f89f0`, the same external checkpoints,
 and historical mini-trantor `3eba368`. M11 v1.0 stabilization/release readiness
-is the current front, and no Core evidence task is running.
+then closes as `DEFER` / `NO-RELEASE` against Core `a2977c9`: current Windows
+Release 130/130, fixed-tick 20/20, install consumers 2/2, tooling 10/10, and
+zero v0.3 API drift are green, while the v1 policy, migration consumer,
+same-commit cross-platform/sanitizer/capacity/endurance matrix, and release
+assets are absent. Stable v0.3 remains current, no v1 release is created, and
+there is no open governance front or running Core evidence task.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -446,6 +456,11 @@ is the current front, and no Core evidence task is running.
   dual-platform runtime/package evidence. Close DGM-U1/U2/K1/K2 as
   `NO-PROMOTION`, DGM-X1 as `skipped-by-evidence`, create no empty v0.9 release,
   and advance to M11.
+- [x] M11: audit stable API/ABI policy, 0.3-to-1.0 migration, same-commit
+  platform/quality/capacity/endurance evidence, and release artifacts. Close as
+  `DEFER` / `NO-RELEASE` because current v0.3 validation is green but every
+  v1-specific promotion gate is absent; preserve stable v0.3 and create no v1
+  tag, Release, package, or empty compatibility promise.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

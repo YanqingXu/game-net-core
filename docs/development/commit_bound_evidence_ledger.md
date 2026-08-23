@@ -650,3 +650,16 @@ a completed, exact-commit record.
 | Slice decision | DGM-U1, DGM-U2, DGM-K1, and DGM-K2 are `NO-PROMOTION`; DGM-X1 is `skipped-by-evidence`. No implementation, manifest, component, tag, Release, or empty v0.9 is created. |
 | Verification | `tests/cmake/test_migration_status_contract.py` binds `docs/development/m10_udp_kcp_readiness_2026-08-24.md`, all five deferred intent/catalog entries, exact checkpoints, focused 3/3 Core evidence, setup-attempt truthfulness, slice decisions, M11 as the next front, and absence of installed UDP/KCP/PMTU/datagram headers or targets. |
 | Decision | Close M10 as `NO-PROMOTION`; preserve active TCP/session contracts and advance the unique governance front to M11 v1.0 stabilization and release readiness. |
+
+## M11-G0 v1.0 Stabilization / Release Readiness Audit — 2026-08-24
+
+| Field | Evidence |
+| --- | --- |
+| Core baseline | `a2977c90374aa6c08a54d2d569ff369c51717345`; the repository remains `GameNetCore 0.3.0`, `SameMinorVersion`, and stable Apache-2.0 `v0.3.0@8e4a6ed`. No runtime or installed API is changed by this audit. |
+| Current validation | The stale pre-reconfigure build is recorded honestly as 128/129. Reconfiguring and rebuilding current source produced a fixed-tick 20/20 pass and complete Windows Release 130/130 pass: 8 unit, 108 contract, 14 integration, 103 threading, and 108 lifecycle. Fresh Windows install consumers passed 2/2. Ten API/install/release/evidence/governance tooling contracts passed 10/10. |
+| Stable-surface check | Current comparison against the reviewed v0.3 public surface reports `has_changes=false`, with no compatibility or stable-surface review required. This confirms v0.3 continuity only; it does not define a v1 contract. |
+| Version/API blockers | The active release intent, CMake version, public manifest, candidate freeze, release metadata, assembler/verifier, and consumers remain v0.3-specific. Pre-1.0 ABI is explicitly unsupported; no active v1 intent, stable/provisional target decision, independent v1 API/ABI/toolchain policy review, or 0.3-to-1.0 migration consumer/guide exists. |
+| Missing same-commit evidence | No M11 Linux Debug/Release, Windows Debug, ASan/UBSan, TSan, fuzz, paired performance, Linux/Windows capacity, dedicated 100k, repeat/fault, gateway 1h, Core 3h, package, SPDX, checksum, extracted migration, or fresh-download evidence is bound to this baseline. Historical evidence stays bound to its immutable commits. |
+| Publication | Local and remote inspection found no `v1*` tag. No version bump, promotion commit, tag, push, hosted workflow, GitHub Release, source/binary archive, package, SBOM, checksum set, or empty v1.0 artifact was authorized or created. |
+| Ownership/lifetime | Documentation and governance tests only. EventLoop/TCP/Session owners, callback re-entry, cross-thread admission, shutdown, and experimental io_uring boundaries remain unchanged. |
+| Decision | v1.0 release: `DEFER` / `NO-RELEASE`. Keep stable v0.3 current. M1–M11 are fully adjudicated and there is no open implementation or governance front; future v1 work requires a new active release intent and exact evidence plan. |

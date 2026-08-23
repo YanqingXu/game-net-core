@@ -65,7 +65,9 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M11 v1.0 稳定化与发布就绪审查**。
+当前没有开放的治理前沿。**M1–M11 已全部完成证据审计并作出终态决策**；其中
+M4 发布 stable v0.3，M6 安装显式 io_uring experimental component，M7–M10 按证据
+关闭为 `NO-PROMOTION`，M11 关闭为 `DEFER` / `NO-RELEASE`。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -586,9 +588,13 @@ raw ICMP、authenticated PMTU signal、FEC、advanced congestion control、zero-
 
 ## 13. M11：v1.0 稳定化与发布
 
-状态：**当前治理前沿**。先审查 stable API/ABI、0.3→1.0 consumer、同提交
-Linux/Windows/sanitizer/fuzz/fault/endurance、包/SBOM/许可证和兼容性证据；全部门禁
-满足前不得创建 v1.0 tag、Release 或稳定性承诺。
+状态：**已关闭，`DEFER` / `NO-RELEASE`**。精确审计记录见
+`docs/development/m11_v1_release_readiness_2026-08-24.md`。Core baseline
+`a2977c90374aa6c08a54d2d569ff369c51717345` 重建后的 Windows Release 130/130、
+fixed-tick focused 20/20、安装 consumer 2/2、v0.3 gate tooling 10/10 和 stable API
+零差异通过；但当前所有版本/manifest/assembler/upgrade policy 仍绑定 0.3，且缺少独立
+v1 API/ABI review、0.3→1.0 consumer、同提交 Linux/Windows/sanitizer/fuzz/capacity/
+1h/3h 与 v1 package/SBOM/checksum 资产。不得创建 v1.0 tag、Release 或稳定性承诺。
 
 ### 13.1 v1 稳定范围
 
@@ -618,6 +624,11 @@ Linux/Windows/sanitizer/fuzz/fault/endurance、包/SBOM/许可证和兼容性证
 - 所有 evidence 绑定同一 promotion commit；
 - 无 callback-after-destroy、kernel-reference-after-free、stranded Accepted work
   或未说明的 public API drift。
+
+审计命中缺失证据分支，且当前连 v1 内部候选的版本/manifest/迁移合同也未建立，因此不
+创建空内部候选。恢复必须从 active v1 release intent、明确的 stable/provisional/
+experimental 分类与 ABI/toolchain policy 开始，再选择单一 promotion commit 执行
+全部门禁。
 
 通过后发布 `v1.0.0`。缺失 endurance、许可证、兼容性或生命周期证据时只能发布内部
 候选，不能以 waiver 宣称 v1 完成。
@@ -671,7 +682,7 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M11 v1.0 稳定化与发布就绪审查是下一治理前沿，无后台 Core 证据任务**：M1–M10
+> **当前执行计划已关闭，无后台 Core 证据任务**：M1–M11
 > 与 IOE-X11–IOE-X15 已关闭。X15 在
 > `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
 > 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。M7 Gateway 实现
@@ -681,5 +692,7 @@ planned -> contract-ready -> implemented -> verified -> integrated
 > Gateway 无 TLS/WebSocket/DNS、YanGame native-worker mTLS 明确排除 GameNet
 > EventLoop TLS、且不存在第二个 WebSocket/DNS consumer 而以 `NO-PROMOTION` 关闭。
 > M10 又因两个外部 consumer 均无 datagram runtime、五个 intent 未提升、旧迁移源
-> 缺少当前 typed/generation/bounds/双平台合同而以 `NO-PROMOTION` 关闭。当前只审查
-> v1.0 稳定化与发布门禁；证据未闭环前不得创建 tag 或 GitHub Release。
+> 缺少当前 typed/generation/bounds/双平台合同而以 `NO-PROMOTION` 关闭。M11 当前
+> Windows/工具回归通过，但 v1 policy、迁移 consumer、同提交跨平台/endurance 和资产
+> 不完整，故以 `DEFER` / `NO-RELEASE` 关闭。stable v0.3 保持当前版本；未来只有在
+> 新 active v1 intent 和证据计划建立后才恢复，不得创建空 tag 或 GitHub Release。
