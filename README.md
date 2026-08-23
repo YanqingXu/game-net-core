@@ -61,8 +61,10 @@ M5 is closed with a second `NO-PROMOTION`: the independent gateway needed no
 new broadly reusable Runtime capability, all Profile compositions remain
 non-installed, and the
 [load-selection guide](docs/architecture/runtime_profile_load_selection_guide.md)
-is published without an empty v0.4 release. The next governance front is
-M6/IOE-X11, the source-private single-owner io_uring server composition.
+is published without an empty v0.4 release. IOE-X11 is closed at exact
+implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d`; the
+next governance front is M6/IOE-X12, the source-private multi-owner io_uring
+topology.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

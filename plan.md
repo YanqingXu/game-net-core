@@ -11,6 +11,9 @@
 M1 实现与证据检查点：`f5d39b800b4dd943531670aa09840c931c3dee4d`
 （IOE-X10；固定协议原始证据绑定该提交）
 
+IOE-X11 实现与证据检查点：`013fecfe81277845eb3e60ccf5fe0205b753858d`
+（source-private 单 owner Server composition）
+
 ## 1. 计划定位与总体顺序
 
 本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
@@ -304,17 +307,22 @@ sharding 证据完整。若没有公共能力被提升，不发布空版本；�
 仅在 `X10=PROMOTE` 且 ARCH-G1 批准时执行；否则整个 M6 标记为
 `skipped-by-evidence`，直接进入 M7。
 
-状态：**当前治理前沿**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；立即任务是
-IOE-X11 source-private 单 owner Server composition。M5 没有发布空 v0.4，实际
+状态：**当前治理前沿**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；IOE-X11 已
+关闭，立即任务是 IOE-X12 source-private 多 owner topology。M5 没有发布空 v0.4，实际
 experimental preview 版本在 M6 发布门前按“下一可交付版本”重新确认。
 
 ### 8.1 IOE-X11：单 owner Server composition
+
+状态：**已关闭**，实现与证据检查点
+`013fecfe81277845eb3e60ccf5fe0205b753858d`。
 
 - 将现有 listener、Hub 和 semantic adapter 组合成 source-private 单 owner server；
 - 对齐 bind/listen、callback、admission、graceful stop 和 force escalation；
 - 保持 epoll 生产默认，不修改 production `TcpServer`。
 
 ### 8.2 IOE-X12：多 owner topology
+
+状态：**当前治理前沿**。
 
 - accept owner 取得 fd 后，通过有界 EventLoop admission 将 sole ownership 转移给
   选定 worker Hub；
@@ -551,8 +559,9 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M6/IOE-X11 是下一治理前沿，无后台 Core 证据任务**：M1–M5 已关闭。M5 对真实
+> **M6/IOE-X12 是下一治理前沿，无后台 Core 证据任务**：M1–M5 与 IOE-X11 已关闭。
+> M5 对真实
 > 网关和四个 Profile 重新审查后记录第二次 `NO-PROMOTION`，公共 v0.3 API 零漂移，
-> 未发布空 v0.4。当前按 `X10=PROMOTE` 与 `ARCH-G1=APPROVE` 的条件授权，先建立
-> source-private 单 owner io_uring Server composition；仍不得修改 production
+> 未发布空 v0.4。当前按 `X10=PROMOTE` 与 `ARCH-G1=APPROVE` 的条件授权，建立
+> source-private 多 owner io_uring topology；仍不得修改 production
 > `TcpServer`、开放公共 backend selector 或提前安装 experimental target。

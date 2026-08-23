@@ -489,3 +489,21 @@ a completed, exact-commit record.
 | Linux gate | Fresh Ubuntu WSL / GCC 13.3 Release build, experimental and TLS off: five `runtime_model` tests each passed 20 consecutive runs, then the full suite passed 129/129. |
 | Sanitizer gate | Fresh Ubuntu WSL / GCC 13.3 Debug ASan/UBSan build with leak detection and halt-on-error: five `runtime_model` tests each passed 20 consecutive runs, then the full suite passed 129/129 with no sanitizer, leak, timeout, or residual-lifecycle finding. No TSan result is claimed for this documentation-only decision. |
 | Decision | Second `NO-PROMOTION`. Close M5 with Profiles A/B/C/D as explicit official recipes/examples and no installed Runtime abstraction. Advance the unique governance front to M6/IOE-X11 source-private single-owner io_uring server composition. |
+
+## IOE-X11 Single-Owner TCP Server — 2026-08-23
+
+| Field | Evidence |
+| --- | --- |
+| Slice | Linux-only, default-off, non-installed `IoUringTcpServer` composes the existing one-shot listener, shared Hub/Pump/Engine, and semantic Adapter into one source-private single-owner Server. |
+| Commit | Exact implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d`; parent/baseline `2379e86f61c7da43e12aaa225378ef539d948659` |
+| Intent/rules | `intents/architecture/io_engine.intent.md`; `rules/thread_affinity_rules.md`; `rules/ownership_rules.md`; `rules/testing_rules.md`; verification file `tests/contract/io_engine/test_io_uring_tcp_server.cpp` |
+| Owner/lifetime | One EventLoop owner constructs, configures, starts, observes, stops, and destroys the Server, listener, Hub, and every Adapter facade. Hub remains sole owner of every transferred listener/accepted fd and retires each route physically. Callback re-entry is allowed on that owner. Server lifecycle mutation and mutable observation reject foreign threads; only existing Adapter Send/Shutdown/Force admission retains its bounded cross-thread mailbox. Listener retirement and every Adapter terminal precede Hub stop and Server future publication. |
+| Contract | Real loopback cases cover ephemeral bind/listen/echo, provisional Adapter settlement on admission/capacity rejection, connection/message/close callback re-entry, accepted-output graceful half-close, first-reason-preserving force escalation, typed bind failure, foreign observation/mutation rejection, and zero listener/Adapter/Hub/Engine residue. |
+| Focused contracts | `contract.io_engine.test_io_uring_tcp_server` passed 20 consecutive normal runs. All 8 IOE-X1–X11 experimental contracts passed normally, under ASan/UBSan, and under TSan; no race, sanitizer, leak, timeout, ownership, callback, byte-accounting, or residual-state finding was reported. |
+| Linux full gate | WSL Ubuntu 24.04/GCC 13.3 Debug with experimental enabled passed 137/137: 8 unit, 115 contract, 14 integration, 110 threading, 115 lifecycle, and 8 experimental tests. Default-off Linux passed 129/129. |
+| Windows full gate | Fresh Visual Studio 18 2026/MSVC 19.51 Debug, experimental off, passed 129/129. The Linux-only target never entered the IOCP/default graph. |
+| Package/public surface | Fresh Linux install consumer passed 2/2 and the installed tree contained no io_uring artifact. The v0.3 same-line public API comparator reported zero change, no compatibility decision, and no stable-surface review. Production `TcpServer`, epoll default, Windows IOCP, package exports, and public selectors are unchanged. |
+| Governance | Workflow/build/io_uring/migration contracts, scope, intent consistency/metadata/semantics, SPDX, migration provenance, scope boundaries, API manifest tests, `git diff --check`, and the 188-path intent inventory passed. CI inventory is updated from 136/7 to 137/8 only for the opt-in Linux experimental job. |
+| Benchmark/capacity | No new performance or promotion claim. IOE-X11 preserves the bounded Hub/Adapter capacity contracts and the earlier limited IOE-X10 `PROMOTE`; it only proves production-equivalent single-owner composition semantics. |
+| Remote evidence | Not collected; no push, hosted CI, release, endurance, or production replacement result is claimed. |
+| Decision | `integrate` and close IOE-X11. Advance the unique governance front to IOE-X12 source-private multi-owner topology while keeping epoll production-default and experimental installation/public selection deferred. |

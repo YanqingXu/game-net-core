@@ -288,7 +288,9 @@ Runtime Model
 - stable Apache-2.0 `v0.3.0@8e4a6ed` 已完成同提交双平台、sanitizer、容量、性能、
   fault/repeat、1h/3h、最终包消费者、SPDX/evidence、annotated tag、GitHub Release
   与回下载验证；M1–M5 已关闭，M5 第二次共同能力审查仍为 `NO-PROMOTION` 且未发布空
-  v0.4，当前唯一治理前沿是 M6/IOE-X11 source-private 单 owner Server composition；
+  v0.4；IOE-X11 source-private 单 owner Server composition 已在
+  `013fecfe81277845eb3e60ccf5fe0205b753858d` 关闭，当前唯一治理前沿是
+  M6/IOE-X12 source-private 多 owner topology；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
@@ -312,7 +314,9 @@ Runtime Model
   observer revocation 和 quit 核算；source-private listener 又在同一个 shared Pump 内
   证明有限 one-shot Accept、accepted-fd 单一所有权、容量拒绝恢复、route generation
   复用、回调重入、listener-first stop 与 owner-quit 排空；其固定容量和同场景性能决策
-  已在 IOE-X10 以限定范围的 `PROMOTE` 关闭。这些能力仍不安装，生产默认和 fallback
+  已在 IOE-X10 以限定范围的 `PROMOTE` 关闭；单 owner Server 又完成 bind/listen、
+  provisional Adapter settlement、connection/message/close callback、graceful drain、
+  force escalation 与零残留 stop composition。这些能力仍不安装，生产默认和 fallback
   仍是 epoll；
 - `TransportEndpoint` 已缩窄上层对 `TcpConnection` 的依赖；
 - `SingleLoopInlineEvent` 已证明单 owner、零跨域 handoff；`MultiIoQueuedEvent` 已证明

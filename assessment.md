@@ -33,7 +33,7 @@ all-rights-reserved，不提供外部使用授权。该句描述内部候选形�
 增长门。M4 随后在精确 promotion commit `8e4a6ed` 上完成全部同提交证据、确定性
 资产、annotated tag、stable Release 和回下载验证。M5 随后用真实网关重新审查
 Runtime 共同能力，确认没有缺失的通用 Core 能力，发布 Profile 负载选择指南并记录
-第二次 `NO-PROMOTION`；当前前沿已转到 M6/IOE-X11。
+第二次 `NO-PROMOTION`；IOE-X11 已在 `013fecf` 关闭，当前前沿已转到 M6/IOE-X12。
 
 ---
 
@@ -313,16 +313,18 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M5 已关闭，M6/IOE-X11 成为治理前沿
+### 5. M1–M5 与 IOE-X11 已关闭，M6/IOE-X12 成为治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M5 关闭、M6/IOE-X11 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M5 与 IOE-X11 关闭、M6/IOE-X12 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
 `8e4a6ed` 重新完成非豁免矩阵并发布 stable Apache-2.0 `v0.3.0`；12 个 Release
 资产全部通过回下载复核。M5 对四个候选边界逐项复核后记录第二次
-`NO-PROMOTION`，未增加公共 API、未发布空 v0.4，并交付负载选择指南。
+`NO-PROMOTION`，未增加公共 API、未发布空 v0.4，并交付负载选择指南。随后 IOE-X11
+在 `013fecfe81277845eb3e60ccf5fe0205b753858d` 完成单 owner Server composition，
+稳定 API 继续零漂移。
 
 ---
 
@@ -408,11 +410,19 @@ AnyTransportAnyLogicRuntime
 “万能框架”。负载选择改由连接数、包频率、逻辑成本、tick、handoff、广播和背压
 测量驱动；M5 不发布空 v0.4。
 
-## P2（当前）：M6/IOE-X11 source-private io_uring Server composition
+## P2（已关闭）：M6/IOE-X11 source-private io_uring Server composition
 
 `X10=PROMOTE` 与 `ARCH-G1=APPROVE` 条件已满足。下一任务只组合现有 listener、Hub
 和 semantic adapter，证明单 owner bind/listen、callback、admission 与 graceful/
-forced stop；不修改 production `TcpServer`，不开放公共 backend selector。
+forced stop；不修改 production `TcpServer`，不开放公共 backend selector。该切片已在
+`013fecfe81277845eb3e60ccf5fe0205b753858d` 通过双平台、sanitizer、repeat、package 与
+API/scope 门并关闭。
+
+## P2（当前）：M6/IOE-X12 source-private 多 owner topology
+
+下一任务由 accept owner 接收 fd，再通过有界 EventLoop admission 将 sole ownership
+精确转移给选定 worker Hub；所有 post、admission 与 worker-shutdown 失败路径都必须由
+当前 sole owner 回收 fd，已建立连接不得迁移 owner。
 
 ## P2：RPC、Lua 和协程优先放在上层适配仓库
 
@@ -454,7 +464,7 @@ Milestone 4
 空 v0.4。
 
 Milestone 5
-当前：M6/IOE-X11，只推进 source-private 单 owner io_uring Server composition；
+当前：M6/IOE-X12，只推进 source-private 多 owner io_uring topology；
 Runtime 公共 API 与 RPC/Lua/coroutine 不并行展开。
 ```
 
@@ -474,7 +484,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M3 已关闭（private gateway 0a8fe1e；1h on 4e2457e/Core 736a090）
 → M4 已关闭（stable Apache-2.0 v0.3.0@8e4a6ed）
 → M5 已关闭（第二次 NO-PROMOTION；无空 v0.4）
-→ M6/IOE-X11（当前）
+→ M6/IOE-X11 已关闭（013fecf）
+→ M6/IOE-X12（当前）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

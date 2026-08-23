@@ -89,7 +89,8 @@ See `migration_status.md` for the current checked state of these phases.
   packaging, final extracted/upgrade consumers, annotated tag, stable Release,
   and fresh-download verification. M5 is closed with a second
   `NO-PROMOTION`, an official Profile load-selection guide, zero public API
-  drift, and no empty v0.4 release. M6/IOE-X11 is the active front. The
+  drift, and no empty v0.4 release. IOE-X11 is closed at `013fecf`; M6/IOE-X12
+  is the active front. The
   cancelled `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
@@ -320,8 +321,9 @@ Linux/Windows extracted and upgrade consumers, annotated tag, stable Release,
 and all-asset redownload verification passed. M5 repeated the common-capability
 review against the real gateway and closed as a second `NO-PROMOTION`; the
 Profile load-selection guide is published and all four recipes remain
-non-installed. M6/IOE-X11 is the current front, and no Core evidence task is
-running.
+non-installed. IOE-X11 is closed at
+`013fecfe81277845eb3e60ccf5fe0205b753858d`; M6/IOE-X12 is the current front,
+and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -356,8 +358,12 @@ running.
   installed Core `736a090`; close as a second `NO-PROMOTION`, publish the
   workload-based Profile guide, retain zero installed Runtime API, and create
   no empty v0.4 release.
-- [ ] M6/IOE-X11: compose the listener, Hub, and semantic adapter into one
-  source-private single-owner server without changing production `TcpServer`.
+- [x] M6/IOE-X11: compose the listener, Hub, and semantic adapter into one
+  source-private single-owner server without changing production `TcpServer`;
+  closed at `013fecfe81277845eb3e60ccf5fe0205b753858d`.
+- [ ] M6/IOE-X12: transfer each accepted fd exactly once from the accept owner
+  through bounded admission to one worker-owned Hub, with typed rollback on
+  post/admission/shutdown failure and no established-connection owner migration.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

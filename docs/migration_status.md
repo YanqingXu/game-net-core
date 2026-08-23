@@ -26,14 +26,16 @@ SPDX Schema validation. Exact evidence is recorded in
 against the independent gateway and closed as a second `NO-PROMOTION`; the
 load-selection guide is published, no Runtime API was installed, and no empty
 v0.4 release was created. Exact M5 decision checkpoint:
-`f8cffb6f04e593983db16d23122ed426f8729bf4`. M6/IOE-X11 is the active
-governance front.
+`f8cffb6f04e593983db16d23122ed426f8729bf4`. IOE-X11 then closed at exact
+implementation checkpoint `013fecfe81277845eb3e60ccf5fe0205b753858d` with a
+source-private single-owner Server and zero stable API drift. M6/IOE-X12 is the
+active governance front.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
 decision `PROMOTE` only for later source-private shaping. Independent ARCH-G1:
-`APPROVE`. M1–M5 are closed; M6/IOE-X11 is the unique governance front. There
-is no running Core evidence task after the M5 decision closure.
+`APPROVE`. M1–M5 and IOE-X11 are closed; M6/IOE-X12 is the unique governance
+front. There is no running Core evidence task after the X11 decision closure.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
@@ -127,7 +129,8 @@ download verification passed all 12 assets. M5 then audited `TransportEndpoint`,
 typed bounded Logic admission, waitable stop, shard, and cadence candidates
 against both the four Profiles and the real gateway. It recorded a second
 `NO-PROMOTION`, retained the non-installed recipes, published the workload
-selection guide, and advanced the sole current task to M6/IOE-X11.
+selection guide, and advanced the sole current task to M6/IOE-X11. X11 then
+closed at `013fecfe81277845eb3e60ccf5fe0205b753858d`; X12 is now current.
 
 `game-net-core` is the component-split migration target for the larger
 `mini_trantor` project. ARCH-G1 now has active I/O Engine and Runtime Model
@@ -403,7 +406,7 @@ as a passing 1/3-hour result.
 | 4 | Gradually migrate protocol / transport / game foundation / experimental | Foundation merged and published as `v0.2.0-phase4-preview`: PacketFramer, TransportEndpoint/TCP adapter, PlayerSession/SessionManager, bounded LogicLoop queue, pipeline demo/integration, and broadcast/backpressure; experimental transports remain deferred |
 | 5 | Production hardening | M3-R1/M3-R2, API-R1 remediation, TCP establishment rollback, and the PERF-R1 probe-lifecycle remediation at `669ebb0` are historical foundations. Frozen-candidate requalification no longer blocks new capability work; validation follows each exact commit |
 | 6 | Promotion infrastructure | Historical REL-C1 tag `v0.3.0-rel-c1-refreeze-5` replaced `v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`. API diff, metrics, regression, capacity, fault injection, endurance and waiver infrastructure remain available as continuous or promotion-only gates |
-| 7 | I/O Engine and Runtime Profiles | M1–M5 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M6/IOE-X11 is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
+| 7 | I/O Engine and Runtime Profiles | M1–M5 closed: ARCH-G1 is `APPROVE`; IOE-R1/R2/C1 and Runtime Profiles A/B/C/D remain closed; M5 repeated the cross-Profile review against private gateway `0a8fe1e` / Core `736a090` and recorded a second `NO-PROMOTION`; IOE-X1–X9 are closed, IOE-X10 at `f5d39b8` is a narrow `PROMOTE`, IOE-X11 is closed at `013fecf`, and stable Apache-2.0 `v0.3.0@8e4a6ed` passed external promotion/publication. The Profile load-selection guide is published, no empty v0.4 release exists, and M6/IOE-X12 is active. Production epoll/IOCP and the stable surface remain unchanged; there is no installed io_uring target or public selector |
 
 ## Current Intent Inventory
 
