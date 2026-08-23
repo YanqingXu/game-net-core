@@ -161,8 +161,12 @@
   "resolved_after_authorization": [
     "The canonical Apache-2.0 LICENSE, NOTICE, and THIRD_PARTY_NOTICES.md are tracked and installed.",
     "Project C/C++, Python, CMake, and workflow source files carry machine-checked Apache-2.0 SPDX headers.",
-    "The CMake package and public API manifest declare Apache-2.0."
+    "The CMake package and public API manifest declare Apache-2.0.",
+    "A tracked deterministic assembler now emits source/Linux/Windows/evidence archives, file-level SPDX 2.3, an evidence index, a package manifest, and SHA256SUMS in one operation.",
+    "The independent bundle verifier checks safe archive paths, all asset and evidence hashes, source/archive identity, Apache-2.0 metadata, SPDX package/file relationships and verification codes, and supports validation against the official SPDX 2.3 JSON schema.",
+    "The assembler contract proves two byte-identical builds from the same immutable source/install/evidence inputs and rejects tampered output."
   ],
+  "current_next_task": "Add clean Linux/Windows extracted-package consumers and v0.2-to-v0.3 upgrade consumers to the final promotion evidence.",
   "required_exact_commit_gates": [
     "Linux Debug and Release plus ASan/UBSan and TSan",
     "Windows Debug and Release on IOCP",

@@ -59,6 +59,11 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
     ]
     assert "Apache License" in license_text
     assert "Version 2.0, January 2004" in license_text
+    assert manifest["current_next_task"].startswith("Add clean Linux/Windows")
+    resolved = " ".join(manifest["resolved_after_authorization"])
+    assert "tracked deterministic assembler" in resolved
+    assert "official SPDX 2.3 JSON schema" in resolved
+    assert "byte-identical builds" in resolved
     assert not git(repo_root, "tag", "-l", "v0.3.0").strip(), (
         "pre-authorization governance must be updated before creating v0.3.0"
     )
@@ -206,7 +211,7 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
         "No vendored third-party library",
         "no tracked file contains `SPDX-License-Identifier`",
         "uninterrupted `candidate-1h`, then `release-3h`",
-        "The repository license transition is now authorized and implemented",
+        "The repository license transition and deterministic release assembler are now implemented",
     ):
         require(normalized_record_text, fragment, record_path)
 
@@ -233,6 +238,8 @@ def main() -> None:
     license_file = repo_root / "LICENSE"
     notice_file = repo_root / "NOTICE"
     third_party_notices = repo_root / "THIRD_PARTY_NOTICES.md"
+    release_packaging = repo_root / "docs" / "development" / "release_packaging.md"
+    release_metadata = repo_root / "release" / "v0.3.0.json"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     readme = repo_root / "README.md"
     ci_workflow = repo_root / ".github" / "workflows" / "ci.yml"
@@ -318,6 +325,8 @@ def main() -> None:
     require(release_text, "macOS, BSD variants, other target systems", release_intent)
     require(release_text, "authorized Apache-2.0 on 2026-08-23", release_intent)
     require(release_text, "inconsistent licensing metadata is a", release_intent)
+    require(release_text, "repeated assembly from the same source object", release_intent)
+    require(release_text, "tests/cmake/test_release_assembler.py", release_intent)
 
     docs_text = platform_docs.read_text(encoding="utf-8")
     for fragment in (
@@ -355,6 +364,7 @@ def main() -> None:
     third_party_text = third_party_notices.read_text(encoding="utf-8")
     require(third_party_text, "do not bundle third-party", third_party_notices)
     require(third_party_text, "PacketFramer fuzz corpus", third_party_notices)
+    require(third_party_text, "Apache-2.0", third_party_notices)
     licensing_text = licensing_docs.read_text(encoding="utf-8")
     normalized_licensing_text = " ".join(licensing_text.split())
     require(
@@ -386,6 +396,23 @@ def main() -> None:
         r"validated \d+ Apache-2\.0 source headers\n?", spdx_check.stdout
     ), spdx_check.stdout
 
+    packaging_text = " ".join(release_packaging.read_text(encoding="utf-8").split())
+    for fragment in (
+        "only supported v0.3.0 external-release assembler",
+        "immutable Git commit",
+        "SPDX 2.3 JSON SBOM",
+        "byte-identical output",
+        "official SPDX 2.3 JSON schema",
+    ):
+        require(packaging_text, fragment, release_packaging)
+    release = json.loads(release_metadata.read_text(encoding="utf-8"))
+    assert release["schema"] == "gamenet.release_metadata.v1"
+    assert release["name"] == "v0.3.0"
+    assert release["version"] == "0.3.0"
+    assert release["license"] == "Apache-2.0"
+    assert release["support"]["linux-x86_64"]["tier"] == 1
+    assert release["support"]["windows-x86_64"]["tier"] == 2
+    assert len(release["known_limitations"]) >= 4
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, guard_command_linux, ci_docs)
     require(ci_docs_text, "platform_support.md", ci_docs)
@@ -397,12 +424,15 @@ def main() -> None:
     assert ci_workflow_text.count(guard_command_windows) == 2, (
         "both Windows main-CI producers must run the build-governance guard"
     )
+    assert ci_workflow_text.count("python3 tests/cmake/test_release_assembler.py") == 4
+    assert ci_workflow_text.count("python tests/cmake/test_release_assembler.py") == 2
 
     soak_workflow_text = soak_workflow.read_text(encoding="utf-8")
     assert soak_workflow_text.count(guard_command_linux) == 2, (
         "the long-soak repeat and self-hosted CI jobs must each run the "
         "build-governance guard"
     )
+    assert soak_workflow_text.count("python3 tests/cmake/test_release_assembler.py") == 2
 
 
 if __name__ == "__main__":

@@ -42,6 +42,10 @@ matrix, and immutable evidence are explicit and machine checked.
 - emit one promotion manifest that revalidates the retained raw capacity and
   endurance inputs, binds their exact workflow run/attempt identities to the
   same immutable commit, and distinguishes candidate from release requirements
+- assemble source bytes from the immutable promotion Git object together with
+  explicit Linux/Windows install trees and labeled evidence roots; normalize
+  archive metadata and emit SPDX 2.3, evidence-index, package-manifest, and
+  SHA256 checksum records that a separate verifier rejects after any drift
 - exercise recoverable network, resource-pressure, callback, and shutdown
   failures without weakening lifecycle or thread-affinity contracts
 - bind every release claim to one immutable candidate commit and a declared
@@ -131,6 +135,10 @@ matrix, and immutable evidence are explicit and machine checked.
     Apache-2.0 license, matching `NOTICE`, source SPDX headers, package metadata,
     third-party notices, and SPDX SBOM; inconsistent licensing metadata is a
     non-waivable release failure
+11. repeated assembly from the same source object and byte-identical install
+    and evidence inputs is byte-identical; archive path safety, every indexed
+    file hash, file-level SBOM checksums, package verification codes, and the
+    official SPDX 2.3 JSON schema all verify before upload
 
 ## 7. Verification
 - `tests/api/test_public_api_manifest.py` verifies the installed inventory,
@@ -156,6 +164,10 @@ matrix, and immutable evidence are explicit and machine checked.
   wiring, and the explicit candidate/release waiver workflow boundaries
 - `tests/cmake/test_capacity_profile_contract.py` verifies that each waiver
   revalidates its stage-appropriate capacity pair and records its approval
+- `tests/cmake/test_release_assembler.py` builds two complete bundles from a
+  synthetic immutable repository plus Linux/Windows install trees and evidence,
+  proves byte identity, verifies their SPDX/package/evidence relationships, and
+  rejects tampered release metadata
 
 ## 8. Review Checklist
 - Is every release claim backed by structured same-commit evidence?

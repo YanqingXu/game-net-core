@@ -156,6 +156,7 @@ jobs:
           python3 tests/cmake/test_msvc_utf8_contract.py
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_build_governance_contract.py
+          python3 tests/cmake/test_release_assembler.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_tcp_connection_thread_contract.py
@@ -410,6 +411,7 @@ jobs:
           python3 tests/cmake/test_msvc_utf8_contract.py
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_build_governance_contract.py
+          python3 tests/cmake/test_release_assembler.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_tcp_connection_thread_contract.py

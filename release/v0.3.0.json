@@ -1,0 +1,25 @@
+{
+  "schema": "gamenet.release_metadata.v1",
+  "name": "v0.3.0",
+  "version": "0.3.0",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/YanqingXu/game-net-core",
+  "support": {
+    "linux-x86_64": {
+      "tier": 1,
+      "backend": "epoll",
+      "package": "static"
+    },
+    "windows-x86_64": {
+      "tier": 2,
+      "backend": "IOCP",
+      "package": "static"
+    }
+  },
+  "known_limitations": [
+    "No binary ABI compatibility is promised before version 1.0.",
+    "The stable compatibility promise covers GameNet::core source contracts; upper-layer targets remain provisional.",
+    "Shared libraries, TLS, HTTP, RPC, UDP, KCP, macOS, and BSD platforms are not supported in v0.3.0.",
+    "The io_uring IOE-X1-X10 path is experimental, Linux-only, and excluded from installed release packages."
+  ]
+}

@@ -80,18 +80,20 @@ commit and rerun the complete M2 matrix.
 
 ## Release engineering gaps to close after authorization
 
-The repository has workflows and validators for CI, capacity, benchmark,
-repeat/fault, and 1h/3h evidence. It does not yet contain a tracked tool that
-reproducibly assembles source and binary packages, `NOTICE`, third-party
-notices, the SPDX SBOM, the evidence index, and `SHA256SUMS` as one release
-operation. The internal candidate bundle was validated, but its final assembly
-was a one-time ignored local operation.
+At audit time, the repository workflows and validators covered CI, capacity,
+benchmark, repeat/fault, and 1h/3h evidence, but final assembly was a one-time
+ignored local operation. That gap is now closed by
+`tools/assemble_release.py`, `tools/verify_release_bundle.py`, and the
+byte-reproducibility/tamper contract in
+`tests/cmake/test_release_assembler.py`. The assembler reads the immutable Git
+object, accepts explicit install/evidence inputs, and emits source/binary/
+evidence archives plus a file-level SPDX 2.3 inventory; the verifier accepts
+the official SPDX 2.3 JSON schema.
 
-M4 must therefore add and test that assembly path, replace the proprietary SBOM
-license with `Apache-2.0`, define the file-level SPDX policy, and add clean
-Linux/Windows current-package and v0.2-to-v0.3 upgrade consumers. No release
-asset may be formed as externally adoptable evidence until those changes share
-one exact promotion commit.
+The remaining release-engineering gap is clean external Linux/Windows current-
+package consumers plus v0.2-to-v0.3 upgrade consumers. No release asset may be
+represented as externally adoptable evidence until those consumers and the
+full matrix share one exact promotion commit.
 
 ## Authorized execution sequence
 
@@ -132,6 +134,7 @@ On 2026-08-23 the owner explicitly confirmed all three points:
 3. the owner authorizes creation and publication of `v0.3.0` only after the
    exact-commit gates above pass.
 
-The repository license transition is now authorized and implemented. M4 remains
-open until the release assembler, consumers, complete promotion matrix, final
-packages, SBOM, tag, GitHub Release, and redownload verification all pass.
+The repository license transition and deterministic release assembler are now
+implemented. M4 remains open until external/upgrade consumers, the complete
+promotion matrix, final packages, SBOM, tag, GitHub Release, and redownload
+verification all pass.

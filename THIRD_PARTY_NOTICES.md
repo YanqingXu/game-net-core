@@ -3,6 +3,9 @@
 The game-net-core source and binary distributions do not bundle third-party
 library source or binary dependencies.
 
+Project-authored material in these distributions is licensed under
+Apache-2.0 as stated by the top-level `LICENSE` and `NOTICE` files.
+
 The following build and system prerequisites may be used but are not included
 in project distributions: CMake, Ninja, GCC and binutils, MSVC, the Windows
 SDK, POSIX threads, and Windows Winsock. Each is governed by its own license.

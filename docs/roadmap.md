@@ -85,7 +85,10 @@ See `migration_status.md` for the current checked state of these phases.
   external release. M3 real gateway integration is closed at private gateway
   commit `0a8fe1e`; the exact gateway `4e2457e` / Core `736a090` process passed
   its uninterrupted 1-hour gate. M4 external release governance is the active
-  front; the cancelled `a89e2b0` endurance checkpoint remains historical only.
+  front. Apache-2.0 metadata and deterministic source/binary/evidence packaging,
+  file-level SPDX 2.3, checksums, and tamper verification are complete; clean
+  external/upgrade consumers are next. The cancelled `a89e2b0` endurance
+  checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -311,9 +314,9 @@ same-commit 1h/3h and package/evidence gates. The 2026-08-22 cancelled
 checkpoint remains historical `NO-PROMOTION` evidence. M3 real gateway
 integration is closed; M4 external release governance is the current front and
 no Core evidence task is running. The M4 engineering preflight is complete and
-machine-guarded. Owner authorization is recorded, and the Apache-2.0
-license/source/package transition is complete; release assembly and the full
-promotion matrix remain.
+machine-guarded. Owner authorization, the Apache-2.0 license/source/package
+transition, and deterministic release assembly are complete; clean external/
+upgrade consumers and the full promotion matrix remain.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.

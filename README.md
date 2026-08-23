@@ -51,8 +51,10 @@ integration is closed: the private gateway closure is
 fix `736a090`, completed 3,743 full replay/fault cycles, and left no unresolved
 Core correctness or reusable-capability blocker. The next governance front is
 M4 external v0.3.0 release. The owner has authorized Apache-2.0 and conditional
-publication; a fresh same-commit promotion matrix is still required. The
-non-mutating source/license/release audit is complete in
+publication; the deterministic release assembler, file-level SPDX 2.3 SBOM,
+evidence index, checksums, and tamper verifier are tracked and tested. Clean
+external/upgrade consumers and a fresh same-commit promotion matrix are still
+required. The non-mutating source/license/release audit is complete in
 [`docs/development/m4_external_release_preflight_2026-08-23.md`](docs/development/m4_external_release_preflight_2026-08-23.md).
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
@@ -137,7 +139,8 @@ authorized this transition on 2026-08-23; project attribution and dependency
 boundaries are recorded in [NOTICE](NOTICE) and
 [Third-Party Notices](THIRD_PARTY_NOTICES.md). Installed CMake packages include
 those files and export `GameNetCore_LICENSE=Apache-2.0`. See
-[Licensing Status](docs/development/licensing.md). The license transition does
+[Licensing Status](docs/development/licensing.md) and
+[Release Packaging](docs/development/release_packaging.md). The license transition does
 not itself constitute the `v0.3.0` release; no final tag or Release is created
 until the complete exact-commit evidence matrix passes.
 

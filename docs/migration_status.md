@@ -20,7 +20,10 @@ and release-tooling preflight is complete at
 `docs/development/m4_external_release_preflight_2026-08-23.md`. The owner then
 authorized Apache-2.0 and conditional publication; the canonical license,
 NOTICE, source SPDX, installed package metadata, and third-party notices are
-synchronized. The tracked release assembler is the current M4 task.
+synchronized. The tracked deterministic release assembler, file-level SPDX 2.3
+SBOM, evidence index, checksum manifest, independent verifier, and
+byte-reproducibility/tamper contract are complete. Clean Linux/Windows extracted
+package and v0.2-to-v0.3 upgrade consumers are the current M4 task.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -113,7 +116,8 @@ cancelled `a89e2b0` run remains `NO-PROMOTION` evidence only. The private
 Core `736a090` Linux/epoll process passed the uninterrupted 1-hour gate with
 3,743 complete replay/fault cycles and 32 KiB peak RSS growth. M4 external
 release governance is active; owner authorization and the Apache-2.0 metadata
-transition are complete, while release evidence and publication remain open.
+transition are complete. The release assembler is also complete; external and
+upgrade consumers precede the final same-commit matrix and publication.
 The M4 preflight confirmed that the GitHub repository was already public. The
 owner has now authorized and executed the Apache-2.0 transition, but no
 `v0.3.0` tag or Release exists and a new exact-commit promotion matrix remains
@@ -404,7 +408,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 67 | 36 | 20 | 11 | 185 |
+| 67 | 36 | 20 | 11 | 186 |
 
 ## Historical Production-Hardening Evidence
 
