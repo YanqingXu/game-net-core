@@ -94,7 +94,9 @@ See `migration_status.md` for the current checked state of these phases.
   `43795e8`. The explicit Linux-only component is prepared but no preview tag
   or Release was published. M7 external-first Lua/typed RPC validation is the
   active front. M7-G0 at `44493b1` records external implementation `DEFER` and
-  shared RPC `NO-PROMOTION`; no RPC/Lua surface was added. The cancelled
+  shared RPC `NO-PROMOTION`; gateway M4 closure `d03cacd` and M7 governance
+  `92a2607` now set only the external adapter to `RESUME`, while shared promotion stays
+  closed and no RPC/Lua surface was added. The cancelled
   `a89e2b0` endurance checkpoint remains historical only.
 
 ## Phase 1: Project Skeleton
@@ -393,6 +395,9 @@ validation is the current front, and no Core evidence task is running.
   external implementation `DEFER` and shared RPC `NO-PROMOTION` at
   `44493b1d37c16567990e1660153d6b0843a8eecc` because no common gateway RPC
   wire/lifecycle contract exists. M7 itself remains open.
+- [x] M7-G0b: bind clean gateway M4 closure `d03cacd` and external M7 governance
+  `92a2607`; set the gateway callback/value adapter to `RESUME` while retaining shared
+  RPC `NO-PROMOTION` and deferred Core intent.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

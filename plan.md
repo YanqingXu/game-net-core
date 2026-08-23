@@ -27,7 +27,10 @@ IOE-X15 实现与证据检查点：`43795e841ba2a279ed6a3d5d831d60a9f2a25570`
 （显式 Linux-only experimental 安装组件、独立 manifest 与 package consumer）
 
 M7-G0 外部就绪审计检查点：`44493b1d37c16567990e1660153d6b0843a8eecc`
-（外部实现 `DEFER`、共享 RPC `NO-PROMOTION`；M7 保持当前）
+（初始外部实现 `DEFER`、共享 RPC `NO-PROMOTION`）；Gateway M4 已在
+`d03cacd5aead885fc61a419c71d5c32a060cb700` 关闭，M7 外部 adapter 治理已在
+`92a26072c3300275edc9d069a59fc17913c7614c` 授权，因此外部实现现为 `RESUME`，共享
+RPC 仍为 `NO-PROMOTION`。
 
 ## 1. 计划定位与总体顺序
 
@@ -388,20 +391,23 @@ v0.3 manifest 零漂移。已准备 v0.5.0 experimental preview 版本说明，�
 
 ### 9.1 M7-G0：外部就绪审计
 
-状态：**已完成 `DEFER / NO-PROMOTION` 就绪判定，M7 尚未关闭**。精确审计检查点为
+状态：**初始 `DEFER / NO-PROMOTION` 已复核为外部 `RESUME` / 共享
+`NO-PROMOTION`，M7 尚未关闭**。精确审计检查点为
 `44493b1d37c16567990e1660153d6b0843a8eecc`，记录见
-`docs/development/m7_external_rpc_lua_readiness_2026-08-24.md`。Gateway 的干净
+`docs/development/m7_external_rpc_lua_readiness_2026-08-24.md`。Gateway 历史
 `0a8fe1e43cb11ac32daa8f9266d3b84924736e67` 检查点只有受 owner 隔离的 Lua callback
-seam，提交范围仍禁止 RPC；独立 `YanGameServer`
+seam；M4 已在 `d03cacd5aead885fc61a419c71d5c32a060cb700` 以 `ADOPTED` 关闭，新的
+M7 intent/rules/合同名已在 `92a26072c3300275edc9d069a59fc17913c7614c` 明确授权外部
+callback/value adapter。独立 `YanGameServer`
 `b5254165389d762c3f3c63568c24ffab448fc501` 的有界 RPC/Lua owner 合同虽通过聚焦
 Windows Release 8/8，但 wire-v2、native transport/TLS 和生命周期并不构成相同的
 GameNet per-connection RPC 需求。因此 `rpc.intent.md` 保持 deferred，当前仓库不增加
-RPC/Lua target、头文件或 package component。
+RPC/Lua target、头文件或 package component。当前只恢复 Gateway 外部实现；共享提升门
+保持关闭。
 
-恢复外部实现前，Gateway 必须先有无冲突任务/工作树修改的干净精确提交，并新增明确
-授权 M7 的 intent/rules/合同测试；随后才实现非 coroutine 前置的 callback/value
-adapter，并与第二 consumer 逐字段比较 wire/lifecycle。就绪审计不授权覆盖 Gateway
-现有的用户修改。
+恢复条件 1/2 已满足。Gateway 现在实现非 coroutine 前置的 callback/value adapter，
+随后与第二 consumer 逐字段比较 wire/lifecycle；在实现与比较证据完成前，Core
+`rpc.intent.md` 保持 deferred。
 
 坚持“外部先行、通用能力再提升”。
 

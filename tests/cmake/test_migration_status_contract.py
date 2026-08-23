@@ -476,15 +476,32 @@ def main() -> None:
         require(text, "NO-PROMOTION", source)
     require(evidence_ledger_text, "M7-G0 External Lua / Typed-RPC Readiness", evidence_ledger)
     gateway_checkpoint = "0a8fe1e43cb11ac32daa8f9266d3b84924736e67"
+    gateway_m4_closure = "d03cacd5aead885fc61a419c71d5c32a060cb700"
+    gateway_m7_governance = "92a26072c3300275edc9d069a59fc17913c7614c"
     independent_consumer_checkpoint = "b5254165389d762c3f3c63568c24ffab448fc501"
     require(m7_readiness_text, "external implementation: `DEFER`", m7_readiness)
+    require(m7_readiness_text, "external implementation: `RESUME`", m7_readiness)
     require(
         m7_readiness_text,
         "shared GameNet RPC promotion: `NO-PROMOTION`",
         m7_readiness,
     )
     require(m7_readiness_text, gateway_checkpoint, m7_readiness)
+    require(m7_readiness_text, gateway_m4_closure, m7_readiness)
+    require(m7_readiness_text, gateway_m7_governance, m7_readiness)
     require(m7_readiness_text, independent_consumer_checkpoint, m7_readiness)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, gateway_m4_closure[:7], source)
+        require(text, gateway_m7_governance[:7], source)
+        require(text, "RESUME", source)
     require(m7_readiness_text, "passed 8/8", m7_readiness)
     require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
     require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)

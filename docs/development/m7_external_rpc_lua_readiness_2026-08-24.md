@@ -7,13 +7,22 @@ Core baseline: `66e7389cf6a2f52b3f13c85ffdbe1dff6a90cf50`
 Exact readiness-audit checkpoint:
 `44493b1d37c16567990e1660153d6b0843a8eecc`.
 
-Disposition:
+Initial disposition at `44493b1d37c16567990e1660153d6b0843a8eecc`:
 
 - external implementation: `DEFER`;
 - shared GameNet RPC promotion: `NO-PROMOTION`;
 - `intents/modules/rpc.intent.md`: remains `deferred`;
-- M7 remains the governance front until an evidence-eligible gateway slice is
-  available or the owner explicitly closes the milestone as `NO-PROMOTION`.
+- M7 remained the governance front until an evidence-eligible gateway slice
+  became available.
+
+Resume recheck after gateway M4 closure:
+
+- external implementation: `RESUME` at gateway governance checkpoint
+  `92a26072c3300275edc9d069a59fc17913c7614c`;
+- shared GameNet RPC promotion: still `NO-PROMOTION`;
+- `intents/modules/rpc.intent.md`: remains `deferred`;
+- M7 remains the governance front while the external callback/value adapter is
+  implemented and compared with the independent consumer.
 
 This is a readiness decision, not an implementation or release result. It adds
 no RPC/Lua target, header, package component, wire format, executor, tag, or
@@ -23,7 +32,7 @@ GitHub Release.
 
 ### `gamenet-game-gateway`
 
-The last clean committed gateway evidence is
+The historical M3 gateway evidence is
 `0a8fe1e43cb11ac32daa8f9266d3b84924736e67`. Its installed-Core TCP path has
 one owner-isolated, bounded Lua execution-cell seam and verifies blocking,
 exception containment, typed saturation, callback kick re-entry, generation
@@ -34,12 +43,18 @@ revalidation, and deterministic shutdown in:
 - `tests/integration/test_sharded_hybrid_gateway.cpp`;
 - `tests/integration/test_gateway_replay_fault_endurance.cpp`.
 
-That seam is an injected callback, not a Lua VM adapter. The committed M3
-intent and repository instructions explicitly exclude RPC. The checkout also
-contained a user-owned, uncommitted `plan.md` change for a separate v0.3.0
-package-adoption track. It was preserved and is not exact-commit evidence.
-Consequently the audit neither edits the gateway nor treats it as an RPC
-consumer.
+That seam is an injected callback, not a Lua VM adapter. At the initial audit,
+the committed M3 intent excluded RPC and a user-owned M4 package-adoption plan
+was still uncommitted, so the audit preserved the checkout and recorded
+`DEFER`.
+
+Gateway M4 subsequently closed as official-package `ADOPTED` at clean commit
+`d03cacd5aead885fc61a419c71d5c32a060cb700`. The separately approved gateway M7
+intent/rules/contract names are committed at
+`92a26072c3300275edc9d069a59fc17913c7614c`. They authorize only an external,
+bounded, non-coroutine callback/value adapter and preserve the installed-Core
+boundary. This satisfies resume gates 1 and 2 without creating RPC evidence or
+authorizing shared promotion.
 
 ### `YanGameServer`
 
@@ -108,16 +123,15 @@ platform real TCP; fuzzing; and zero retained pending/callback state.
 
 ## Resume Gates
 
-External M7 implementation remains deferred until all of the following are
-true:
+External M7 implementation follows these gates:
 
-1. the gateway has one clean exact commit and no conflicting active adoption
-   task or user-owned worktree change;
-2. a gateway M7 intent/rule update explicitly authorizes callback/value RPC
-   after the M3 no-RPC boundary;
+1. **satisfied** — gateway M4 is closed cleanly at `d03cacd5aead885fc61a419c71d5c32a060cb700`;
+2. **satisfied** — gateway M7 governance at `92a26072c3300275edc9d069a59fc17913c7614c`
+   explicitly authorizes callback/value RPC after the historical M3 boundary;
 3. the gateway implements and verifies the bounded non-coroutine adapter and
    Lua-cell integration described above;
-4. a second independent consumer is revalidated at one clean exact commit;
+4. **satisfied for comparison input** — the independent clean checkpoint
+   remains `b5254165389d762c3f3c63568c24ffab448fc501` with focused 8/8 evidence;
 5. a field-by-field comparison proves the same wire and lifecycle need.
 
 Only then may `intents/modules/rpc.intent.md` be rewritten against current code,

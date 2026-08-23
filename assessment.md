@@ -342,7 +342,10 @@ package consumer；默认 Linux/Windows 包继续不含实验产物，没有 sta
 M7-G0 随后在 `44493b1d37c16567990e1660153d6b0843a8eecc` 对 Gateway 与独立
 `YanGameServer` 做就绪审计：前者尚无 RPC consumer 合同，后者的 wire-v2/native
 transport 生命周期并非同一 GameNet 协议需求，因此外部实现记录 `DEFER`、共享 RPC
-记录 `NO-PROMOTION`，M7 保持当前且 `rpc.intent.md` 继续 deferred。
+记录 `NO-PROMOTION`。随后 Gateway M4 在
+`d03cacd5aead885fc61a419c71d5c32a060cb700` 关闭，M7 外部 adapter 的
+intent/rules/合同名在 `92a26072c3300275edc9d069a59fc17913c7614c` 获得授权；外部实现
+现为 `RESUME`，但共享 RPC 仍为 `NO-PROMOTION` 且 `rpc.intent.md` 继续 deferred。
 当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
 基线为 140（8 unit、118 contract、14 integration）。
 

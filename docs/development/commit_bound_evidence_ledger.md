@@ -594,3 +594,13 @@ a completed, exact-commit record.
 | Comparison | Gateway has an injected owner-isolated Lua callback seam but no RPC frame/channel/pending contract. YanGame uses numeric strong identities, internal wire v2, a native-socket TLS/node adapter, and its own lifecycle. The shared owner principle alone is insufficient to promote a GameNet protocol. |
 | Verification | `tests/cmake/test_migration_status_contract.py` binds the audit/checkpoints/decision, requires `rpc.intent.md` to remain deferred, and rejects installed RPC/Lua headers or CMake targets. Scope, intent, build-governance, workflow, and diff guards passed. |
 | Decision | External implementation `DEFER`; shared GameNet RPC `NO-PROMOTION`. Keep M7 active until the gateway has a clean non-conflicting M7 authorization and verified callback/value adapter plus a field-equivalent second consumer. Preserve the user-owned gateway `plan.md` change and make no external repository edit. |
+
+## M7-G0b External Adapter Resume — 2026-08-24
+
+| Field | Evidence |
+| --- | --- |
+| Gateway closure | Official-package M4 is `ADOPTED` at clean gateway commit `d03cacd5aead885fc61a419c71d5c32a060cb700`; historical M3/M4 evidence and the installed-package boundary remain governed. |
+| Gateway authorization | `92a26072c3300275edc9d069a59fc17913c7614c` adds active M7 external typed-RPC intent/rules, exact codec/integration/fuzz test names, owner/ownership/re-entry/cross-thread/shutdown contracts, and no runtime implementation. |
+| Independent input | YanGameServer clean checkpoint `b5254165389d762c3f3c63568c24ffab448fc501` remains the focused 8/8 comparison input. Its broader wire-v2/native transport is not copied into the gateway. |
+| Verification | `tests/cmake/test_migration_status_contract.py` binds the original readiness decision plus the two gateway resume checkpoints, keeps `rpc.intent.md` deferred, and rejects any installed Core RPC/Lua header or target. |
+| Decision | External gateway implementation `RESUME`; shared GameNet RPC remains `NO-PROMOTION`. M7 stays active until gateway runtime evidence and a field-by-field two-consumer comparison close it. |

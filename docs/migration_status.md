@@ -45,8 +45,11 @@ front. Its M7-G0 readiness audit at
 `44493b1d37c16567990e1660153d6b0843a8eecc` records external implementation
 `DEFER` and shared RPC `NO-PROMOTION`: gateway `0a8fe1e` has no RPC consumer
 contract, while independent `YanGameServer@b525416` proves a different
-wire-v2/native-transport lifecycle. M7 remains active, `rpc.intent.md` remains
-deferred, and no RPC/Lua surface was added.
+wire-v2/native-transport lifecycle. Gateway M4 then closed at `d03cacd`, and
+external M7 governance at `92a2607` authorizes the bounded callback/value
+adapter. External implementation is now `RESUME`; M7 remains active,
+`rpc.intent.md` and shared promotion remain deferred/`NO-PROMOTION`, and no
+RPC/Lua Core surface was added.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -60,7 +63,10 @@ Current IOE-X15 implementation/evidence checkpoint:
 
 Current M7-G0 readiness-audit checkpoint:
 `44493b1d37c16567990e1660153d6b0843a8eecc` (2026-08-24);
-external implementation `DEFER`, shared RPC `NO-PROMOTION`, M7 still active.
+initial external implementation `DEFER`, shared RPC `NO-PROMOTION`. Gateway
+closure `d03cacd5aead885fc61a419c71d5c32a060cb700` and M7 governance
+`92a26072c3300275edc9d069a59fc17913c7614c` now set external implementation to
+`RESUME`; shared promotion stays closed and M7 remains active.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)

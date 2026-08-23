@@ -73,7 +73,12 @@ or Release was published; the next governance front is M7 external-first Lua
 and typed RPC validation. Its M7-G0 readiness audit at
 `44493b1d37c16567990e1660153d6b0843a8eecc` records external implementation
 `DEFER` and shared RPC `NO-PROMOTION`: the gateway has no RPC consumer contract,
-so M7 remains active and no RPC/Lua package surface was added.
+so no RPC/Lua package surface was added. Gateway M4 later closed at
+`d03cacd5aead885fc61a419c71d5c32a060cb700`, and its external M7
+intent/rules/contract names are authorized at
+`92a26072c3300275edc9d069a59fc17913c7614c`; external implementation is now
+`RESUME`, while shared promotion remains `NO-PROMOTION` and Core RPC stays
+deferred.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint
