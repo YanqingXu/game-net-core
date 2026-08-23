@@ -240,8 +240,8 @@ TcpServer
 
 优先级：P1。启动条件：M3 关闭通用 Core blocker。
 
-状态：**所有者授权、Apache-2.0 切换和确定性发布组装器已完成；干净的 Linux/Windows
-外部包消费者与 0.2→0.3 升级消费者是当前任务**。审计基线、来源/资产清单、M3 后 runtime diff、授权和固定重验
+状态：**所有者授权、Apache-2.0 切换、确定性发布组装器和双平台当前/升级消费者均已
+完成；冻结最终 promotion commit 并启动完整同提交矩阵是当前任务**。审计基线、来源/资产清单、M3 后 runtime diff、授权和固定重验
 顺序见 `docs/development/m4_external_release_preflight_2026-08-23.md`、同名 JSON 与
 `docs/development/m4_license_authorization_2026-08-23.md`。`v0.3.0` tag/Release/资产仍须
 等待全部同提交门通过。
@@ -538,8 +538,9 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 > **M4 是下一治理前沿，无后台 Core 证据任务**：M1、M2、M3 已关闭，M4 preflight
 > 与所有者授权已完成，Apache-2.0 法律/源码/package metadata 已同步，受跟踪且可复现
-> 的 release assembler、file-level SPDX 2.3、证据索引和独立验证器已经完成；当前立即
-> 加入干净的 Linux/Windows 解压包消费者与 0.2→0.3 升级消费者。M3 后存在
+> 的 release assembler、file-level SPDX 2.3、证据索引、独立验证器、Linux/Windows
+> 解压包消费者与 0.2→0.3 升级消费者已经完成；当前立即冻结最终 promotion commit。
+> M3 后存在
 > Core runtime 修复 `736a090`，因此外部发布必须在最终许可证/NOTICE/SBOM 变更后
 > 重新选择 promotion commit，并完整执行 M2 的 Linux/Windows、sanitizer、容量、
 > benchmark、fault、repeat、1h/3h、package 和 evidence 矩阵。只有全部门通过后才能

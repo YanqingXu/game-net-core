@@ -102,7 +102,7 @@ JOB_CONTRACTS = {
         "Test",
         60,
         ("ci-evidence/ctest-junit.xml",),
-        4,
+        8,
     ),
     "windows-msvc": JobContract(
         "python",
@@ -127,7 +127,7 @@ JOB_CONTRACTS = {
         "Test Release",
         30,
         ("ci-evidence/ctest-junit.xml", "ci-evidence/install-consumer-junit.xml"),
-        9,
+        12,
         package_step="Install and verify Release package consumer",
     ),
 }

@@ -112,6 +112,11 @@ The `ci` workflow validates:
 - Windows MSVC Debug build, CTest suite, and install/package consumer
   verification through the IOCP backend.
 - Windows MSVC Release build and CTest suite as a required main-CI job.
+- Linux and Windows Release jobs retain deterministic platform binary archives,
+  build/run the 2-test consumer from the extracted v0.3 package, pin and hash
+  the canonical v0.2 source asset, and run the same 1-test stable-Core upgrade
+  consumer against exact v0.2 and v0.3 packages. An independent verifier checks
+  package/log/inventory/JUnit hashes before upload.
 
 Ordinary production builds keep optional modules disabled. A separate Linux
 job slice enables only the three non-installed IOE-X1/X2/X3 io_uring contracts.
@@ -150,6 +155,8 @@ python3 tests/cmake/test_migration_status_contract.py
 python3 tests/cmake/test_msvc_utf8_contract.py
 python3 tests/cmake/test_platform_backend_contract.py
 python3 tests/cmake/test_build_governance_contract.py
+python3 tests/cmake/test_release_assembler.py
+python3 tests/cmake/test_release_consumer_gate.py
 python3 tests/cmake/test_tcp_lifecycle_contracts.py
 python3 tests/cmake/test_tcp_connection_context_contract.py
 python3 tests/cmake/test_tcp_connection_thread_contract.py

@@ -90,10 +90,15 @@ object, accepts explicit install/evidence inputs, and emits source/binary/
 evidence archives plus a file-level SPDX 2.3 inventory; the verifier accepts
 the official SPDX 2.3 JSON schema.
 
-The remaining release-engineering gap is clean external Linux/Windows current-
-package consumers plus v0.2-to-v0.3 upgrade consumers. No release asset may be
-represented as externally adoptable evidence until those consumers and the
-full matrix share one exact promotion commit.
+The clean consumer gap is now implemented in both Release jobs. Each retains
+the extracted v0.3 binary package and executes its 2/2 current consumer. Both
+jobs pin the canonical v0.2 tar asset (SHA-256
+`c2f5f2ece4a147f63f91c86ef3c1dd25bf9d370d22e25889648132985f9af408`,
+peeled tag commit `7668d6b82a0d815ccd79f83c572bc0a36bcceea0`) and execute the
+same stable-Core consumer 1/1 against v0.2 and 1/1 against v0.3. Structured
+evidence and its retained package have a separate hash/JUnit/inventory verifier.
+The next operation is to freeze one exact promotion commit and run the full
+matrix; pre-freeze diagnostics are not external release evidence.
 
 ## Authorized execution sequence
 
@@ -137,4 +142,5 @@ On 2026-08-23 the owner explicitly confirmed all three points:
 The repository license transition and deterministic release assembler are now
 implemented. M4 remains open until external/upgrade consumers, the complete
 promotion matrix, final packages, SBOM, tag, GitHub Release, and redownload
-verification all pass.
+verification all pass. The consumer implementation is complete, but only its
+final frozen-commit run is eligible for the release evidence index.

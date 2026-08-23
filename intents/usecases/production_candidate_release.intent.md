@@ -46,6 +46,10 @@ matrix, and immutable evidence are explicit and machine checked.
   explicit Linux/Windows install trees and labeled evidence roots; normalize
   archive metadata and emit SPDX 2.3, evidence-index, package-manifest, and
   SHA256 checksum records that a separate verifier rejects after any drift
+- build and run clean Linux/epoll and Windows/IOCP Release consumers from the
+  extracted binary packages; independently pin and hash the published v0.2
+  canonical source asset, then configure the same stable-Core consumer against
+  exact v0.2 and v0.3 packages so the upgrade claim is executable evidence
 - exercise recoverable network, resource-pressure, callback, and shutdown
   failures without weakening lifecycle or thread-affinity contracts
 - bind every release claim to one immutable candidate commit and a declared
@@ -139,6 +143,11 @@ matrix, and immutable evidence are explicit and machine checked.
     and evidence inputs is byte-identical; archive path safety, every indexed
     file hash, file-level SBOM checksums, package verification codes, and the
     official SPDX 2.3 JSON schema all verify before upload
+12. Linux and Windows Release evidence each retains the extracted v0.3 package,
+    its content hash, a 2/2 current-package consumer, and 1/1 executions of the
+    same upgrade consumer against pinned v0.2 and exact-commit v0.3; an
+    independent verifier rejects path traversal, identity drift, failed tests,
+    missing files, or changed hashes
 
 ## 7. Verification
 - `tests/api/test_public_api_manifest.py` verifies the installed inventory,
@@ -168,6 +177,9 @@ matrix, and immutable evidence are explicit and machine checked.
   synthetic immutable repository plus Linux/Windows install trees and evidence,
   proves byte identity, verifies their SPDX/package/evidence relationships, and
   rejects tampered release metadata
+- `tests/cmake/test_release_consumer_gate.py` verifies the pinned v0.2 release
+  identity, common stable-Core fixture, Linux/Windows workflow wiring, archive
+  path safety, retained evidence semantics, and tamper rejection
 
 ## 8. Review Checklist
 - Is every release claim backed by structured same-commit evidence?

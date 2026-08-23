@@ -99,6 +99,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_build_governance_contract.py
           python3 tests/cmake/test_release_assembler.py
+          python3 tests/cmake/test_release_consumer_gate.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_tcp_connection_thread_contract.py
@@ -333,6 +334,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_build_governance_contract.py
           python3 tests/cmake/test_release_assembler.py
+          python3 tests/cmake/test_release_consumer_gate.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_tcp_connection_thread_contract.py
@@ -561,6 +563,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_build_governance_contract.py
           python3 tests/cmake/test_release_assembler.py
+          python3 tests/cmake/test_release_consumer_gate.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_tcp_connection_thread_contract.py
@@ -720,6 +723,7 @@ jobs:
           python3 tests/cmake/test_platform_backend_contract.py
           python3 tests/cmake/test_build_governance_contract.py
           python3 tests/cmake/test_release_assembler.py
+          python3 tests/cmake/test_release_consumer_gate.py
           python3 tests/cmake/test_tcp_lifecycle_contracts.py
           python3 tests/cmake/test_tcp_connection_context_contract.py
           python3 tests/cmake/test_tcp_connection_thread_contract.py
@@ -760,6 +764,28 @@ jobs:
           --output-junit "$PWD/ci-evidence/ctest-junit.xml"
           --output-log "$PWD/ci-evidence/ctest.log"
 
+      - name: Download pinned v0.2 canonical source asset
+        run: |
+          mkdir -p build-release/v02-download
+          curl --fail --location --retry 3 \
+            --output build-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz \
+            https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz
+
+      - name: Install and verify extracted and upgrade consumers
+        run: |
+          cmake --install build-release --prefix "$PWD/build-release/_install"
+          python3 tools/run_release_consumer_gate.py \
+            --candidate-sha "$(git rev-parse HEAD)" \
+            --platform linux \
+            --current-install-tree build-release/_install \
+            --v02-source-archive build-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz \
+            --work-root build-release/release-consumer-gate \
+            --evidence-dir ci-evidence/release-consumer
+          python3 tools/verify_release_consumer_evidence.py \
+            --evidence-dir ci-evidence/release-consumer \
+            --expected-commit "$(git rev-parse HEAD)" \
+            --expected-platform linux
+
       - name: Write CI evidence manifest
         if: always()
         env:
@@ -776,7 +802,11 @@ jobs:
             --command 'cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 129 --output ci-evidence/ctest-inventory.json' \
             --command 'cmake --build build-release --parallel' \
-            --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
+            --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
+            --command 'curl --fail --location --retry 3 --output build-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz' \
+            --command 'cmake --install build-release --prefix $PWD/build-release/_install' \
+            --command 'python3 tools/run_release_consumer_gate.py --candidate-sha $(git rev-parse HEAD) --platform linux --current-install-tree build-release/_install --v02-source-archive build-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz --work-root build-release/release-consumer-gate --evidence-dir ci-evidence/release-consumer' \
+            --command 'python3 tools/verify_release_consumer_evidence.py --evidence-dir ci-evidence/release-consumer --expected-commit $(git rev-parse HEAD) --expected-platform linux'
 
       - name: Upload CI evidence
         id: ci-evidence-upload
@@ -913,6 +943,7 @@ jobs:
           python tests/cmake/test_platform_backend_contract.py
           python tests/cmake/test_build_governance_contract.py
           python tests/cmake/test_release_assembler.py
+          python tests/cmake/test_release_consumer_gate.py
           python tests/cmake/test_tcp_lifecycle_contracts.py
           python tests/cmake/test_tcp_connection_context_contract.py
           python tests/cmake/test_tcp_connection_thread_contract.py
@@ -1139,6 +1170,7 @@ jobs:
           python tests/cmake/test_platform_backend_contract.py
           python tests/cmake/test_build_governance_contract.py
           python tests/cmake/test_release_assembler.py
+          python tests/cmake/test_release_consumer_gate.py
           python tests/cmake/test_tcp_lifecycle_contracts.py
           python tests/cmake/test_tcp_connection_context_contract.py
           python tests/cmake/test_tcp_connection_thread_contract.py
@@ -1205,6 +1237,36 @@ jobs:
             --output-junit "$pwd/ci-evidence/install-consumer-junit.xml" `
             --output-log "$pwd/ci-evidence/install-consumer-ctest.log"
 
+      - name: Download pinned v0.2 canonical source asset
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force build-windows-release/v02-download | Out-Null
+          curl.exe --fail --location --retry 3 `
+            --output build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz `
+            https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz
+          if ($LASTEXITCODE -ne 0) {
+            throw "v0.2 canonical source download failed: $LASTEXITCODE"
+          }
+
+      - name: Verify extracted and upgrade Release consumers
+        shell: pwsh
+        run: |
+          $candidateSha = git rev-parse HEAD
+          python tools/run_release_consumer_gate.py `
+            --candidate-sha $candidateSha `
+            --platform windows `
+            --current-install-tree build-windows-release/_install `
+            --v02-source-archive build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz `
+            --work-root build-windows-release/release-consumer-gate `
+            --evidence-dir ci-evidence/release-consumer `
+            --generator "Visual Studio 18 2026" `
+            --architecture x64
+          python tools/verify_release_consumer_evidence.py `
+            --evidence-dir ci-evidence/release-consumer `
+            --expected-commit $candidateSha `
+            --expected-platform windows
+
       - name: Write CI evidence manifest
         if: always()
         shell: pwsh
@@ -1227,7 +1289,10 @@ jobs:
             --command 'cmake -S tests/cmake/install_consumer -B build-windows-release-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=$pwd/build-windows-release/_install' `
             --command 'python tools/verify_ctest_inventory.py --test-dir build-windows-release-install-consumer --config Release --expected-total 2 --output ci-evidence/install-consumer-inventory.json' `
             --command 'cmake --build build-windows-release-install-consumer --config Release --parallel' `
-            --command 'ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log'
+            --command 'ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log' `
+            --command 'curl.exe --fail --location --retry 3 --output build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz' `
+            --command 'python tools/run_release_consumer_gate.py --candidate-sha $candidateSha --platform windows --current-install-tree build-windows-release/_install --v02-source-archive build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz --work-root build-windows-release/release-consumer-gate --evidence-dir ci-evidence/release-consumer --generator "Visual Studio 18 2026" --architecture x64' `
+            --command 'python tools/verify_release_consumer_evidence.py --evidence-dir ci-evidence/release-consumer --expected-commit $candidateSha --expected-platform windows'
 
       - name: Upload CI evidence
         id: ci-evidence-upload

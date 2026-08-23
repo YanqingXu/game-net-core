@@ -59,11 +59,13 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
     ]
     assert "Apache License" in license_text
     assert "Version 2.0, January 2004" in license_text
-    assert manifest["current_next_task"].startswith("Add clean Linux/Windows")
+    assert manifest["current_next_task"].startswith("Freeze one final promotion commit")
     resolved = " ".join(manifest["resolved_after_authorization"])
     assert "tracked deterministic assembler" in resolved
     assert "official SPDX 2.3 JSON schema" in resolved
     assert "byte-identical builds" in resolved
+    assert "Linux/epoll and Windows/IOCP Release jobs" in resolved
+    assert "c2f5f2ece4a147f63f91c86ef3c1dd25bf9d370d22e25889648132985f9af408" in resolved
     assert not git(repo_root, "tag", "-l", "v0.3.0").strip(), (
         "pre-authorization governance must be updated before creating v0.3.0"
     )
@@ -327,6 +329,8 @@ def main() -> None:
     require(release_text, "inconsistent licensing metadata is a", release_intent)
     require(release_text, "repeated assembly from the same source object", release_intent)
     require(release_text, "tests/cmake/test_release_assembler.py", release_intent)
+    require(release_text, "tests/cmake/test_release_consumer_gate.py", release_intent)
+    require(release_text, "pinned v0.2 and exact-commit v0.3", release_intent)
 
     docs_text = platform_docs.read_text(encoding="utf-8")
     for fragment in (
@@ -416,6 +420,9 @@ def main() -> None:
     ci_docs_text = ci_docs.read_text(encoding="utf-8")
     require(ci_docs_text, guard_command_linux, ci_docs)
     require(ci_docs_text, "platform_support.md", ci_docs)
+    require(ci_docs_text, "tests/cmake/test_release_assembler.py", ci_docs)
+    require(ci_docs_text, "tests/cmake/test_release_consumer_gate.py", ci_docs)
+    require(ci_docs_text, "canonical v0.2 source asset", ci_docs)
 
     ci_workflow_text = ci_workflow.read_text(encoding="utf-8")
     assert ci_workflow_text.count(guard_command_linux) == 4, (
@@ -426,6 +433,12 @@ def main() -> None:
     )
     assert ci_workflow_text.count("python3 tests/cmake/test_release_assembler.py") == 4
     assert ci_workflow_text.count("python tests/cmake/test_release_assembler.py") == 2
+    assert ci_workflow_text.count("python3 tests/cmake/test_release_consumer_gate.py") == 4
+    assert ci_workflow_text.count("python tests/cmake/test_release_consumer_gate.py") == 2
+    assert ci_workflow_text.count("python3 tools/run_release_consumer_gate.py") == 2
+    assert ci_workflow_text.count("python tools/run_release_consumer_gate.py") == 2
+    assert ci_workflow_text.count("python3 tools/verify_release_consumer_evidence.py") == 2
+    assert ci_workflow_text.count("python tools/verify_release_consumer_evidence.py") == 2
 
     soak_workflow_text = soak_workflow.read_text(encoding="utf-8")
     assert soak_workflow_text.count(guard_command_linux) == 2, (
@@ -433,6 +446,7 @@ def main() -> None:
         "build-governance guard"
     )
     assert soak_workflow_text.count("python3 tests/cmake/test_release_assembler.py") == 2
+    assert soak_workflow_text.count("python3 tests/cmake/test_release_consumer_gate.py") == 2
 
 
 if __name__ == "__main__":

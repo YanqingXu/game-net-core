@@ -23,7 +23,10 @@ NOTICE, source SPDX, installed package metadata, and third-party notices are
 synchronized. The tracked deterministic release assembler, file-level SPDX 2.3
 SBOM, evidence index, checksum manifest, independent verifier, and
 byte-reproducibility/tamper contract are complete. Clean Linux/Windows extracted
-package and v0.2-to-v0.3 upgrade consumers are the current M4 task.
+package and v0.2-to-v0.3 upgrade consumers are implemented with independent
+retained-evidence verification and pass local Linux/epoll and Windows/IOCP
+Release diagnostics. Freezing the final promotion commit and executing the
+complete same-commit matrix is the current M4 task.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -117,7 +120,8 @@ Core `736a090` Linux/epoll process passed the uninterrupted 1-hour gate with
 3,743 complete replay/fault cycles and 32 KiB peak RSS growth. M4 external
 release governance is active; owner authorization and the Apache-2.0 metadata
 transition are complete. The release assembler is also complete; external and
-upgrade consumers precede the final same-commit matrix and publication.
+upgrade consumer implementation is complete, so the final same-commit matrix
+and publication sequence are next.
 The M4 preflight confirmed that the GitHub repository was already public. The
 owner has now authorized and executed the Apache-2.0 transition, but no
 `v0.3.0` tag or Release exists and a new exact-commit promotion matrix remains
@@ -408,7 +412,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 67 | 36 | 20 | 11 | 186 |
+| 67 | 36 | 20 | 11 | 187 |
 
 ## Historical Production-Hardening Evidence
 

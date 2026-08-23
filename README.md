@@ -53,8 +53,9 @@ Core correctness or reusable-capability blocker. The next governance front is
 M4 external v0.3.0 release. The owner has authorized Apache-2.0 and conditional
 publication; the deterministic release assembler, file-level SPDX 2.3 SBOM,
 evidence index, checksums, and tamper verifier are tracked and tested. Clean
-external/upgrade consumers and a fresh same-commit promotion matrix are still
-required. The non-mutating source/license/release audit is complete in
+Linux/Windows extracted-package and pinned v0.2-to-v0.3 upgrade consumers are
+also wired and locally functional; their final exact-commit run and the fresh
+promotion matrix are still required. The non-mutating source/license/release audit is complete in
 [`docs/development/m4_external_release_preflight_2026-08-23.md`](docs/development/m4_external_release_preflight_2026-08-23.md).
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical

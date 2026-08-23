@@ -42,3 +42,11 @@ The assembler itself requires the named promotion manifest to be inside a
 labeled evidence root and rejects it unless it is a successful release-stage
 v2 record for the exact source commit, dedicated-100k capacity, and completed
 candidate-1h plus release-3h endurance evidence.
+
+The Linux and Windows Release CI producers create the same platform binary
+archive form before final assembly and run `tools/run_release_consumer_gate.py`.
+That gate builds the 2-test current consumer from the extracted v0.3 package,
+pins and hashes the published canonical v0.2 source asset, and builds the same
+1-test stable-Core upgrade consumer against v0.2 and v0.3. The retained package,
+inventories, JUnit, raw CTest logs, command logs, and manifest are rechecked by
+`tools/verify_release_consumer_evidence.py` before CI uploads them.
