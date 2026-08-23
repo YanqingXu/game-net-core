@@ -103,8 +103,13 @@ See `migration_status.md` for the current checked state of these phases.
   gateway `588acd0`, and Actor-bound `YanGameServer@b525416`; Core 3/3 and Yan
   9/9 evidence proved valid but non-substitutable contracts, so M8 closed as
   `NO-PROMOTION` with all six async intents deferred and no empty v0.7 release.
-  M9 TLS/WebSocket/DNS evidence review is the active front. The cancelled
-  `a89e2b0` endurance checkpoint remains historical only.
+  M9 then compared Core `fff4162`, gateway `588acd0`, and
+  `YanGameServer@b525416`; Core `TransportEndpoint` 3/3 and YanGame fallback TLS
+  4/4 plus two explicit real-OpenSSL skips do not form a shared EventLoop TLS,
+  WebSocket, or DNS contract. M9 closed as `NO-PROMOTION` with all five related
+  intents deferred and no empty v0.8 release. M10 UDP/KCP evidence review is
+  the active front. The cancelled `a89e2b0` endurance checkpoint remains
+  historical only.
 
 ## Phase 1: Project Skeleton
 
@@ -341,8 +346,10 @@ non-installed. IOE-X11 is closed at
 `351b3c0e476a462265016d53361a02b5f2c51611`. IOE-X15 and M6 are closed at
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570`; M7 external-first Lua/typed RPC
 closed as `NO-PROMOTION` at gateway `588acd0`, M8 async/coroutine promotion
-closed as `NO-PROMOTION` against Core `e5ea9ef` and YanGame `b525416`, M9
-evidence review is the current front, and no Core evidence task is running.
+closed as `NO-PROMOTION` against Core `e5ea9ef` and YanGame `b525416`, and M9
+transport/TLS/WebSocket/DNS promotion closed as `NO-PROMOTION` against Core
+`fff4162`, gateway `588acd0`, and YanGame `b525416`. M10 UDP/KCP evidence review
+is the current front, and no Core evidence task is running.
 
 - [x] ARCH-G1: independent review is `APPROVE` at the IOE-X10 checkpoint after
   all non-waivable ownership/thread-affinity/lifecycle blockers were closed.
@@ -418,6 +425,13 @@ evidence review is the current front, and no Core evidence task is running.
   prove different result, executor, frame, resume, timer, and retirement
   contracts. Close as `NO-PROMOTION`, keep all six async intents deferred, add
   no coroutine/awaiter surface or empty v0.7 release, and advance to M9.
+- [x] M9: distinguish active upper-layer `TransportEndpoint` from the deferred
+  per-connection seam, then compare Core/gateway with YanGame's native-worker
+  internal-RPC mTLS. Core 3/3 and YanGame fallback 4/4 plus two explicit
+  real-OpenSSL skips prove no shared GameNet EventLoop TLS contract; WebSocket
+  and DNS have no consumer pair. Close as `NO-PROMOTION`, keep all five related
+  intents deferred, add no TLS/WebSocket/DNS/HTTP surface or empty v0.8 release,
+  and advance to M10.
 - [x] IOE-X1–X9: the default-off, Linux-only, non-installed Engine through
   listener/Accept vertical slices are closed with exact-commit evidence.
 - [x] IOE-X10: fixed 256-route epoll/io_uring listener comparison is `PROMOTE`

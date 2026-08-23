@@ -88,8 +88,16 @@ surface and no empty v0.6 release. M8 then compared Core
 TimerQueue 3/3 and YanGame async/coroutine/timer/RPC/persistence 9/9 passed,
 but their result, executor, frame, resume, timer, and retirement contracts are
 not substitutable. M8 is closed as `NO-PROMOTION`; all six async intents remain
-deferred, no coroutine/awaiter package surface or empty v0.7 release exists,
-and M9 TLS/WebSocket/DNS evidence review is the next governance front.
+deferred, and no coroutine/awaiter package surface or empty v0.7 release
+exists. M9 then audited Core `fff4162`, gateway `588acd0`, and independent
+`YanGameServer@b525416`: Core's active `TransportEndpoint` contracts passed
+3/3, while the independent TLS fallback set passed 4/4 with two real-OpenSSL
+tests explicitly skipped. Gateway has no TLS/WebSocket/DNS implementation and
+YanGame's native-worker internal-RPC mTLS explicitly excludes GameNet
+EventLoop TLS, so no substitutable two-consumer contract exists. M9 closes as
+`NO-PROMOTION`; all five transport/protocol intents remain deferred, no empty
+v0.8 release exists, and M10 UDP/KCP evidence review is the next governance
+front.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint
@@ -138,7 +146,7 @@ Planned / Deferred Modules:
 
 - game packet headers and serialization codecs
 - UDP/KCP experimental transport
-- coroutine, TLS, HTTP, WebSocket, and RPC adapters
+- coroutine, TLS, DNS, HTTP, WebSocket, and RPC adapters
 
 ## Non-goals
 

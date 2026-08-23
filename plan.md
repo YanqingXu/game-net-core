@@ -65,7 +65,7 @@ M10 v0.9 UDP / KCP 实验能力
 M11 v1.0 稳定发布
 ```
 
-当前唯一治理前沿是 **M9 v0.8 TLS、WebSocket 与 DNS 证据审查**。
+当前唯一治理前沿是 **M10 v0.9 UDP/KCP 实验能力证据审查**。
 同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
 可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
 `skipped-by-evidence`，不得以“后续再决定”结束。
@@ -489,8 +489,14 @@ intents：
 
 ## 11. M9：v0.8 TLS、WebSocket 与 DNS
 
-状态：**当前治理前沿**。先审查两个真实 consumer 是否共享可替代的
-transport、TLS、WebSocket 或 DNS 合同；在正式提升 deferred intent 之前不创建公共表面。
+状态：**已关闭，`NO-PROMOTION`**。精确审计记录见
+`docs/development/m9_tls_websocket_dns_readiness_2026-08-24.md`。Core baseline
+`fff41622ffc1d2e0d047d3938529d9eb7919e5af` 的 active `TransportEndpoint`
+合同 3/3 通过，但它是上层 endpoint adapter，并非 deferred
+`ConnectionTransport`。Gateway closure `588acd0` 没有 TLS、WebSocket 或 DNS
+实现；独立 `YanGameServer@b525416` 的 native-worker 内部 RPC mTLS 明确排除
+GameNet EventLoop TLS，其 fallback TLS 合同 4/4 通过且两项真实 OpenSSL 合同明确
+skipped。不存在两个可替代 consumer，因而不提升公共表面，也不发布空 v0.8。
 
 顺序固定为：
 
@@ -509,7 +515,17 @@ WebSocket 必须覆盖升级校验、mask、fragmentation、ping/pong、close ha
 上限和慢客户端。只实现 WebSocket 所需的最小升级适配；完整 HTTP server 继续不在
 v1 范围。
 
+审计已命中关闭分支：`connection_transport`、`tls`、`websocket`、
+`dns_resolver` 与 `http` 全部保持 deferred；未创建 Core TLS/WebSocket/DNS/HTTP
+头文件、target 或 package component。未来恢复前必须重写旧 intent 中与当前门禁冲突的
+MINI/coroutine、fragmentation、无界 DNS 生命周期和完整 HTTP server 假设，并提供两个
+真实 consumer 与双平台安装包证据。
+
 ## 12. M10：v0.9 UDP/KCP 实验能力
+
+状态：**当前治理前沿**。先按启动条件审查 UDP、KCP、PMTU intents 与两个真实
+consumer 的共同需求；未完成 intent promotion 和 owner/lifecycle 合同评审前不创建
+实验 target 或占位 v0.9。
 
 启动条件：
 
@@ -640,11 +656,13 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 16. 当前立即执行
 
-> **M9 TLS/WebSocket/DNS 证据审查是下一治理前沿，无后台 Core 证据任务**：M1–M8
+> **M10 UDP/KCP 实验能力证据审查是下一治理前沿，无后台 Core 证据任务**：M1–M9
 > 与 IOE-X11–IOE-X15 已关闭。X15 在
 > `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
 > 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。M7 Gateway 实现
 > `e43393c`、closure `588acd0` 与 YanGameServer `b525416` 8/8 比较已以
 > `NO-PROMOTION` 关闭。M8 Core 3/3 与 YanGame 9/9 证据又因 Gateway 无
-> coroutine、Task/owner/retirement 合同不可替代而以 `NO-PROMOTION` 关闭。当前只审查
-> TLS/WebSocket/DNS 外部共同需求，不得提前并行展开 UDP/KCP。
+> coroutine、Task/owner/retirement 合同不可替代而以 `NO-PROMOTION` 关闭。M9 又因
+> Gateway 无 TLS/WebSocket/DNS、YanGame native-worker mTLS 明确排除 GameNet
+> EventLoop TLS、且不存在第二个 WebSocket/DNS consumer 而以 `NO-PROMOTION` 关闭。
+> 当前只审查 UDP/KCP/PMTU 的外部共同需求，不得提前并行展开 v1 稳定发布。

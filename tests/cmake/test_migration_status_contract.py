@@ -192,6 +192,12 @@ def main() -> None:
         / "development"
         / "m8_async_coroutine_readiness_2026-08-24.md"
     )
+    m9_readiness = (
+        repo_root
+        / "docs"
+        / "development"
+        / "m9_tls_websocket_dns_readiness_2026-08-24.md"
+    )
     rpc_intent = repo_root / "intents" / "modules" / "rpc.intent.md"
     async_intent_names = (
         "async_semantics",
@@ -204,6 +210,17 @@ def main() -> None:
     async_intents = {
         name: repo_root / "intents" / "modules" / f"{name}.intent.md"
         for name in async_intent_names
+    }
+    m9_intent_names = (
+        "connection_transport",
+        "tls",
+        "websocket",
+        "dns_resolver",
+        "http",
+    )
+    m9_intents = {
+        name: repo_root / "intents" / "modules" / f"{name}.intent.md"
+        for name in m9_intent_names
     }
     intents_index = repo_root / "intents" / "README.md"
 
@@ -239,10 +256,15 @@ def main() -> None:
     evidence_ledger_text = evidence_ledger.read_text(encoding="utf-8")
     m7_readiness_text = m7_readiness.read_text(encoding="utf-8")
     m8_readiness_text = m8_readiness.read_text(encoding="utf-8")
+    m9_readiness_text = m9_readiness.read_text(encoding="utf-8")
     rpc_intent_text = rpc_intent.read_text(encoding="utf-8")
     async_intent_texts = {
         name: path.read_text(encoding="utf-8")
         for name, path in async_intents.items()
+    }
+    m9_intent_texts = {
+        name: path.read_text(encoding="utf-8")
+        for name, path in m9_intents.items()
     }
     intents_index_text = intents_index.read_text(encoding="utf-8")
     freeze_record = json.loads(candidate_freeze.read_text(encoding="utf-8"))
@@ -273,6 +295,7 @@ def main() -> None:
     gateway_m7_implementation = "e43393c85fa37604d340fe866610756c99f4fe4e"
     gateway_m7_closure = "588acd079be93de3e230ba4f07dd111f7bec6a3c"
     m8_core_baseline = "e5ea9efa71dbe52e841423ec3cac3e9529158b22"
+    m9_core_baseline = "fff41622ffc1d2e0d047d3938529d9eb7919e5af"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -303,6 +326,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", m7_readiness_checkpoint, "HEAD")
     git(repo_root, "cat-file", "-e", f"{m8_core_baseline}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", m8_core_baseline, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{m9_core_baseline}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", m9_core_baseline, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -584,6 +609,43 @@ def main() -> None:
         require(text, independent_consumer_checkpoint[:7], source)
         require(text, "NO-PROMOTION", source)
         require(text, "M9", source)
+    require(
+        evidence_ledger_text,
+        "M9-G0 TLS / WebSocket / DNS Promotion Audit",
+        evidence_ledger,
+    )
+    require(m9_readiness_text, m9_core_baseline, m9_readiness)
+    require(m9_readiness_text, gateway_m7_closure, m9_readiness)
+    require(m9_readiness_text, independent_consumer_checkpoint, m9_readiness)
+    require(
+        m9_readiness_text,
+        "shared transport/TLS/WebSocket/DNS promotion: `NO-PROMOTION`",
+        m9_readiness,
+    )
+    require(m9_readiness_text, "contracts passed 3/3", m9_readiness)
+    require(m9_readiness_text, "contracts passed 4/4", m9_readiness)
+    require(m9_readiness_text, "explicitly skipped", m9_readiness)
+    require(m9_readiness_text, "TransportEndpoint", m9_readiness)
+    require(m9_readiness_text, "ConnectionTransport", m9_readiness)
+    require(m9_readiness_text, "advances to M10", m9_readiness)
+    for name, path in m9_intents.items():
+        require(m9_intent_texts[name], "status: deferred", path)
+        require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
+        require(m9_readiness_text, f"`{name}`", m9_readiness)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
+        require(text, m9_core_baseline[:7], source)
+        require(text, gateway_m7_closure[:7], source)
+        require(text, independent_consumer_checkpoint[:7], source)
+        require(text, "NO-PROMOTION", source)
+        require(text, "M10", source)
     require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
     require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)
     require(m7_readiness_text, "callback re-entry", m7_readiness)
@@ -634,6 +696,30 @@ def main() -> None:
     )
     assert "GameNet::coroutine" not in tracked_cmake_text
     assert "gamenet_coroutine" not in tracked_cmake_text
+    installed_m9_headers = [
+        path
+        for path in (repo_root / "include" / "gamenet").rglob("*")
+        if path.is_file()
+        and any(
+            term in path.relative_to(repo_root).as_posix().lower()
+            for term in ("tls", "websocket", "dns", "http")
+        )
+    ]
+    assert not installed_m9_headers, (
+        "M9 closure must not install TLS/WebSocket/DNS/HTTP headers: "
+        + ", ".join(str(path) for path in installed_m9_headers)
+    )
+    for target in (
+        "GameNet::tls",
+        "gamenet_tls",
+        "GameNet::websocket",
+        "gamenet_websocket",
+        "GameNet::dns",
+        "gamenet_dns",
+        "GameNet::http",
+        "gamenet_http",
+    ):
+        assert target not in tracked_cmake_text
     require(
         roadmap_text,
         "The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14",
@@ -651,7 +737,7 @@ def main() -> None:
     require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前唯一治理前沿是 **M9", plan)
+    require(plan_text, "当前唯一治理前沿是 **M10", plan)
     assert plan_text.count("当前唯一治理前沿") == 1, (
         "plan must declare exactly one current governance front"
     )
@@ -682,7 +768,7 @@ def main() -> None:
     require(plan_text, "NO-PROMOTION", plan)
     require(plan_text, "M5：v0.4 Runtime 边界", plan)
     require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "M9 TLS/WebSocket/DNS 证据审查是下一治理前沿", plan)
+    require(plan_text, "M10 UDP/KCP 实验能力证据审查是下一治理前沿", plan)
     require(plan_text, "runtime_profile_load_selection_guide.md", plan)
     require(plan_text, "不开放公共 backend selector", plan)
     require(plan_text, "IOE-X1–X9", plan)

@@ -1,6 +1,7 @@
 # 总体判断
 
-本次检查以 2026-08-24 IOE-X14 跨后端 TCP 语义套件关闭为当前前沿；
+本次检查以 2026-08-24 M9 TLS/WebSocket/DNS `NO-PROMOTION` 关闭、M10
+UDP/KCP 证据审查成为当前前沿；
 stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。`game-net-core` 已经不再只是从
 `mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：
@@ -39,8 +40,11 @@ IOE-X13 已在 `5484d7a`、IOE-X14 已在 `351b3c0`、IOE-X15/M6 已在
 `YanGameServer@b525416` 8/8 逐字段比较已以 `NO-PROMOTION` 关闭 M7；
 M8 又以 Core `e5ea9ef` 3/3 与 `YanGameServer@b525416` 9/9 聚焦证据确认
 callback-only Gateway 与 ActorScheduler Task 不构成可替代的双 consumer 合同，
-因此以 `NO-PROMOTION` 关闭；当前唯一治理前沿是 M9
-TLS/WebSocket/DNS 证据审查。
+因此以 `NO-PROMOTION` 关闭。M9 随后以 Core `fff4162`、Gateway `588acd0` 与
+`YanGameServer@b525416` 审计 transport/TLS/WebSocket/DNS；Gateway 无实现，YanGame
+只有明确排除 GameNet EventLoop TLS 的 native-worker 内部 RPC mTLS，WebSocket/DNS
+也没有 consumer pair，因此 M9 以 `NO-PROMOTION` 关闭。当前唯一治理前沿是 M10
+UDP/KCP 实验能力证据审查。
 
 ---
 
@@ -322,10 +326,10 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M8 与 IOE-X11–IOE-X15 已关闭，M9 成为治理前沿
+### 5. M1–M9 与 IOE-X11–IOE-X15 已关闭，M10 成为治理前沿
 
 README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M8 与 IOE-X11–IOE-X15 关闭、M9 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+“M1–M9 与 IOE-X11–IOE-X15 关闭、M10 当前”。`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
@@ -364,6 +368,14 @@ M8-G0 继续在 Core `e5ea9efa71dbe52e841423ec3cac3e9529158b22`、Gateway
 控制状态、continuation token、ActorRef 世代和 owner 销毁也不是 Core 旧 deferred
 `start/detach/co_await` 包装合同。因此 M8 以 `NO-PROMOTION` 关闭，六个
 async intents 保持 deferred，没有 coroutine/awaiter 安装面或空 v0.7 发布。
+M9-G0 又以 Core `fff41622ffc1d2e0d047d3938529d9eb7919e5af`、Gateway
+`588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立
+`YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` 审查 transport、TLS、
+WebSocket 和 DNS。Core active `TransportEndpoint` 3/3 只证明上层 plain-TCP endpoint
+边界；YanGame fallback TLS 4/4 通过、两项真实 OpenSSL 测试按配置 skipped，但其冻结
+intent 明确排除 GameNet EventLoop TLS；Gateway 和两个 consumer 均不能形成 WebSocket/
+DNS pair。因此 M9 以 `NO-PROMOTION` 关闭，五个相关 intents 保持 deferred，没有
+TLS/WebSocket/DNS/HTTP 安装面或空 v0.8 发布。
 当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
 基线为 140（8 unit、118 contract、14 integration）。
 
@@ -545,8 +557,12 @@ Milestone 7
 六个 intent 保持 deferred，未创建 coroutine 占位 target 或空 v0.7。
 
 Milestone 8
-当前：M9 审查 TLS/WebSocket/DNS 的外部双 consumer 证据；未提升 intent 之前
-不创建公共 transport 或协议表面。
+已关闭：M9 transport/TLS/WebSocket/DNS 双 consumer 证据不足，结论为
+`NO-PROMOTION`；五个 intents 保持 deferred，未创建相关安装面或空 v0.8。
+
+Milestone 9
+当前：M10 审查 UDP/KCP/PMTU 的 intent 与外部双 consumer 证据；未完成提升门之前
+不创建 experimental datagram target 或空 v0.9。
 ```
 
 # 最终评价
@@ -572,7 +588,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M6/IOE-X15 已关闭（43795e8；未发布 preview）
 → M7 已关闭（Gateway e43393c/588acd0；NO-PROMOTION）
 → M8 已关闭（Core e5ea9ef / YanGame b525416；NO-PROMOTION）
-→ M9 TLS/WebSocket/DNS 证据审查（当前）
+→ M9 已关闭（Core fff4162 / Gateway 588acd0 / YanGame b525416；NO-PROMOTION）
+→ M10 UDP/KCP 实验能力证据审查（当前）
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。
