@@ -26,6 +26,9 @@ IOE-X14 实现与证据检查点：`351b3c0e476a462265016d53361a02b5f2c51611`
 IOE-X15 实现与证据检查点：`43795e841ba2a279ed6a3d5d831d60a9f2a25570`
 （显式 Linux-only experimental 安装组件、独立 manifest 与 package consumer）
 
+M7-G0 外部就绪审计检查点：`44493b1d37c16567990e1660153d6b0843a8eecc`
+（外部实现 `DEFER`、共享 RPC `NO-PROMOTION`；M7 保持当前）
+
 ## 1. 计划定位与总体顺序
 
 本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
@@ -385,7 +388,8 @@ v0.3 manifest 零漂移。已准备 v0.5.0 experimental preview 版本说明，�
 
 ### 9.1 M7-G0：外部就绪审计
 
-状态：**已完成 `DEFER / NO-PROMOTION` 就绪判定，M7 尚未关闭**。审计记录见
+状态：**已完成 `DEFER / NO-PROMOTION` 就绪判定，M7 尚未关闭**。精确审计检查点为
+`44493b1d37c16567990e1660153d6b0843a8eecc`，记录见
 `docs/development/m7_external_rpc_lua_readiness_2026-08-24.md`。Gateway 的干净
 `0a8fe1e43cb11ac32daa8f9266d3b84924736e67` 检查点只有受 owner 隔离的 Lua callback
 seam，提交范围仍禁止 RPC；独立 `YanGameServer`

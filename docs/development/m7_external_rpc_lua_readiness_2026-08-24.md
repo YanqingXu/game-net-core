@@ -4,6 +4,9 @@ Date: 2026-08-24
 
 Core baseline: `66e7389cf6a2f52b3f13c85ffdbe1dff6a90cf50`
 
+Exact readiness-audit checkpoint:
+`44493b1d37c16567990e1660153d6b0843a8eecc`.
+
 Disposition:
 
 - external implementation: `DEFER`;

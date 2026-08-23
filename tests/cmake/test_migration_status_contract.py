@@ -246,6 +246,7 @@ def main() -> None:
     x13_implementation_checkpoint = "5484d7a89b01597824bc860e4d2d3cf3cfd45a82"
     x14_implementation_checkpoint = "351b3c0e476a462265016d53361a02b5f2c51611"
     x15_implementation_checkpoint = "43795e841ba2a279ed6a3d5d831d60a9f2a25570"
+    m7_readiness_checkpoint = "44493b1d37c16567990e1660153d6b0843a8eecc"
     git(repo_root, "cat-file", "-e", f"{implementation_checkpoint}^{{commit}}")
     git(repo_root, "cat-file", "-e", f"{superseded_candidate}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", superseded_candidate, implementation_checkpoint)
@@ -272,6 +273,8 @@ def main() -> None:
     git(repo_root, "merge-base", "--is-ancestor", x14_implementation_checkpoint, "HEAD")
     git(repo_root, "cat-file", "-e", f"{x15_implementation_checkpoint}^{{commit}}")
     git(repo_root, "merge-base", "--is-ancestor", x15_implementation_checkpoint, "HEAD")
+    git(repo_root, "cat-file", "-e", f"{m7_readiness_checkpoint}^{{commit}}")
+    git(repo_root, "merge-base", "--is-ancestor", m7_readiness_checkpoint, "HEAD")
 
     assert x10_evidence_record["schema"] == "gamenet.ioe_x10_listener_evidence.v1"
     assert x10_evidence_record["decision"] == "PROMOTE"
@@ -458,6 +461,20 @@ def main() -> None:
         require(text, x15_implementation_checkpoint, source)
         require(text, "M7", source)
     require(evidence_ledger_text, "IOE-X15 Experimental Installation Surface", evidence_ledger)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (plan_text, plan),
+        (goal_text, goal),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+        (m7_readiness_text, m7_readiness),
+    ):
+        require(text, m7_readiness_checkpoint, source)
+        require(text, "DEFER", source)
+        require(text, "NO-PROMOTION", source)
+    require(evidence_ledger_text, "M7-G0 External Lua / Typed-RPC Readiness", evidence_ledger)
     gateway_checkpoint = "0a8fe1e43cb11ac32daa8f9266d3b84924736e67"
     independent_consumer_checkpoint = "b5254165389d762c3f3c63568c24ffab448fc501"
     require(m7_readiness_text, "external implementation: `DEFER`", m7_readiness)

@@ -295,7 +295,9 @@ Runtime Model
   `5484d7a89b01597824bc860e4d2d3cf3cfd45a82` 关闭，IOE-X14 跨后端 TCP 语义套件已在
   `351b3c0e476a462265016d53361a02b5f2c51611` 关闭，M6/IOE-X15 显式实验安装面已在
   `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 关闭；当前唯一治理前沿是 M7
-  Lua/typed RPC 外部先行验证；
+  Lua/typed RPC 外部先行验证；M7-G0 已在
+  `44493b1d37c16567990e1660153d6b0843a8eecc` 记录外部实现 `DEFER` 与共享 RPC
+  `NO-PROMOTION`，不改变 M7 当前状态，也未增加 RPC/Lua 安装面；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness

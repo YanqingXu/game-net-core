@@ -339,6 +339,10 @@ IOE-X15 随后在 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 导出显式
 `GameNet::experimental_io_uring`、六个受独立 manifest 指纹保护的实验头文件和独立
 package consumer；默认 Linux/Windows 包继续不含实验产物，没有 stable selector、tag
 或 GitHub Release。
+M7-G0 随后在 `44493b1d37c16567990e1660153d6b0843a8eecc` 对 Gateway 与独立
+`YanGameServer` 做就绪审计：前者尚无 RPC consumer 合同，后者的 wire-v2/native
+transport 生命周期并非同一 GameNet 协议需求，因此外部实现记录 `DEFER`、共享 RPC
+记录 `NO-PROMOTION`，M7 保持当前且 `rpc.intent.md` 继续 deferred。
 当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
 基线为 140（8 unit、118 contract、14 integration）。
 

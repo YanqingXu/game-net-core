@@ -70,7 +70,10 @@ semantic suite across epoll, IOCP, and io_uring. M6/IOE-X15 is closed at
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` with an explicit Linux-only
 experimental installation surface and no stable-manifest drift. No preview tag
 or Release was published; the next governance front is M7 external-first Lua
-and typed RPC validation.
+and typed RPC validation. Its M7-G0 readiness audit at
+`44493b1d37c16567990e1660153d6b0843a8eecc` records external implementation
+`DEFER` and shared RPC `NO-PROMOTION`: the gateway has no RPC consumer contract,
+so M7 remains active and no RPC/Lua package surface was added.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

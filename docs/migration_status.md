@@ -41,7 +41,12 @@ drift. M6/IOE-X15 then closed at exact implementation checkpoint
 experimental component, independent manifest/package consumer, default-package
 isolation, and zero stable v0.3 drift. No preview tag or GitHub Release was
 published. M7 external-first Lua/typed RPC validation is the active governance
-front.
+front. Its M7-G0 readiness audit at
+`44493b1d37c16567990e1660153d6b0843a8eecc` records external implementation
+`DEFER` and shared RPC `NO-PROMOTION`: gateway `0a8fe1e` has no RPC consumer
+contract, while independent `YanGameServer@b525416` proves a different
+wire-v2/native-transport lifecycle. M7 remains active, `rpc.intent.md` remains
+deferred, and no RPC/Lua surface was added.
 
 Current IOE-X10 implementation/evidence checkpoint:
 `f5d39b800b4dd943531670aa09840c931c3dee4d` (2026-08-22); fixed-protocol
@@ -52,6 +57,10 @@ task after the X15 decision closure.
 
 Current IOE-X15 implementation/evidence checkpoint:
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
+
+Current M7-G0 readiness-audit checkpoint:
+`44493b1d37c16567990e1660153d6b0843a8eecc` (2026-08-24);
+external implementation `DEFER`, shared RPC `NO-PROMOTION`, M7 still active.
 
 Historical implementation checkpoint carried by the former candidate:
 `669ebb0a7c5c475dea74b12275c66a2ce1876804` (2026-08-18)
