@@ -59,8 +59,9 @@ def create_evidence_fixture(root: Path, commit: str) -> None:
             encoding="utf-8",
         )
         ctest_log = root / f"{name}-ctest.log"
+        failure_summary = "" if name == "current-extracted" else ", 0 tests failed"
         ctest_log.write_text(
-            f"100% tests passed, 0 tests failed out of {count}\n", encoding="utf-8"
+            f"100% tests passed{failure_summary} out of {count}\n", encoding="utf-8"
         )
         consumers.append(
             {
@@ -163,6 +164,7 @@ def main() -> None:
         "upgrade-v02",
         "upgrade-v03",
         "100% tests passed",
+        "(?:, 0 tests failed)?",
         "actual_files == expected_files",
     ):
         require(verifier_text, fragment, verifier)

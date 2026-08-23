@@ -77,8 +77,11 @@ def verify(evidence_dir: Path, expected_commit: str, expected_platform: str) -> 
         assert int(suite.attrib["skipped"]) == 0
         assert len(suite.findall("testcase")) == expected_count
         ctest_log = ctest_log_path.read_text(encoding="utf-8")
-        assert "100% tests passed" in ctest_log
-        assert f"0 tests failed out of {expected_count}" in ctest_log
+        summary = re.compile(
+            rf"^100% tests passed(?:, 0 tests failed)? out of {expected_count}\s*$",
+            re.MULTILINE,
+        )
+        assert summary.search(ctest_log)
 
     assert len(manifest["commands"]) == 15
     assert len(manifest["command_logs"]) == 15
