@@ -7,9 +7,15 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - README.md
+      - 'docs/**'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - README.md
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -215,7 +221,7 @@ jobs:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report CI evidence upload
         if: always()
@@ -473,7 +479,7 @@ jobs:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report CI evidence upload
         if: always()
@@ -633,7 +639,7 @@ jobs:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report CI evidence upload
         if: always()
@@ -817,7 +823,7 @@ jobs:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report CI evidence upload
         if: always()
@@ -841,7 +847,6 @@ jobs:
     name: Windows MSVC IOCP build and tests
     runs-on: >-
       ${{ fromJSON(
-        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
         (github.event_name != 'pull_request' ||
          github.event.pull_request.head.repo.full_name == github.repository) &&
         '["self-hosted","windows","x64","gamenet-windows"]' ||
@@ -872,7 +877,6 @@ jobs:
 
       - name: Bootstrap self-hosted Windows tool paths
         if: >-
-          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
           (github.event_name != 'pull_request' ||
            github.event.pull_request.head.repo.full_name == github.repository)
         shell: pwsh
@@ -1043,7 +1047,7 @@ jobs:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report CI evidence upload
         if: always()
@@ -1068,7 +1072,6 @@ jobs:
     name: Windows MSVC IOCP Release build and tests
     runs-on: >-
       ${{ fromJSON(
-        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
         (github.event_name != 'pull_request' ||
          github.event.pull_request.head.repo.full_name == github.repository) &&
         '["self-hosted","windows","x64","gamenet-windows"]' ||
@@ -1099,7 +1102,6 @@ jobs:
 
       - name: Bootstrap self-hosted Windows tool paths
         if: >-
-          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
           (github.event_name != 'pull_request' ||
            github.event.pull_request.head.repo.full_name == github.repository)
         shell: pwsh
@@ -1303,7 +1305,7 @@ jobs:
           name: ci-evidence-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report CI evidence upload
         if: always()
@@ -1438,7 +1440,7 @@ jobs:
           name: ci-evidence-set-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence-aggregate/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report aggregate CI evidence
         if: always()
@@ -1462,3 +1464,4 @@ jobs:
               echo "::error::Required aggregate CI evidence upload failed."
             fi
           fi
+
