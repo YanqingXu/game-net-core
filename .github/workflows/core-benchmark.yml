@@ -260,6 +260,34 @@ jobs:
           path: core-capacity-baseline
           persist-credentials: false
 
+      - name: Bootstrap self-hosted Windows tool paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw "vswhere.exe is required"
+          }
+          $installationPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $installationPath) {
+            throw "Visual Studio C++ tools are required"
+          }
+          $cmakeBin = Join-Path $installationPath `
+            "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $pythonExe = & py -3 -c "import sys; print(sys.executable)"
+          if ($LASTEXITCODE -ne 0 -or -not $pythonExe) {
+            throw "Python 3 is required"
+          }
+          $pythonBin = Split-Path -Parent $pythonExe
+          foreach ($toolPath in @($cmakeBin, $pythonBin)) {
+            if (-not (Test-Path -LiteralPath $toolPath)) {
+              throw "Required tool path is missing: $toolPath"
+            }
+            $toolPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
       - name: Record Phase 4 benchmark toolchain evidence
         shell: pwsh
         run: |
