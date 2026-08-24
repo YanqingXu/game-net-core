@@ -987,7 +987,7 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: cmake --build build-windows --config Debug --parallel
+        run: cmake --build build-windows --config Debug --parallel 2
 
       - name: Test
         shell: pwsh
@@ -1030,7 +1030,7 @@ jobs:
             --require-canonical-artifact-name `
             --command 'cmake -S . -B build-windows -G "Visual Studio 18 2026" -A x64 -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' `
             --command 'python tools/verify_ctest_inventory.py --test-dir build-windows --config Debug --expected-total 129 --output ci-evidence/ctest-inventory.json' `
-            --command 'cmake --build build-windows --config Debug --parallel' `
+            --command 'cmake --build build-windows --config Debug --parallel 2' `
             --command 'ctest --test-dir build-windows -C Debug --output-on-failure --timeout 30 --output-junit $pwd/ci-evidence/ctest-junit.xml --output-log $pwd/ci-evidence/ctest.log' `
             --command 'cmake --install build-windows --config Debug --prefix $pwd/build-windows/_install' `
             --command 'cmake -S tests/cmake/install_consumer -B build-windows-install-consumer -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=$pwd/build-windows/_install' `
@@ -1260,7 +1260,7 @@ jobs:
             --platform windows `
             --current-install-tree build-windows-release/_install `
             --v02-source-archive build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz `
-            --work-root build-windows-release/release-consumer-gate `
+            --work-root "$env:RUNNER_TEMP/gamenet-release-${{ github.run_id }}-${{ github.run_attempt }}" `
             --evidence-dir ci-evidence/release-consumer `
             --generator "Visual Studio 18 2026" `
             --architecture x64
@@ -1268,6 +1268,14 @@ jobs:
             --evidence-dir ci-evidence/release-consumer `
             --expected-commit $candidateSha `
             --expected-platform windows
+
+      - name: Clean Release consumer work tree
+        if: always()
+        shell: pwsh
+        run: >-
+          Remove-Item -LiteralPath
+          "$env:RUNNER_TEMP/gamenet-release-${{ github.run_id }}-${{ github.run_attempt }}"
+          -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Write CI evidence manifest
         if: always()
@@ -1293,7 +1301,7 @@ jobs:
             --command 'cmake --build build-windows-release-install-consumer --config Release --parallel' `
             --command 'ctest --test-dir build-windows-release-install-consumer -C Release --output-on-failure --timeout 60 --output-junit $pwd/ci-evidence/install-consumer-junit.xml --output-log $pwd/ci-evidence/install-consumer-ctest.log' `
             --command 'curl.exe --fail --location --retry 3 --output build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz' `
-            --command 'python tools/run_release_consumer_gate.py --candidate-sha $candidateSha --platform windows --current-install-tree build-windows-release/_install --v02-source-archive build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz --work-root build-windows-release/release-consumer-gate --evidence-dir ci-evidence/release-consumer --generator "Visual Studio 18 2026" --architecture x64' `
+            --command 'python tools/run_release_consumer_gate.py --candidate-sha $candidateSha --platform windows --current-install-tree build-windows-release/_install --v02-source-archive build-windows-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz --work-root $env:RUNNER_TEMP/gamenet-release-${{ github.run_id }}-${{ github.run_attempt }} --evidence-dir ci-evidence/release-consumer --generator "Visual Studio 18 2026" --architecture x64' `
             --command 'python tools/verify_release_consumer_evidence.py --evidence-dir ci-evidence/release-consumer --expected-commit $candidateSha --expected-platform windows'
 
       - name: Upload CI evidence
