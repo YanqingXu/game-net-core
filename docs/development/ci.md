@@ -261,7 +261,7 @@ It uploads the complete `ci-evidence/` directory and, under the default
 `required` artifact policy, treats an absent evidence root or upload failure as
 an error. Inventory, JUnit, raw CTest logs, toolchain, manifest,
 install-consumer evidence where applicable, and ASan fuzz inputs/logs/artifacts
-are retained for 90 days when the artifact service accepts the upload. The
+are retained for 7 days when the artifact service accepts the upload. The
 primary Linux producer also retains
 `public-api-diff.json`, whose target/header additions, removals, category moves,
 stable fingerprint changes, and compatibility-decision signal are hashed by
@@ -282,7 +282,7 @@ presence: five jobs must execute 129 tests, TSan must execute the exact 102-test
 `threading` selection from the 129-test inventory, and Linux Debug plus both
 Windows jobs must each execute exactly one installed-package consumer test.
 The resulting `gamenet.ci_evidence_set.v1` manifest includes each producer
-manifest hash and is uploaded for 90 days as:
+manifest hash and is uploaded for 7 days as:
 
 ```text
 ci-evidence-set-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -432,7 +432,7 @@ directories to remain below the legacy Windows `MAX_PATH` limit.
 
 Each configuration writes its evidence manifest to the job log and job summary.
 The workflow also attempts to retain the full configuration-specific evidence
-artifact for 90 days, but that upload is non-blocking because repository or
+artifact for 7 days, but that upload is non-blocking because repository or
 account storage quota exhaustion must not override the build and test result.
 
 This fallback does not run for `pull_request` or `push`. The repository is
@@ -443,9 +443,11 @@ the six-producer aggregate gate.
 
 ### Billing-Safe Main CI Routing
 
-Main `ci` defaults to GitHub-hosted runners and strict artifact retention when
-the repository variables are unset. During an account billing lock that blocks
-GitHub-hosted scheduling, trusted maintainers may temporarily set:
+Main `ci` always routes the two trusted Windows producers to the dedicated
+`[self-hosted, windows, x64, gamenet-windows]` runner. The four Linux producers
+and aggregate job default to GitHub-hosted runners when repository variables
+are unset. During an account billing lock that blocks GitHub-hosted scheduling,
+trusted maintainers may temporarily set:
 
 ```bash
 gh variable set GAMENET_CI_RUNNER_MODE --body self-hosted
@@ -453,12 +455,12 @@ gh variable set GAMENET_CI_ARTIFACT_POLICY --body best-effort
 ```
 
 `GAMENET_CI_RUNNER_MODE=self-hosted` routes the four Linux producers and the
-aggregate job to `[self-hosted, linux, x64, gamenet-endurance]`, and the two
-Windows producers to `[self-hosted, windows, x64, gamenet-windows]`. This route
-is allowed only for `push`, manual dispatch, and a trusted same-repository PR.
-Fork PRs continue to select GitHub-hosted runners so an untrusted workflow
-cannot execute on repository-owned machines. Both dedicated runners must be
-online; the workflow never skips a required platform job.
+aggregate job to `[self-hosted, linux, x64, gamenet-endurance]`. The Windows
+producers already use `[self-hosted, windows, x64, gamenet-windows]` for
+`push`, manual dispatch, and trusted same-repository PRs. Fork PRs continue to
+select GitHub-hosted Windows runners so an untrusted workflow cannot execute on
+repository-owned machines. Every selected dedicated runner must be online; the
+workflow never skips a required platform job.
 
 `GAMENET_CI_ARTIFACT_POLICY=best-effort` changes only artifact upload/download
 handling. Repository guards, configure, inventory, build, CTest, sanitizer,
@@ -475,8 +477,9 @@ gh variable delete GAMENET_CI_RUNNER_MODE
 gh variable delete GAMENET_CI_ARTIFACT_POLICY
 ```
 
-Deleting the variables restores `ubuntu-24.04`, `windows-latest`, and the
-`required` artifact policy.
+Deleting the variables restores `ubuntu-24.04` for Linux and the `required`
+artifact policy. Trusted Windows jobs remain self-hosted; fork PRs continue to
+fall back to `windows-latest`.
 
 ## Non-Default Long Soak
 
@@ -811,9 +814,9 @@ as well as link time.
 
 ## Current Platform Gate
 
-The active CI gate defaults to `ubuntu-24.04` and `windows-latest`. The
-temporary billing-safe route documented above preserves the same six producer
-contracts on dedicated Linux and Windows self-hosted runners; it changes
+The active CI gate defaults to `ubuntu-24.04` for Linux and the dedicated
+Windows self-hosted runner for trusted events. The temporary billing-safe Linux
+route documented above preserves the same six producer contracts; it changes
 scheduling and artifact retention policy, not the platform requirements.
 
 Linux/epoll is the Tier 1 release, sanitizer, performance, and endurance
@@ -921,3 +924,4 @@ py -3 tests\ci\test_phase4_benchmark_workflow.py
 
 The local command and CI workflow should stay aligned so test results remain
 comparable across developer machines and remote validation.
+

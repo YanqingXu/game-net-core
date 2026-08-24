@@ -73,10 +73,10 @@ def main() -> None:
     docs_text = ci_docs.read_text(encoding="utf-8")
     require(
         docs_text,
-        "The active CI gate defaults to `ubuntu-24.04` and `windows-latest`.",
+        "The active CI gate defaults to `ubuntu-24.04` for Linux and the dedicated",
         ci_docs,
     )
-    require(docs_text, "dedicated Linux and Windows self-hosted runners", ci_docs)
+    require(docs_text, "Trusted Windows jobs remain self-hosted", ci_docs)
     require(docs_text, "The Windows job validates the IOCP completion path", ci_docs)
     require(docs_text, "Windows MSVC Debug build", ci_docs)
     require(docs_text, "select-based", ci_docs)
@@ -99,3 +99,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

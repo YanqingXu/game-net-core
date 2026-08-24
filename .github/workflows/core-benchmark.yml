@@ -226,7 +226,7 @@ jobs:
           name: core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/*.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Upload Linux Phase 4 raw JSON
         if: always()
@@ -235,11 +235,11 @@ jobs:
           name: phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: phase4-benchmark-results/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   windows-release-benchmark:
     name: Windows Release IOCP benchmark
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows, x64, gamenet-windows]
     timeout-minutes: 45
 
     steps:
@@ -259,6 +259,34 @@ jobs:
           ref: bbcdd8af2e736d8f8ed53d49e787f14d7f7cb043
           path: core-capacity-baseline
           persist-credentials: false
+
+      - name: Bootstrap self-hosted Windows tool paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw "vswhere.exe is required"
+          }
+          $installationPath = & $vswhere -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $installationPath) {
+            throw "Visual Studio C++ tools are required"
+          }
+          $cmakeBin = Join-Path $installationPath `
+            "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
+          $pythonExe = & py -3 -c "import sys; print(sys.executable)"
+          if ($LASTEXITCODE -ne 0 -or -not $pythonExe) {
+            throw "Python 3 is required"
+          }
+          $pythonBin = Split-Path -Parent $pythonExe
+          foreach ($toolPath in @($cmakeBin, $pythonBin)) {
+            if (-not (Test-Path -LiteralPath $toolPath)) {
+              throw "Required tool path is missing: $toolPath"
+            }
+            $toolPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - name: Record Phase 4 benchmark toolchain evidence
         shell: pwsh
@@ -468,7 +496,7 @@ jobs:
           name: core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/*.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Upload Windows Phase 4 raw JSON
         if: always()
@@ -477,7 +505,7 @@ jobs:
           name: phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: phase4-benchmark-results/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   phase4-benchmark-evidence:
     name: Verify paired Phase 4 benchmark evidence
@@ -522,4 +550,5 @@ jobs:
           name: phase4-benchmark-pair-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: phase4-benchmark-evidence-set/pair-manifest.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
+
