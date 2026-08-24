@@ -346,7 +346,7 @@ def main() -> None:
     ):
         require(upload, evidence_path, workflow)
     require(upload, "if-no-files-found: error", workflow)
-    require(upload, "retention-days: 90", workflow)
+    require(upload, "retention-days: 7", workflow)
     assert "continue-on-error:" not in upload, (
         "repeat-soak retained evidence upload must remain strict"
     )
@@ -509,7 +509,7 @@ def main() -> None:
         workflow,
     )
     require(self_hosted_upload, "if-no-files-found: error", workflow)
-    require(self_hosted_upload, "retention-days: 90", workflow)
+    require(self_hosted_upload, "retention-days: 7", workflow)
     self_hosted_upload_report = step_block(
         self_hosted_ci, "Report self-hosted CI artifact upload"
     )
@@ -826,3 +826,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
