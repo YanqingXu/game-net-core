@@ -226,7 +226,7 @@ jobs:
           name: core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/*.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Upload Linux Phase 4 raw JSON
         if: always()
@@ -235,11 +235,11 @@ jobs:
           name: phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: phase4-benchmark-results/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   windows-release-benchmark:
     name: Windows Release IOCP benchmark
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows, x64, gamenet-windows]
     timeout-minutes: 45
 
     steps:
@@ -468,7 +468,7 @@ jobs:
           name: core-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: benchmark-results/*.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Upload Windows Phase 4 raw JSON
         if: always()
@@ -477,7 +477,7 @@ jobs:
           name: phase4-benchmark-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: phase4-benchmark-results/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   phase4-benchmark-evidence:
     name: Verify paired Phase 4 benchmark evidence
@@ -522,4 +522,5 @@ jobs:
           name: phase4-benchmark-pair-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: phase4-benchmark-evidence-set/pair-manifest.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
+
