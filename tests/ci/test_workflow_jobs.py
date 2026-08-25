@@ -657,7 +657,7 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
     require(upload, f"name: {ARTIFACT_NAME}")
     require(upload, "path: ci-evidence/")
     require(upload, "if-no-files-found: error")
-    require(upload, "retention-days: 90")
+    require(upload, "retention-days: 7")
     require(report, "if: always()")
     require(
         report,
@@ -765,7 +765,7 @@ def main() -> None:
     evidence_upload = step_block(self_hosted_job, "Upload CI evidence")
     require(evidence_upload, "continue-on-error: true")
     require(self_hosted_job, "uses: actions/upload-artifact@v4")
-    require(self_hosted_job, "retention-days: 90")
+    require(self_hosted_job, "retention-days: 7")
     require(ci_docs, "Manual Windows Self-Hosted IOCP")
     require(ci_docs, "[self-hosted, windows, x64, gamenet-windows]")
     require(ci_docs, "does not run for `pull_request` or `push`")
@@ -1083,7 +1083,7 @@ def main() -> None:
     require(aggregate_upload, f"name: {AGGREGATE_ARTIFACT_NAME}")
     require(aggregate_upload, "path: ci-evidence-aggregate/")
     require(aggregate_upload, "if-no-files-found: error")
-    require(aggregate_upload, "retention-days: 90")
+    require(aggregate_upload, "retention-days: 7")
     aggregate_report = step_block(aggregate_job, "Report aggregate CI evidence")
     require(aggregate_report, "if: always()")
     require(
@@ -1120,7 +1120,7 @@ def main() -> None:
                 "write_ci_evidence invocation"
             )
     assert workflow.count(f"name: {ARTIFACT_NAME}") == len(JOB_CONTRACTS)
-    assert workflow.count("retention-days: 90") == len(JOB_CONTRACTS) + 1
+    assert workflow.count("retention-days: 7") == len(JOB_CONTRACTS) + 1
     assert workflow.count(f"--expected-total {EXPECTED_CTEST_TOTAL}") == 2 * len(JOB_CONTRACTS)
     assert len(re.findall(r"--expected-total 2(?=\s|['\"])", workflow)) == 6
     assert workflow.count(f"--expect-label threading={EXPECTED_THREADING_TOTAL}") == 2
@@ -1143,7 +1143,7 @@ def main() -> None:
     require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")
-    require(ci_docs, "90 days")
+    require(ci_docs, "7 days")
     require(ci_docs, "artifact_name")
     require(ci_docs, "job_before_evidence_upload")
     require(ci_docs, "CTest 3.21 or newer")

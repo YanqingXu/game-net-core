@@ -702,7 +702,7 @@ def main() -> None:
         require(upload, "uses: actions/upload-artifact@v4", workflow)
         require(upload, "path: phase4-benchmark-results/", workflow)
         require(upload, "if-no-files-found: error", workflow)
-        require(upload, "retention-days: 90", workflow)
+        require(upload, "retention-days: 7", workflow)
 
     require(pair_job, "needs:", workflow)
     require(pair_job, "- linux-release-benchmark", workflow)

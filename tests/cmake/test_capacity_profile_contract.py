@@ -611,7 +611,7 @@ def main() -> None:
         "dedicated-100k",
         "RUN_DEDICATED_100K",
         '["self-hosted","linux","x64","gamenet-endurance"]',
-        '["self-hosted","windows","x64","gamenet-windows"]',
+        "runs-on: [self-hosted, windows, x64, gamenet-windows]",
         "tools/run_capacity_gate.py",
         "tools/verify_capacity_gate_evidence_set.py",
         "Require successful capacity producers",

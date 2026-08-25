@@ -268,4 +268,4 @@ jobs:
           name: windows-self-hosted-${{ matrix.configuration }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7

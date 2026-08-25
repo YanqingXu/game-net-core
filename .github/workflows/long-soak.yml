@@ -273,8 +273,7 @@ jobs:
             long-soak-evidence/phase4-repeat-evidence.json
             long-soak-evidence/manifest.json
           if-no-files-found: error
-          retention-days: 90
-
+          retention-days: 7
   linux-self-hosted-ci:
     name: Linux self-hosted CI (${{ matrix.profile }})
     if: inputs.mode == 'ci'
@@ -546,7 +545,7 @@ jobs:
           name: linux-self-hosted-${{ matrix.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ci-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
       - name: Report self-hosted CI artifact upload
         if: always()
@@ -840,7 +839,7 @@ jobs:
           name: production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: endurance-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   production-endurance-waiver:
     name: Production endurance waiver (${{ inputs.mode }})
@@ -1004,4 +1003,4 @@ jobs:
           name: production-endurance-${{ inputs.mode }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: endurance-waiver-evidence/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7

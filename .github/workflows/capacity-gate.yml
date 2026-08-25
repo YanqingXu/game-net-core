@@ -100,11 +100,10 @@ jobs:
           name: capacity-gate-${{ inputs.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: capacity-results/
           if-no-files-found: error
-          retention-days: 90
-
+          retention-days: 7
   windows-capacity-gate:
     name: Windows IOCP mixed capacity gate
-    runs-on: ${{ inputs.profile == 'dedicated-100k' && fromJSON('["self-hosted","windows","x64","gamenet-windows"]') || 'windows-latest' }}
+    runs-on: [self-hosted, windows, x64, gamenet-windows]
     timeout-minutes: 180
 
     steps:
@@ -207,7 +206,7 @@ jobs:
           name: capacity-gate-${{ inputs.profile }}-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: capacity-results/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   paired-capacity-evidence:
     name: Verify paired mixed capacity evidence
@@ -253,4 +252,4 @@ jobs:
           name: capacity-gate-pair-${{ inputs.profile }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: capacity-evidence-set/
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7

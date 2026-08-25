@@ -45,7 +45,7 @@ def main() -> None:
     require(text, "Linux Release epoll benchmark", workflow)
     require(text, "Windows Release IOCP benchmark", workflow)
     require(text, "runs-on: ubuntu-24.04", workflow)
-    require(text, "runs-on: windows-latest", workflow)
+    require(text, "runs-on: [self-hosted, windows, x64, gamenet-windows]", workflow)
     require(text, "-DCMAKE_BUILD_TYPE=Release", workflow)
     require(text, 'GAMENET_BUILD_BENCHMARKS=ON', workflow)
     require(text, "--config Release", workflow)
@@ -109,7 +109,7 @@ def main() -> None:
         require(upload, "uses: actions/upload-artifact@v4", workflow)
         require(upload, "path: benchmark-results/*.json", workflow)
         require(upload, "if-no-files-found: error", workflow)
-        require(upload, "retention-days: 90", workflow)
+        require(upload, "retention-days: 7", workflow)
     assert "name: core-benchmark-linux-release-${{ github.sha }}" not in text, (
         "SHA-only Linux Core artifacts collide when a workflow run is rerun"
     )
