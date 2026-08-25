@@ -361,6 +361,12 @@ int run(const Config& config) {
               << "  \"cross_domain_handoffs\": " << metrics.crossDomainHandoffs << ",\n"
               << "  \"shutdown_us\": " << shutdownMicros << "\n"
               << "}\n";
+    std::cout.flush();
+    if (!std::cout) {
+        std::cerr
+            << "gamenet_multi_io_queued_benchmark: failed to flush complete JSON output\n";
+        return 2;
+    }
     return invariantPassed ? 0 : 1;
 }
 

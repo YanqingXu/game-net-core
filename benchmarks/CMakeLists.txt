@@ -25,6 +25,18 @@ add_executable(gamenet_multi_io_sharded_hybrid_benchmark
     runtime_profiles/multi_io_sharded_hybrid.cpp
 )
 
+# HP0 is a suite target: tools/run_hot_path_cost.py drives these existing,
+# semantically validated executables and freezes their raw JSON in one cost
+# ledger.  It remains behind GAMENET_BUILD_BENCHMARKS, is not installed, and
+# is intentionally not registered with CTest.
+add_custom_target(gamenet_hot_path_benchmark
+    DEPENDS
+        gamenet_core_benchmark
+        gamenet_phase4_benchmark
+        gamenet_capacity_profile
+        gamenet_multi_io_queued_benchmark
+)
+
 if(GAMENET_ENABLE_EXPERIMENTAL)
     add_executable(gamenet_io_uring_one_shot_benchmark
         io_uring/one_shot.cpp

@@ -663,3 +663,13 @@ a completed, exact-commit record.
 | Publication | Local and remote inspection found no `v1*` tag. No version bump, promotion commit, tag, push, hosted workflow, GitHub Release, source/binary archive, package, SBOM, checksum set, or empty v1.0 artifact was authorized or created. |
 | Ownership/lifetime | Documentation and governance tests only. EventLoop/TCP/Session owners, callback re-entry, cross-thread admission, shutdown, and experimental io_uring boundaries remain unchanged. |
 | Decision | v1.0 release: `DEFER` / `NO-RELEASE`. Keep stable v0.3 current. M1–M11 are fully adjudicated and there is no open implementation or governance front; future v1 work requires a new active release intent and exact evidence plan. |
+
+## HP0 Hot-Path Cost Baseline Authorization — 2026-08-25
+
+| Field | Evidence |
+| --- | --- |
+| Governance baseline | `202bf9f993575d144c4c440a3972dd80733da0a7`; this authorizes the HP0–HP8 performance-first plan but is not a claim that the current working change or any future sample belongs to that commit. |
+| Current front | HP0 is the unique active front. M1–M11 and IOE-X1–X15 remain historically closed; stable v0.3, production epoll/IOCP defaults, deferred coroutine scope, and experimental io_uring boundaries remain unchanged. |
+| Implemented infrastructure | Active `hot_path_cost_baseline` intent; default-off and non-installed `gamenet_hot_path_benchmark` suite; six-scenario preregistration; `gamenet.hot_path_cost.v1` runner/validator; raw JSON/stderr/observer hashes; repository/workflow guards; fixed-lab documentation; manual named self-hosted Linux/epoll and Windows/IOCP workflow. |
+| Evidence boundary | The working tree is not an exact promotion commit. No fixed-lab artifact is entered here. Development smoke output, WSL output, hosted-runner output, dirty output, missing observer costs, or fewer than ten samples cannot close HP0. |
+| Decision | `DEFER` exact baseline evidence. Run one unrecorded warmup and at least ten scenario-round-robin samples on each native fixed runner after selecting a clean exact commit. HP1 remains blocked until both ledgers independently validate with `--require-fixed-lab`. |

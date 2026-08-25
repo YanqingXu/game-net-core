@@ -604,6 +604,21 @@ For lifecycle-sensitive modules, tests should include:
 - performance runners decode stdout as strict UTF-8 evidence but preserve
   localized/non-UTF-8 stderr with byte escapes; a diagnostic decoder failure
   cannot replace the benchmark process's real nonzero result
+- the HP0 hot-path cost ledger must run one unrecorded warmup followed by at
+  least ten recorded samples for every preregistered scenario, preserve each
+  raw child JSON document and SHA-256, and bind the ledger to one exact clean
+  commit plus every executable hash
+- `gamenet.hot_path_cost.v1` records a fixed key set for cycles, instructions,
+  LLC load misses, allocations, copied bytes, syscalls, wakeups, generic posts,
+  cross-domain handoffs, P50/P99/P999, maximum queue age, RSS, overload
+  recovery, and shutdown convergence; an unavailable counter is `null` with a
+  non-empty reason and must never be represented by a synthetic zero
+- fixed-lab hot-path evidence is native Linux/epoll or native Windows/IOCP,
+  uses a named self-hosted runner, fixed CPU affinity/frequency policy,
+  Release build and compiler identity, and rejects WSL, dirty worktrees,
+  missing preregistered scenarios, missing required counters, shortened loads,
+  fewer than ten samples, or parameter drift; development evidence may retain
+  those limitations but is never promotion eligible
 - the slow-broadcast-recovery capacity profile must use real TCP endpoints,
   hold reads during pressure, keep aggregate connection pending bytes within
   the configured connection hard-limit sum, keep dispatcher outstanding bytes

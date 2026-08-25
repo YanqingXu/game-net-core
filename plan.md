@@ -1,667 +1,257 @@
-# game-net-core 完整后续执行计划：IOE-X10 至 v1.0
+# game-net-core 高性能执行计划：HP0–HP8
 
-计划重制日期：2026-08-22
+计划重制日期：2026-08-25
 
 长期方向：`goal.md`
 
-当前评估：`assessment.md`
-
-前序治理检查点：`a5ff7e6d823984a86e89146889f29f6615702ec3`
-
-M1 实现与证据检查点：`f5d39b800b4dd943531670aa09840c931c3dee4d`
-（IOE-X10；固定协议原始证据绑定该提交）
-
-IOE-X11 实现与证据检查点：`013fecfe81277845eb3e60ccf5fe0205b753858d`
-（source-private 单 owner Server composition）
-
-IOE-X12 实现与证据检查点：`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`
-（source-private 多 owner TCP topology）
-
-IOE-X13 实现与证据检查点：`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`
-（source-private one-shot Connect/TcpClient composition）
-
-IOE-X14 实现与证据检查点：`351b3c0e476a462265016d53361a02b5f2c51611`
-（epoll、IOCP 与 io_uring 跨后端 TCP 语义套件）
-
-IOE-X15 实现与证据检查点：`43795e841ba2a279ed6a3d5d831d60a9f2a25570`
-（显式 Linux-only experimental 安装组件、独立 manifest 与 package consumer）
-
-M7-G0 外部就绪审计检查点：`44493b1d37c16567990e1660153d6b0843a8eecc`
-（初始外部实现 `DEFER`、共享 RPC `NO-PROMOTION`）；Gateway M4 已在
-`d03cacd5aead885fc61a419c71d5c32a060cb700` 关闭，M7 外部 adapter 治理已在
-`92a26072c3300275edc9d069a59fc17913c7614c` 授权；外部实现在 `e43393c85fa37604d340fe866610756c99f4fe4e`
-完成并由 `588acd079be93de3e230ba4f07dd111f7bec6a3c` 关闭。逐字段比较结论为共享 RPC
-`NO-PROMOTION`，Core RPC 继续 deferred。
-
-M8-G0 Async/Coroutine 提升审计基线：
-`e5ea9efa71dbe52e841423ec3cac3e9529158b22`。Core EventLoop/TimerQueue 3/3 与
-精确 `YanGameServer@b525416` async/coroutine/timer/RPC/persistence 9/9 证明两套
-各自有效但不可替代的合同；Gateway `588acd0` 仍为 callback/value-only。
-M8 因此以 `NO-PROMOTION` 关闭，六个 async intents 继续 deferred。
-
-## 1. 计划定位与总体顺序
-
-本计划覆盖从当前 IOE-X10 前沿到 v1.0 的完整、证据门控路线。已经关闭的
-M0–M5、IOE-R1/R2/C1、IOE-X1–X9 和 Runtime Profile A/B/C/D 不再逐项展开；
-完整历史结论分别见：
-
-- `docs/migration_status.md`；
-- `docs/architecture/runtime_profile_common_capability_review.md`；
-- `docs/development/commit_bound_evidence_ledger.md`。
-
-总体顺序固定为：
-
-```text
-M1  IOE-X10 + ARCH-G1
-M2  v0.3 内部候选
-M3  真实网关验证
-M4  v0.3 外部发布
-M5  v0.4 Runtime 边界
-M6  v0.5 io_uring 实验后端（条件执行）
-M7  v0.6 Lua / RPC
-M8  v0.7 Async / Coroutine
-M9  v0.8 TLS / WebSocket / DNS
-M10 v0.9 UDP / KCP 实验能力
-M11 v1.0 稳定发布
-```
-
-当前没有开放的治理前沿。**M1–M11 已全部完成证据审计并作出终态决策**；其中
-M4 发布 stable v0.3，M6 安装显式 io_uring experimental component，M7–M10 按证据
-关闭为 `NO-PROMOTION`，M11 关闭为 `DEFER` / `NO-RELEASE`。
-同一时刻只允许一条 Core 实现主线；一个 Core 外部网关集成切片和一个持续证据任务
-可以并行。每个条件分支必须明确记录执行、`NO-PROMOTION`、`DEFER` 或
-`skipped-by-evidence`，不得以“后续再决定”结束。
-
-## 2. 当前事实与全程边界
-
-- `a5ff7e6d823984a86e89146889f29f6615702ec3` 是进入 M1 前的治理检查点；
-- `f5d39b800b4dd943531670aa09840c931c3dee4d` 已实现 IOE-X10 固定协议、
-  结构化比较、验证器和 ARCH-G1 fix-forward；
-- 当前仓库留存的默认测试基线为 130（8 unit、108 contract、14 integration），
-  Linux experimental 基线为 140（8 unit、118 contract、14 integration）。这些是
-  已记录证据，不表示本次计划重制重新执行了测试；
-- Profile A/B/C/D 的共同能力审查结论保持 `NO-PROMOTION`；
-- main 持续前进，证据绑定精确 commit，需要推广时再选择 promotion commit；
-- EventLoop 继续是单 owner scheduler / event pump，Readiness 与 Completion 保留
-  各自真实语义；
-- owner、ownership、re-entry、cross-thread marshal、typed failure 和 shutdown
-  必须先在 active intent、rules 和 contract 中明确；
-- epoll 和 IOCP 是 v1 稳定后端；io_uring、UDP/KCP 最多进入显式 opt-in 的实验面；
-- 不通过无界队列、operation、buffer、mailbox 或 final drain 换取表面吞吐；
-- Lua、Actor、Room、AOI、World、数据库和部署控制面不得进入 `GameNet::core`；
-- 完整 HTTP server、raw ICMP、FEC、高级拥塞控制、zero-copy 和跨进程 Session
-  migration 不进入 v1 范围。
-
-历史 REL-C1、REL-V1、candidate tag 和 refreeze 记录保持不可变，只作为历史证据。
-`v0.3.0-rel-c1-refreeze-5` 及其替代的
-`v0.3.0-rel-c1-refreeze-4@c061f9967b9481b70b2faf9a8fee24f5a3e72ffc`
-不再是开发冻结点。
-
-## 3. M1：IOE-X10、ARCH-G1 与治理统一
-
-优先级：P0。
-
-M1 状态：已关闭（2026-08-22）。
-
-### 3.1 IOE-X10 固定合同
-
-在 benchmark 实现前，先在 active I/O Engine intent 和 testing rules 中加入 X10
-固定测量合同。X10 不改变运行时语义；若测量暴露 correctness 或 lifecycle 缺陷，
-必须另开合同先行的 fix-forward 切片，修复后重新执行全部样本。
-
-| 参数 | 固定值 |
-| --- | ---: |
-| 并发 active routes | 256 |
-| `maxPendingAccepts` | 32 |
-| Hub route 上限 | 256 |
-| churn | 4 波，每波替换 64 routes |
-| 每连接 echo round trips | 100 |
-| payload | 64 bytes |
-| warm-up | 每个 backend 1 次完整但不计入结果的运行 |
-| 正式样本 | 每个 backend 5 次 Release 样本，交错运行 |
-
-同一个 listener benchmark 场景驱动 source-private io_uring listener 与 production
-epoll `TcpServer`。固定同一机器、CPU affinity、构建配置、client count、payload 和
-采样顺序，并记录 CPU、内核、编译器、构建类型和 affinity。
-
-每个结构化样本必须记录并校验：
-
-- connect、echo、close 完成数与完成率；
-- throughput、P50/P99/P999 latency；
-- fd、active route、Accept/Recv/Send operation 高水位；
-- Engine-owned bytes、pending send bytes、process RSS/working set；
-- capacity rejection、SQ rejection 及拒绝后的恢复时间；
-- listener stop、Hub/server shutdown 延迟；
-- listener、route、operation、notice、fd、pending byte 和 Engine-owned byte 最终残留。
-
-correctness、资源核算、恢复、owner/lifecycle、零残留或五次正式样本验证任一失败即
-`DEFER`。全部通过后才可根据中位数和 tail 分布给出 `PROMOTE`；`PROMOTE` 只授权后续
-source-private shaping，不表示 io_uring 全面优于 epoll，也不开放公共 backend selector。
-环境不能完成固定协议时直接记录 `DEFER`，不得静默降低负载后宣称通过。
-
-### 3.2 ARCH-G1 独立审查
-
-独立 reviewer 按 intent、public contract、invariants、thread affinity、ownership、
-lifecycle、implementation、test completeness 的顺序审查，并输出
-`docs/reviews/arch-g1-independent-review.md`。审查必须回答：
-
-1. I/O Engine seam 是否降低具体 backend 耦合；
-2. EventLoop 还残留哪些 readiness/completion 兼容职责；
-3. stable 0.3 API/layout 中哪些兼容字节或 ABI slot 必须保留到 breaking line；
-4. Runtime Profile 是否向 Core 泄漏 placement、tick、shard 或业务策略；
-5. io_uring Hub/Adapter 是否复制了过多 production `TcpConnection` 逻辑；
-6. 结合 X10，应继续 source-private integration 还是暂停实验。
-
-结论只能是 `APPROVE` 或 `REQUEST-CHANGES`。生命周期、所有权、线程亲和和 stable API
-blocker 不允许 waiver；必须 fix-forward、补合同并复审。
-
-### 3.3 决策分支
-
-```text
-X10=DEFER 或 ARCH-G1 要求暂停
-    -> 冻结 io_uring 功能扩展
-    -> X1–X9 合同继续进入 CI 维护
-    -> M6 标记 skipped-by-evidence
-    -> 继续 M2–M5 和 M7
-
-X10=PROMOTE 且 ARCH-G1=APPROVE
-    -> 记录 IOE-X11–X15 授权
-    -> 仍先完成 v0.3 推广和真实网关验证
-    -> 到 M6 再实施生产等价塑形
-```
-
-实际分支为 `X10=PROMOTE 且 ARCH-G1=APPROVE`。`PROMOTE` 仅授权到 M6 时继续
-source-private IOE-X11–X15 塑形；它不表示 io_uring 全面优于 epoll，也不改变默认
-后端、安装面或 stable API。固定证据保存在
-`docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/`，独立复核保存在
-`docs/reviews/arch-g1-independent-review.md`。
-
-中位数显示 io_uring 的 RTT/吞吐约为 epoll 的 0.499，P50/P99 分别约为 2.233/
-1.396 倍，P999 约为 0.765 倍，RSS 约为 0.954 倍。因此后续塑形必须保留吞吐、
-P50 和 P99 性能债务，不能把限定范围的通过改写为“更快”。
-
-### 3.4 M1 关闭门
-
-- X10 已输出限定范围的 `PROMOTE` 或 `DEFER`；
-- ARCH-G1 为 `APPROVE`，或所有 blocker 已关闭并复审通过；
-- README、roadmap、migration status、plan 和 evidence ledger 只有一个当前前沿；
-- Linux experimental focused/repeat/sanitizer 与默认 Linux/Windows 回归门通过；
-- stable API manifest 无变化；
-- 没有引入 selector、production backend replacement 或高级 io_uring feature。
-
-关闭结果：X10 为限定范围的 `PROMOTE`；ARCH-G1：`APPROVE`；固定协议 10 个正式
-样本全部有效且 SHA-256 受治理守卫校验；Linux experimental 136/136、focused 重复、
-ASan/UBSan 与经 `setarch x86_64 -R` 规避 WSL ASLR 映射冲突后的 TSan 均通过；
-默认 Linux/Windows 回归与 stable API zero-diff 通过。Windows 完整门发现并修复了
-Profile C cadence-stop 同一退休被重复计数的问题，新增合同证明取消投递可为 0/1，
-但结果恰好发布一次。
-
-## 4. M2：v0.3.0 内部候选
-
-优先级：P1。启动条件：M1 关闭。
-
-状态：**已关闭**。精确 promotion commit
-`0c3012449ae36fa32656da33c4d1161f5129cde7` 已通过同提交 CI、sanitizer/TSan、
-10k/100k 容量、paired benchmark、repeat-50、candidate-1h、release-3h 和双平台
-安装/解压包消费者。SPDX 2.3 SBOM、third-party notices、`SHA256SUMS` 与完整 evidence
-bundle 已形成，内部输出命名为 `v0.3.0-internal-candidate.1`。关闭记录见
-`docs/development/releases/v0.3.0-internal-candidate.1.md`。旧候选 `a89e2b0` 的取消
-运行仍是历史 `NO-PROMOTION`，未被追认为通过。当前许可证仍不允许外部采用。
-
-- 选择 main 上一个精确 promotion commit，停止展开新的 IOE/Runtime 功能；
-- 完成 Linux Debug/Release、ASan/UBSan、TSan、Windows Debug/Release/IOCP；
-- 完成 focused repeat、repository/scope/intent guards、install consumers 和 API manifest；
-- 完成 paired benchmark、capacity、fault injection、1h 和 3h endurance；
-- 生成内部 package、SBOM、third-party notices 和完整 evidence bundle；
-- waiver 只能记录证据缺失，不能计为通过；
-- 任一生命周期、API、容量或 endurance 门失败即 `NO-GO`，修复后选择新 promotion
-  commit 全量重验。
-
-输出命名为 `v0.3.0-internal-candidate.1`，不声明外部可采用。证据期间 main 可以继续
-开发；promotion evidence 只绑定被验证的精确提交，运行时或工具变化时不 refreeze
-旧候选。
-
-## 5. M3：`gamenet-game-gateway` 真实集成
-
-优先级：P1。启动条件：M2 形成内部候选。
-
-状态：**已关闭**。私有网关关闭提交为
-`0a8fe1e43cb11ac32daa8f9266d3b84924736e67`；其 Queued Event 与 Sharded Hybrid
-真实 TCP 场景通过 Linux/Windows Release、Linux ASan/UBSan 和重复门。精确网关提交
-`4e2457e81f0ba2154b6aca2e6cd945daf793fbba` 在 Core
-`736a0907e90dbd0373cd652283618794c31020df` 上完成一个不间断 Linux/epoll 1h
-进程：3,743 个完整回放/故障周期、3,600.023 秒 supervisor monotonic、32 KiB RSS
-增长。M3 发现的唯一 Core correctness blocker 已由 `736a090` 修复；反馈账本没有遗留
-category 1/2 blocker。
-
-在独立仓库中使用安装后的 GameNet targets，禁止依赖 source-private 或 non-installed
-helper。实现相同业务场景的两种运行模型：
-
-1. Queued Event：多 I/O owner、独立有界逻辑执行域；
-2. Sharded Hybrid：连接 owner 不迁移，命令按 player/room/scene key 进入逻辑 cell。
-
-共同流水线：
-
-```text
-TcpServer
--> PacketFramer
--> Auth / SessionManager
--> bounded logic/shard executor
--> Lua execution cell
--> BroadcastDispatcher
--> TcpTransportEndpoint
-```
-
-必须验证：
-
-- 鉴权成功、失败、超时和重复登录；
-- Session generation、断线、重连和踢下线；
-- Lua 阻塞和异常不阻塞网络 owner；
-- logic/shard queue、输出和广播饱和后的 typed 降级与恢复；
-- 慢客户端、分片广播和 callback re-entry；
-- 网络、逻辑、Lua、广播和持久化边界的确定性关闭顺序；
-- 真实流量回放、故障注入和至少一次 1h 集成运行。
-
-集成反馈账本必须把问题分为：Core correctness blocker、缺少的通用能力、仅属于网关/
-业务的策略、API 易用性问题、性能或内存问题。只有前两类可以触发 game-net-core
-变更，并且仍须经过 active intent、rules、contract 和兼容性审查。
-
-## 6. M4：Apache-2.0 下的 v0.3.0 外部发布
-
-优先级：P1。启动条件：M3 关闭通用 Core blocker。
-
-状态：**已关闭**。所有者授权与 Apache-2.0 切换、确定性发布组装器、双平台当前/升级
-消费者、最终 promotion commit `8e4a6ed` 的完整同提交矩阵、可复现源码/二进制/SBOM/
-evidence 资产、annotated `v0.3.0` tag、stable GitHub Release 和全资产回下载验证均已
-完成。关闭记录见 `docs/development/releases/v0.3.0.md`；审计与授权基线见
-`docs/development/m4_external_release_preflight_2026-08-23.md`、同名 JSON 与
-`docs/development/m4_license_authorization_2026-08-23.md`。
-
-- 只修复 M3 暴露的通用 Core blocker，不把 Lua、Room、Actor、RPC 或部署拓扑引入 Core；
-- 顶层许可证切换为 Apache-2.0，并同步源码 header、README、package metadata、NOTICE、
-  third-party notices 和 SBOM；
-- 审计第三方来源、生成代码、测试语料和 benchmark 资产的许可证兼容性；
-- 若 M3 后存在运行时变化，重新选择 promotion commit 并完整执行 M2 同提交矩阵；
-- 增加从干净安装包构建的 Linux/Windows 外部消费者和 0.2/0.3 升级消费者；
-- 发布 `v0.3.0`、校验和、源码包、二进制包、SBOM、已知限制和证据索引。
-
-v0.3 稳定承诺仅覆盖现有安装目标和 TCP epoll/IOCP 路径。Runtime Profiles 与
-io_uring 不属于 v0.3 stable API。
-
-## 7. M5：v0.4 Runtime 边界
-
-优先级：P2。启动条件：M3 的 Queued Event 与 Sharded Hybrid 都有真实证据。
-
-状态：**已关闭，第二次 `NO-PROMOTION`**。M3 的独立真实网关在 Queued Event 与
-Sharded Hybrid 两条路径中只使用已安装 v0.3 能力，未提出缺失的 broadly reusable
-Core capability。逐项审查确认 `TransportEndpoint` 已可直接复用，而 Logic admission、
-stop、shard 与 cadence 仍有不同的 owner、Accepted obligation、失败作用域和退休语义。
-因此不激活 Runtime public-surface intent，不增加安装 target/header/ABI，也不发布空
-v0.4.0。精确决策 checkpoint 是
-`f8cffb6f04e593983db16d23122ed426f8729bf4`。完整决策与选择指南见
-`docs/architecture/runtime_profile_common_capability_review.md` 和
-`docs/architecture/runtime_profile_load_selection_guide.md`。
-
-重新执行跨 Profile 共同能力审查。允许提升的候选仅限：
-
-- 复用现有 `TransportEndpoint`；
-- typed、有界的 `LogicExecutor` admission；
-- 可等待且单调的 `RuntimeStopFuture`；
-- 只有两个实现语义一致时才加入 shard/cadence 类型。
-
-明确禁止 `UniversalGameServer`、`RuntimeProfileFactory`、
-`AnyTransportAnyLogicRuntime` 和每种策略组合一个 Server 类。
-
-```text
-两个真实实现存在相同 owner/lifecycle/admission 需求
-    -> 激活 Runtime public-surface intent
-    -> 每个公共概念单独合同、实现和 API review
-    -> 形成 v0.4.0
-
-语义仍然不同或只有名称相似
-    -> 记录第二次 NO-PROMOTION
-    -> Profile 继续作为官方 recipe/example
-    -> 不创建占位公共抽象
-```
-
-无论是否提升 API，都发布 Profile A/B/C 的负载选择指南，记录连接数、包频率、逻辑
-成本、tick、handoff、广播和背压适用条件。Profile D 继续 provisional，直到真实
-sharding 证据完整。若没有公共能力被提升，不发布空版本；后续可交付能力接管 v0.4
-版本号。
-
-## 8. M6：v0.5 io_uring 可安装实验后端
-
-仅在 `X10=PROMOTE` 且 ARCH-G1 批准时执行；否则整个 M6 标记为
-`skipped-by-evidence`，直接进入 M7。
-
-M6/IOE-X15 状态：**已关闭**。`X10=PROMOTE` 且 `ARCH-G1=APPROVE` 已满足；IOE-X11–
-IOE-X15 均已关闭。M5 没有发布空 v0.4；X15 准备了 v0.5.0 experimental preview
-轨道，但没有创建 tag 或 GitHub Release，后续发布仍需单独批准。
-
-### 8.1 IOE-X11：单 owner Server composition
-
-状态：**已关闭**，实现与证据检查点
-`013fecfe81277845eb3e60ccf5fe0205b753858d`。
-
-- 将现有 listener、Hub 和 semantic adapter 组合成 source-private 单 owner server；
-- 对齐 bind/listen、callback、admission、graceful stop 和 force escalation；
-- 保持 epoll 生产默认，不修改 production `TcpServer`。
-
-### 8.2 IOE-X12：多 owner topology
-
-状态：**已关闭**，实现与证据检查点
-`5be30e701c61f8d6700bcc4be6bc0ef152120fb8`。
-
-- accept owner 取得 fd 后，通过有界 EventLoop admission 将 sole ownership 转移给
-  选定 worker Hub；
-- post、admission 或 worker shutdown 失败时，由当前 sole owner 精确关闭 fd；
-- 保持 RoundRobin、LeastConnections、QueueLag 和 ConsistentHash 的连接放置语义；
-- 已建立连接不迁移 owner，每个 worker 独占自己的 Hub/Pump。
-
-### 8.3 IOE-X13：Connect/TcpClient
-
-状态：**已关闭**，实现与证据检查点
-`5484d7a89b01597824bc860e4d2d3cf3cfd45a82`。
-
-- 增加 one-shot Connect operation；
-- 覆盖 timeout、retry、cancel、stale attempt、callback re-entry 和 owner quit；
-- 完成 source-private client adapter 与 production `TcpClient` 观察序列对比。
-
-### 8.4 IOE-X14：跨后端语义套件
-
-状态：**已关闭**，实现与证据检查点
-`351b3c0e476a462265016d53361a02b5f2c51611`。
-
-- 同一 server/client 合同驱动 epoll、IOCP 和 io_uring；
-- 比较 send/backpressure、read pause、close reason、half-close、cross-thread admission
-  和 final drain；
-- 性能数字保持同场景方向性，不制造虚假统一。
-
-### 8.5 IOE-X15：实验安装面
-
-状态：**已关闭**，实现与证据检查点
-`43795e841ba2a279ed6a3d5d831d60a9f2a25570`。
-
-- 将 `gamenet_experimental_io_uring` 以 `GameNet::experimental_io_uring` 安装；
-- 提供显式 Linux-only `IoUringTcpServer` 和 `IoUringTcpClient` façade；
-- 保留 `GAMENET_ENABLE_EXPERIMENTAL=OFF` 默认值；
-- 不向稳定 `TcpServer` 添加 backend selector，不自动选择 io_uring；
-- experimental API 使用独立 manifest、package consumer 和版本说明，不进入 stable
-  compatibility manifest。
-
-Linux 默认与 Windows 安装树保持无实验产物；Linux 显式实验安装消费者通过，稳定
-v0.3 manifest 零漂移。已准备 v0.5.0 experimental preview 版本说明，但未发布 tag
-或 GitHub Release；epoll 仍是 Linux 默认和稳定后端。
-
-## 9. M7：v0.6 Lua 与 typed RPC
-
-状态：**已关闭，`NO-PROMOTION`**。`gamenet-game-gateway` 与第二个独立 consumer
-已经形成真实合同、运行证据与逐字段比较；双 consumer 提升门不成立，因此不激活
-Core/RPC 公共实现，也不发布空 v0.6。
-
-### 9.1 M7-G0：外部就绪审计
-
-状态：**初始 `DEFER / NO-PROMOTION`、中间外部 `RESUME` 已最终关闭为共享
-`NO-PROMOTION`**。精确审计检查点为
-`44493b1d37c16567990e1660153d6b0843a8eecc`，记录见
-`docs/development/m7_external_rpc_lua_readiness_2026-08-24.md`。Gateway 历史
-`0a8fe1e43cb11ac32daa8f9266d3b84924736e67` 检查点只有受 owner 隔离的 Lua callback
-seam；M4 已在 `d03cacd5aead885fc61a419c71d5c32a060cb700` 以 `ADOPTED` 关闭，新的
-M7 intent/rules/合同名已在 `92a26072c3300275edc9d069a59fc17913c7614c` 明确授权外部
-callback/value adapter。独立 `YanGameServer`
-`b5254165389d762c3f3c63568c24ffab448fc501` 的有界 RPC/Lua owner 合同虽通过聚焦
-Windows Release 8/8，但 wire-v2、native transport/TLS 和生命周期并不构成相同的
-GameNet per-connection RPC 需求。因此 `rpc.intent.md` 保持 deferred，当前仓库不增加
-RPC/Lua target、头文件或 package component。Gateway 外部实现在
-`e43393c85fa37604d340fe866610756c99f4fe4e` 完成，Windows/IOCP 与 Linux/epoll
-package-only 11/11、Linux ASan/UBSan 11/11、两项 focused test 双平台各 20/20、codec
-fuzz 100,000 次通过；closure `588acd079be93de3e230ba4f07dd111f7bec6a3c`
-记录最终 `NO-PROMOTION`。
-
-恢复条件 1–4 均已满足；条件 5 的逐字段比较实际执行后发现 wire、correlation key、
-payload、owner、handshake 与 callback/coroutine completion 合同不同。独立
-`YanGameServer@b525416` 精确源码的聚焦 Windows Release RPC 集合再次通过 8/8，
-但它不能作为 Gateway v1 wire 的第二个等价 consumer。Core `rpc.intent.md` 保持
-deferred。
-
-坚持“外部先行、通用能力再提升”。
-
-Lua execution cell 保持在 `gamenet-game-gateway`：
-
-- 每 cell 单 owner；
-- 有界 mailbox、执行预算和内存预算；
-- Lua 异常、超时、reload 和 shutdown 可观察；
-- 网络 callback 不直接进入 Lua VM；
-- Lua 不进入 `GameNet::core`。
-
-RPC 首先在外部适配层实现 callback/value 版本：
-
-- request/response/error frame；
-- generation-safe request id；
-- pending request 上限；
-- timeout、connection close 和 shutdown 清算；
-- handler 异常转 typed error；
-- 不依赖 coroutine。
-
-只有网关和第二个独立 consumer 都证明相同 wire/lifecycle 需求后，才提升
-`rpc.intent.md`，将 codec、typed result 和 per-connection channel 提升到
-`GameNet::protocol`。业务 method registry、鉴权和服务发现继续外置。
-
-关闭门包括 malformed/oversized/partial frame、重复/迟到响应、超时竞态、断线清算、
-queue saturation、双平台真实 TCP 和 fuzz coverage。缺少第二个 consumer 时记录
-`NO-PROMOTION`，RPC 保持外部 adapter。
-
-## 10. M8：v0.7 Async 与 Coroutine
-
-状态：**已关闭，`NO-PROMOTION`**。M8-G0 在 Core
-`e5ea9efa71dbe52e841423ec3cac3e9529158b22`、Gateway
-`588acd079be93de3e230ba4f07dd111f7bec6a3c` 与独立
-`YanGameServer@b5254165389d762c3f3c63568c24ffab448fc501` 之间完成审计。
-Core 聚焦 EventLoop/TimerQueue 3/3 和 YanGame async/coroutine/timer/Actor-RPC/
-persistence 9/9 通过，但 Gateway 无 coroutine，YanGame Task 又是 ActorScheduler
-专属的有界 frame/continuation 合同，没有双 consumer 证明一个可替代的
-value/error/cancel/resume 或 executor 表面。详见
-`docs/development/m8_async_coroutine_readiness_2026-08-24.md`。
-
-只有 RPC、timer 或第二个适配器证明需要统一异步语义时，按以下固定顺序提升 deferred
-intents：
-
-1. `async_semantics`：统一 value/error/cancel、executor 和 exactly-once continuation；
-2. `coroutine_task`：frame ownership、detach、异常和 owner-loop resume；
-3. `async_timer`：取消与 TimerQueue retirement；
-4. `connection_awaiter_registry`：read/write/close awaiter 与 generation；
-5. `when_all`：全部完成和异常聚合；
-6. `when_any`：winner、loser cancellation 和 frame retirement；
-7. RPC coroutine bridge；
-8. C++ coroutine 与 Lua coroutine bridge，继续位于外部网关仓库。
-
-每个切片必须证明：
-
-- coroutine frame sole ownership；
-- resume 只发生在目标 owner executor；
-- callback/close/timeout/cancel 竞态只完成一次；
-- EventLoop shutdown 不遗留 suspended frame；
-- rejected scheduling 不产生幽灵 continuation；
-- callback API 继续可用，不强迫稳定 Core 用户采用 coroutine。
-
-若缺少两个真实 consumer，这些能力保持外部 adapter，不为满足版本号而提升，也不发布
-空版本。审计已命中此关闭分支：`async_semantics`、`coroutine_task`、
-`async_timer`、`connection_awaiter_registry`、`when_all` 与 `when_any`
-全部保持 deferred，不创建 Core coroutine 头文件、target、package component 或空 v0.7。
-
-## 11. M9：v0.8 TLS、WebSocket 与 DNS
-
-状态：**已关闭，`NO-PROMOTION`**。精确审计记录见
-`docs/development/m9_tls_websocket_dns_readiness_2026-08-24.md`。Core baseline
-`fff41622ffc1d2e0d047d3938529d9eb7919e5af` 的 active `TransportEndpoint`
-合同 3/3 通过，但它是上层 endpoint adapter，并非 deferred
-`ConnectionTransport`。Gateway closure `588acd0` 没有 TLS、WebSocket 或 DNS
-实现；独立 `YanGameServer@b525416` 的 native-worker 内部 RPC mTLS 明确排除
-GameNet EventLoop TLS，其 fallback TLS 合同 4/4 通过且两项真实 OpenSSL 合同明确
-skipped。不存在两个可替代 consumer，因而不提升公共表面，也不发布空 v0.8。
-
-顺序固定为：
-
-1. `ConnectionTransport` source-private seam，以 plain TCP adapter 证明零行为变化；
-2. OpenSSL `TlsContext` 与 owner-loop TLS transport；
-3. TcpServer/TcpClient TLS 配置、handshake timeout、证书错误和 graceful TLS shutdown；
-4. `DnsResolver` 的有界 worker、admission、cancel 和 typed result；
-5. 外部 WebSocket gateway adapter；
-6. 只有两个 consumer 需要时，将 framing/control-frame 部分提升到
-   `GameNet::protocol`。
-
-TLS 必须覆盖 WANT_READ/WANT_WRITE、partial I/O、renegotiation 禁令、peer close、
-callback exception、certificate reload boundary 和双平台 package consumer。
-
-WebSocket 必须覆盖升级校验、mask、fragmentation、ping/pong、close handshake、payload
-上限和慢客户端。只实现 WebSocket 所需的最小升级适配；完整 HTTP server 继续不在
-v1 范围。
-
-审计已命中关闭分支：`connection_transport`、`tls`、`websocket`、
-`dns_resolver` 与 `http` 全部保持 deferred；未创建 Core TLS/WebSocket/DNS/HTTP
-头文件、target 或 package component。未来恢复前必须重写旧 intent 中与当前门禁冲突的
-MINI/coroutine、fragmentation、无界 DNS 生命周期和完整 HTTP server 假设，并提供两个
-真实 consumer 与双平台安装包证据。
-
-## 12. M10：v0.9 UDP/KCP 实验能力
-
-状态：**已关闭，`NO-PROMOTION`**。精确审计记录见
-`docs/development/m10_udp_kcp_readiness_2026-08-24.md`。Core baseline
-`f1f89f0e66642b4be3c988400213783e5120536c` 的 active SessionManager 3/3
-只证明 generation-safe 单 endpoint；Gateway `588acd0` 与独立
-`YanGameServer@b525416` 均无 datagram runtime。历史迁移源
-`mini_trantor@3eba368` 虽有 UDP/KCP/PMTU 代码，但缺少当前 typed admission、peer
-generation、所有 retained 容量上限和双平台合同，不能充当第二 consumer。
-
-启动条件：
-
-- v0.3 外部发布完成；
-- 至少两个 TCP Runtime Model 经过 M3 真实验证；
-- UDP、KCP 和必要 PMTU intents 正式提升；
-- owner、Session generation、MTU、retransmission、backpressure 和双通道关闭语义
-  完成评审。
-
-### 12.1 DGM-U1：UDP owner-loop 基础
-
-- owner-owned socket/registration；
-- 有界 datagram batch；
-- typed send/receive/EMSGSIZE；
-- generation-safe peer/session identity；
-- Linux/Windows loopback 和 shutdown。
-
-### 12.2 DGM-U2：Datagram TransportEndpoint
-
-- bounded send admission；
-- peer/session token；
-- TCP 与 UDP endpoint 不共享可变 owner 状态；
-- 双通道 Session 只在上层通过 generation 绑定。
-
-### 12.3 DGM-K1：基础可靠数据报
-
-- KCP session、timer、重传、ACK、窗口和有序交付；
-- deterministic loss/reorder/duplicate/delay fixture；
-- 所有队列、window、in-flight bytes 和 per-turn work 有界。
-
-### 12.4 DGM-K2：生命周期与压力
-
-- handshake/session timeout；
-- MTU reduction；
-- slow peer/backpressure；
-- reconnect、stale packet、shutdown/final drain；
-- capacity、soak 和方向性 benchmark。
-
-### 12.5 DGM-X1：实验安装
-
-- 提供显式 opt-in 的 `GameNet::experimental_datagram`；
-- UDP/KCP headers 使用 experimental versioning；
-- 不作为 v1 稳定传输，不自动与 TCP 组成双通道。
-
-启动门审计已命中关闭分支：`udp`、`kcp_transport`、`path_mtu_cache`、
-`platform_path_mtu_signal` 与 `path_mtu_signal_authentication` 保持 deferred；
-DGM-U1/U2/K1/K2 均为 `NO-PROMOTION`，DGM-X1 为 `skipped-by-evidence`。未创建
-`GameNet::experimental_datagram`、manifest、package component 或空 v0.9。未来恢复
-必须先缩小旧源中过量的 raw-ICMP/FEC 范围、补齐有界 typed 生命周期并获得两个真实
-consumer 与 Windows/Linux 证据。
-
-raw ICMP、authenticated PMTU signal、FEC、advanced congestion control、zero-copy
-和跨进程 Session migration 全部留到 v1 后。
-
-## 13. M11：v1.0 稳定化与发布
-
-状态：**已关闭，`DEFER` / `NO-RELEASE`**。精确审计记录见
-`docs/development/m11_v1_release_readiness_2026-08-24.md`。Core baseline
-`a2977c90374aa6c08a54d2d569ff369c51717345` 重建后的 Windows Release 130/130、
-fixed-tick focused 20/20、安装 consumer 2/2、v0.3 gate tooling 10/10 和 stable API
-零差异通过；但当前所有版本/manifest/assembler/upgrade policy 仍绑定 0.3，且缺少独立
-v1 API/ABI review、0.3→1.0 consumer、同提交 Linux/Windows/sanitizer/fuzz/capacity/
-1h/3h 与 v1 package/SBOM/checksum 资产。不得创建 v1.0 tag、Release 或稳定性承诺。
-
-### 13.1 v1 稳定范围
-
-- Linux/epoll 和 Windows/IOCP；
-- EventLoop、TCP、Timer、owner/lifecycle/admission/typed result；
-- 已安装的 protocol、transport、session、logic、broadcast 能力；
-- Profile A/B/C 的官方 workload 指南和跨平台证据；
-- 经 M5 证明的极窄 Runtime API；若 M5 为 `NO-PROMOTION` 则不强行加入；
-- Apache-2.0、SBOM、NOTICE 和明确的兼容政策。
-
-### 13.2 v1 实验范围
-
-- io_uring 可安装后端，仅在 M6 完成时提供；
-- UDP/KCP experimental target；
-- Profile D 和尚未满足公共提升门的 adapter；
-- experimental 能力不计入稳定 backend parity。
-
-### 13.3 v1 发布门
-
-- stable API/ABI policy 独立审查；
-- 0.3→1.0 source migration consumer；
-- Linux/Windows Debug/Release、sanitizer、TSan、fuzz；
-- TCP、Runtime、RPC/TLS 适用场景的 paired benchmark/capacity；
-- fault injection；
-- game gateway 1h 与 Core 3h endurance；
-- 安装包、源码包、校验和、SBOM、许可证和第三方声明；
-- 所有 evidence 绑定同一 promotion commit；
-- 无 callback-after-destroy、kernel-reference-after-free、stranded Accepted work
-  或未说明的 public API drift。
-
-审计命中缺失证据分支，且当前连 v1 内部候选的版本/manifest/迁移合同也未建立，因此不
-创建空内部候选。恢复必须从 active v1 release intent、明确的 stable/provisional/
-experimental 分类与 ABI/toolchain policy 开始，再选择单一 promotion commit 执行
-全部门禁。
-
-通过后发布 `v1.0.0`。缺失 endurance、许可证、兼容性或生命周期证据时只能发布内部
-候选，不能以 waiver 宣称 v1 完成。
-
-## 14. Public Interfaces 与版本策略
-
-- v0.3：不新增 Runtime/backend public API；
-- v0.4：最多新增经双实现证明的 `LogicExecutor`、`RuntimeStopFuture`，复用
-  `TransportEndpoint`；
-- v0.5：条件性安装 `GameNet::experimental_io_uring`、`IoUringTcpServer`、
-  `IoUringTcpClient`；
-- v0.6：条件性提升通用 RPC codec/channel 到 `GameNet::protocol`，Lua 永久位于
-  Core 外；
-- v0.7：条件性提升 async/coroutine primitives，callback API 保持完整；
-- v0.8：TLS/DNS 位于 transport，WebSocket framing 位于 protocol，完整 HTTP 不进入 v1；
-- v0.9：安装 experimental datagram target，不纳入 stable API parity；
-- 条件未满足时记录 `NO-PROMOTION` 或 `skipped-by-evidence`，不创建占位接口；
-- 版本里程碑因证据分支被跳过时不发布空版本，后续可交付能力接管下一个可用版本号。
-
-## 15. 持续验证、WIP 与完成定义
-
-允许同时存在：
-
-1. 一个 Core 实现切片；
-2. 一个 Core 外部集成切片；
-3. 一个 CI/benchmark/capacity/endurance 证据任务。
-
-同一时刻只允许一个切片改变 stable Core 生命周期语义。每个 Core 切片必须遵守：
-
-```text
-intent -> invariants -> threading/ownership -> contracts
-       -> implementation -> exact-commit evidence
-```
+性能设计输入：`high-performance.md`、`high-performance2.md`
+
+当前治理基线：`202bf9f993575d144c4c440a3972dd80733da0a7`
+
+## 1. 总结与当前前沿
+
+- M1–M11、IOE-X1–X15 均已关闭；历史细节继续由 `assessment.md`、
+  `docs/migration_status.md` 和证据账本保存，不再占用本计划主体。
+- 新的唯一 Core 主线为 HP0–HP8：先建立成本账本，再依次优化 framing、跨域
+  mailbox、epoll 分发、发送/广播、预算与调度、内存局部性，最后条件性验证协程和
+  高级 backend。
+- stable v0.3 Core 保持源兼容；协议、传输、逻辑等 provisional 表面允许兼容新增。
+  所有快路径先在 provisional/source-private 层验证。
+- 同时只允许一个 Core 实现切片；benchmark/lab 证据任务可以并行。每个切片遵循
+  `intent -> rules -> contracts -> implementation -> exact-commit evidence`。
+
+## 2. 接口与架构边界
+
+- 向 provisional `GameNet::protocol` 兼容新增：
+
+  - `PacketView`：只借用调用方输入，不能保存、跨线程或跨 `co_await`；
+  - `OwnedPacket`：move-only 所有权载体；由 `PacketView::retain()` 至多复制一次；
+  - `FrameVisitResult`：包含状态、已消费字节、帧数和 continuation 标志；
+  - `PacketFramer::visitFrames(span, visitor)`：使用既有帧数/字节预算，直接解析
+    `TcpConnection::inputBuffer` 可读区；
+  - 现有 `push()`、`encode()` 和错误语义全部保留，并与新接口做 differential
+    contract。
+
+- mailbox/outbox、EventLoop mailbox source、OutputSegmentChain、credit cache 和
+  owner-local handle table 首先保持非安装、source-private。
+- `GameCommandQueue` 继续作为兼容实现和对照基线，不直接替换成万能 MPMC 队列。
+- HP4 通过性能门后，才对 stable `TcpConnection` 做独立兼容审查并兼容新增：
+
+  ```cpp
+  TcpSendResult trySendOwned(std::string&&);
+  TcpSendResult trySendShared(std::shared_ptr<const std::string>);
+  ```
+
+  现有 `trySend(std::string_view)` 保持 borrowed/兼容路径；正常高频回包通过 owner
+  outbox 回到连接 owner 后发送。
+- 不增加公共 Runtime factory、公共 mailbox、公共 backend selector 或默认
+  io_uring；不扩展到 HTTP、TLS、UDP/KCP、RPC、Lua、AOI 等模块。
+
+## 3. 执行里程碑
+
+### HP0：成本账本与固定性能实验室——当前立即执行
+
+状态：**基础设施已实现，exact-commit fixed-lab 证据 `DEFER`**。已建立 active intent、
+预登记矩阵、suite target、`gamenet.hot_path_cost.v1` runner/validator、普通 CI 静态守卫
+和双平台 self-hosted 手动工作流；当前工作树只能形成 development smoke，不能关闭 HP0。
+
+- 新建默认关闭、非安装的 hot-path benchmark，冻结
+  `gamenet.hot_path_cost.v1` 数据格式。
+- 覆盖 framing、NetworkLoop↔LogicShard、epoll readiness、发送、广播、连接容量和
+  关闭恢复。
+- 记录 cycles/instructions/LLC misses、allocations、copied bytes、syscalls、wakeup、
+  generic post、handoff、P50/P99/P999、queue age、RSS、过载恢复和 shutdown
+  convergence。
+- 固定原生 Linux/epoll 和 Windows/IOCP runner、CPU affinity、频率策略、编译器及
+  构建类型；WSL 只作开发证据。
+- 为每个后续切片预登记主指标、护栏指标和场景，形成优化前 exact-commit baseline。
+
+关闭门：benchmark schema/validator/CI guard 完整，当前 callback+mutex 路径完成基线，
+所有样本可追溯到精确提交。
+
+### HP1：零额外复制的 owner-local 解帧
+
+- 更新 active PacketFramer、Buffer、Profile A intent/rules，明确 `PacketView`
+  生命周期和 callback re-entry 限制。
+- `visitFrames` 直接读取调用方连续可读区；只在完整帧处理后返回消费长度，partial
+  frame 留在输入 Buffer。
+- owner-local handler 直接消费 view；跨域处理显式转换为 `OwnedPacket`。
+- Profile A 和 framing benchmark 增加 legacy/candidate 双路径；只有通过性能门才切换
+  默认 recipe。
+
+关闭门：
+
+- owner-local `allocations/frame = 0`、额外 payload copy 为 0、generic
+  post/wakeup/handoff 为 0；
+- partial/sticky/empty/oversized/budget/fault/reset 行为与旧 API 等价；
+- `tests/contract/protocol/test_packet_framer_view.cpp`、现有 PacketFramer contracts 和
+  fuzz 全部通过。
+
+### HP2：SPSC typed mailbox 与 owner outbox
+
+- 建立固定容量、原地构造、cache-line 隔离的 `SpscMailbox<T>`；支持 typed
+  rejection、batch push/drain 和无静默丢弃的关闭清算。
+- 每个 NetworkLoop→LogicShard 和 LogicShard→NetworkLoop 使用独立 SPSC；构造时按
+  `producer × consumer × capacity` 核算总内存，超出 `maxMailboxBytes` 直接拒绝，不
+  自动回退 MPSC/MPMC。
+- 增加 source-private EventLoop mailbox source：预注册、generation-safe、无每消息
+  queue node，仅 empty→non-empty 通知；它拥有独立有界阶段，不借用 control/lifecycle
+  lane。
+- Profile B 使用内部 `DataPlaneCommand<OwnedPacket>`，批量 drain，结果经 owner
+  outbox 返回并重验 route generation；现有 `GameCommandQueue` 保留为基线。
+- Profile B 通过后，再分别验证 C/D；不因实现复用而提升公共 Runtime API。
+
+关闭门：
+
+- payload copy ≤1、无每消息 queue allocation、每 burst 每方向最多一次 wakeup；
+- QueueFull/Stopped/OwnerUnavailable 可区分，Accepted 工作全部处理或形成显式
+  cancelled/discarded 终局；
+- lost wakeup、wraparound、shutdown residue、route generation 和回调重入合同通过；
+- `tests/contract/event_loop/test_event_loop_mailbox_source.cpp`、
+  `tests/contract/runtime_model/test_spsc_mailbox.cpp`、现有 Network/Logic split contract
+  通过；
+- callback+SPSC 相对 callback+mutex 达到推广门。
+
+### HP3：epoll O(1) readiness dispatch
+
+- 将 wait 热路径改为 slot arena：`slot index + generation` 写入
+  `epoll_event.data.u64`。
+- fd→slot 哈希只用于 register/update/cancel；wait 通过数组直接定位、generation 校验
+  和 `lastBatchEpoch` O(1) 合并。
+- slot 复用必须先换代；wakeup token、stale fd、兴趣变更和 active-batch
+  invalidation 语义保持不变。
+- 保持 `ReadinessRegistrationIdentity` 观察语义和 stable Core API 不变。
+
+关闭门：
+
+- wait 热路径无 `unordered_map` 查询和线性 notice 去重；
+- slot reuse、fd reuse、重复 mask、remove/re-register、epoch wrap、wakeup 与 stale
+  notice 合同通过；
+- `tests/contract/io_engine/test_readiness_engine.cpp` 和新增 slot-arena contract 通过；
+- 1K/10K/100K 连接、不同活跃比例下达到推广门；Windows 回归零语义变化。
+
+### HP4：分段发送、所有权发送与广播 owner-direct
+
+- 内部建立有界 `OutputSegmentChain`，segment 持有 owned 或 immutable shared storage
+  及 offset。
+- Linux 使用 `writev/sendmsg`，Windows 使用多 `WSABUF` 的 `WSASend`；单次最多 16 段
+  或 64 KiB。
+- 队列为空时仍立即尝试 direct send；micro-batching 只合并当前 owner turn，不为凑
+  批次等待下一轮。
+- owner outbox 使用 owned send；广播 owner task 一次验证 owner/generation 后批量
+  shared send，统计批量发布。
+- 先以 source-private 路径验证；通过门后才按第 2 节签名增加 stable Core API，并更新
+  API manifest/review。
+
+关闭门：
+
+- header/payload 不再为发送强制拼接；部分写保持顺序、offset 和精确 pending-byte
+  核算；
+- connection/loop/server/global hard limit 不超发，关闭后 segment/byte residue 为 0；
+- 新增 owned/shared/segmented send contracts，并保持现有 IOCP segmented-write、
+  output-memory 和真实广播集成测试通过。
+
+### HP5：分片 credit 与多级背压降原子成本
+
+- 为 fast path 增加 loop-local credit lease；连接 owner 使用本地记账，上级预算只在
+  批量领取/归还时访问跨核 atomic。
+- credit 采用保守预留，任何时刻 global、server、loop、connection hard limit 均不得
+  超发。
+- 公共跨线程 `trySend` 兼容路径继续使用原有精确 admission；mailbox/outbox 快路径
+  进入 owner 后消费 credit。
+- 停机、连接迁移失败、owner unavailable 和异常必须归还全部 credit。
+
+关闭门：新增并发领取/回收、层级拒绝、关闭清算合同；现有 TCP/Broadcast
+memory-budget contracts 全部通过；atomic operations/message 明确下降并达到推广门。
+
+### HP6：自适应有界调度与内存局部性
+
+- HP6-A：EventLoop 在既有数量上限外增加每阶段时间预算、backlog、oldest age 和
+  weighted deficit；control/lifecycle 保留最低服务，任何阶段不得无限 drain，budget
+  exhausted 后继续 `poll(0)`。
+- HP6-B：只池化 HP0 证明为热点的 Packet block、Output segment 和 mailbox storage；
+  per-loop pool 的跨线程归还通过有界 reclaim mailbox 回原 owner，并参与 final drain。
+- HP6-C：根据 cache-miss/bytes-per-connection 证据拆分 TcpConnection 热冷字段；
+  Connection/Channel pool 和 NUMA 策略仅在前述证据表明收益时实施。
+- generic functor 队列仍服务低频控制/兼容 API，不为高频 packet 数据面使用。
+
+关闭门：公平性、队列年龄、Timer/lifecycle 最低进度、pool exhaustion、remote reclaim、
+shutdown zero-residue 合同通过；每项子优化独立测量，不把多个变化混入一个性能结论。
+
+### HP7：条件性协程与高容量 Timer 实验
+
+启动条件：HP2 已集成，且存在含两个以上真实异步等待点的 Session/RPC-like 流程。
+否则记录 `SKIPPED-BY-EVIDENCE`。
+
+- 先重写 deferred async/coroutine intents，修正 shutdown 不恢复、任意线程
+  continuation 和通用 functor resume 等旧语义，再激活非安装实验 target。
+- 实现 `OwnerTask<T>`、owner-local `CoroutineReadyQueue`、bounded remote resume
+  mailbox、CancellationToken、asyncSleep 和 connection awaiters。
+- 一个连接/Session 一个长生命周期 coroutine；禁止一包一 coroutine、广播内层
+  coroutine 和固定 Tick 实体 coroutine。
+- owner-local completion 只入 ready queue，在独立有界阶段批量 resume；跨线程
+  resume 经 typed mailbox 返回 origin owner。
+- Completion operation 独立于 coroutine frame；内核 terminal completion 前不得释放
+  operation storage。
+- `PacketView` 禁止跨 suspend；可挂起路径只能持有 `OwnedPacket`。
+- 只有 ready queue、取消和 owner-return 语义通过后才考虑 `whenAll/whenAny`；父
+  continuation 必须回 origin owner。
+- 仅当并发 Timer 规模达到 10 万且现有 TimerQueue 成为已测热点时，增加独立
+  `HighVolumeTimerWheel`；现有精确定时队列保留。
+
+关闭门：
+
+- frame allocation ≤1/connection、per-await allocation=0、arbitrary-thread resume=0、
+  terminal waiter residue=0；
+- 完成 callback+mutex、coroutine+mutex、callback+SPSC、coroutine+SPSC 四组同场景
+  对照；
+- coroutine+SPSC 满足推广门，否则保持非安装实验且相关公共 intents 继续 deferred。
+
+### HP8：backend、构建 Profile 与最终推广审查
+
+- 在用户态数据路径完成后，重新比较 epoll、IOCP 和 io_uring 的相同
+  Server/Client/Profile 场景。
+- io_uring 的 multishot accept/recv、provided buffer、registered files、send bundle
+  各自独立实验；SQPOLL 仅用于 DedicatedLowLatency 部署 Profile。
+- 不因采用 io_uring 而推广；只在明确 Runtime Profile 上满足吞吐、尾延迟、CPU、内存
+  和关闭门才扩大实验范围。
+- 提供 `PortableRelease`、`NativeTunedRelease`、`PGORelease`、`Sanitizer`、
+  `BenchmarkInstrumented` 构建 Profile；portable package 不默认使用 `-march=native`。
+- 输出 CPU affinity、NUMA、IRQ/RSS/RPS/XPS、socket buffer、TCP_NODELAY 和可选
+  SO_REUSEPORT 部署指南；SO_REUSEPORT 仍受现有 accept-topology 证据门控制。
+- 完成 HP0 全矩阵复测和独立架构/API 审查后，再决定下一版本号；不创建空版本或提前
+  承诺 v1。
+
+## 4. 性能、测试与推广规则
+
+- 普通 PR：Linux/Windows correctness、focused repeat、ASan/UBSan、TSan、fuzz、
+  capacity、API/scope guards，并保留现有宽松灾难性回退门。
+- 固定性能实验室：每个 revision/scenario 先 1 次不计入 warmup，再执行至少 10 个
+  交错正式样本；保存原始样本、机器信息、命令、commit、二进制 hash 和
+  `perf stat`/等价数据。
+- 默认路径推广必须同时满足：
+
+  - 预登记主指标中位数改善至少 5%，且 95% bootstrap 置信区间不跨越无改善；
+  - 非目标吞吐、P99/P999、CPU、RSS、恢复和关闭指标回退不超过 3%；
+  - 结构成本合同、生命周期、背压、owner、generation 和零残留全部通过。
+
+- 未达到 5% 但 correctness 完整的实现标记 `KEEP-EXPERIMENTAL`；出现生命周期或核算
+  失败则 `REJECT`；缺少硬件/场景证据则 `DEFER`，不得降低负载后宣称通过。
+- 最终矩阵覆盖 32–16384 字节、1K/10K/100K 连接、0.1%–100% 活跃度、
+  50%–overload，以及 ping-pong、单向吞吐、burst、churn、广播、慢客户端、fixed
+  Tick、queued logic 和 shutdown/recovery。
+
+## 5. 固定假设
+
+- 高性能优先于 v1 发布准备；HP8 之前不恢复 v1 发布线。
+- callback API 永久保留；协程是后置、条件性、非安装实验。
+- 固定拓扑优先 SPSC；MPSC 只在 SPSC matrix 的实测内存或拓扑证据不合格后另立
+  切片，MPMC 不作为默认方案。
+- Linux 默认仍为 epoll，Windows 默认仍为 IOCP，io_uring 保持显式 opt-in。
+- “高性能”以满足 P99/P999 SLO 时的持续负载、每消息成本和饱和恢复为准，不以单一
+  Echo 峰值定义。
+
+## 6. 状态与完成定义
 
 任务状态统一为：
 
@@ -669,30 +259,25 @@ intent -> invariants -> threading/ownership -> contracts
 planned -> contract-ready -> implemented -> verified -> integrated
 ```
 
+每个 HP 切片必须明确输出 `INTEGRATE`、`KEEP-EXPERIMENTAL`、`REJECT`、`DEFER` 或
+`SKIPPED-BY-EVIDENCE`，不得以“后续再决定”结束。
+
 `integrated` 必须满足：
 
-- active intent 与 rules 和实现一致；
-- owner、ownership、re-entry、cross-thread marshal、typed failure 和 shutdown 有答案；
+- 对应 intent 为 active，且 rules、实现和文档一致；
+- owner、ownership、callback re-entry、cross-thread marshal 和 shutdown 均有明确答案；
 - 具体 contract 在目标行为回归时会失败；
-- focused repeat、全量、双平台、sanitizer、scope 和 API guards 达到阶段门；
-- 热路径变化有 benchmark/capacity 数字；
-- evidence 绑定精确 commit；
-- migration status、roadmap、README、plan 和 evidence ledger 描述同一当前事实；
-- 历史证据不被提升为当前提交结论。
+- focused、全量、双平台、sanitizer、API/scope guard 达到阶段门；
+- 性能结论绑定同一精确提交并满足本计划的 5%/3% 推广规则；
+- Accepted 工作、队列、operation、segment、credit、pool 和 retained storage 全部形成
+  可观察终局并收敛至零残留；
+- README、roadmap、migration status、assessment、plan 和 evidence ledger 描述同一
+  当前事实。
 
-## 16. 当前立即执行
+## 7. 当前立即执行
 
-> **当前执行计划已关闭，无后台 Core 证据任务**：M1–M11
-> 与 IOE-X11–IOE-X15 已关闭。X15 在
-> `43795e841ba2a279ed6a3d5d831d60a9f2a25570` 建立显式 Linux-only experimental
-> 安装面并保持稳定 v0.3 零漂移；未创建 tag 或 GitHub Release。M7 Gateway 实现
-> `e43393c`、closure `588acd0` 与 YanGameServer `b525416` 8/8 比较已以
-> `NO-PROMOTION` 关闭。M8 Core 3/3 与 YanGame 9/9 证据又因 Gateway 无
-> coroutine、Task/owner/retirement 合同不可替代而以 `NO-PROMOTION` 关闭。M9 又因
-> Gateway 无 TLS/WebSocket/DNS、YanGame native-worker mTLS 明确排除 GameNet
-> EventLoop TLS、且不存在第二个 WebSocket/DNS consumer 而以 `NO-PROMOTION` 关闭。
-> M10 又因两个外部 consumer 均无 datagram runtime、五个 intent 未提升、旧迁移源
-> 缺少当前 typed/generation/bounds/双平台合同而以 `NO-PROMOTION` 关闭。M11 当前
-> Windows/工具回归通过，但 v1 policy、迁移 consumer、同提交跨平台/endurance 和资产
-> 不完整，故以 `DEFER` / `NO-RELEASE` 关闭。stable v0.3 保持当前版本；未来只有在
-> 新 active v1 intent 和证据计划建立后才恢复，不得创建空 tag 或 GitHub Release。
+> **当前前沿为 HP0：成本账本与固定性能实验室。** schema、默认关闭且非安装的
+> benchmark suite、validator/CI guard 已实现；下一步只允许选择干净精确提交，在固定
+> 原生 Linux/epoll 与 Windows/IOCP runner 上补齐 observer 成本，并各执行 1 次不计入
+> warmup + 至少 10 次正式样本。HP0 关闭前不得开始 HP1 Core 实现，也不得提前增加
+> PacketView、mailbox、稳定发送 API、coroutine target 或高级 io_uring capability。

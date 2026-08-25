@@ -88,6 +88,8 @@ def main() -> None:
     require(benchmark_text, "logic_to_network_p999_us", benchmark)
     require(benchmark_text, "queue_oldest_age_max_us", benchmark)
     require(benchmark_text, "working_set_delta_bytes", benchmark)
+    require(benchmark_text, "std::cout.flush()", benchmark)
+    require(benchmark_text, "failed to flush complete JSON output", benchmark)
     require(benchmarks_cmake_text, "gamenet_multi_io_queued_benchmark", benchmarks_cmake)
     assert "install(TARGETS gamenet_multi_io_queued" not in examples_cmake_text
     assert not (repo_root / "include" / "gamenet" / "runtime_profile").exists(), (

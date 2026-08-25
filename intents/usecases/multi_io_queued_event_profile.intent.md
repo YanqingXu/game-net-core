@@ -87,7 +87,9 @@ histogram network-to-logic and logic-to-network P99/P999 plus maximum queue age.
 
 The first benchmark is directional: it records throughput, both handoff tails,
 queue age/depth, coalescing, memory and shutdown for the exact Profile B
-composition. It is not promotion evidence.
+composition. It flushes and checks the complete JSON document before returning
+zero, so an empty or truncated stdout stream cannot become evidence. It is not
+promotion evidence.
 
 ## 6. Verification
 

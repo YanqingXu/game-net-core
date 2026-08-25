@@ -89,6 +89,16 @@ or governance front and no running Core evidence task after the M11 decision
 closure. Any future v1 effort must begin with a new active release intent and
 exact evidence plan.
 
+The no-open-front sentence above is the historical M11 closure state. On
+2026-08-25, governance baseline
+`202bf9f993575d144c4c440a3972dd80733da0a7` opened the HP0–HP8
+performance-first line. HP0 is now the unique active front. Its active intent,
+default-off/non-installed suite target, preregistered six-scenario inventory,
+`gamenet.hot_path_cost.v1` runner/validator, repository guards, documentation,
+and named self-hosted Linux/epoll plus Windows/IOCP workflow are implemented in
+the working change. No clean exact-commit fixed-lab ledger exists yet, so HP0
+evidence remains `DEFER` and HP1 Core implementation is not authorized.
+
 Current IOE-X15 implementation/evidence checkpoint:
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
 
@@ -534,7 +544,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 68 | 37 | 20 | 11 | 196 |
+| 69 | 38 | 20 | 11 | 198 |
 
 ## Historical Production-Hardening Evidence
 

@@ -486,9 +486,6 @@ def main() -> None:
     require(assessment_text, "NO-PROMOTION", assessment)
     require(assessment_text, "公共 backend selector", assessment)
 
-    require(plan_text, current_governance_checkpoint, plan)
-    require(plan_text, current_implementation_checkpoint, plan)
-    require(plan_text, m5_decision_checkpoint, plan)
     require(status_text, m5_decision_checkpoint, migration_status)
     require(evidence_ledger_text, m5_decision_checkpoint, evidence_ledger)
     require(evidence_ledger_text, "M5 Runtime Boundary Re-review", evidence_ledger)
@@ -496,7 +493,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -507,7 +503,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -518,7 +513,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -529,7 +523,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -540,7 +533,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -553,7 +545,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -585,7 +576,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -634,7 +624,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -671,7 +660,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -714,7 +702,6 @@ def main() -> None:
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
-        (plan_text, plan),
         (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
@@ -763,28 +750,35 @@ def main() -> None:
     assert not git(repo_root, "tag", "-l", "v1*"), (
         "M11 NO-RELEASE closure must not create a local v1 tag"
     )
+    hp0_governance_baseline = "202bf9f993575d144c4c440a3972dd80733da0a7"
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
         (assessment_text, assessment),
         (plan_text, plan),
-        (goal_text, goal),
         (readme_text, readme),
         (evidence_ledger_text, evidence_ledger),
     ):
-        require(text, m11_core_baseline[:7], source)
         require(text, "M11", source)
-        require(text, "DEFER", source)
-        require(text, "NO-RELEASE", source)
+        require(text, "HP0", source)
+        require(text, hp0_governance_baseline, source)
+    for text, source in (
+        (status_text, migration_status),
+        (roadmap_text, roadmap),
+        (assessment_text, assessment),
+        (readme_text, readme),
+        (evidence_ledger_text, evidence_ledger),
+    ):
         assert any(
             phrase in text
             for phrase in (
-                "no open implementation or governance front",
-                "no open governance front",
-                "当前没有开放的治理前沿",
-                "无开放治理前沿",
+                "historical M11 closure",
+                "historical M1–M11 line",
+                "historically closed",
+                "历史判定不变",
+                "历史 M11 关闭事实",
             )
-        ), f"{source} must record the M11 no-open-front closure"
+        ), f"{source} must distinguish historical M11 closure from the HP0 front"
     require(m7_readiness_text, "connection EventLoop owner", m7_readiness)
     require(m7_readiness_text, "gateway logic/Lua cell owner", m7_readiness)
     require(m7_readiness_text, "callback re-entry", m7_readiness)
@@ -891,75 +885,44 @@ def main() -> None:
         migration_status,
     )
     require(status_text, "103 threading and 108 lifecycle labels", migration_status)
-    require(plan_text, "默认测试基线为 130", plan)
-    require(plan_text, "Linux experimental 基线为 140", plan)
-    require(plan_text, "# game-net-core 完整后续执行计划：IOE-X10 至 v1.0", plan)
+    require(plan_text, "# game-net-core 高性能执行计划：HP0–HP8", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
-    require(plan_text, "当前评估：`assessment.md`", plan)
-    require(plan_text, "当前没有开放的治理前沿", plan)
-    assert plan_text.count("当前唯一治理前沿") == 0, (
-        "closed plan must not declare a current governance front"
-    )
-    for milestone in (
-        "M1：IOE-X10、ARCH-G1 与治理统一",
-        "M2：v0.3.0 内部候选",
-        "M3：`gamenet-game-gateway` 真实集成",
-        "M4：Apache-2.0 下的 v0.3.0 外部发布",
-        "M5：v0.4 Runtime 边界",
-        "M6：v0.5 io_uring 可安装实验后端",
-        "M7：v0.6 Lua 与 typed RPC",
-        "M8：v0.7 Async 与 Coroutine",
-        "M9：v0.8 TLS、Web" + "Socket 与 DNS",
-        "M10：v0.9 UDP/KCP 实验能力",
-        "M11：v1.0 稳定化与发布",
-    ):
-        require(plan_text, milestone, plan)
+    require(plan_text, "性能设计输入：`high-performance.md`、`high-performance2.md`", plan)
+    require(plan_text, hp0_governance_baseline, plan)
+    require(plan_text, "M1–M11、IOE-X1–X15 均已关闭", plan)
+    require(plan_text, "stable v0.3 Core 保持源兼容", plan)
     roadmap_milestones = re.findall(
-        r"^##\s+\d+\.\s+M(?:[1-9]|1[01])：",
+        r"^###\s+HP[0-8]：",
         plan_text,
         re.MULTILINE,
     )
-    assert len(roadmap_milestones) == 11, (
-        "plan must contain exactly eleven executable roadmap milestones"
+    assert len(roadmap_milestones) == 9, (
+        "plan must contain exactly nine HP0-HP8 milestones"
     )
-    require(plan_text, "v0.3.0-internal-candidate", plan)
-    require(plan_text, "gamenet-game-gateway", plan)
-    require(plan_text, "NO-PROMOTION", plan)
-    require(plan_text, "M5：v0.4 Runtime 边界", plan)
-    require(plan_text, "状态：**已关闭，第二次 `NO-PROMOTION`**", plan)
-    require(plan_text, "当前执行计划已关闭，无后台 Core 证据任务", plan)
-    require(plan_text, "runtime_profile_load_selection_guide.md", plan)
-    require(plan_text, "不开放公共 backend selector", plan)
-    require(plan_text, "IOE-X1–X9", plan)
-    require(plan_text, "X10=DEFER 或 ARCH-G1 要求暂停", plan)
-    require(plan_text, "X10=PROMOTE 且 ARCH-G1=APPROVE", plan)
-    require(plan_text, "M6 标记 skipped-by-evidence", plan)
-    for slice_name in ("IOE-X11", "IOE-X12", "IOE-X13", "IOE-X14", "IOE-X15"):
-        require(plan_text, slice_name, plan)
-    require(plan_text, "GameNet::experimental_io_uring", plan)
-    require(plan_text, "IoUringTcpServer", plan)
-    require(plan_text, "IoUringTcpClient", plan)
-    require(plan_text, "Apache-2.0", plan)
-    require(plan_text, "GameNet::experimental_datagram", plan)
-    require(plan_text, "v1 稳定范围", plan)
-    require(plan_text, "v1 实验范围", plan)
-    require(plan_text, "v1 发布门", plan)
-    require(plan_text, "Linux/epoll 和 Windows/IOCP", plan)
-    require(plan_text, "完整 HTTP server", plan)
-    require(plan_text, "raw ICMP", plan)
-    require(plan_text, "版本里程碑因证据分支被跳过时不发布空版本", plan)
-    for fixed_protocol_anchor in (
-        "并发 active routes | 256",
-        "`maxPendingAccepts` | 32",
-        "4 波，每波替换 64 routes",
-        "每连接 echo round trips | 100",
-        "payload | 64 bytes",
-        "每个 backend 5 次 Release 样本",
+    for hp_anchor in (
+        "gamenet.hot_path_cost.v1",
+        "PacketView",
+        "OwnedPacket",
+        "FrameVisitResult",
+        "SpscMailbox<T>",
+        "slot index + generation",
+        "OutputSegmentChain",
+        "loop-local credit lease",
+        "OwnerTask<T>",
+        "PortableRelease",
+        "95% bootstrap",
+        "改善至少 5%",
+        "回退不超过 3%",
+        "KEEP-EXPERIMENTAL",
+        "SKIPPED-BY-EVIDENCE",
+        "当前前沿为 HP0",
+        "HP0 关闭前不得开始 HP1 Core 实现",
     ):
-        require(plan_text, fixed_protocol_anchor, plan)
-    require(plan_text, "M1 状态：已关闭", plan)
-    require(plan_text, "ARCH-G1：`APPROVE`", plan)
-    require(plan_text, "2026-08-22-ioe-x10-f5d39b8", plan)
+        require(plan_text, hp_anchor, plan)
+    require(plan_text, "TcpSendResult trySendOwned(std::string&&);", plan)
+    require(plan_text, "TcpSendResult trySendShared(std::shared_ptr<const std::string>);", plan)
+    require(plan_text, "不增加公共 Runtime factory", plan)
+    require(plan_text, "不创建空版本或提前", plan)
     assert "IOE-R2's generation-safe epoll Readiness Engine" not in plan_text
     assert "IOE-X8 cross-thread admission/lifecycle equivalence is next" not in plan_text
     require(
@@ -1116,13 +1079,6 @@ def main() -> None:
         assessment,
     )
     require(assessment_text, "Linux experimental 基线为 136", assessment)
-    require(
-        normalized_plan_text,
-        f"默认测试基线为 {configured_test_count}（{unit_count} unit、"
-        f"{contract_count} contract、{integration_count} integration）",
-        plan,
-    )
-    require(plan_text, "Linux experimental 基线为 140", plan)
     require(status_text, "gamenet.core_benchmark.v2", migration_status)
     require(status_text, "MetricsExporter is active but provisional", migration_status)
     require(

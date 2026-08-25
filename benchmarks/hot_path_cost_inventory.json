@@ -1,0 +1,152 @@
+{
+  "schema": "gamenet.hot_path_cost_inventory.v1",
+  "cost_keys": [
+    "cycles",
+    "instructions",
+    "llc_load_misses",
+    "allocations",
+    "copied_bytes",
+    "syscalls",
+    "wakeups",
+    "generic_posts",
+    "handoffs",
+    "latency_p50_us",
+    "latency_p99_us",
+    "latency_p999_us",
+    "queue_age_max_us",
+    "rss_bytes",
+    "overload_recovery_ms",
+    "shutdown_convergence_us"
+  ],
+  "scenarios": [
+    {
+      "key": "framing.callback-copy",
+      "domains": ["framing"],
+      "baseline": "callback+copy",
+      "hp_slices": ["HP1"],
+      "executable": "phase4",
+      "child_schema": "gamenet.phase4_benchmark.v1",
+      "arguments": ["--scenario", "framing", "--messages", "250000", "--payload", "256", "--threads", "1", "--batch", "64", "--fanout", "1", "--tick-us", "1000", "--timeout-ms", "30000"],
+      "primary": {"name": "operations_per_second", "direction": "higher", "source": "measurements.operations_per_second"},
+      "guardrails": [
+        {"name": "throughput_mib_per_second", "direction": "higher", "source": "measurements.throughput_mib_per_second"}
+      ],
+      "required_costs": ["cycles", "instructions", "llc_load_misses", "allocations", "copied_bytes"],
+      "cost_sources": {}
+    },
+    {
+      "key": "network-logic.callback-mutex",
+      "domains": ["network_logic"],
+      "baseline": "callback+mutex",
+      "hp_slices": ["HP2", "HP5", "HP6", "HP7"],
+      "executable": "queued",
+      "child_schema": "gamenet.multi_io_queued_benchmark.v1",
+      "arguments": ["5000", "256", "4"],
+      "primary": {"name": "messages_per_second", "direction": "higher", "source": "messages_per_second"},
+      "guardrails": [
+        {"name": "network_to_logic_p99_us", "direction": "lower", "source": "network_to_logic_p99_us"},
+        {"name": "network_to_logic_p999_us", "direction": "lower", "source": "network_to_logic_p999_us"},
+        {"name": "logic_to_network_p99_us", "direction": "lower", "source": "logic_to_network_p99_us"},
+        {"name": "logic_to_network_p999_us", "direction": "lower", "source": "logic_to_network_p999_us"},
+        {"name": "working_set_after_bytes", "direction": "lower", "source": "working_set_after_bytes"},
+        {"name": "drain_callbacks", "direction": "lower", "source": "drain_callbacks"},
+        {"name": "shutdown_us", "direction": "lower", "source": "shutdown_us"}
+      ],
+      "required_costs": ["cycles", "instructions", "llc_load_misses", "allocations", "copied_bytes", "syscalls", "wakeups", "generic_posts", "handoffs", "latency_p99_us", "latency_p999_us", "queue_age_max_us", "rss_bytes", "shutdown_convergence_us"],
+      "cost_sources": {
+        "generic_posts": "producer_wake_posts",
+        "handoffs": "cross_domain_handoffs",
+        "latency_p99_us": "network_to_logic_p99_us",
+        "latency_p999_us": "network_to_logic_p999_us",
+        "queue_age_max_us": "queue_oldest_age_max_us",
+        "rss_bytes": "working_set_after_bytes",
+        "shutdown_convergence_us": "shutdown_us"
+      }
+    },
+    {
+      "key": "readiness-send.callback-borrowed",
+      "domains": ["readiness", "send"],
+      "baseline": "callback+borrowed",
+      "hp_slices": ["HP3", "HP4", "HP5", "HP8"],
+      "executable": "core",
+      "child_schema": "gamenet.core_benchmark.v2",
+      "arguments": ["--scenario", "echo", "--connections", "16", "--threads", "4", "--messages", "5000", "--payload", "256", "--settle-ms", "500", "--timeout-ms", "60000"],
+      "primary": {"name": "messages_per_second", "direction": "higher", "source": "measurements.messages_per_second"},
+      "guardrails": [
+        {"name": "p99_latency_us", "direction": "lower", "source": "measurements.p99_latency_us"},
+        {"name": "p999_latency_us", "direction": "lower", "source": "measurements.p999_latency_us"},
+        {"name": "working_set_after_bytes", "direction": "lower", "source": "measurements.working_set_after_bytes"},
+        {"name": "server_stop_seconds", "direction": "lower", "source": "measurements.server_stop_seconds"}
+      ],
+      "required_costs": ["cycles", "instructions", "llc_load_misses", "allocations", "copied_bytes", "syscalls", "latency_p50_us", "latency_p99_us", "latency_p999_us", "rss_bytes", "shutdown_convergence_us"],
+      "cost_sources": {
+        "latency_p50_us": "measurements.p50_latency_us",
+        "latency_p99_us": "measurements.p99_latency_us",
+        "latency_p999_us": "measurements.p999_latency_us",
+        "rss_bytes": "measurements.working_set_after_bytes",
+        "shutdown_convergence_us": {"source": "measurements.server_stop_seconds", "scale": 1000000.0}
+      }
+    },
+    {
+      "key": "broadcast.current-owner-tasks",
+      "domains": ["broadcast"],
+      "baseline": "callback+owner-tasks",
+      "hp_slices": ["HP4", "HP5", "HP6"],
+      "executable": "phase4",
+      "child_schema": "gamenet.phase4_benchmark.v1",
+      "arguments": ["--scenario", "broadcast-fanout", "--messages", "32", "--payload", "256", "--threads", "4", "--batch", "64", "--fanout", "4096", "--tick-us", "1000", "--timeout-ms", "60000"],
+      "primary": {"name": "operations_per_second", "direction": "higher", "source": "measurements.operations_per_second"},
+      "guardrails": [
+        {"name": "fanout_completion_p99_us", "direction": "lower", "source": "measurements.broadcast_fanout_completion_p99_us"},
+        {"name": "endpoint_latency_p99_us", "direction": "lower", "source": "measurements.broadcast_endpoint_latency_p99_us"},
+        {"name": "working_set_peak_bytes", "direction": "lower", "source": "measurements.working_set_peak_bytes"}
+      ],
+      "required_costs": ["cycles", "instructions", "llc_load_misses", "allocations", "copied_bytes", "syscalls", "wakeups", "generic_posts", "latency_p50_us", "latency_p99_us", "rss_bytes"],
+      "cost_sources": {
+        "latency_p50_us": "measurements.broadcast_fanout_completion_p50_us",
+        "latency_p99_us": "measurements.broadcast_fanout_completion_p99_us",
+        "rss_bytes": "measurements.working_set_peak_bytes"
+      }
+    },
+    {
+      "key": "connection-capacity.current",
+      "domains": ["connection_capacity", "shutdown"],
+      "baseline": "callback+current-storage",
+      "hp_slices": ["HP3", "HP6", "HP8"],
+      "executable": "core",
+      "child_schema": "gamenet.core_benchmark.v2",
+      "arguments": ["--scenario", "connections", "--connections", "10000", "--threads", "4", "--settle-ms", "2000", "--timeout-ms", "120000"],
+      "primary": {"name": "connection_establish_per_second", "direction": "higher", "source": "measurements.connection_establish_per_second"},
+      "guardrails": [
+        {"name": "approx_bytes_per_connection", "direction": "lower", "source": "measurements.approx_bytes_per_connection"},
+        {"name": "connection_close_seconds", "direction": "lower", "source": "measurements.connection_close_seconds"},
+        {"name": "server_stop_seconds", "direction": "lower", "source": "measurements.server_stop_seconds"}
+      ],
+      "required_costs": ["cycles", "instructions", "llc_load_misses", "allocations", "syscalls", "rss_bytes", "shutdown_convergence_us"],
+      "cost_sources": {
+        "rss_bytes": "measurements.working_set_after_bytes",
+        "shutdown_convergence_us": {"source": "measurements.server_stop_seconds", "scale": 1000000.0}
+      }
+    },
+    {
+      "key": "overload-recovery.current",
+      "domains": ["send", "broadcast", "overload_recovery", "shutdown"],
+      "baseline": "callback+hierarchical-budgets",
+      "hp_slices": ["HP4", "HP5", "HP6", "HP8"],
+      "executable": "capacity",
+      "child_schema": "gamenet.capacity_profile.v1",
+      "arguments": ["--scenario", "slow-broadcast-recovery", "--connections", "100", "--threads", "4", "--messages", "10", "--payload-bytes", "32768", "--low-water-bytes", "32768", "--high-water-bytes", "65536", "--hard-limit-bytes", "262144", "--server-send-buffer-bytes", "4096", "--recovery-threshold-bytes", "0", "--pressure-settle-ms", "500", "--recovery-stable-ms", "250", "--timeout-ms", "120000", "--iocp-accept-depth", "32"],
+      "primary": {"name": "recovery_elapsed_ms", "direction": "lower", "source": "recovery.elapsed_ms"},
+      "guardrails": [
+        {"name": "pending_peak_bytes", "direction": "lower", "source": "pressure.pending_peak_bytes"},
+        {"name": "working_set_peak_bytes", "direction": "lower", "source": "process.working_set_peak_bytes"},
+        {"name": "teardown_released", "direction": "exact", "source": "checks.teardown_released"}
+      ],
+      "required_costs": ["cycles", "instructions", "llc_load_misses", "allocations", "copied_bytes", "syscalls", "rss_bytes", "overload_recovery_ms", "shutdown_convergence_us"],
+      "cost_sources": {
+        "rss_bytes": "process.working_set_peak_bytes",
+        "overload_recovery_ms": "recovery.elapsed_ms"
+      }
+    }
+  ]
+}

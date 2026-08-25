@@ -112,6 +112,12 @@ no v1 API/ABI policy, 0.3-to-1.0 consumer, same-commit dual-platform/
 sanitizer/capacity/endurance evidence, or v1 artifacts. M11 therefore closes
 as `DEFER` / `NO-RELEASE`: stable v0.3 remains current, no v1 tag or package is
 created, and M1–M11 are fully adjudicated with no open governance front.
+That sentence is the historical M11 closure state. On 2026-08-25 the project
+opened a new performance-first HP0–HP8 line at governance baseline
+`202bf9f993575d144c4c440a3972dd80733da0a7`. The unique current front is HP0:
+the default-off, non-installed `gamenet.hot_path_cost.v1` cost ledger and fixed
+native Linux/epoll plus Windows/IOCP laboratory. HP1 runtime work remains
+blocked until clean exact-commit fixed-lab ledgers exist on both platforms.
 Production Linux remains epoll, Windows remains IOCP, and the reviewed stable
 API remains zero-diff. Historical
 API-R1/PERF-R1 and REL-C1 evidence remains immutable: implementation checkpoint

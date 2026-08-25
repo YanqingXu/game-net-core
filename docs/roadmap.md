@@ -5,7 +5,16 @@ The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
 See `migration_status.md` for the current checked state of these phases.
 
-## Current Roadmap Checkpoint — 2026-08-24
+## Current Roadmap Checkpoint — 2026-08-25
+
+- The historical M1–M11 line remains fully adjudicated, and stable v0.3 stays
+  current. Governance baseline
+  `202bf9f993575d144c4c440a3972dd80733da0a7` opens the performance-first
+  HP0–HP8 line. HP0 is the unique current front: freeze the default-off,
+  non-installed `gamenet.hot_path_cost.v1` ledger, preregister costs and
+  guardrails, and produce clean exact-commit native Linux/epoll and
+  Windows/IOCP baselines. The infrastructure is implemented in the working
+  change, but fixed-lab evidence remains `DEFER`; HP1 is not authorized yet.
 
 - Historical REL-C1 implementation checkpoint
   `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled

@@ -1,8 +1,13 @@
 # 总体判断
 
-本次检查以 2026-08-24 M11 v1.0 稳定化与发布就绪审查
-`DEFER` / `NO-RELEASE` 关闭；M1–M11 已全部完成证据审计，当前没有开放的治理前沿，
-stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。`game-net-core` 已经不再只是从
+2026-08-24 的 M11 v1.0 稳定化与发布就绪审查仍以 `DEFER` / `NO-RELEASE`
+关闭，M1–M11 的历史判定不变，stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。
+2026-08-25 已在治理基线 `202bf9f993575d144c4c440a3972dd80733da0a7`
+打开性能优先的 HP0–HP8 路线；当前唯一前沿为 HP0 成本账本与固定性能实验室。
+`gamenet.hot_path_cost.v1` 的 schema、预登记矩阵、runner、validator、静态 CI guard
+和双平台 self-hosted 工作流已进入实现，但干净 exact-commit 的 Linux/epoll 与
+Windows/IOCP 各十次正式样本尚未形成，因此当前证据结论为 `DEFER`，HP1 仍被门禁阻塞。
+`game-net-core` 已经不再只是从
 `mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：
 

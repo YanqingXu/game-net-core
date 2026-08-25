@@ -1,0 +1,199 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: HP0 fixed hot-path benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      linux_observer:
+        description: Absolute path to the reviewed Linux cost observer
+        required: true
+        type: string
+      windows_observer:
+        description: Absolute path to the reviewed Windows cost observer
+        required: true
+        type: string
+      frequency_policy:
+        description: Reviewed fixed CPU frequency/governor policy identifier
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  linux-fixed-hot-path:
+    name: Native Linux epoll fixed-lab ledger
+    runs-on: [self-hosted, linux, x64, gamenet-performance]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require clean exact checkout and observer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain=v1)"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -x "${{ inputs.linux_observer }}"
+
+      - name: Record fixed runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p hot-path-results
+          cmake --version > hot-path-results/toolchain.txt
+          c++ --version >> hot-path-results/toolchain.txt
+          lscpu > hot-path-results/machine.txt
+          taskset -pc $$ >> hot-path-results/machine.txt
+          printf '%s\n' '${{ inputs.frequency_policy }}' > hot-path-results/frequency-policy.txt
+
+      - name: Check HP0 contracts
+        run: |
+          python3 tests/cmake/test_hot_path_benchmark_contract.py
+          python3 tests/ci/test_hot_path_benchmark_workflow.py
+
+      - name: Configure Release benchmark suite
+        run: >
+          cmake -S . -B build-hot-path
+          -DCMAKE_BUILD_TYPE=Release
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_BENCHMARKS=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build hot-path suite
+        run: >
+          cmake --build build-hot-path
+          --target gamenet_hot_path_benchmark --parallel
+
+      - name: Run fixed Linux ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          cpu_model="$(lscpu | awk -F: '/Model name/ {sub(/^[[:space:]]+/, "", $2); print $2; exit}')"
+          affinity="$(taskset -pc $$ | sed 's/.*: //')"
+          compiler="$(c++ --version | head -n 1)"
+          python3 tools/run_hot_path_cost.py \
+            --core-executable build-hot-path/benchmarks/gamenet_core_benchmark \
+            --phase4-executable build-hot-path/benchmarks/gamenet_phase4_benchmark \
+            --capacity-executable build-hot-path/benchmarks/gamenet_capacity_profile \
+            --queued-executable build-hot-path/benchmarks/gamenet_multi_io_queued_benchmark \
+            --observer-command '${{ inputs.linux_observer }}' \
+            --output-root hot-path-results/ledger \
+            --platform linux --backend epoll --build-type Release \
+            --commit-sha "${GITHUB_SHA}" --working-tree clean \
+            --evidence-class fixed-lab --native-runner \
+            --runner-id "${RUNNER_NAME}" --cpu-model "$cpu_model" \
+            --cpu-affinity "$affinity" \
+            --frequency-policy '${{ inputs.frequency_policy }}' \
+            --compiler "$compiler" --command-context github-actions-fixed-lab \
+            --warmups 1 --samples 10 --process-timeout-seconds 180
+
+      - name: Validate fixed Linux ledger
+        run: >
+          python3 tools/validate_hot_path_cost.py
+          --input hot-path-results/ledger/hot-path-cost.json
+          --require-fixed-lab
+
+      - name: Upload Linux raw ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hot-path-linux-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: hot-path-results/
+          if-no-files-found: error
+          retention-days: 90
+
+  windows-fixed-hot-path:
+    name: Native Windows IOCP fixed-lab ledger
+    runs-on: [self-hosted, windows, x64, gamenet-performance]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require clean exact checkout and observer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (git status --porcelain=v1) { throw "working tree is dirty" }
+          if ((git rev-parse HEAD) -ne "$env:GITHUB_SHA") { throw "checkout SHA mismatch" }
+          if (-not (Test-Path -LiteralPath '${{ inputs.windows_observer }}' -PathType Leaf)) {
+            throw "Windows observer is missing"
+          }
+
+      - name: Record fixed runner identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force hot-path-results | Out-Null
+          cmake --version | Set-Content hot-path-results/toolchain.txt
+          (Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name) |
+            Set-Content hot-path-results/machine.txt
+          (Get-Process -Id $PID).ProcessorAffinity |
+            Add-Content hot-path-results/machine.txt
+          '${{ inputs.frequency_policy }}' |
+            Set-Content hot-path-results/frequency-policy.txt
+
+      - name: Check HP0 contracts
+        shell: pwsh
+        run: |
+          python tests/cmake/test_hot_path_benchmark_contract.py
+          python tests/ci/test_hot_path_benchmark_workflow.py
+
+      - name: Configure Release benchmark suite
+        shell: pwsh
+        run: >
+          cmake -S . -B build-hot-path
+          -A x64
+          -DGAMENET_BUILD_TESTING=OFF
+          -DGAMENET_BUILD_BENCHMARKS=ON
+          -DGAMENET_ENABLE_TLS=OFF
+          -DGAMENET_ENABLE_EXPERIMENTAL=OFF
+
+      - name: Build hot-path suite
+        shell: pwsh
+        run: >
+          cmake --build build-hot-path --config Release
+          --target gamenet_hot_path_benchmark --parallel
+
+      - name: Run fixed Windows ledger
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $cpuModel = (Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)
+          $affinity = (Get-Process -Id $PID).ProcessorAffinity.ToString()
+          python tools/run_hot_path_cost.py `
+            --core-executable build-hot-path/benchmarks/Release/gamenet_core_benchmark.exe `
+            --phase4-executable build-hot-path/benchmarks/Release/gamenet_phase4_benchmark.exe `
+            --capacity-executable build-hot-path/benchmarks/Release/gamenet_capacity_profile.exe `
+            --queued-executable build-hot-path/benchmarks/Release/gamenet_multi_io_queued_benchmark.exe `
+            --observer-command '${{ inputs.windows_observer }}' `
+            --output-root hot-path-results/ledger `
+            --platform windows --backend iocp --build-type Release `
+            --commit-sha "$env:GITHUB_SHA" --working-tree clean `
+            --evidence-class fixed-lab --native-runner `
+            --runner-id "$env:RUNNER_NAME" --cpu-model "$cpuModel" `
+            --cpu-affinity "$affinity" `
+            --frequency-policy '${{ inputs.frequency_policy }}' `
+            --compiler msvc --command-context github-actions-fixed-lab `
+            --warmups 1 --samples 10 --process-timeout-seconds 180
+          if ($LASTEXITCODE -ne 0) { throw "fixed hot-path ledger failed" }
+
+      - name: Validate fixed Windows ledger
+        shell: pwsh
+        run: |
+          python tools/validate_hot_path_cost.py `
+            --input hot-path-results/ledger/hot-path-cost.json `
+            --require-fixed-lab
+          if ($LASTEXITCODE -ne 0) { throw "fixed hot-path validation failed" }
+
+      - name: Upload Windows raw ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hot-path-windows-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: hot-path-results/
+          if-no-files-found: error
+          retention-days: 90
