@@ -92,12 +92,77 @@ exact evidence plan.
 The no-open-front sentence above is the historical M11 closure state. On
 2026-08-25, governance baseline
 `202bf9f993575d144c4c440a3972dd80733da0a7` opened the HP0–HP8
-performance-first line. HP0 is now the unique active front. Its active intent,
-default-off/non-installed suite target, preregistered six-scenario inventory,
-`gamenet.hot_path_cost.v1` runner/validator, repository guards, documentation,
-and named self-hosted Linux/epoll plus Windows/IOCP workflow are implemented in
-the working change. No clean exact-commit fixed-lab ledger exists yet, so HP0
-evidence remains `DEFER` and HP1 Core implementation is not authorized.
+performance-first line. HP0 is now the unique promotion and integration front.
+Its active intent, default-off/non-installed suite target, preregistered
+six-scenario inventory, `gamenet.hot_path_cost.v1` runner/validator, repository
+guards, documentation, and named self-hosted Linux/epoll plus Windows/IOCP
+workflow are implemented. No clean exact-commit fixed-lab ledger exists yet,
+so HP0 evidence remains `DEFER`. Governance now permits at most one isolated
+`EXPERIMENTAL-PRESTUDY` HP1-HP8 prototype in parallel, but it cannot enter the
+production Core path, advance a milestone, switch a default, add an installed
+API, or mint promotion evidence.
+The first isolated slice, HP1 borrowed-view framing, has concluded
+`KEEP-EXPERIMENTAL`: Windows Release legacy/candidate protocol contracts passed
+4/4, the focused MSVC AddressSanitizer candidate contract passed 1/1, and local
+development samples kept equal checksums with zero candidate allocation/copy.
+Those samples are not fixed-lab evidence; Linux/fuzz, real Profile A
+input-Buffer integration and 5%/3% promotion remain missing. HP1 remains
+planned, no default/API changed, and the prestudy implementation slot is
+released.
+HP3 portable epoll slot dispatch concluded `DEFER`. Its Release and focused
+MSVC AddressSanitizer contract passed, and ten local decoder comparisons kept
+equal notices/checksums with zero residue while eliminating candidate wait-side
+hash lookups and linear merge probes. The 96%+ elapsed micro-signal is not
+promotion evidence: this Windows host exercised no real Linux epoll syscall,
+level-trigger, stale kernel token, cache or end-to-end latency path. Production
+`EpollReadinessPort`, Channel, defaults and APIs remain unchanged; HP3 remains
+planned and the prestudy slot is released.
+HP6-A adaptive bounded scheduler prestudy concluded `DEFER`; HP6-B pools and
+HP6-C hot/cold layout are `SKIPPED-BY-EVIDENCE`. Focused Release/ASan and six
+unchanged EventLoop/timer regressions passed. The synthetic model reduced
+maximum round cost 85.16% and first control/lifecycle service materially, but
+raised rounds 512 -> 6,554 and planner median 1,600 -> 333,850 ns while oldest
+age regressed 0.186%. No real callback/poll or fixed-lab evidence exists, so
+production EventLoop/storage remains unchanged, formal HP6 stays planned and
+the slot is released.
+HP7 is `SKIPPED-BY-EVIDENCE`. HP2 is not integrated, there is no in-scope
+Session/RPC-like flow with two real asynchronous waits, and no measured 100k
+timer hotspot. Deferred async intents now require origin-owner bounded resume,
+terminal shutdown settlement, operation/frame separation and owned data across
+suspension. No coroutine/timer-wheel target, implementation or API was added;
+formal HP7 remains planned/skipped.
+HP8 backend/promotion review concluded `DEFER` / `NO-RELEASE`. All six named
+CMake profiles configured on Windows, their generated portable/native, PGO and
+instrumented properties were distinguished, and PortableRelease core built.
+A deployment checklist now covers affinity/NUMA/network steering/socket tuning.
+No Linux preset run, HP0 replay or post-integration backend comparison exists;
+epoll/IOCP defaults, explicit io_uring scope and version 0.3.0 remain unchanged.
+The second slice, HP2 SPSC mailbox/source/outbox, also concluded
+`KEEP-EXPERIMENTAL`. Both focused Release contracts, the existing Profile B
+contract, and the MSVC Debug AddressSanitizer contracts passed. Ten local
+development comparisons reported equal checksums, zero residue, zero candidate
+queue allocator/lock/generic-post counts, and a 26.60% median paired throughput
+improvement, but burst queue-age regressed materially. HP2 therefore remains
+planned; production `GameCommandQueue`, EventLoop lanes, Profile B, installed
+APIs and defaults are unchanged, and the prestudy implementation slot is
+released.
+HP4 fixed OutputSegmentChain/shared owner-batch prestudy concluded `DEFER`.
+Focused Release and MSVC AddressSanitizer contracts passed, as did five
+unchanged production IOCP, memory-budget and broadcast regressions. Ten-sample
+local comparisons removed modeled concatenation allocation/copy but were mixed:
+the 1 KiB median regressed 65.10%, while 16 KiB improved 94.07%. No real
+writev/WSASend or native fixed-lab path ran, so TcpConnection, TransportEndpoint,
+BroadcastDispatcher, budgets, APIs and defaults remain unchanged; formal HP4
+remains planned and the prestudy slot is released.
+HP5 owner-local credit lease prestudy concluded `KEEP-EXPERIMENTAL`. Its
+focused Release/AddressSanitizer contract and four unchanged production
+TCP/server/broadcast budget regressions passed. Across two 200k-message local
+loads it reduced the modeled shared atomic count from 1,600,000 to four and
+improved median elapsed time by at least 92.86%, with exact accounting and zero
+residue. This remains a single-owner immediate-release model without real
+TcpConnection/cache contention, fairness/reclamation, Linux or HP0 fixed-lab
+evidence. Production budgets/admission remain unchanged; formal HP5 remains
+planned and the prestudy slot is released.
 
 Current IOE-X15 implementation/evidence checkpoint:
 `43795e841ba2a279ed6a3d5d831d60a9f2a25570` (2026-08-24)
@@ -544,7 +609,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 69 | 38 | 20 | 11 | 198 |
+| 75 | 44 | 20 | 11 | 210 |
 
 ## Historical Production-Hardening Evidence
 

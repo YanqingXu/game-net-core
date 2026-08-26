@@ -155,3 +155,11 @@ API naming can evolve, but semantics should remain stable.
 - Is tie logic safe and understandable?
 - Are update/remove paths respecting EventLoop ownership?
 - Is callback dispatch order/documentation clear?
+
+## HP3 Experimental Prestudy Boundary
+
+HP3 may represent a Channel-like target only as a borrowed opaque pointer in a
+non-installed decoder. The production Channel layout, registration generation,
+active-batch epoch/index and callbacks do not change. A decoded candidate
+notice must be revalidated before dispatch so callback-driven cancel/reuse
+cannot reach a stale or replacement target.

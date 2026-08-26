@@ -103,3 +103,13 @@ owner.
 - no connection migration, logic shard, Tick scheduler, or business state;
 - no claim that wall-time observation can preempt a blocking handler;
 - no UDP, KCP, TLS, HTTP, RPC, coroutine, or experimental transport work.
+
+## 8. HP1 Experimental Prestudy Boundary
+
+The current Profile A example remains on legacy `PacketFramer::push()` and is
+the HP0 callback-copy baseline. The isolated HP1 benchmark may replay Profile
+A's owner-local synchronous handler shape over borrowed `PacketView` payloads,
+but it does not change the example, its installed dependencies, continuation
+policy, handler type, default recipe, or metrics. A future formal HP1 slice must
+repeat the real TcpConnection input-Buffer integration and all Profile A
+owner/re-entry/shutdown contracts after HP0 closes.

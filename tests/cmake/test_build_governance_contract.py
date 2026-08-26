@@ -233,6 +233,8 @@ def verify_m4_preflight(repo_root: Path, license_text: str) -> None:
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     root_cmake = repo_root / "CMakeLists.txt"
+    build_profiles_cmake = repo_root / "cmake" / "BuildProfiles.cmake"
+    presets_path = repo_root / "CMakePresets.json"
     core_cmake = repo_root / "src" / "core" / "CMakeLists.txt"
     installed_target_files = {
         "gamenet_core": core_cmake,
@@ -245,6 +247,10 @@ def main() -> None:
     platform_intent = repo_root / "intents" / "modules" / "platform_runtime.intent.md"
     release_intent = repo_root / "intents" / "usecases" / "production_candidate_release.intent.md"
     platform_docs = repo_root / "docs" / "development" / "platform_support.md"
+    build_profiles_docs = repo_root / "docs" / "development" / "build_profiles.md"
+    deployment_docs = (
+        repo_root / "docs" / "development" / "performance_deployment_guide.md"
+    )
     licensing_docs = repo_root / "docs" / "development" / "licensing.md"
     authorization_docs = (
         repo_root / "docs" / "development" / "m4_license_authorization_2026-08-23.md"
@@ -284,6 +290,9 @@ def main() -> None:
         root_cmake,
     )
     require(root_text, "add_subdirectory(src/experimental/io_uring)", root_cmake)
+    require(root_text, "GAMENET_ENABLE_NATIVE_TUNING", root_cmake)
+    require(root_text, "GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION", root_cmake)
+    require(root_text, "include(BuildProfiles)", root_cmake)
     assert root_text.index('project(GameNetCore VERSION 0.3.0 LANGUAGES CXX)') < root_text.index(
         "game-net-core currently supports only Linux and Windows"
     )
@@ -293,6 +302,91 @@ def main() -> None:
     assert root_text.index("if(GAMENET_ENABLE_EXPERIMENTAL AND NOT") < root_text.index(
         "add_subdirectory(src/core)"
     )
+
+    build_profiles_text = build_profiles_cmake.read_text(encoding="utf-8")
+    for fragment in (
+        'set(GAMENET_PGO_PHASE "OFF" CACHE STRING',
+        "GAMENET_ENABLE_NATIVE_TUNING",
+        "-march=native",
+        "/arch:AVX2",
+        "GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION",
+        "-fno-omit-frame-pointer",
+        "/Oy-",
+        "PGO cannot be combined with sanitizer instrumentation",
+        "-fprofile-generate=",
+        "-fprofile-use=",
+        "/LTCG:PGINSTRUMENT",
+        "/LTCG:PGOPTIMIZE",
+    ):
+        require(build_profiles_text, fragment, build_profiles_cmake)
+
+    presets = json.loads(presets_path.read_text(encoding="utf-8"))
+    configure_presets = {item["name"]: item for item in presets["configurePresets"]}
+    assert set(configure_presets) == {
+        "portable-release",
+        "native-tuned-release",
+        "pgo-generate",
+        "pgo-release",
+        "sanitizer",
+        "benchmark-instrumented",
+    }
+    assert configure_presets["portable-release"]["displayName"] == "PortableRelease"
+    assert configure_presets["portable-release"]["cacheVariables"][
+        "GAMENET_ENABLE_NATIVE_TUNING"
+    ] == "OFF"
+    assert configure_presets["native-tuned-release"]["displayName"] == "NativeTunedRelease"
+    assert configure_presets["native-tuned-release"]["cacheVariables"][
+        "GAMENET_ENABLE_NATIVE_TUNING"
+    ] == "ON"
+    assert configure_presets["pgo-generate"]["displayName"] == "PGOGenerate"
+    assert configure_presets["pgo-generate"]["cacheVariables"]["GAMENET_PGO_PHASE"] == "GENERATE"
+    assert configure_presets["pgo-release"]["displayName"] == "PGORelease"
+    assert configure_presets["pgo-release"]["cacheVariables"]["GAMENET_PGO_PHASE"] == "USE"
+    assert configure_presets["pgo-generate"]["binaryDir"] == configure_presets[
+        "pgo-release"
+    ]["binaryDir"]
+    assert configure_presets["sanitizer"]["cacheVariables"][
+        "GAMENET_ENABLE_ASAN_UBSAN"
+    ] == "ON"
+    assert configure_presets["benchmark-instrumented"]["cacheVariables"][
+        "GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION"
+    ] == "ON"
+    assert {item["name"] for item in presets["buildPresets"]} == set(configure_presets)
+    preset_check = subprocess.run(
+        ["cmake", "--list-presets"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert preset_check.returncode == 0, preset_check.stdout + preset_check.stderr
+    for name in configure_presets:
+        assert f'"{name}"' in preset_check.stdout
+
+    build_profiles_docs_text = build_profiles_docs.read_text(encoding="utf-8")
+    for fragment in (
+        "PortableRelease",
+        "NativeTunedRelease",
+        "PGOGenerate",
+        "PGORelease",
+        "Sanitizer",
+        "BenchmarkInstrumented",
+        "not a portable release package",
+        "same build tree",
+        "same-toolchain",
+    ):
+        require(build_profiles_docs_text, fragment, build_profiles_docs)
+    deployment_docs_text = deployment_docs.read_text(encoding="utf-8")
+    for fragment in (
+        "CPU And NUMA Placement",
+        "IRQ affinity",
+        "RSS/RPS/XPS",
+        "SO_SNDBUF",
+        "TCP_NODELAY",
+        "SO_REUSEPORT Boundary",
+        "accept-topology contracts",
+    ):
+        require(deployment_docs_text, fragment, deployment_docs)
 
     core_text = core_cmake.read_text(encoding="utf-8")
     platform_selection = re.search(

@@ -3,10 +3,47 @@
 2026-08-24 的 M11 v1.0 稳定化与发布就绪审查仍以 `DEFER` / `NO-RELEASE`
 关闭，M1–M11 的历史判定不变，stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。
 2026-08-25 已在治理基线 `202bf9f993575d144c4c440a3972dd80733da0a7`
-打开性能优先的 HP0–HP8 路线；当前唯一前沿为 HP0 成本账本与固定性能实验室。
+打开性能优先的 HP0–HP8 路线；当前唯一推广与集成前沿为 HP0 成本账本与固定性能实验室。
 `gamenet.hot_path_cost.v1` 的 schema、预登记矩阵、runner、validator、静态 CI guard
 和双平台 self-hosted 工作流已进入实现，但干净 exact-commit 的 Linux/epoll 与
-Windows/IOCP 各十次正式样本尚未形成，因此当前证据结论为 `DEFER`，HP1 仍被门禁阻塞。
+Windows/IOCP 各十次正式样本尚未形成，因此当前证据结论为 `DEFER`。治理现允许并行
+存在至多一个隔离的 `EXPERIMENTAL-PRESTUDY` HP1–HP8 原型；它不得进入生产 Core
+路径、推进里程碑、切换默认实现、增加安装 API 或形成推广证据。
+首个 HP1 borrowed-view framing 预研已判定 `KEEP-EXPERIMENTAL`：Windows Release
+差分合同 4/4、focused MSVC ASan 1/1 通过，development 样本保持 checksum 等价且
+candidate allocation/copy 为零；但 Linux/fuzz、真实 Profile A inputBuffer、HP0 fixed-lab
+与 5%/3% 门禁仍缺失。HP1 仍为 planned，默认/API 不变，预研实现槽已释放。
+HP2 SPSC mailbox/source/outbox 预研也已判定 `KEEP-EXPERIMENTAL`：Windows Release
+两个新合同、现有 Profile B 合同和 focused ASan 通过，10 次 development 对照保持 checksum
+与零残留并消除 candidate queue allocation/lock/generic post；但 burst queue-age 中位数明显
+回退，且没有 HP0 固定负载双平台证据。HP2 仍为 planned，生产 EventLoop/Profile B/API
+均未切换，预研槽再次释放。
+HP3 slot-index/generation readiness decoder 预研记为 `DEFER`：Release 与 focused
+ASan 合同通过，10 次 portable 算法对照保持通知/checksum/零残留一致并把 wait-side 哈希与
+线性 merge probe 降为零；但 Windows 主机不能提供真实 Linux epoll、level-trigger、内核
+stale token 或端到端尾延迟证据。生产 epoll/Channel/API 未修改，HP3 仍为 planned。
+HP4 fixed OutputSegmentChain/shared owner-batch 预研亦判定 `DEFER`：focused Release、
+ASan 与 5 项既有发送/广播回归通过，模型消除了拼接分配与复制；但 1 KiB payload 中位
+耗时回退 65.10%，16 KiB 改善 94.07%，且未调用真实 writev/WSASend。生产
+TcpConnection、TransportEndpoint、BroadcastDispatcher、预算与 API 均未修改，HP4
+仍为 planned，预研槽已释放。
+HP5 owner-local credit lease 预研判定 `KEEP-EXPERIMENTAL`：focused Release/ASan
+及 4 项既有 TCP/server/broadcast 预算回归通过；两档 20 万消息本机模型把 shared atomic
+mutation 从 1,600,000 降到 4，中位耗时改善至少 92.86%，并保持精确核算与零残留。
+但它仍是单 owner、立即释放模型，没有真实 TcpConnection/cache 争用、公平回收、Linux
+或 HP0 fixed-lab 证据。生产预算/admission 未修改，HP5 仍为 planned，预研槽已释放。
+HP6-A adaptive bounded scheduler 预研为 `DEFER`，HP6-B/C 为
+`SKIPPED-BY-EVIDENCE`。focused Release/ASan 与 6 项 EventLoop/timer 回归通过；
+合成最大单轮成本下降 85.16%，但轮数和 planner 开销大增、最老 age 回退 0.186%，且
+没有真实 callback/poll 与 fixed-lab 证据。生产 EventLoop/存储未修改，HP6 仍为 planned。
+HP7 为 `SKIPPED-BY-EVIDENCE`：HP2 未集成，当前范围没有两个真实异步等待点的流程，
+也没有 10 万并发 Timer 热点。deferred async intents 已补 origin-owner bounded resume、
+shutdown 终局化、operation/frame 分离和 suspend 持有 OwnedPacket 的未来规则；未新增任何
+coroutine/timer-wheel target、实现或 API。
+HP8 backend/推广结论为 `DEFER` / `NO-RELEASE`。六个 CMake build profile 已在
+Windows 完成配置验证，PortableRelease core 构建通过，并新增部署调优清单；但没有 Linux
+preset、HP0 全矩阵或 post-integration backend 对照。epoll/IOCP 默认、显式 io_uring
+范围和 0.3.0 版本均保持不变，不创建 tag/package/release。
 `game-net-core` 已经不再只是从
 `mini_trantor` 拆出来的
 Reactor/TCP 练习项目，而是进入了：

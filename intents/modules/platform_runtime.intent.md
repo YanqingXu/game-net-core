@@ -117,6 +117,12 @@ This module is not business logic.
   deferred UDP, KCP, TLS, HTTP, RPC, or coroutine modules. Windows rejects the
   experimental option explicitly.
 - No binary ABI compatibility is promised before version 1.0.
+- Repository presets define `PortableRelease`, `NativeTunedRelease`,
+  `PGOGenerate`/`PGORelease`, `Sanitizer`, and `BenchmarkInstrumented` build
+  profiles. PortableRelease keeps host-specific ISA tuning disabled;
+  NativeTunedRelease/PGO artifacts are host deployment artifacts, not portable
+  packages. PGO data must come from the same toolchain and representative fixed
+  workload; sanitizer and PGO instrumentation cannot be combined.
 
 ---
 
@@ -214,3 +220,20 @@ This module is not business logic.
 - Which callbacks may re-enter after platform events are translated?
 - Which operations are allowed cross-thread, and are they still marshaled by EventLoop?
 - Which test file verifies the behavior on each platform?
+
+## HP3 Experimental Prestudy Boundary
+
+The portable HP3 slot-token decoder contains no epoll descriptor or syscall.
+It can validate token, generation, filtering and O(1) merge mechanics on any
+development host, but only native Linux execution of the unchanged production
+readiness contracts and a future formal candidate can validate platform
+behavior. Windows remains IOCP and receives no slot-dispatch fallback.
+
+## HP8 Backend And Build Review
+
+HP8 backend expansion is `DEFER`: HP0 fixed-lab evidence is absent and HP1-HP6
+have not changed the production user-data path. Linux therefore remains epoll,
+Windows remains IOCP, and the opt-in io_uring package receives no multishot,
+provided-buffer, registered-file, send-bundle or SQPOLL expansion. The build
+profiles and deployment checklist are additive tooling only and do not select
+or promote a backend.

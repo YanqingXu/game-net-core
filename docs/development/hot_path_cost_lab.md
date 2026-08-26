@@ -137,7 +137,24 @@ stderr, observation files, manifest, toolchain, and machine information.
 Hosted CI runs the repository and workflow contracts only; a hosted runner is
 not stable enough to mint performance promotion evidence. A complete Linux
 ledger and complete Windows ledger must be indexed against the same exact
-commit before HP0 closes. Until that happens, HP1 remains blocked by evidence.
+commit before HP0 closes. Until that happens, HP1-HP8 promotion, integration,
+default-path changes, and installed API additions remain blocked by evidence.
+
+## Experimental prestudy while HP0 is open
+
+HP0 evidence collection may run in parallel with at most one HP1-HP8 runtime
+prototype labeled `EXPERIMENTAL-PRESTUDY`. The prototype must be default-off,
+non-installed, non-exported, absent from the production Core path and public
+manifests, and unable to replace any preregistered current-path baseline.
+Design, contracts, and benchmark scaffolding may be prepared out of milestone
+order, but a runtime experiment must use real satisfied dependencies and retain
+deterministic owner, admission, failure, shutdown, and zero-residue tests.
+
+Prestudy results are development-only. They may support
+`KEEP-EXPERIMENTAL`, `REJECT`, or `DEFER`, but cannot produce `INTEGRATE`, a
+5%/3% promotion decision, a default switch, an installed API, or a release.
+After HP0 closes, a surviving candidate must enter its formal HP slice and be
+remeasured against the fixed exact-commit baseline.
 
 ## Interpretation
 

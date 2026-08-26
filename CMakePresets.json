@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "portable-release",
+      "displayName": "PortableRelease",
+      "description": "Portable production-compatible Release; no host ISA tuning.",
+      "binaryDir": "${sourceDir}/out/build/portable-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_SHARED_LIBS": "OFF",
+        "GAMENET_BUILD_TESTING": "ON",
+        "GAMENET_BUILD_BENCHMARKS": "OFF",
+        "GAMENET_ENABLE_EXPERIMENTAL": "OFF",
+        "GAMENET_ENABLE_NATIVE_TUNING": "OFF",
+        "GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION": "OFF",
+        "GAMENET_ENABLE_ASAN_UBSAN": "OFF",
+        "GAMENET_ENABLE_TSAN": "OFF",
+        "GAMENET_PGO_PHASE": "OFF"
+      }
+    },
+    {
+      "name": "native-tuned-release",
+      "displayName": "NativeTunedRelease",
+      "description": "Host-specific Release; artifacts are not portable to older CPUs.",
+      "inherits": "portable-release",
+      "binaryDir": "${sourceDir}/out/build/native-tuned-release",
+      "cacheVariables": {
+        "GAMENET_ENABLE_NATIVE_TUNING": "ON"
+      }
+    },
+    {
+      "name": "pgo-generate",
+      "displayName": "PGOGenerate",
+      "description": "Instrumented training build; run the representative fixed workload before PGORelease.",
+      "inherits": "native-tuned-release",
+      "binaryDir": "${sourceDir}/out/build/pgo-release",
+      "cacheVariables": {
+        "GAMENET_BUILD_BENCHMARKS": "ON",
+        "GAMENET_PGO_PHASE": "GENERATE",
+        "GAMENET_PGO_DATA_DIR": "${sourceDir}/out/pgo-data"
+      }
+    },
+    {
+      "name": "pgo-release",
+      "displayName": "PGORelease",
+      "description": "Uses profile data produced from the same toolchain and representative workload.",
+      "inherits": "native-tuned-release",
+      "binaryDir": "${sourceDir}/out/build/pgo-release",
+      "cacheVariables": {
+        "GAMENET_BUILD_BENCHMARKS": "ON",
+        "GAMENET_PGO_PHASE": "USE",
+        "GAMENET_PGO_DATA_DIR": "${sourceDir}/out/pgo-data"
+      }
+    },
+    {
+      "name": "sanitizer",
+      "displayName": "Sanitizer",
+      "description": "Debug ASan/UBSan profile (MSVC provides ASan only).",
+      "inherits": "portable-release",
+      "binaryDir": "${sourceDir}/out/build/sanitizer",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GAMENET_ENABLE_ASAN_UBSAN": "ON"
+      }
+    },
+    {
+      "name": "benchmark-instrumented",
+      "displayName": "BenchmarkInstrumented",
+      "description": "Release benchmarks with profiling symbols and frame pointers.",
+      "inherits": "portable-release",
+      "binaryDir": "${sourceDir}/out/build/benchmark-instrumented",
+      "cacheVariables": {
+        "GAMENET_BUILD_TESTING": "OFF",
+        "GAMENET_BUILD_BENCHMARKS": "ON",
+        "GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "portable-release", "configurePreset": "portable-release", "configuration": "Release" },
+    { "name": "native-tuned-release", "configurePreset": "native-tuned-release", "configuration": "Release" },
+    { "name": "pgo-generate", "configurePreset": "pgo-generate", "configuration": "Release" },
+    { "name": "pgo-release", "configurePreset": "pgo-release", "configuration": "Release" },
+    { "name": "sanitizer", "configurePreset": "sanitizer", "configuration": "Debug" },
+    { "name": "benchmark-instrumented", "configurePreset": "benchmark-instrumented", "configuration": "Release" }
+  ],
+  "testPresets": [
+    { "name": "portable-release", "configurePreset": "portable-release", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "native-tuned-release", "configurePreset": "native-tuned-release", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "sanitizer", "configurePreset": "sanitizer", "configuration": "Debug", "output": { "outputOnFailure": true } }
+  ]
+}

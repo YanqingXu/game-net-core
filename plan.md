@@ -12,13 +12,45 @@
 
 - M1–M11、IOE-X1–X15 均已关闭；历史细节继续由 `assessment.md`、
   `docs/migration_status.md` 和证据账本保存，不再占用本计划主体。
-- 新的唯一 Core 主线为 HP0–HP8：先建立成本账本，再依次优化 framing、跨域
+- 新的唯一 Core 推广主线为 HP0–HP8：先建立成本账本，再依次优化 framing、跨域
   mailbox、epoll 分发、发送/广播、预算与调度、内存局部性，最后条件性验证协程和
   高级 backend。
 - stable v0.3 Core 保持源兼容；协议、传输、逻辑等 provisional 表面允许兼容新增。
   所有快路径先在 provisional/source-private 层验证。
-- 同时只允许一个 Core 实现切片；benchmark/lab 证据任务可以并行。每个切片遵循
+- 同时只允许一个 Core 实现切片；HP0 fixed-lab 和其他 benchmark/lab 证据任务可以
+  并行。HP0 未关闭期间，该实现切片可以是下述受控实验性预研，但不得成为默认路径或
+  推广结论。每个切片遵循
   `intent -> rules -> contracts -> implementation -> exact-commit evidence`。
+
+### 1.1 HP0 未关闭期间的实验性预研授权
+
+HP0 仍是唯一性能推广与集成前沿。为避免固定硬件排期阻塞设计验证，允许 HP1–HP8
+开展标记为 `EXPERIMENTAL-PRESTUDY` 的受控预研；该标签不是里程碑状态，不改变任何
+HP 切片的 `planned -> contract-ready -> implemented -> verified -> integrated` 状态。
+
+允许范围：
+
+- 可先行编写 intent/invariant、threading/ownership/re-entry/shutdown 规则、失败合同、
+  benchmark adapter 和设计比较；
+- 同一时间至多一个 HP1–HP8 实现原型，可与 HP0 fixed-lab 证据执行并行；
+- 原型只能存在于默认关闭、非安装、不导出的 lab/benchmark/source-private
+  experimental target，不得链接进默认 production Core 数据路径；
+- 可跨里程碑做设计或测量脚手架，但运行时原型必须列出并满足其实际技术依赖；缺失
+  HP2 等前置能力时，不得以 mock 结果声称验证了 HP7/HP8 的组合收益；
+- 运行时原型在实现前必须回答 owner、ownership、callback re-entry、cross-thread
+  marshal、bounded admission 和 shutdown settlement，并指定会因回归而失败的测试文件；
+- 预研只生成 development evidence，可输出 `KEEP-EXPERIMENTAL`、`REJECT` 或 `DEFER`。
+
+禁止范围：
+
+- 不得修改 stable/provisional 安装 API、public manifest、默认 recipe、生产 epoll/IOCP
+  选择、发布资产或版本号；
+- 不得替换 HP0 的 callback+mutex/current-path 基线，不得把 hosted、WSL、dirty、缩短
+  负载或缺少 observer 的结果用于 5%/3% 推广判断；
+- HP0 关闭前不得输出 `INTEGRATE`、切换默认路径、恢复 v1 发布线，或把预研完成计作
+  HP1–HP8 里程碑完成；
+- HP0 关闭后，候选必须按正式顺序重新进入对应切片，针对固定基线复测并通过全部推广
+  门；预研代码和数据不自动继承验证资格。
 
 ## 2. 接口与架构边界
 
@@ -71,6 +103,11 @@
 
 ### HP1：零额外复制的 owner-local 解帧
 
+预研状态：`KEEP-EXPERIMENTAL`（2026-08-25）。隔离 target 已完成 borrowed view、
+move-only retain、差分合同和 Windows development benchmark；未完成 Linux/fuzz、真实
+Profile A inputBuffer、fixed-lab 和 5%/3% 推广门，因此 HP1 里程碑仍为 `planned`，默认
+路径与安装 API 不变。预研实现槽已释放。
+
 - 更新 active PacketFramer、Buffer、Profile A intent/rules，明确 `PacketView`
   生命周期和 callback re-entry 限制。
 - `visitFrames` 直接读取调用方连续可读区；只在完整帧处理后返回消费长度，partial
@@ -88,6 +125,12 @@
   fuzz 全部通过。
 
 ### HP2：SPSC typed mailbox 与 owner outbox
+
+预研状态：`KEEP-EXPERIMENTAL`（2026-08-25）。默认关闭、非安装的 SPSC
+mailbox/source/outbox 原型已通过 Release、focused ASan 和现有 Profile B 合同；10 次本地
+development 样本的吞吐配对改善中位数为 26.60%，queue allocation/lock/generic post 为 0，
+但 burst queue-age 中位数明显回退且缺少 HP0 fixed-load 双平台证据。因此 HP2 里程碑仍为
+`planned`，`GameCommandQueue`、Profile B、EventLoop lanes 与默认/API 路径不变，预研槽已释放。
 
 - 建立固定容量、原地构造、cache-line 隔离的 `SpscMailbox<T>`；支持 typed
   rejection、batch push/drain 和无静默丢弃的关闭清算。
@@ -114,6 +157,12 @@
 
 ### HP3：epoll O(1) readiness dispatch
 
+预研状态：`DEFER`（2026-08-25）。默认关闭、非安装的 portable slot-token decoder 已
+通过 Release/ASan 合同，10 次本地算法对照消除了 wait-side 哈希与线性 merge probe；但
+当前 Windows 主机没有执行真实 Linux epoll 注册/wait、level-trigger、stale kernel token
+与端到端尾延迟。因此 HP3 里程碑仍为 `planned`，生产 `EpollReadinessPort`、Linux 默认、
+Channel/API 与 Windows IOCP 不变，预研槽已释放。
+
 - 将 wait 热路径改为 slot arena：`slot index + generation` 写入
   `epoll_event.data.u64`。
 - fd→slot 哈希只用于 register/update/cancel；wait 通过数组直接定位、generation 校验
@@ -131,6 +180,13 @@
 - 1K/10K/100K 连接、不同活跃比例下达到推广门；Windows 回归零语义变化。
 
 ### HP4：分段发送、所有权发送与广播 owner-direct
+
+预研状态：`DEFER`。默认关闭、非安装的 fixed OutputSegmentChain 与 shared broadcast
+owner-batch 模型已通过 focused Release/ASan 合同及 5 项生产回归。10 次本机测量中，
+1 KiB payload 中位耗时回退 65.10%，16 KiB payload 中位改善 94.07%；两档均消除了模型
+中的 25,600 次分配和拼接复制。由于尚未调用真实 writev/WSASend、缺少 syscall/completion
+生命周期与 HP0 fixed-lab 证据，结论为 `DEFER`，而非集成。TcpConnection、
+TransportEndpoint、BroadcastDispatcher、分层预算、安装 API 和默认路径保持不变，预研槽已释放。
 
 - 内部建立有界 `OutputSegmentChain`，segment 持有 owned 或 immutable shared storage
   及 offset。
@@ -153,6 +209,13 @@
 
 ### HP5：分片 credit 与多级背压降原子成本
 
+预研状态：`KEEP-EXPERIMENTAL`。默认关闭的 owner-local lease 原型通过 Release/ASan
+合同和 4 项现有 TCP/server/broadcast 预算回归。两档各 10 次、20 万消息本机模型中，
+exact 四级链为 1,600,000 次 shared atomic mutation，candidate 为 4 次，中位耗时改善
+92.87%/92.86%。该对照只有单 owner、立即释放且没有真实 TcpConnection/cache 争用、
+公平性、Linux 或 HP0 fixed-lab 证据，因此仅保留实验实现；生产预算/admission 不变，
+正式 HP5 仍为 planned，预研槽已释放。
+
 - 为 fast path 增加 loop-local credit lease；连接 owner 使用本地记账，上级预算只在
   批量领取/归还时访问跨核 atomic。
 - credit 采用保守预留，任何时刻 global、server、loop、connection hard limit 均不得
@@ -165,6 +228,14 @@
 memory-budget contracts 全部通过；atomic operations/message 明确下降并达到推广门。
 
 ### HP6：自适应有界调度与内存局部性
+
+预研判定：HP6-A 为 `DEFER`；HP6-B/C 为 `SKIPPED-BY-EVIDENCE`。HP6-A 的
+Release/ASan 合同与 6 项既有 EventLoop/timer 回归通过；10 次合成模型把最大单轮成本
+降低 85.16%，control/lifecycle 首次服务由 6.72/7.04 ms 降至 0.58/0.66 ms，但轮数
+从 512 增至 6,554，planner 中位开销从 1,600 ns 增至 333,850 ns，最老 age 回退
+0.186%。因为没有真实 callback/poll、P99/P999 或 HP0 fixed-load 证据，不能集成。
+HP0 也未证明 pool 或热冷字段为热点，因此 B/C 不实现。生产 EventLoop/存储不变，
+正式 HP6 仍为 planned，预研槽已释放。
 
 - HP6-A：EventLoop 在既有数量上限外增加每阶段时间预算、backlog、oldest age 和
   weighted deficit；control/lifecycle 保留最低服务，任何阶段不得无限 drain，budget
@@ -179,6 +250,13 @@ memory-budget contracts 全部通过；atomic operations/message 明确下降并
 shutdown zero-residue 合同通过；每项子优化独立测量，不把多个变化混入一个性能结论。
 
 ### HP7：条件性协程与高容量 Timer 实验
+
+启动门判定：`SKIPPED-BY-EVIDENCE`。HP2 目前仅为 `KEEP-EXPERIMENTAL`，并未集成；
+仓库当前范围内也不存在含两个以上真实异步等待点的 Session/RPC-like 流程。因此不创建
+OwnerTask、ready queue、awaitable、HighVolumeTimerWheel 或任何安装/实验 runtime target。
+现有 deferred async intents 已增加 supersession 记录：未来必须由 origin-owner bounded
+ready queue 恢复、shutdown 终局化 accepted waiter、operation 独立于 frame，并禁止
+PacketView 跨 suspend。正式 HP7 仍为 planned/skipped，生产代码与 API 零变化。
 
 启动条件：HP2 已集成，且存在含两个以上真实异步等待点的 Session/RPC-like 流程。
 否则记录 `SKIPPED-BY-EVIDENCE`。
@@ -208,6 +286,14 @@ shutdown zero-residue 合同通过；每项子优化独立测量，不把多个�
 - coroutine+SPSC 满足推广门，否则保持非安装实验且相关公共 intents 继续 deferred。
 
 ### HP8：backend、构建 Profile 与最终推广审查
+
+审查判定：backend 扩展与最终推广为 `DEFER` / `NO-RELEASE`。HP0 fixed-lab 未关闭，
+HP1–HP6 均未集成生产用户态路径，因而不启动 io_uring multishot/provided-buffer/
+registered-file/send-bundle/SQPOLL 实验，也不做失真的 backend 优胜结论。独立可交付项已
+完成：`CMakePresets.json` 提供 PortableRelease、NativeTunedRelease、PGOGenerate/
+PGORelease、Sanitizer、BenchmarkInstrumented；portable 明确关闭 host ISA tuning，
+PGO 与 sanitizer 互斥；部署指南覆盖 affinity、NUMA、IRQ/RSS/RPS/XPS、socket buffer、
+TCP_NODELAY 与受证据门约束的 SO_REUSEPORT。版本保持 0.3.0，不创建 tag/package/release。
 
 - 在用户态数据路径完成后，重新比较 epoll、IOCP 和 io_uring 的相同
   Server/Client/Profile 场景。
@@ -276,8 +362,10 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 7. 当前立即执行
 
-> **当前前沿为 HP0：成本账本与固定性能实验室。** schema、默认关闭且非安装的
-> benchmark suite、validator/CI guard 已实现；下一步只允许选择干净精确提交，在固定
-> 原生 Linux/epoll 与 Windows/IOCP runner 上补齐 observer 成本，并各执行 1 次不计入
-> warmup + 至少 10 次正式样本。HP0 关闭前不得开始 HP1 Core 实现，也不得提前增加
-> PacketView、mailbox、稳定发送 API、coroutine target 或高级 io_uring capability。
+> **当前性能推广前沿为 HP0：成本账本与固定性能实验室。** schema、默认关闭且非安装的
+> benchmark suite、validator/CI guard 已实现；下一步仍需选择干净精确提交，在固定原生
+> Linux/epoll 与 Windows/IOCP runner 上补齐 observer 成本，并各执行 1 次不计入 warmup
+> + 至少 10 次正式样本。允许同时开展至多一个 `EXPERIMENTAL-PRESTUDY` 实现原型，但
+> 它必须默认关闭、非安装、不导出且不进入默认 Core 数据路径。HP0 关闭前，HP1–HP8
+> 仍不得输出 `INTEGRATE`、切换默认路径、增加稳定发送 API、发布 coroutine target 或
+> 推广高级 io_uring capability。

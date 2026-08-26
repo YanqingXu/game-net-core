@@ -308,6 +308,19 @@ It must not blur these roles.
   Poller, completion entry, Channel, operation, or EventLoop and cannot extend
   any of their lifetimes
 
+### 3.1 HP3 Epoll Slot Dispatch Prestudy Ownership
+
+- the prototype arena owns one fixed slot array, free-index stack, finite
+  notice array, fd control map, generations, batch epochs and counters; it owns
+  no epoll fd, EventLoop, Channel, socket, callback or payload
+- one active slot borrows an opaque target until exact cancel. A notice borrows
+  that target only while its slot index/generation remains current; cancel or
+  reuse revokes the observation before target release
+- a native token is a value identity and owns nothing. Slot reuse advances its
+  generation before the replacement target becomes visible
+- stop retains active registration obligations. Shutdown/arena destruction is
+  legal only after exact cancellation leaves zero registrations and notices
+
 ## 4. Channel
 - Channel does not own fd by default
 - Channel belongs logically to one EventLoop
@@ -362,6 +375,41 @@ It must not blur these roles.
 - TcpConnection's lifecycle node may retain the connection close state through
   completion drain, but it detaches before final connection ownership is
   released
+
+### 5.1 HP4 Output Segment Chain Prestudy Ownership
+
+- the chain owns one fixed segment ring, offsets, in-flight view metadata and
+  byte counters; it owns no socket, Channel, EventLoop, connection, callback or
+  output-budget identity
+- an owned segment exclusively owns a moved string. A shared segment retains
+  immutable storage plus a bounded slice; gathered views borrow those segments
+  only until exact completion/failure
+- partial completion transfers no storage and copies no suffix. Fully consumed
+  or explicitly discarded segments release exactly once
+- broadcast chains share one immutable payload owner; each chain independently
+  owns its segment reference and terminal byte obligation. Route-generation
+  rejection retains no reference in that target chain
+
+### 5.2 HP5 Credit Lease Prestudy Ownership
+
+- each shared parent budget owns only atomic reservation metrics; shared
+  ownership keeps it alive until every loop lease has returned its credit
+- one loop lease owns fixed connection slots, their generations and pending
+  bytes, local loop usage, retained credit and settlement counters
+- a connection handle is non-owning identity. Retire/reuse invalidates the old
+  generation, and cancel records outstanding bytes before slot release
+- idle credit remains owned by the lease but reserved in every shared parent;
+  trim and stop return it in reverse hierarchy order. Destruction is an
+  emergency RAII return, not evidence of a correctly settled lifecycle
+
+### 5.3 HP6 Adaptive Scheduler Prestudy Ownership
+
+- the planner owns fixed policy/deficit arrays and one in-plan guard only; it
+  owns no queue item, callback, EventLoop, Channel, timer or continuation
+- phase observations and decisions are values. Applying a quota cannot extend
+  the lifetime of observed runtime work
+- HP6-B/C allocate no pool, reclaim item, connection field block or NUMA state
+  because their evidence launch conditions are unsatisfied
 
 ## 6. Timer / Scheduled Tasks
 - Timer containers own timer metadata
@@ -526,6 +574,25 @@ It must not blur these roles.
   its current logical bytes, preserves ring order, and releases the historical
   allocation without acquiring transport/session ownership
 
+## 11.1.1 HP1 Packet View Prestudy Ownership
+
+- the source Buffer exclusively owns its readable storage; the HP1 prototype
+  receives only a synchronous borrowed span and never retains, retrieves,
+  grows, trims, or releases Buffer storage
+- `PacketView` owns nothing and expires when its current visitor returns. A
+  copied view does not extend lifetime and may not cross a thread or suspension
+- `PacketView::retain()` creates one `OwnedPacket` and copies the payload at
+  most once. `OwnedPacket` exclusively owns those bytes, is move-only, and may
+  later cross an owner boundary only through typed bounded admission
+- `FrameVisitResult` is a value observation. Its consumed byte count transfers
+  no storage ownership; only the Buffer owner may apply that count after the
+  visitor stack has unwound
+- the prototype owns only validated options, sticky fault state, and an active-
+  visit guard. It owns no EventLoop, Buffer, connection, callback, queued work,
+  retained payload, or shutdown obligation
+- visitor exception, nested visit, reset rejection, protocol fault, and normal
+  completion all leave zero retained view/packet state in the prototype
+
 ## 11.2 Runtime Profile A Ownership
 - the caller owns and outlives the EventLoop and non-installed
   `SingleLoopInlineEvent` Profile object
@@ -560,6 +627,26 @@ It must not blur these roles.
   drain callbacks can no longer invoke the handler
 - an accepted owner-output post temporarily retains route plus encoded bytes;
   generation failure drops output without reaching a replacement connection
+
+### 11.3.1 HP2 SPSC Mailbox Prestudy Ownership
+
+- each mailbox owns one fixed slot array, producer cursor publication,
+  consumer cursor publication, finite metrics, and exactly the live values
+  between head and tail; it owns no EventLoop, route, connection, or handler
+- one producer handle shares finite generation/control state but no owner-loop
+  mutation authority. Detach revokes its generation before source replacement;
+  stale handles cannot address replacement storage
+- an Accepted slot owns one `DataPlaneCommand<OwnedPacket>` until the consumer
+  moves it into its callback frame. Normal processing or explicit cancellation
+  destroys it exactly once and increments one terminal counter
+- HP1 `OwnedPacket` exclusively owns payload bytes across the domain boundary;
+  PacketView never enters mailbox storage and the mailbox performs no payload
+  copy
+- the notification-pending bit owns only one scheduling obligation for a
+  non-empty burst. It owns no message, callback, EventLoop task, or payload
+- begin-stop revokes admission but retains all Accepted slot obligations.
+  Finalization requires zero active producer calls, empty storage, a clear
+  notification bit, and `accepted == processed + cancelled`
 
 ## 11.4 Runtime Profile C Ownership
 - the caller owns and outlives the base EventLoop, logic EventLoop, and

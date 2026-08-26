@@ -7,6 +7,15 @@ promote_gate: post-core-preview
 
 # Module Intent: coroutine::WhenAll
 
+## HP7 Launch-Gate Record — 2026-08-25
+
+HP7 is `SKIPPED-BY-EVIDENCE`; this intent stays deferred. The historical rule
+that the last completing sub-task chooses the parent resume thread is
+superseded. If the gate later opens, the parent continuation is owned by and
+returns through its origin owner's bounded ready queue. `whenAll` remains
+blocked until owner-ready-queue, cancellation and terminal child settlement
+contracts exist; no borrowed `PacketView` may survive a child suspension.
+
 ## 1. Intent
 WhenAll is a coroutine combinator that awaits multiple `Task<T>` sub-tasks
 concurrently and resumes the caller when **all** sub-tasks have completed.

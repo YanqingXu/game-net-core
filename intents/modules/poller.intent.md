@@ -229,3 +229,12 @@ High-risk mistakes:
 - Are owner-thread assumptions enforced?
 - Are error paths explicit enough?
 - Is EventLoop-facing interface stable and backend-neutral enough?
+
+## HP3 Experimental Prestudy Boundary
+
+The default-off HP3 benchmark may compare a portable fixed slot-arena decoder
+with the current fd-map plus linear-merge algorithm. It must not edit or link
+into production `EpollReadinessPort`, change Linux epoll/Windows IOCP defaults,
+own a Channel, invoke callbacks, or present portable decode timing as native
+epoll evidence. Formal integration still requires the existing readiness
+contracts on Linux plus active-batch lifecycle validation.

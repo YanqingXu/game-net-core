@@ -13,7 +13,10 @@ source_paths: benchmarks/core/main.cpp;benchmarks/phase4/main.cpp;benchmarks/cap
 
 ## Intent
 
-HP0 creates a reproducible cost ledger before any HP1-HP8 data-path change.
+HP0 creates a reproducible cost ledger before any HP1-HP8 data-path promotion
+or default-path change. A bounded experimental-prestudy exception may explore
+isolated alternatives while HP0 evidence is pending, but cannot replace the
+baseline or advance a milestone.
 The opt-in suite reuses the current callback and mutex-backed implementations,
 keeps each child benchmark's semantic validator as the correctness authority,
 and records comparable structural and latency costs in
@@ -91,8 +94,33 @@ intent change and cannot occur inside a performance comparison.
 - CPU affinity and frequency policy are explicit non-empty reviewed strings;
   the runner configuration is an evidence input, not an inferred default.
 - Recorded baselines use Release binaries from the same exact clean commit.
-  HP1 cannot start until both platform ledgers validate and are indexed in the
-  exact-commit evidence ledger.
+  HP1 promotion and integration cannot start until both platform ledgers
+  validate and are indexed in the exact-commit evidence ledger.
+
+## Experimental Prestudy Exception
+
+- HP0 remains the unique performance-promotion and integration front while its
+  fixed-lab evidence is incomplete.
+- At most one HP1-HP8 implementation prototype may carry the
+  `EXPERIMENTAL-PRESTUDY` label at a time, in parallel with HP0 laboratory
+  evidence. The label is not a milestone status.
+- A prototype is default-off, non-installed, non-exported, absent from public
+  manifests and release assets, and not linked into the default production
+  Core data path. It cannot change the production epoll/IOCP choice or current
+  callback-and-mutex baseline.
+- Design, intent, rules, contracts, and benchmark scaffolding may be prepared
+  out of milestone order. Runtime prototypes must declare and satisfy their
+  real technical prerequisites; mocks cannot prove a downstream composed
+  optimization.
+- Before implementation, each runtime prototype names its owner, ownership and
+  release path, callback re-entry behavior, cross-thread marshal, bounded
+  admission, shutdown settlement, and exact regression test file.
+- All prestudy measurements are development evidence. Before HP0 closes they
+  may conclude only `KEEP-EXPERIMENTAL`, `REJECT`, or `DEFER`; they cannot
+  produce `INTEGRATE`, switch a default path, add an installed API, or satisfy
+  a 5%/3% promotion gate.
+- After HP0 closes, any surviving candidate re-enters its formal HP slice,
+  reruns against the fixed baseline, and earns verification from scratch.
 
 ## Verification
 

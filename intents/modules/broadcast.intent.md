@@ -160,6 +160,15 @@ state.
   JSON before a successful exit; process-teardown buffering is not accepted as
   evidence publication.
 
+## HP4 Experimental Prestudy Boundary
+
+The existing dispatcher already shares one payload across owner tasks but calls
+borrowed endpoint send once per endpoint. HP4 may model one owner-local batch
+that revalidates route generations and enqueues the same immutable storage into
+separate fixed segment chains. It cannot change routing, reservations, progress
+metrics, endpoint callbacks or production dispatch until real multi-loop TCP
+contracts and the promotion gate pass.
+
 ## Migration Provenance
 
 - Source baseline: `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57`.

@@ -24,6 +24,8 @@ option(GAMENET_ENABLE_ASAN_UBSAN "Enable ASan/UBSan" OFF)
 option(GAMENET_ENABLE_TSAN "Enable TSan" OFF)
 option(GAMENET_ENABLE_TLS "Build TLS support" OFF)
 option(GAMENET_ENABLE_EXPERIMENTAL "Build experimental modules" OFF)
+option(GAMENET_ENABLE_NATIVE_TUNING "Enable host-specific CPU tuning" OFF)
+option(GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION "Keep benchmark profiling symbols and frame pointers" OFF)
 
 if(BUILD_SHARED_LIBS)
     message(FATAL_ERROR
@@ -48,6 +50,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(Sanitizers)
+include(BuildProfiles)
 
 set(GAMENET_INSTALL_CMAKEDIR
     "${CMAKE_INSTALL_LIBDIR}/cmake/GameNetCore"

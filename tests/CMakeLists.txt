@@ -410,6 +410,192 @@ add_gamenet_test(integration resilience ${CMAKE_CURRENT_SOURCE_DIR}/integration/
 add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_contract.cpp)
 add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_budget.cpp)
 add_gamenet_component_test(contract protocol GameNet::protocol ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_round_trip_smoke.cpp round-trip-smoke)
+if(TARGET gamenet_hp1_packet_framer_view)
+    add_executable(
+        gamenet_hp1_packet_framer_view_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_view.cpp
+    )
+    target_include_directories(
+        gamenet_hp1_packet_framer_view_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp1_packet_framer_view_contract
+        PRIVATE gamenet_hp1_packet_framer_view GameNet::core
+    )
+    add_test(
+        NAME contract.protocol.test_packet_framer_view
+        COMMAND gamenet_hp1_packet_framer_view_contract
+    )
+    set_tests_properties(
+        contract.protocol.test_packet_framer_view
+        PROPERTIES LABELS "contract;protocol;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.protocol.test_packet_framer_view)
+    add_dependencies(
+        gamenet_hp1_packet_framer_view_prestudy
+        gamenet_hp1_packet_framer_view_contract
+    )
+endif()
+if(TARGET gamenet_hp2_spsc_mailbox)
+    add_executable(
+        gamenet_hp2_spsc_mailbox_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/runtime_model/test_spsc_mailbox.cpp
+    )
+    target_include_directories(
+        gamenet_hp2_spsc_mailbox_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp2_spsc_mailbox_contract
+        PRIVATE gamenet_hp2_spsc_mailbox
+    )
+    add_test(
+        NAME contract.runtime_model.test_spsc_mailbox
+        COMMAND gamenet_hp2_spsc_mailbox_contract
+    )
+    set_tests_properties(
+        contract.runtime_model.test_spsc_mailbox
+        PROPERTIES LABELS "contract;runtime_model;threading;backpressure;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.runtime_model.test_spsc_mailbox)
+
+    add_executable(
+        gamenet_hp2_mailbox_source_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_event_loop_mailbox_source.cpp
+    )
+    target_include_directories(
+        gamenet_hp2_mailbox_source_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp2_mailbox_source_contract
+        PRIVATE gamenet_hp2_spsc_mailbox
+    )
+    add_test(
+        NAME contract.event_loop.test_event_loop_mailbox_source
+        COMMAND gamenet_hp2_mailbox_source_contract
+    )
+    set_tests_properties(
+        contract.event_loop.test_event_loop_mailbox_source
+        PROPERTIES LABELS "contract;event_loop;threading;lifecycle;backpressure;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.event_loop.test_event_loop_mailbox_source)
+
+    add_dependencies(
+        gamenet_hp2_spsc_mailbox_prestudy
+        gamenet_hp2_spsc_mailbox_contract
+        gamenet_hp2_mailbox_source_contract
+    )
+endif()
+if(TARGET gamenet_hp3_epoll_slot_dispatch)
+    add_executable(
+        gamenet_hp3_epoll_slot_dispatch_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/io_engine/test_epoll_slot_dispatch.cpp
+    )
+    target_include_directories(
+        gamenet_hp3_epoll_slot_dispatch_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp3_epoll_slot_dispatch_contract
+        PRIVATE gamenet_hp3_epoll_slot_dispatch
+    )
+    add_test(
+        NAME contract.io_engine.test_epoll_slot_dispatch
+        COMMAND gamenet_hp3_epoll_slot_dispatch_contract
+    )
+    set_tests_properties(
+        contract.io_engine.test_epoll_slot_dispatch
+        PROPERTIES LABELS "contract;io_engine;threading;lifecycle;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.io_engine.test_epoll_slot_dispatch)
+    add_dependencies(
+        gamenet_hp3_epoll_slot_dispatch_prestudy
+        gamenet_hp3_epoll_slot_dispatch_contract
+    )
+endif()
+if(TARGET gamenet_hp4_output_segment_chain)
+    add_executable(
+        gamenet_hp4_output_segment_chain_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_output_segment_chain.cpp
+    )
+    target_include_directories(
+        gamenet_hp4_output_segment_chain_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp4_output_segment_chain_contract
+        PRIVATE gamenet_hp4_output_segment_chain
+    )
+    add_test(
+        NAME contract.tcp_connection.test_output_segment_chain
+        COMMAND gamenet_hp4_output_segment_chain_contract
+    )
+    set_tests_properties(
+        contract.tcp_connection.test_output_segment_chain
+        PROPERTIES LABELS "contract;tcp_connection;threading;lifecycle;backpressure;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.tcp_connection.test_output_segment_chain)
+    add_dependencies(
+        gamenet_hp4_output_segment_chain_prestudy
+        gamenet_hp4_output_segment_chain_contract
+    )
+endif()
+if(TARGET gamenet_hp5_credit_lease)
+    add_executable(
+        gamenet_hp5_credit_lease_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/tcp_connection/test_credit_lease.cpp
+    )
+    target_include_directories(
+        gamenet_hp5_credit_lease_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp5_credit_lease_contract
+        PRIVATE gamenet_hp5_credit_lease
+    )
+    add_test(
+        NAME contract.tcp_connection.test_credit_lease
+        COMMAND gamenet_hp5_credit_lease_contract
+    )
+    set_tests_properties(
+        contract.tcp_connection.test_credit_lease
+        PROPERTIES LABELS "contract;tcp_connection;threading;lifecycle;backpressure;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.tcp_connection.test_credit_lease)
+    add_dependencies(
+        gamenet_hp5_credit_lease_prestudy
+        gamenet_hp5_credit_lease_contract
+    )
+endif()
+if(TARGET gamenet_hp6_adaptive_scheduler)
+    add_executable(
+        gamenet_hp6_adaptive_scheduler_contract
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/event_loop/test_adaptive_phase_scheduler.cpp
+    )
+    target_include_directories(
+        gamenet_hp6_adaptive_scheduler_contract
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    target_link_libraries(
+        gamenet_hp6_adaptive_scheduler_contract
+        PRIVATE gamenet_hp6_adaptive_scheduler
+    )
+    add_test(
+        NAME contract.event_loop.test_adaptive_phase_scheduler
+        COMMAND gamenet_hp6_adaptive_scheduler_contract
+    )
+    set_tests_properties(
+        contract.event_loop.test_adaptive_phase_scheduler
+        PROPERTIES LABELS "contract;event_loop;threading;lifecycle;backpressure;experimental;prestudy"
+    )
+    gamenet_configure_test_runtime(contract.event_loop.test_adaptive_phase_scheduler)
+    add_dependencies(
+        gamenet_hp6_adaptive_scheduler_prestudy
+        gamenet_hp6_adaptive_scheduler_contract
+    )
+endif()
 add_gamenet_component_test(contract transport GameNet::transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/transport/test_tcp_transport_endpoint_contract.cpp threading lifecycle)
 add_gamenet_component_test(contract transport GameNet::transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/transport/test_tcp_transport_endpoint_lifetime.cpp threading lifecycle)
 add_gamenet_component_test(contract transport GameNet::transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/transport/test_tcp_transport_endpoint_dispatch.cpp threading lifecycle backpressure)

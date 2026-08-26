@@ -17,7 +17,7 @@ Every `*.intent.md` document starts with this authoritative front matter:
 ```yaml
 ---
 status: active | deferred | legacy
-target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | GameNet::experimental_io_uring | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_multi_io_queued_echo | gamenet_multi_io_fixed_tick_echo | gamenet_multi_io_sharded_hybrid_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | gamenet_hot_path_benchmark | historical
+target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | GameNet::experimental_io_uring | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_multi_io_queued_echo | gamenet_multi_io_fixed_tick_echo | gamenet_multi_io_sharded_hybrid_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | gamenet_hot_path_benchmark | gamenet_hp1_packet_framer_view_benchmark | gamenet_hp2_spsc_mailbox_benchmark | gamenet_hp3_epoll_slot_dispatch_benchmark | gamenet_hp4_output_segment_chain_benchmark | historical
 migration_source: mini_trantor | native
 promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundation | post-core-preview | post-phase-4-protocol | experimental-only | never
 ---
@@ -95,6 +95,12 @@ These intents apply to the current migrated core:
 - `intents/usecases/production_candidate_release.intent.md`
 - `intents/usecases/core_performance_baseline.intent.md`
 - `intents/usecases/hot_path_cost_baseline.intent.md`
+- `intents/usecases/hp1_packet_framer_view_prestudy.intent.md`
+- `intents/usecases/hp2_spsc_mailbox_prestudy.intent.md`
+- `intents/usecases/hp3_epoll_slot_dispatch_prestudy.intent.md`
+- `intents/usecases/hp4_output_segment_chain_prestudy.intent.md`
+- `intents/usecases/hp5_credit_lease_prestudy.intent.md`
+- `intents/usecases/hp6_adaptive_scheduler_prestudy.intent.md`
 - `intents/modules/metrics_exporter.intent.md`
 - `intents/modules/logger.intent.md`
 - `intents/modules/channel.intent.md`

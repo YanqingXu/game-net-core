@@ -82,6 +82,13 @@ depending on `TcpConnection`.
   typed request-close behavior from a non-owner thread while the normal queue
   is saturated and after owner shutdown.
 
+## HP4 Experimental Prestudy Boundary
+
+TransportEndpoint keeps its owner-thread borrowed `send(bytes)` contract. HP4
+adds no installed owned/shared overload. The isolated broadcast helper may
+model owner-batch generation validation, but it does not adapt or invoke a real
+endpoint and cannot establish public API semantics.
+
 ## Migration Provenance
 
 - Source baseline: `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57`.

@@ -7,6 +7,20 @@ promote_gate: post-core-preview
 
 # Module Intent: Unified Async Semantics
 
+## HP7 Launch-Gate Record — 2026-08-25
+
+HP7 is `SKIPPED-BY-EVIDENCE`: HP2 is not integrated and the repository has no
+in-scope Session/RPC-like flow with at least two real asynchronous waits. This
+intent remains deferred and authorizes no target or API.
+
+If the gate later opens, accepted waiters must reach one explicit terminal
+outcome during owner-loop final drain; shutdown may not silently abandon a
+borrowed coroutine handle. Cross-thread cancel/resume is a typed bounded
+request returned to the origin owner, and only an owner-local ready-queue phase
+may resume the frame. Completion operation storage remains independent of the
+frame and alive until native terminal completion. A borrowed `PacketView` may
+never cross suspension; suspending code must own an `OwnedPacket`.
+
 ## 1. Intent
 
 Unified async semantics define how coroutine-facing asynchronous APIs in

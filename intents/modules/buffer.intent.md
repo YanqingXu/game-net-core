@@ -86,3 +86,22 @@ without owning protocol semantics.
 - Are index transitions still easy to reason about?
 - Does growth preserve existing unread bytes?
 - Is Buffer remaining protocol-agnostic?
+
+---
+
+## 9. HP1 Borrowed-View Prestudy Boundary
+
+The HP1 prestudy may form a contiguous span from `peek()` and
+`readableBytes()` on the Buffer owner thread. Buffer retains exclusive storage
+ownership. The synchronous visitor may not save the span, cross a thread or
+`co_await`, mutate the source Buffer, or re-enter the same framer. After the
+visit returns, the owner retrieves exactly `FrameVisitResult::consumedBytes`;
+partial prefix/payload bytes remain readable. This observation adds no Buffer
+API and does not move protocol semantics into Buffer.
+
+## 10. HP4 Experimental Prestudy Boundary
+
+The HP4 isolated segment chain is not a Buffer replacement and does not change
+Buffer storage or fd I/O. It compares ownership shapes outside production;
+formal Linux integration would require an explicit review of whether output
+Buffer remains a compatibility path while owned segments become source-private.

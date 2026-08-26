@@ -673,3 +673,102 @@ a completed, exact-commit record.
 | Implemented infrastructure | Active `hot_path_cost_baseline` intent; default-off and non-installed `gamenet_hot_path_benchmark` suite; six-scenario preregistration; `gamenet.hot_path_cost.v1` runner/validator; raw JSON/stderr/observer hashes; repository/workflow guards; fixed-lab documentation; manual named self-hosted Linux/epoll and Windows/IOCP workflow. |
 | Evidence boundary | The working tree is not an exact promotion commit. No fixed-lab artifact is entered here. Development smoke output, WSL output, hosted-runner output, dirty output, missing observer costs, or fewer than ten samples cannot close HP0. |
 | Decision | `DEFER` exact baseline evidence. Run one unrecorded warmup and at least ten scenario-round-robin samples on each native fixed runner after selecting a clean exact commit. HP1 remains blocked until both ledgers independently validate with `--require-fixed-lab`. |
+
+## HP0-G1 Experimental Prestudy Governance Amendment — 2026-08-25
+
+| Field | Evidence |
+| --- | --- |
+| Scope | Governance-only authorization for at most one HP1-HP8 runtime prototype labeled `EXPERIMENTAL-PRESTUDY` while HP0 fixed-lab evidence is pending. No runtime prototype, API, target, performance sample, version, tag, or release is created by this amendment. |
+| Preserved gate | HP0 remains the unique performance-promotion and integration front. Native Linux/epoll and Windows/IOCP ledgers from the same clean exact commit are still mandatory before any HP milestone can integrate or switch a default. |
+| Isolation | A prestudy implementation must be default-off, non-installed, non-exported, absent from the production Core path, public manifests, and release assets. It cannot replace the callback-and-mutex/current-path baseline. |
+| Contracts | Before implementation, the prototype must declare real technical dependencies, owner, ownership/release, callback re-entry, cross-thread marshal, bounded admission, shutdown settlement, zero-residue obligations, and an exact deterministic regression test file. |
+| Evidence boundary | Prestudy output is development-only and may decide `KEEP-EXPERIMENTAL`, `REJECT`, or `DEFER`. It cannot decide `INTEGRATE`, satisfy the 5%/3% promotion gate, add an installed API, or advance an HP milestone. |
+| Replay rule | After HP0 closes, any surviving candidate enters its formal HP slice and reruns correctness and performance evidence against the fixed baseline; no prestudy result is grandfathered into verification. |
+| Decision | `AUTHORIZE-EXPERIMENTAL-PRESTUDY` under the bounded isolation above. HP0 fixed-lab evidence remains `DEFER`; no HP1-HP8 milestone status changes. |
+
+## HP1-P0 PacketFramer Borrowed-View Prestudy — 2026-08-25
+
+| Field | Evidence |
+| --- | --- |
+| Scope | Default-off, non-installed and non-exported `gamenet_hp1_packet_framer_view_benchmark` plus exact contract. No production Core path, installed header, API manifest, Profile A default, version, or release changes. |
+| Owner/lifetime | One connection EventLoop owns prototype, Buffer mutation, visitor and consumption. PacketView borrows only for the visitor frame; retain copies once into move-only OwnedPacket. Nested visit/reset is rejected; visitor exception reports only previously settled frames. The prototype retains no payload or queued work. |
+| Correctness | Windows MSVC Release legacy plus candidate protocol contracts passed 4/4. Focused MSVC Debug AddressSanitizer candidate contract passed 1/1. The candidate contract includes deterministic randomized differential decoding, failure preflight and zero-allocation observation. |
+| Development measurement | Four payload sizes ran ten sequential local Release samples. Candidate and legacy checksums/frame counts matched; candidate allocation and copied-byte counts were zero. Median elapsed improvement ranged from 31.99% to 74.97%. Raw samples, warmup, fixed observer, confidence intervals and cross-platform pairing were not retained, so this is not promotion evidence. |
+| Missing evidence | HP0 fixed lab, Linux correctness/sanitizers, candidate fuzz, real Profile A input-Buffer integration, observer counters, installed API review and formal 5%/3% gate. |
+| Decision | `KEEP-EXPERIMENTAL`. Release the one prestudy implementation slot. HP1 remains `planned`; after HP0 closes the candidate must enter the formal slice and earn verification from scratch. |
+
+## HP2-P0 SPSC Mailbox And Owner-Outbox Prestudy — 2026-08-25
+
+| Field | Evidence |
+| --- | --- |
+| Scope | Default-off, non-installed and non-exported `gamenet_hp2_spsc_mailbox_benchmark`, fixed-storage mailbox/source headers, and two exact contracts. Production `GameCommandQueue`, Profile B, EventLoop lanes, installed APIs, manifests, versions and releases are unchanged. |
+| Owner/lifetime | Each mailbox has one fixed producer and consumer; consumer owner drains, validates route generation, stops, cancels, detaches and destroys. Move-only `OwnedPacket` is the sole cross-domain payload owner. Recursive drain is rejected; stale generation handles return `OwnerUnavailable`; accepted slots settle as processed or explicitly cancelled. |
+| Correctness | Windows MSVC Release HP2 contracts passed 2/2 and existing Profile B contract passed 1/1. Focused MSVC Debug AddressSanitizer HP2 contracts passed 2/2. Contracts cover matrix budget, wraparound, FIFO, full/stopped rejection without premature move, true producer/consumer ordering, visitor exception, clear/recheck races, notification coalescing, route generation, outbox and zero residue. |
+| Development measurement | Ten sequential local Release samples at 200,000 messages, 256-byte payload, capacity 4,096 and batch 64 all reported equal checksums and zero residue. Paired elapsed improvement median was 26.60% (median elapsed 80,171,500 ns baseline versus 61,130,950 ns candidate); candidate queue allocator calls, lock acquisitions and generic posts were zero versus a median 912 deque allocator calls and 200,000 generic output posts. |
+| Guardrail | Mean queue-age median was about 2,814.9 ns baseline versus 7,638.4 ns candidate in the burst model, with wide sample variance. There was no rate-controlled SLO load, fixed observer, raw artifact retention, confidence interval, Linux pairing or clean exact commit; the throughput signal is development-only and cannot satisfy 5%/3%. |
+| Decision | `KEEP-EXPERIMENTAL`. Retain the isolated prototype for post-HP0 fixed-load replay, release the one prestudy implementation slot, and leave formal HP2 `planned`. |
+
+## HP3-P0 Epoll Slot Dispatch Prestudy — 2026-08-25
+
+| Field | Evidence |
+| --- | --- |
+| Scope | Default-off, non-installed portable `gamenet_hp3_epoll_slot_dispatch_benchmark`, decoder library and exact contract. It owns no epoll descriptor and changes no production `EpollReadinessPort`, Channel, Linux/Windows default, installed API, manifest, version or release. |
+| Owner/lifetime | One constructing owner performs all registration, update, cancel, decode, validation, stop and shutdown. Fixed slots borrow opaque targets; packed tokens own nothing. Exact cancel/reuse revokes old generation observations before target release; decode invokes no callback. |
+| Correctness | Windows MSVC Release contract passed 1/1 and focused MSVC Debug AddressSanitizer passed 1/1. Capacity, identity, update, reuse, malformed/wakeup/stale filtering, O(1) duplicate merge, batch budget, epoch wrap, active-batch invalidation, owner rejection, stop and zero residue are covered. |
+| Development measurement | Ten local Release samples used 1,024 sources and 200 iterations. Unique-event median elapsed was 22,514,850 ns current-model versus 717,900 ns slot candidate; factor-four duplicate median was 88,992,500 ns versus 2,016,650 ns. Every sample matched notices/checksum and zero residue; candidate wait hash lookups and merge probes were zero. |
+| Missing evidence | No native Linux epoll descriptor, `epoll_ctl`, `epoll_wait`, level-trigger drain-to-EAGAIN, kernel-stale token, cache/observer counter, end-to-end tail latency, clean exact commit, fixed lab, confidence interval or cross-platform pairing. The large portable decoder signal cannot be treated as a 5%/3% result. |
+| Decision | `DEFER`. Retain the isolated algorithm as design evidence, release the prestudy implementation slot, and leave formal HP3 `planned` until native Linux evidence is possible. |
+
+## HP4-P0 Output Segment Chain Prestudy — 2026-08-25
+
+| Field | Evidence |
+|---|---|
+| Binding | Dirty local worktree on Windows; development-only evidence, not a commit-bound HP0 ledger and not promotion evidence. |
+| Candidate | Default-off, non-installed `gamenet_hp4_output_segment_chain_benchmark` plus fixed-ring owned/shared segment contract. Production TcpConnection, TransportEndpoint, broadcast, budgets, APIs and defaults are unchanged. |
+| Correctness | Windows MSVC Release focused contract passed 1/1, focused Debug AddressSanitizer passed 1/1, and unchanged IOCP segmented/partial write, TCP memory-budget, broadcast contract and multi-loop integration regressions passed 5/5. |
+| Measurement | Ten sequential Release samples per payload, 256 endpoints x 100 iterations. 1,024-byte baseline/candidate medians 951,000/1,570,350 ns, paired median -65.10%; 16,384-byte medians 26,707,150/1,568,100 ns, paired median +94.07%. All samples matched checksums and settled. Candidate modeled zero allocation/copy; baseline used 25,600 allocations and copied 26,316,800 or 419,532,800 bytes. |
+| Limit | No real writev/WSASend, syscall count, native Linux, IOCP completion-storage integration, P99/P999, clean exact commit, fixed runner or HP0 ledger. The 16 KiB baseline also ranged from 3,808,400 to 29,414,100 ns. |
+| Decision | `DEFER`. Preserve the prototype as mixed design evidence, release the prestudy slot, keep formal HP4 `planned`, and require native fixed-lab replay from scratch after HP0. |
+
+## HP5-P0 Owner-Local Credit Lease Prestudy — 2026-08-25
+
+| Field | Evidence |
+|---|---|
+| Binding | Dirty local worktree on Windows; development-only modeled-atomic evidence, not a commit-bound HP0 ledger or promotion evidence. |
+| Candidate | Default-off, non-installed fixed connection-slot/loop lease reserving conservative chunks from shared server/global budgets. Production TcpOutputMemoryBudget, TcpConnection, TcpServer, Broadcast, APIs and defaults are unchanged. |
+| Correctness | Windows MSVC Release focused contract passed 1/1, focused Debug AddressSanitizer passed 1/1, and four unchanged production hierarchical TCP/server and broadcast budget regressions passed 4/4. |
+| Measurement | Ten sequential Release samples per payload, 200,000 messages. At 512 bytes exact/candidate medians were 11,685,150/833,150 ns (+92.87% paired median); at 16,384 bytes 11,681,000/833,350 ns (+92.86%). The exact model recorded 1,600,000 shared atomic mutations and the retained lease four; all samples matched checksum/accounting and settled. |
+| Limit | Single owner, immediate release, instrumented model atomics, no real TcpConnection/cache contention, multi-connection distribution, fairness/reclamation, overload recovery, Linux, tail latency, clean commit or HP0 fixed-lab ledger. |
+| Decision | `KEEP-EXPERIMENTAL`. Retain the isolated design for formal replay, release the prestudy slot, keep HP5 `planned`, and leave production admission unchanged. |
+
+## HP6-P0 Adaptive Scheduler Prestudy — 2026-08-25
+
+| Field | Evidence |
+|---|---|
+| Binding | Dirty local worktree on Windows; development-only synthetic-cost evidence, not a commit-bound HP0 ledger or promotion evidence. |
+| Candidate | Default-off, non-installed HP6-A fixed-array quota planner. HP6-B pools and HP6-C hot/cold/NUMA work are `SKIPPED-BY-EVIDENCE`; production EventLoop/storage is unchanged. |
+| Correctness | Windows MSVC Release focused contract passed 1/1, focused Debug AddressSanitizer passed 1/1, and six unchanged EventLoop/timer regressions passed 6/6. |
+| Measurement | Ten Release samples, 32,768 synthetic I/O plus 512 items in each side phase. Equal 34,816 completions, simulated cost, checksum and zero residue. Maximum modeled round cost fell 7,680,000 -> 1,140,000 ns (85.16%); control/lifecycle first service fell 6,720,000/7,040,000 -> 580,000/660,000 ns. Rounds rose 512 -> 6,554, planner median 1,600 -> 333,850 ns, oldest age regressed 0.186%. |
+| Limit | Estimated costs only; no real callbacks, backend poll/wakeup, queue-age/P99/P999, throughput/CPU, Profile A/B, Linux, clean commit or HP0 ledger. |
+| Decision | HP6-A `DEFER`; HP6-B/C `SKIPPED-BY-EVIDENCE`. Release the prestudy slot, keep formal HP6 `planned`, and leave production runtime/storage unchanged. |
+
+## HP7 Launch Gate — 2026-08-25
+
+| Field | Evidence |
+|---|---|
+| Prerequisite | HP2 must be production-integrated and one in-scope Session/RPC-like flow must contain at least two real asynchronous waits. HighVolumeTimerWheel additionally requires a measured 100k-timer hotspot. |
+| Observation | HP2 is `KEEP-EXPERIMENTAL`, not integrated; no qualifying in-scope flow or timer hotspot exists. |
+| Governance | Deferred Task/asyncSleep/async semantics/whenAll/whenAny intents now supersede abandoned-on-shutdown, arbitrary-thread parent resume, generic-functor resume, operation/frame coupling and borrowed-view-across-suspend directions. |
+| Mutation | No runtime implementation, target, installed header, public API, default, version or release. |
+| Decision | `SKIPPED-BY-EVIDENCE`. Reevaluate from scratch only after the launch conditions become true; formal HP7 remains planned/skipped. |
+
+## HP8 Backend, Build Profile, And Promotion Review — 2026-08-25
+
+| Field | Evidence |
+|---|---|
+| Backend gate | HP0 clean native ledgers are absent and HP1-HP6 are not production-integrated, so no comparable post-user-data-path epoll/IOCP/io_uring replay exists. Advanced io_uring features and backend selector/default changes were not started. |
+| Build profiles | Added PortableRelease, NativeTunedRelease, PGOGenerate/PGORelease, Sanitizer and BenchmarkInstrumented presets plus validated compiler-option governance. All six configured on Windows MSVC; generated projects distinguished portable/native, PGO generate/use and instrumented frame-pointer/debug behavior. PortableRelease core built successfully. |
+| Deployment | Added measurement-first affinity, NUMA, IRQ/RSS/RPS/XPS, socket-buffer, TCP_NODELAY and gated SO_REUSEPORT guidance with primary platform references. |
+| Working-tree validation | Complete Windows MSVC Release and Debug AddressSanitizer CTest matrices passed 137/137, including seven experimental/prestudy contracts and the unchanged production suite. All 44 Python API/CMake/scope/CI/intent guards passed; semantic inventory validated 44 active intents and 210 explicit paths. One eight-way Release run exposed a non-reproducing loopback timing assertion and one unrestricted-parallel ASan build hit MSVC PDB `C1090`; the exact test and four-way full suite passed, and the two-way incremental ASan build passed without source changes. |
+| Limit | No Linux preset build in this worktree, clean exact commit, HP0 matrix replay, post-integration backend comparison or independent architecture/API promotion review. |
+| Decision | Backend/promotion `DEFER`; release `NO-RELEASE`. Keep epoll/IOCP defaults, existing opt-in io_uring scope and version 0.3.0; create no tag/package/release. |

@@ -472,3 +472,22 @@ inline inside TcpConnection.
 - Can callbacks or coroutine resumes outlive safe ownership?
 - Is registration removed before destruction?
 - Are optional behaviors delegated cleanly without weakening the public lifecycle model?
+
+## 11. HP4 Experimental Prestudy Boundary
+
+HP4 may model fixed owned/shared segments and vectored batch completion only in
+the default-off benchmark graph. It cannot change `trySend`, output Buffer,
+IOCP transport, hierarchical reservations, write-interest, callback ordering
+or close semantics. A formal candidate must preserve direct-empty send,
+partial-write accounting, reservation release, callback re-entry and native
+Linux/Windows cancellation contracts before any API review.
+
+## 12. HP5 Experimental Prestudy Boundary
+
+HP5 may compare exact per-message atomic hierarchy accounting with an isolated
+owner-local credit lease. The lease owns no production connection or budget,
+and only already-owner-local work may spend it. Public cross-thread `trySend`,
+the exact connection -> loop -> server -> global reservation chain, overload
+hysteresis, callbacks, shutdown and installed API remain unchanged until a
+formal post-HP0 slice proves all hard limits, rollback and terminal credit
+return on native fixed-load paths.

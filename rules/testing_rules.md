@@ -619,6 +619,118 @@ For lifecycle-sensitive modules, tests should include:
   missing preregistered scenarios, missing required counters, shortened loads,
   fewer than ten samples, or parameter drift; development evidence may retain
   those limitations but is never promotion eligible
+- while HP0 fixed-lab evidence is incomplete, at most one HP1-HP8 runtime
+  prototype may be labeled `EXPERIMENTAL-PRESTUDY`; it must be default-off,
+  non-installed, non-exported, absent from the default production Core data
+  path, public manifests, and release assets, and it cannot replace the current
+  callback-and-mutex baseline
+- an `EXPERIMENTAL-PRESTUDY` runtime prototype must name a deterministic test
+  file before implementation and cover its owner, ownership/release,
+  callback re-entry, cross-thread marshal, bounded admission, failure paths,
+  shutdown settlement, and zero-residue obligations
+- prestudy design and benchmark scaffolding may be prepared out of milestone
+  order, but runtime tests must use real satisfied dependencies; a mock or
+  synthetic downstream component cannot validate a composed HP7/HP8 claim
+- prestudy measurements are development evidence only and cannot satisfy an
+  HP milestone, dependency gate, fixed-lab baseline, 5%/3% promotion decision,
+  default-path switch, installed API addition, version, or release decision
+- after HP0 closes, a retained prestudy candidate must enter the formal HP
+  slice and rerun its contracts and performance comparison against the fixed
+  exact-commit baseline; no prestudy result is grandfathered into verification
+- the active HP1 `EXPERIMENTAL-PRESTUDY` contract is
+  `tests/contract/protocol/test_packet_framer_view.cpp`; it must use a real
+  `Buffer` readable region and prove borrowed-view expiry discipline, explicit
+  one-copy retain, zero owner-local allocations without retain, and zero post,
+  wakeup, or handoff behavior by construction
+- HP1 differential cases cover partial prefix/payload, sticky and empty frames,
+  frame-count and frame-byte budgets, a valid frame followed by an oversized
+  prefix with zero visitor side effects, sticky fault/reset, visitor exception,
+  nested visit/reset rejection, exact `consumedBytes`, and randomized valid
+  streams against legacy `PacketFramer::push()`
+- the HP1 benchmark is default-off, non-installed, non-exported, preserves the
+  unchanged legacy callback-copy path, and reports raw checksums, payload/
+  copied/retained byte accounting, iteration count, and elapsed time for both
+  paths; its development output cannot satisfy the HP0 5%/3% promotion gate
+- the active HP2 `EXPERIMENTAL-PRESTUDY` contracts are
+  `tests/contract/runtime_model/test_spsc_mailbox.cpp` and
+  `tests/contract/event_loop/test_event_loop_mailbox_source.cpp`; they use real
+  producer/consumer threads and move-only HP1 OwnedPacket values rather than a
+  model-only vector of copyable integers
+- HP2 mailbox tests cover overflow-safe topology memory rejection, power-of-two
+  capacity, in-place construction, QueueFull, FIFO wraparound, batch budgets,
+  concurrent release/acquire publication, callback re-entry, visitor exception,
+  stop versus producer, explicit cancellation, and exact
+  `accepted == processed + cancelled` zero-residue settlement
+- HP2 source tests deterministically place a producer before and after the
+  consumer clears notification-pending, prove at most one physical notification
+  per non-empty burst without lost wakeup, reject recursive drain, invalidate
+  stale generations on detach/replacement, and distinguish QueueFull, Stopped,
+  and OwnerUnavailable
+- the HP2 benchmark preserves callback+mutex as baseline, records both mailbox
+  directions, allocations, copied bytes, notifications, generic posts,
+  handoffs, throughput, queue age and shutdown residue, and remains
+  development-only until HP0 fixed-lab pairing
+- the active HP3 `EXPERIMENTAL-PRESTUDY` contract is
+  `tests/contract/io_engine/test_epoll_slot_dispatch.cpp`; it covers fixed
+  capacity, packed index/generation identity, same-generation interest update,
+  remove/reuse generation, stale/malformed/wakeup filtering, O(1) duplicate
+  merge, batch limit, epoch wrap, exact cancellation and zero residue
+- HP3 decode invokes no callback and performs no fd hash lookup. A deterministic
+  active-batch case cancels and reuses a later target before dispatch, then
+  proves `isCurrent` rejects the old notice and cannot reach the replacement
+- HP3 foreign-thread mutation is rejected. Stop seals new registration and
+  requires every borrowed target registration to cancel before terminal
+  settlement; the prototype owns no real epoll fd or cross-thread wakeup
+- the HP3 benchmark preserves the current fd-map plus linear-merge algorithm as
+  baseline and reports native events, delivered unique notices, map lookups,
+  merge probes, slot probes, stale/filtered counts, elapsed time and checksum;
+  portable timing is development-only and cannot replace native Linux evidence
+- the active HP4 `EXPERIMENTAL-PRESTUDY` contract is
+  `tests/contract/tcp_connection/test_output_segment_chain.cpp`; it covers
+  fixed capacity, owned/shared storage, non-concatenated views, 16-segment and
+  64-KiB batches, direct-empty prepare, FIFO and partial completion across
+  segment boundaries without suffix copy
+- HP4 contract paths reject nested/in-flight prepare, invalid completion,
+  foreign-owner mutation, capacity/stopped admission and cancellation during
+  an in-flight batch; stop plus explicit discard must reconcile accepted bytes
+  to completed plus discarded with zero residue
+- an HP4 broadcast case shares one immutable payload across many owner-local
+  chains, validates route generation before enqueue, reports stale/rejected
+  targets, and proves no per-endpoint payload copy or shared-storage mutation
+- the HP4 benchmark preserves per-endpoint header+payload concatenation as the
+  baseline and reports copied bytes, allocation events, batch/views, elapsed
+  time, checksum and zero residue. It performs no real socket syscall and
+  cannot substitute for native segmented-write or broadcast integration tests
+- the active HP5 `EXPERIMENTAL-PRESTUDY` contract is
+  `tests/contract/tcp_connection/test_credit_lease.cpp`; it proves owner-only
+  mutation, slot-generation reuse, typed connection/loop/server/global
+  rejection, later-scope rollback, concurrent parent no-overshoot, idle-credit
+  reuse/trim, cancel/retire/stop and exact zero-residue settlement
+- the HP5 benchmark compares the current modeled four-scope per-message atomic
+  chain with owner-local connection/loop accounting and batched server/global
+  lease operations. It reports modeled atomic mutations, elapsed time,
+  checksum, accepted/released/discarded bytes and residue; it cannot replace
+  native TcpConnection, broadcast, capacity or fixed-lab evidence
+- the active HP6-A `EXPERIMENTAL-PRESTUDY` contract is
+  `tests/contract/event_loop/test_adaptive_phase_scheduler.cpp`; it covers
+  option/owner/stopped rejection, count/time/deficit bounds, age boost,
+  weighted saturated progress, minimum control/lifecycle service, poll-zero
+  continuation, stop and zero residue
+- the HP6 benchmark runs fixed-count and adaptive quota planners over identical
+  finite synthetic work and reports completion/checksum equality, simulated
+  total/max-round cost, first control/lifecycle latency, planner overhead,
+  rounds and zero-poll continuations. Estimated cost cannot substitute for real
+  EventLoop queue-age/P99/P999 evidence
+- HP6-B pools and HP6-C hot/cold layout remain `SKIPPED-BY-EVIDENCE` until HP0
+  identifies a qualifying allocation, cache-miss or bytes-per-connection hotspot
+- HP8 build-profile governance is verified by
+  `tests/cmake/test_build_governance_contract.py`: portable/native tuning must
+  be explicit and mutually observable, PGO generate/use share one training
+  build tree, sanitizer excludes PGO, benchmark instrumentation retains frame
+  pointers, and all named presets parse through CMake
+- HP8 backend promotion remains `DEFER` until clean exact-commit HP0 ledgers and
+  a post-user-data-path epoll/IOCP/io_uring comparison exist. Build presets or
+  deployment tuning alone are never backend promotion evidence
 - the slow-broadcast-recovery capacity profile must use real TCP endpoints,
   hold reads during pressure, keep aggregate connection pending bytes within
   the configured connection hard-limit sum, keep dispatcher outstanding bytes

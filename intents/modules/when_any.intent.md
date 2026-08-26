@@ -7,6 +7,15 @@ promote_gate: post-core-preview
 
 # Module Intent: coroutine::WhenAny
 
+## HP7 Launch-Gate Record — 2026-08-25
+
+HP7 is `SKIPPED-BY-EVIDENCE`; this intent stays deferred. The historical rule
+that the first completing child directly chooses the parent resume thread is
+superseded. A future parent continuation must return to its origin owner's
+bounded ready queue, losers must each reach one terminal settlement, and native
+operations must outlive cancellation until terminal completion. `whenAny`
+cannot start before owner-ready-queue and cancellation contracts pass.
+
 ## 1. Intent
 WhenAny is a coroutine combinator that awaits multiple `Task<T>` sub-tasks
 concurrently and resumes the caller as soon as the **first** sub-task completes.

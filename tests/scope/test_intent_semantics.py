@@ -60,6 +60,34 @@ CONCRETE_ACTIVE_ARTIFACTS = {
         "benchmark",
         "gamenet_core_benchmark",
     ),
+    "intents/usecases/hot_path_cost_baseline.intent.md": (
+        "benchmark",
+        "gamenet_hot_path_benchmark",
+    ),
+    "intents/usecases/hp1_packet_framer_view_prestudy.intent.md": (
+        "benchmark",
+        "gamenet_hp1_packet_framer_view_benchmark",
+    ),
+    "intents/usecases/hp2_spsc_mailbox_prestudy.intent.md": (
+        "benchmark",
+        "gamenet_hp2_spsc_mailbox_benchmark",
+    ),
+    "intents/usecases/hp3_epoll_slot_dispatch_prestudy.intent.md": (
+        "benchmark",
+        "gamenet_hp3_epoll_slot_dispatch_benchmark",
+    ),
+    "intents/usecases/hp4_output_segment_chain_prestudy.intent.md": (
+        "benchmark",
+        "gamenet_hp4_output_segment_chain_benchmark",
+    ),
+    "intents/usecases/hp5_credit_lease_prestudy.intent.md": (
+        "benchmark",
+        "gamenet_hp5_credit_lease_benchmark",
+    ),
+    "intents/usecases/hp6_adaptive_scheduler_prestudy.intent.md": (
+        "benchmark",
+        "gamenet_hp6_adaptive_scheduler_benchmark",
+    ),
     **PHASE4_ARTIFACTS,
 }
 
@@ -346,6 +374,8 @@ def configure_inventory(
                 source = normalized_source(argument, command_file, source_root)
                 if source is not None:
                     entry.sources.add(source)
+        elif cmake_command == "add_custom_target" and arguments:
+            targets.setdefault(arguments[0], ConfiguredTarget(kind="utility"))
         elif cmake_command == "install" and arguments and arguments[0] == "TARGETS":
             for argument in arguments[1:]:
                 if argument.upper() in INSTALL_KEYWORDS:
@@ -497,11 +527,19 @@ def validate_artifact(
             backing_target in inventory.installed_targets,
             f"active installed-library target is not installed: {intent_name}: {target}",
         )
-    else:
+    elif kind == "example":
         require(
             configured_target.kind == "executable",
             f"{kind} intent resolves to a non-executable target: {intent_name}: {target}",
         )
+    else:
+        require(
+            configured_target.kind in {"executable", "utility"},
+            f"benchmark intent resolves to neither an executable nor a utility suite target: "
+            f"{intent_name}: {target}",
+        )
+
+    if kind != "installed-library":
         require(
             backing_target not in inventory.installed_targets,
             f"{kind} intent unexpectedly names an installed target: {intent_name}: {target}",
@@ -715,6 +753,7 @@ install(EXPORT FixtureTargets DESTINATION lib/cmake/Fixture)
 
 add_executable(real_example fixture.cpp)
 add_executable(real_benchmark fixture.cpp)
+add_custom_target(real_benchmark_suite DEPENDS real_benchmark)
 add_executable(real_test tests/registered.cpp)
 add_test(NAME contract.fixture.registered COMMAND real_test)
 
@@ -749,6 +788,18 @@ endif()
 
     positive = fixture("positive", dict(base_metadata), "tests/registered.cpp")
     validate_intent(positive, source_root, inventory, set(), "")
+
+    positive_suite_metadata = dict(
+        base_metadata,
+        target="real_benchmark_suite",
+        artifact_kind="benchmark",
+    )
+    positive_suite = fixture(
+        "positive_suite",
+        positive_suite_metadata,
+        "tests/registered.cpp",
+    )
+    validate_intent(positive_suite, source_root, inventory, set(), "")
 
     cases: list[tuple[str, str, Path]] = []
 

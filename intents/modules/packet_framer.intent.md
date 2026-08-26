@@ -81,6 +81,17 @@ format is exactly `uint32 big-endian payload_length | payload`.
   `LLVMFuzzerTestOneInput` entry for arbitrary bytes, bounded continuation,
   reset recovery, and differential one-shot/chunked valid-stream decoding.
 
+## HP1 Experimental Prestudy Boundary
+
+The installed `PacketFramer` and its `push()`/`encode()` behavior remain the
+current contract and HP0 baseline. While HP0 evidence is incomplete, the
+separate `gamenet_hp1_packet_framer_view_benchmark` target may evaluate a
+non-installed `gamenet::experimental::hp1` borrowed-view prototype. It must
+preflight fail-closed batches before callbacks, preserve the existing budgets
+and fault/reset semantics, consume only fully visited frames, and keep partial
+input in the caller-owned Buffer. It does not authorize an installed
+`PacketView`, `OwnedPacket`, `FrameVisitResult`, or `visitFrames()` member.
+
 ## Migration Provenance
 
 - Source baseline: `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57`.

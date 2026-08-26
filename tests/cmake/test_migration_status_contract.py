@@ -762,6 +762,7 @@ def main() -> None:
         require(text, "M11", source)
         require(text, "HP0", source)
         require(text, hp0_governance_baseline, source)
+        require(text, "EXPERIMENTAL-PRESTUDY", source)
     for text, source in (
         (status_text, migration_status),
         (roadmap_text, roadmap),
@@ -915,8 +916,11 @@ def main() -> None:
         "回退不超过 3%",
         "KEEP-EXPERIMENTAL",
         "SKIPPED-BY-EVIDENCE",
-        "当前前沿为 HP0",
-        "HP0 关闭前不得开始 HP1 Core 实现",
+        "当前性能推广前沿为 HP0",
+        "HP0 仍是唯一性能推广与集成前沿",
+        "同一时间至多一个 HP1–HP8 实现原型",
+        "预研只生成 development evidence",
+        "HP0 关闭前不得输出 `INTEGRATE`",
     ):
         require(plan_text, hp_anchor, plan)
     require(plan_text, "TcpSendResult trySendOwned(std::string&&);", plan)

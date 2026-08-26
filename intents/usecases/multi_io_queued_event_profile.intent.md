@@ -113,3 +113,13 @@ promotion evidence.
 - no control-source admission bypass, work stealing, global executor, or
   unbounded queue;
 - no UDP, KCP, TLS, HTTP, RPC, coroutine, or experimental transport work.
+
+## 8. HP2 Experimental Prestudy Boundary
+
+The installed dependencies and current Profile B example remain on
+`GameCommandQueue` plus ordinary logic/owner executor posts and form the HP0
+callback+mutex baseline. The isolated HP2 benchmark may compare fixed-topology
+SPSC Network→Logic and Logic→Network mailboxes using HP1 `OwnedPacket`, but it
+does not change this Profile, its handler/output path, default recipe, metrics,
+or public surface. A formal switch requires HP0 closure and the real Profile B
+contract, then separate Profile C/D validation.

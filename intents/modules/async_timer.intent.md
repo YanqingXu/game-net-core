@@ -7,6 +7,17 @@ promote_gate: post-core-preview
 
 # Module Intent: SleepAwaitable / asyncSleep
 
+## HP7 Launch-Gate Record — 2026-08-25
+
+HP7 is `SKIPPED-BY-EVIDENCE`; this intent remains deferred and creates no
+awaitable target. Its historical statement that EventLoop quit may leave the
+coroutine unresumed is explicitly unsafe and superseded for any future rewrite.
+
+Accepted sleep/cancel/shutdown must publish exactly one terminal result through
+the origin owner's bounded ready queue before frame release. Cross-thread
+cancel only submits a typed request; it does not resume directly or depend on a
+generic functor continuation. Shutdown cancellation participates in final drain.
+
 ## 1. Intent
 SleepAwaitable is a coroutine awaitable that suspends the current coroutine
 for a specified duration, then resumes it on the owner EventLoop thread.

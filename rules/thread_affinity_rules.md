@@ -46,6 +46,22 @@ No other direct mutation path is allowed for core loop state.
 - Profile start, stop, configuration, metrics observation, and destruction are
   owner-thread-only; cross-thread callers marshal through EventLoop first
 
+### 3.1.1 HP1 Packet View Prestudy
+
+- `PacketFramerViewPrototype`, the source Buffer, visitor execution, byte
+  consumption, reset, and destruction stay on one connection EventLoop owner
+- `visitFrames` preflights the current contiguous readable span without a
+  callback, then invokes each visitor synchronously on that owner; it posts no
+  EventLoop task and performs no cross-domain handoff
+- a visitor may re-enter higher-level owner-only stop/close behavior but may
+  not mutate the source Buffer or the same prototype. Nested visit and reset
+  are rejected while the outer visit is active
+- a `PacketView` cannot be saved, sent cross-thread, or held across `co_await`;
+  cross-owner or suspendable work first calls `retain()` and later submits the
+  resulting `OwnedPacket` through a typed bounded mechanism outside HP1
+- after `visitFrames` returns and every borrowed view is dead, only the owner
+  may call `Buffer::retrieve(consumedBytes)` or otherwise grow/trim the Buffer
+
 ## 3.2 Runtime Profile B
 - `MultiIoQueuedEvent` uses one base accept EventLoop, at least two TcpServer
   worker EventLoops for connection ownership, and one distinct caller-owned
@@ -65,6 +81,26 @@ No other direct mutation path is allowed for core loop state.
 - Profile lifecycle/configuration remains base-loop-owner-only; metrics are an
   explicitly synchronized cross-thread snapshot, and the separate logic stop
   future must converge before the caller destroys the logic EventLoop
+
+### 3.2.1 HP2 SPSC Mailbox Prestudy
+
+- one fixed producer thread alone constructs and publishes slots; one fixed
+  consumer owner alone visits, moves, destroys, cancels, snapshots terminal
+  settlement, and detaches the mailbox source
+- producer publication is release and consumer observation is acquire;
+  consumer head publication is release and producer capacity observation is
+  acquire. No mutex or role migration is permitted
+- only the first empty→non-empty transition for one burst invokes the notifier.
+  The consumer clears the pending bit only after observing empty and then
+  rechecks tail so a concurrent producer cannot strand Accepted work
+- a bounded drain may request a later owner turn but cannot recursively invoke
+  the same drain. Visitor re-entry may revoke routes or begin stop because no
+  queue lock is held
+- Network→Logic and Logic→Network outbox directions use different mailbox
+  objects and handles; neither thread directly mutates the other owner's route,
+  transport, or business state
+- stop/detach is consumer-owner-only. Producer calls that race it return a typed
+  result or remain an Accepted obligation; no foreign thread clears slots
 
 ## 3.3 Runtime Profile C
 - `MultiIoDedicatedFixedTick` uses one base accept EventLoop, at least two
@@ -408,6 +444,17 @@ No other direct mutation path is allowed for core loop state.
 - source-private retirement of the currently executing removed Channel is an
   inline owner-loop operation and never uses pending-functor admission
 
+### 6.0.1 HP3 Epoll Slot Dispatch Prestudy
+
+- slot registration/update/cancel, native-token decode, notice iteration,
+  begin-stop, settlement and destruction are confined to the constructing
+  owner thread; the portable prototype has no cross-thread wakeup method
+- decode invokes no callback. EventLoop-style dispatch occurs afterward and
+  revalidates slot identity before a callback; callback re-entry may cancel or
+  reuse another slot without recursive decoding
+- fd lookup is owner-only control-plane work. Wait-side decode uses only packed
+  slot index/generation, fixed slot state and batch-local notice storage
+
 ## 6.1 Connector and TcpClient
 - Connector mutation, retry/timeout handling, Channel cleanup, and connected-fd
   publication are owner-loop-only
@@ -497,6 +544,38 @@ No other direct mutation path is allowed for core loop state.
   with a stale Poller entry during callback-driven reconnect
 - cross-thread terminal requests signal the lifecycle node and do not depend on
   normal/reserved functor capacity
+
+### 7.0.1 HP4 Output Segment Chain Prestudy
+
+- enqueue, prepare/complete/fail one batch, stop, cancellation, broadcast owner
+  batch publication and destruction are constructing-owner-only
+- the prototype exposes no direct cross-thread mutation. A future foreign
+  owned send would first own bytes, reserve bounded admission and marshal that
+  value through the existing owner mechanism
+- prepare/complete invoke no user callback and reject nested prepare. Formal
+  callbacks may run only after mandatory offsets, pending bytes and transport
+  interest/completion state are settled
+
+### 7.0.2 HP5 Credit Lease Prestudy
+
+- one constructing owner alone mutates connection slots, local connection/loop
+  pending bytes, cached credit, stop state and generation reuse
+- shared server/global parents expose atomic reserve/release only; they own no
+  loop state and invoke no callback
+- foreign local-lease mutation is rejected before local state observation. The
+  production public cross-thread send remains on its exact atomic admission path
+- refill reserves parents in hierarchy order and rolls earlier scopes back on
+  later failure. Owner stop/cancel returns every retained parent credit before
+  shutdown can settle
+
+### 7.0.3 HP6 Adaptive Scheduler Prestudy
+
+- the constructing owner alone updates fixed phase deficits and planner stop
+  state; observations and returned quotas transfer no EventLoop work ownership
+- planning invokes no callback and cannot recursively plan. A future runtime
+  applies quotas only on its owner and settles mandatory state before re-entry
+- foreign plan/stop is rejected before mutable planner state is read. Existing
+  cross-thread EventLoop admission and wakeup paths remain the only runtime path
 
 ## 8. Logger
 - Logger is process-global and is not owned by an EventLoop

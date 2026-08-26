@@ -73,3 +73,11 @@ automatic io_uring choice is introduced.
 
 - `tests/cmake/test_experimental_io_uring_install_contract.py`
 - `tests/api/test_experimental_io_uring_api_manifest.py`
+
+## 6. HP8 Review Boundary
+
+HP8 records `DEFER` for additional backend work. No comparable post-HP1-HP6
+production data path or clean HP0 Linux/Windows ledger exists, so multishot
+accept/recv, provided buffers, registered files, send bundles and SQPOLL remain
+separate unstarted experiments. Existing IOE-X1-X15 packaging and explicit
+Linux opt-in behavior are unchanged; there is no default selector or promotion.

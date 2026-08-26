@@ -55,6 +55,12 @@ EventLoop is not itself limited to, or synonymous with, an epoll-style Reactor.
 - does not replace a thread pool abstraction
 - does not directly implement high-level coroutine task graph in v1
 
+HP2 prestudy note: the default-off benchmark may model a dedicated coalesced
+mailbox source outside Core. It does not register with or consume capacity from
+the production control, lifecycle, normal, or reserved lanes and does not add a
+public EventLoop API. A real source-private EventLoop mailbox source remains a
+formal post-HP0 change requiring its own owner/lifecycle contracts.
+
 ---
 
 ## 4. Core Invariants
@@ -481,6 +487,14 @@ These extensions must preserve EventLoop as the single-thread scheduling core.
   later callbacks still run under Continue, Quit still drains accepted work,
   and a throwing thread-init callback is rethrown to `startLoop()` without a
   worker `terminate` or publication deadlock
+
+## HP6 Experimental Prestudy Boundary
+
+HP6-A may model count + estimated-time + weighted-deficit quotas only in the
+default-off benchmark graph. It owns no EventLoop work and invokes no callback.
+The production phase order, count budgets, poll behavior, metrics, lifecycle/
+control minimum progress and API remain unchanged. HP6-B pools and HP6-C hot/
+cold layout remain skipped until HP0 identifies their costs as real hotspots.
 
 ---
 

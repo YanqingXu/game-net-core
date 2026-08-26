@@ -87,6 +87,14 @@ explicit logic `EventLoop` drains a fixed maximum on each tick.
   command, supersedes its binding before the tick, and proves no handler/output
   side effect; it also covers rollover during a handler before output.
 
+## HP2 Experimental Prestudy Boundary
+
+`GameCommandQueue` remains the installed callback+mutex compatibility path and
+the current LogicLoop contract. The HP2 opt-in benchmark may compare a separate
+fixed-capacity SPSC `DataPlaneCommand<OwnedPacket>` mailbox where topology has
+one producer and one consumer. It cannot replace the queue, change fixed-tick
+semantics, add a universal MPMC abstraction, or infer a public Runtime API.
+
 ## Migration Provenance
 
 - Source baseline: `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57`.

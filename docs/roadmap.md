@@ -10,11 +10,50 @@ See `migration_status.md` for the current checked state of these phases.
 - The historical M1–M11 line remains fully adjudicated, and stable v0.3 stays
   current. Governance baseline
   `202bf9f993575d144c4c440a3972dd80733da0a7` opens the performance-first
-  HP0–HP8 line. HP0 is the unique current front: freeze the default-off,
-  non-installed `gamenet.hot_path_cost.v1` ledger, preregister costs and
-  guardrails, and produce clean exact-commit native Linux/epoll and
-  Windows/IOCP baselines. The infrastructure is implemented in the working
-  change, but fixed-lab evidence remains `DEFER`; HP1 is not authorized yet.
+  HP0–HP8 line. HP0 is the unique promotion and integration front: freeze the
+  default-off, non-installed `gamenet.hot_path_cost.v1` ledger, preregister
+  costs and guardrails, and produce clean exact-commit native Linux/epoll and
+  Windows/IOCP baselines. The infrastructure is implemented, but fixed-lab
+  evidence remains `DEFER`. While that evidence is pending, governance permits
+  at most one isolated `EXPERIMENTAL-PRESTUDY` HP1-HP8 prototype in parallel;
+  it cannot enter the production Core path, advance a milestone, switch a
+  default, add an installed API, or mint promotion evidence.
+  The first bounded slice, HP1 borrowed-view framing, is now
+  `KEEP-EXPERIMENTAL`: Windows differential/ASan contracts and development
+  measurements justify retaining the isolated target, but Linux/fuzz, real
+  Profile A input-Buffer, HP0 fixed-lab and 5%/3% evidence remain absent. HP1
+  therefore remains planned. HP2 SPSC mailbox/source/outbox is likewise
+  `KEEP-EXPERIMENTAL`: Release/ASan and current Profile B contracts pass and
+  structural queue allocation/lock/generic-post costs are zero, but the local
+  burst comparison regressed queue age. HP2 remains planned, no production
+  path changed, and the prestudy implementation slot is released.
+  HP3 portable slot dispatch is `DEFER`: generation/merge contracts and the
+  local algorithm comparison passed, while native Linux epoll syscall,
+  level-trigger and end-to-end evidence are absent. Production epoll remains
+  unchanged and the prestudy slot is released.
+  HP4 fixed output segments are also `DEFER`: focused Release/ASan and five
+  unchanged send/broadcast regressions pass, while local timings are mixed
+  (-65.10% at 1 KiB, +94.07% at 16 KiB). Because the prototype invokes no
+  writev/WSASend, production send/broadcast paths remain unchanged and the
+  prestudy slot is released.
+  HP5 owner-local credit leasing is `KEEP-EXPERIMENTAL`: focused Release/ASan
+  and four production budget regressions pass, and its 200k-message local model
+  reduces 1,600,000 shared atomic mutations to four with 92.86%+ median elapsed
+  improvement. Real TcpConnection contention/fairness and fixed-lab evidence
+  remain absent; production admission is unchanged and the slot is released.
+  HP6-A adaptive quotas are `DEFER`: synthetic maximum-round and first-service
+  signals improve, but round/planner cost rises and oldest age slightly
+  regresses. HP6-B/C are `SKIPPED-BY-EVIDENCE` because HP0 identified no pool
+  or layout hotspot. Production EventLoop/storage remains unchanged and the
+  slot is released.
+  HP7 is `SKIPPED-BY-EVIDENCE`: HP2 is not integrated, no qualifying two-wait
+  flow exists, and no 100k-timer hotspot is measured. Deferred async intents
+  record the required future owner-return/shutdown semantics; no target or API
+  is created.
+  HP8 backend/promotion is `DEFER` and release is `NO-RELEASE`: HP0 and the
+  post-integration matrix are absent. Six additive CMake build profiles and a
+  deployment checklist are delivered, while epoll/IOCP defaults, opt-in
+  io_uring scope and version 0.3.0 remain unchanged.
 
 - Historical REL-C1 implementation checkpoint
   `669ebb0a7c5c475dea74b12275c66a2ce1876804` is recorded by the commit peeled

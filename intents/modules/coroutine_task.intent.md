@@ -7,6 +7,19 @@ promote_gate: post-core-preview
 
 # Module Intent: coroutine::Task
 
+## HP7 Launch-Gate Record — 2026-08-25
+
+HP7 is `SKIPPED-BY-EVIDENCE` because HP2 is not integrated and no qualifying
+two-wait Session/RPC-like flow exists. This deferred historical `Task` design
+must not be implemented as written.
+
+A future rewrite starts with owner-bound `OwnerTask<T>`: at most one
+long-lived frame per connection/session, no per-packet coroutine, owner-only
+ready-queue resume, and bounded typed remote resume back to the origin owner.
+`start()`/`detach()` may not make arbitrary caller-thread execution part of the
+contract. Frame ownership, cancellation and final drain must settle exactly;
+native completion operation storage is not owned by the coroutine frame.
+
 ## 1. Intent
 Task is the minimal composable coroutine result object for mini-trantor.
 It provides start/detach/co_await semantics so that coroutine-based connection
