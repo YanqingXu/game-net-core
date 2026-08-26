@@ -46,12 +46,34 @@
 - Key lifecycle or threading logic should have local comments
 - Large design reasoning belongs in intent/rules/docs, not random inline comment blocks
 
-## 9. Testing
+## 9. Readability and Local Design
+- Keep a function at one main level of abstraction; separate protocol validation,
+  state transition, resource mutation, and callback dispatch when combining them
+  hides the lifecycle
+- Prefer early exits when they make the normal path clearer, but not when they
+  obscure exact-once cleanup, rollback, or callback ordering
+- Give non-trivial conditions domain names when the name exposes an invariant or
+  transition better than the raw expression
+- Names must make consequential side effects discoverable, especially user
+  callback invocation, cross-thread scheduling, ownership transfer, and resource
+  release
+- Avoid clusters of boolean mode parameters in public APIs; use an enum or a
+  focused options type when the values select distinct behavior
+- Keep helpers, aliases, and dependencies in the narrowest responsible module;
+  do not grow generic `Manager`, `Utils`, or `Helper` containers for unrelated
+  reactor concerns
+- Remove duplication when it repeats the same invariant, ownership rule, or
+  failure policy; do not couple coincidentally similar code whose owner threads,
+  lifecycles, or contracts differ
+- Function length alone is not a violation; cohesion, visible state transitions,
+  and the number of abstraction levels determine whether extraction is needed
+
+## 10. Testing
 - Every public behavior contract should be testable
 - Every lifecycle-sensitive module must have contract tests
 - Every cross-thread API must have threading-related tests
 
-## 10. AI-Specific Requirement
+## 11. AI-Specific Requirement
 - Generated code must reference the intent and rules it implements
 - Generated code should remain small enough for human audit
 - Avoid generating large opaque helper abstractions without explicit intent support
