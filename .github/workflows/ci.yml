@@ -197,6 +197,10 @@ jobs:
             echo "default package unexpectedly exposed experimental_io_uring" >&2
             exit 1
           fi
+          cmake --build build-io-uring-experimental --parallel \
+            --target gamenet_core gamenet_protocol gamenet_transport \
+            gamenet_game_session gamenet_game_logic gamenet_broadcast \
+            gamenet_experimental_io_uring
           cmake --install build-io-uring-experimental \
             --prefix "$PWD/build-io-uring-experimental/_install"
           cmake -S tests/cmake/experimental_io_uring_install_consumer \
@@ -241,6 +245,7 @@ jobs:
             --command 'cmake --build build-install-consumer --parallel' \
             --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log' \
             --command 'cmake -S tests/cmake/experimental_io_uring_install_consumer -B build-default-experimental-component-probe -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
+            --command 'cmake --build build-io-uring-experimental --parallel --target gamenet_core gamenet_protocol gamenet_transport gamenet_game_session gamenet_game_logic gamenet_broadcast gamenet_experimental_io_uring' \
             --command 'cmake --install build-io-uring-experimental --prefix $PWD/build-io-uring-experimental/_install' \
             --command 'cmake -S tests/cmake/experimental_io_uring_install_consumer -B build-experimental-io-uring-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build-io-uring-experimental/_install' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-experimental-io-uring-install-consumer --expected-total 1 --output ci-evidence/experimental-io-uring-install-consumer-inventory.json' \

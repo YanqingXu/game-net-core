@@ -62,7 +62,7 @@ JOB_CONTRACTS = {
             "ci-evidence/install-consumer-junit.xml",
             "ci-evidence/experimental-io-uring-install-consumer-junit.xml",
         ),
-        20,
+        21,
         package_step="Install and verify package consumer",
     ),
     "linux-asan-ubsan": JobContract(
@@ -930,6 +930,16 @@ def main() -> None:
     )
     require(linux_io_uring_consumer, "build-default-experimental-component-probe")
     require(linux_io_uring_consumer, "default package unexpectedly exposed")
+    build_package = "cmake --build build-io-uring-experimental --parallel"
+    require(linux_io_uring_consumer, build_package)
+    for target in (
+        "gamenet_core", "gamenet_protocol", "gamenet_transport", "gamenet_game_session",
+        "gamenet_game_logic", "gamenet_broadcast", "gamenet_experimental_io_uring",
+    ):
+        require(linux_io_uring_consumer, target)
+    assert linux_io_uring_consumer.index(build_package) < linux_io_uring_consumer.index(
+        "cmake --install build-io-uring-experimental"
+    ), "all installed libraries must be built before installing the experimental package"
     require(linux_io_uring_consumer, "cmake --install build-io-uring-experimental")
     require(
         linux_io_uring_consumer,
