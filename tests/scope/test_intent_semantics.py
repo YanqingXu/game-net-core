@@ -187,6 +187,8 @@ class ConfiguredInventory:
     tests_by_source: dict[str, set[str]]
     ctest_names: set[str]
     link_dependencies: dict[str, set[str]]
+    installed_files: set[str] = field(default_factory=set)
+    installed_directories: set[str] = field(default_factory=set)
 
 
 def require(condition: bool, message: str) -> None:
@@ -273,16 +275,15 @@ def active_intent_paths(repo_root: Path) -> list[str]:
 
 def project_cmake_files(source_root: Path) -> list[Path]:
     paths = [source_root / "CMakeLists.txt"]
-    for directory in ("src", "examples", "benchmarks", "tests"):
+    for directory in ("src", "examples", "benchmarks", "tests", "cmake"):
         root = source_root / directory
         if root.is_dir():
             paths.extend(root.rglob("CMakeLists.txt"))
+            paths.extend(root.rglob("*.cmake"))
     return sorted({path.resolve() for path in paths if path.is_file()})
 
 
-def normalized_source(argument: str, command_file: Path, source_root: Path) -> str | None:
-    if "$<" in argument or Path(argument).suffix.lower() not in SOURCE_SUFFIXES:
-        return None
+def normalized_path(argument: str, command_file: Path, source_root: Path) -> str:
     candidate = Path(argument)
     if not candidate.is_absolute():
         candidate = command_file.parent / candidate
@@ -291,6 +292,18 @@ def normalized_source(argument: str, command_file: Path, source_root: Path) -> s
         return candidate.relative_to(source_root.resolve()).as_posix()
     except ValueError:
         return candidate.as_posix()
+
+
+def normalized_source(argument: str, command_file: Path, source_root: Path) -> str | None:
+    if "$<" in argument:
+        # Conditional sources must not hide a production/prestudy edge. Keep
+        # their source-tree footprint even though CTest mapping ignores them.
+        if "benchmarks/prestudy/" in argument.replace("\\", "/"):
+            return "benchmarks/prestudy/" + argument
+        return None
+    if Path(argument).suffix.lower() not in SOURCE_SUFFIXES:
+        return None
+    return normalized_path(argument, command_file, source_root)
 
 
 def trace_commands(output: str) -> list[dict[str, object]]:
@@ -349,13 +362,29 @@ def configure_inventory(
     targets: dict[str, ConfiguredTarget] = {}
     aliases: dict[str, str] = {}
     installed_targets: set[str] = set()
+    installed_files: set[str] = set()
+    installed_directories: set[str] = set()
     configured_tests: dict[str, str] = {}
     raw_link_dependencies: dict[str, set[str]] = {}
+    source_directories: dict[int, Path] = {}
 
     for record in commands:
         cmake_command = str(record["cmd"]).lower()
         arguments = [str(value) for value in record["args"]]
         command_file = Path(str(record["file"]))
+        depth = int(record["global_frame"])
+        source_directories = {
+            frame: directory for frame, directory in source_directories.items() if frame < depth
+        }
+        # include() and function bodies keep the caller's source directory;
+        # their definition file is not the base for relative source/install paths.
+        source_directory = (
+            command_file.parent if command_file.name == "CMakeLists.txt"
+            else source_directories[max(source_directories)] if source_directories
+            else source_root
+        )
+        source_directories[depth] = source_directory
+        source_context = source_directory / "CMakeLists.txt"
 
         if cmake_command == "add_library" and arguments:
             if len(arguments) >= 3 and arguments[1] == "ALIAS":
@@ -364,23 +393,36 @@ def configure_inventory(
             target = arguments[0]
             entry = targets.setdefault(target, ConfiguredTarget(kind="library"))
             for argument in arguments[1:]:
-                source = normalized_source(argument, command_file, source_root)
+                source = normalized_source(argument, source_context, source_root)
                 if source is not None:
                     entry.sources.add(source)
         elif cmake_command == "add_executable" and arguments:
             target = arguments[0]
             entry = targets.setdefault(target, ConfiguredTarget(kind="executable"))
             for argument in arguments[1:]:
-                source = normalized_source(argument, command_file, source_root)
+                source = normalized_source(argument, source_context, source_root)
                 if source is not None:
                     entry.sources.add(source)
         elif cmake_command == "add_custom_target" and arguments:
             targets.setdefault(arguments[0], ConfiguredTarget(kind="utility"))
+        elif cmake_command == "target_sources" and len(arguments) >= 2:
+            entry = targets.get(arguments[0])
+            if entry is not None:
+                for argument in arguments[1:]:
+                    source = normalized_source(argument, source_context, source_root)
+                    if source is not None:
+                        entry.sources.add(source)
         elif cmake_command == "install" and arguments and arguments[0] == "TARGETS":
             for argument in arguments[1:]:
                 if argument.upper() in INSTALL_KEYWORDS:
                     break
                 installed_targets.add(argument)
+        elif cmake_command == "install" and arguments and arguments[0] in {"FILES", "DIRECTORY"}:
+            inputs = installed_files if arguments[0] == "FILES" else installed_directories
+            for argument in arguments[1:]:
+                if argument.upper() in INSTALL_KEYWORDS or argument == "TYPE":
+                    break
+                inputs.add(normalized_path(argument, source_context, source_root))
         elif cmake_command == "target_link_libraries" and len(arguments) >= 2:
             dependencies = raw_link_dependencies.setdefault(arguments[0], set())
             for argument in arguments[1:]:
@@ -433,6 +475,14 @@ def configure_inventory(
         if target not in targets:
             continue
         for raw_dependency in raw_dependencies:
+            if "$<" in raw_dependency:
+                # Conservatively retain both arms of a conditional dependency,
+                # including LINK_ONLY wrappers and aliases. Other configurations
+                # must not gain a production/prestudy edge unnoticed.
+                for name in targets.keys() | aliases.keys():
+                    if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", raw_dependency):
+                        link_dependencies[target].add(aliases.get(name, name))
+                continue
             dependency = aliases.get(raw_dependency, raw_dependency)
             if dependency in targets:
                 link_dependencies[target].add(dependency)
@@ -445,6 +495,8 @@ def configure_inventory(
         tests_by_source=tests_by_source,
         ctest_names=ctest_names,
         link_dependencies=link_dependencies,
+        installed_files=installed_files,
+        installed_directories=installed_directories,
     )
 
 
@@ -488,6 +540,38 @@ def validate_dependency_direction(inventory: ConfiguredInventory) -> None:
             not forbidden,
             f"configured dependency direction violation: {target} reaches {forbidden}",
         )
+
+
+def is_prestudy_source(path: str) -> bool:
+    return path == "benchmarks/prestudy" or path.startswith("benchmarks/prestudy/")
+
+
+def validate_prestudy_isolation(inventory: ConfiguredInventory, *, benchmarks_enabled: bool) -> None:
+    prestudy_targets = {
+        name for name, target in inventory.targets.items()
+        if re.match(r"gamenet_hp\d+_", name)
+        or any(is_prestudy_source(source) for source in target.sources)
+    }
+    if not benchmarks_enabled:
+        require(
+            not prestudy_targets,
+            f"default configuration exposes prestudy targets: {sorted(prestudy_targets)}",
+        )
+    for target in PRODUCTION_TARGET_DEPENDENCIES.keys() & inventory.targets.keys():
+        closure = {target} | transitive_dependencies(inventory, target)
+        forbidden = sorted(closure & prestudy_targets)
+        require(not forbidden, f"production target reaches prestudy: {target}: {forbidden}")
+    for target in inventory.installed_targets:
+        closure = {target} | transitive_dependencies(inventory, target)
+        forbidden = sorted(closure & prestudy_targets)
+        require(not forbidden, f"installed target reaches prestudy: {target}: {forbidden}")
+    for path in inventory.installed_files:
+        require(not is_prestudy_source(path), f"installed prestudy file: {path}")
+    for path in inventory.installed_directories:
+        # A broad install of benchmarks/ or the source root also includes the
+        # prototype headers, even if it never spells the prestudy directory.
+        forbidden = is_prestudy_source(path) or path in {".", "benchmarks"}
+        require(not forbidden, f"installed directory includes prestudy: {path}")
 
 
 def validate_artifact(
@@ -930,6 +1014,88 @@ def run_dependency_direction_fixtures(temp_root: Path) -> None:
     )
 
 
+def prestudy_fixture_inventory(
+    temp_root: Path, name: str, commands: str, *, enabled: bool = True,
+) -> ConfiguredInventory:
+    source_root = temp_root / f"prestudy-{name}-source"
+    prototype = source_root / "benchmarks/prestudy/hp1"
+    prototype.mkdir(parents=True)
+    (source_root / "fixture.cpp").write_text("int fixture = 0;\n", encoding="utf-8")
+    (prototype / "Probe.cc").write_text("int prototype = 0;\n", encoding="utf-8")
+    (prototype / "Probe.h").write_text("#pragma once\n", encoding="utf-8")
+    (source_root / "cmake").mkdir()
+    (source_root / "cmake/Fixture.cmake").write_text(commands, encoding="utf-8")
+    (source_root / "CMakeLists.txt").write_text(
+        """cmake_minimum_required(VERSION 3.20)
+project(PrestudyIsolationFixture LANGUAGES CXX)
+enable_testing()
+option(GAMENET_BUILD_BENCHMARKS "Build prestudy fixture" OFF)
+add_library(gamenet_core STATIC fixture.cpp)
+add_library(bridge INTERFACE)
+if(GAMENET_BUILD_BENCHMARKS)
+    add_library(gamenet_hp1_fixture STATIC benchmarks/prestudy/hp1/Probe.cc)
+    add_library(Prestudy::fixture ALIAS gamenet_hp1_fixture)
+endif()
+include(cmake/Fixture.cmake)
+""",
+        encoding="utf-8",
+    )
+    return configure_inventory(
+        source_root, temp_root / f"prestudy-{name}-build",
+        {"GAMENET_BUILD_BENCHMARKS": "ON" if enabled else "OFF"},
+    )
+
+
+def run_prestudy_isolation_fixtures(temp_root: Path) -> None:
+    for enabled in (False, True):
+        inventory = prestudy_fixture_inventory(
+            temp_root, f"allowed-{enabled}",
+            "install(TARGETS gamenet_core DESTINATION lib)\n", enabled=enabled,
+        )
+        validate_prestudy_isolation(inventory, benchmarks_enabled=enabled)
+
+    cases = (
+        ("direct", "target_link_libraries(gamenet_core PRIVATE Prestudy::fixture)\n",
+         "production target reaches prestudy"),
+        ("transitive", "target_link_libraries(bridge INTERFACE Prestudy::fixture)\n"
+         "target_link_libraries(gamenet_core PRIVATE bridge)\n",
+         "production target reaches prestudy"),
+        ("conditional", 'target_link_libraries(gamenet_core PRIVATE "$<$<CONFIG:Debug>:Prestudy::fixture>")\n',
+         "production target reaches prestudy"),
+        ("source", "target_sources(gamenet_core PRIVATE benchmarks/prestudy/hp1/Probe.cc)\n",
+         "production target reaches prestudy"),
+        ("conditional-source", 'target_sources(gamenet_core PRIVATE '
+         '"$<$<CONFIG:Debug>:${PROJECT_SOURCE_DIR}/benchmarks/prestudy/hp1/Probe.cc>")\n',
+         "production target reaches prestudy"),
+        ("renamed-source", "add_library(renamed STATIC benchmarks/prestudy/hp1/Probe.cc)\n"
+         "target_link_libraries(gamenet_core PRIVATE renamed)\n",
+         "production target reaches prestudy"),
+        ("install-target", "install(TARGETS gamenet_hp1_fixture DESTINATION lib)\n",
+         "installed target reaches prestudy"),
+        ("install-bridge", "target_link_libraries(bridge INTERFACE Prestudy::fixture)\n"
+         "install(TARGETS bridge DESTINATION lib)\n", "installed target reaches prestudy"),
+        ("install-file", "install(FILES benchmarks/prestudy/hp1/Probe.h DESTINATION include)\n",
+         "installed prestudy file"),
+        ("install-directory", "install(DIRECTORY benchmarks/prestudy/ DESTINATION include)\n",
+         "installed directory includes prestudy"),
+        ("install-parent", "install(DIRECTORY benchmarks/ DESTINATION include)\n",
+         "installed directory includes prestudy"),
+    )
+    for name, commands, message in cases:
+        inventory = prestudy_fixture_inventory(temp_root, name, commands)
+        expect_failure(
+            name, message,
+            lambda: validate_prestudy_isolation(inventory, benchmarks_enabled=True),
+        )
+    exposed = prestudy_fixture_inventory(
+        temp_root, "default-exposure", "add_library(gamenet_hp7_unexpected INTERFACE)\n", enabled=False,
+    )
+    expect_failure(
+        "default-exposure", "default configuration exposes prestudy targets",
+        lambda: validate_prestudy_isolation(exposed, benchmarks_enabled=False),
+    )
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     fuzz_cmake = (repo_root / "tests" / "fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -953,6 +1119,11 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="gamenet-intent-semantics-") as directory:
         temp_root = Path(directory)
+        default_inventory = configure_inventory(
+            repo_root, temp_root / "configured-default",
+            {"CMAKE_BUILD_TYPE": "Debug", "GAMENET_BUILD_TESTING": "ON"},
+        )
+        validate_prestudy_isolation(default_inventory, benchmarks_enabled=False)
         inventory = configure_inventory(
             repo_root,
             temp_root / "configured-repository",
@@ -965,6 +1136,7 @@ def main() -> None:
                 "GAMENET_ENABLE_TLS": "OFF",
             },
         )
+        validate_prestudy_isolation(inventory, benchmarks_enabled=True)
         experimental_inventory = None
         if sys.platform.startswith("linux"):
             experimental_inventory = configure_inventory(
@@ -983,6 +1155,7 @@ def main() -> None:
         validate_dependency_direction(inventory)
         if experimental_inventory is not None:
             validate_dependency_direction(experimental_inventory)
+            validate_prestudy_isolation(experimental_inventory, benchmarks_enabled=False)
 
         for relative_path in active_paths:
             is_phase4 = relative_path in PHASE4_ARTIFACTS
@@ -1001,6 +1174,7 @@ def main() -> None:
 
         run_negative_fixtures(temp_root)
         run_dependency_direction_fixtures(temp_root)
+        run_prestudy_isolation_fixtures(temp_root)
 
     pipeline_metadata, _ = parse_front_matter(
         repo_root / "intents/usecases/game_server_pipeline_demo.intent.md"

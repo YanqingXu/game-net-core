@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import argparse
+import io
 import re
 import sys
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +41,37 @@ ACTIVE_EXPERIMENTAL_TEST_PATHS = {
     "tests/api/test_public_api_manifest.py",
     "tests/contract/io_engine/test_io_uring_completion_engine.cpp",
     "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
+}
+IO_URING_BOUNDARY_LINES = {
+    "src/experimental/io_uring/CMakeLists.txt": {
+        "DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet/experimental",
+    },
+    "tests/api/test_experimental_io_uring_api_manifest.py": {
+        'header.startswith("include/gamenet/experimental/")',
+    },
+    "tests/cmake/test_experimental_io_uring_install_contract.py": {
+        'assert re.search(r"GameNet::experimental(?!_io_uring)", target_text) is None',
+        'assert re.search(r"GameNet::experimental(?!_io_uring)", cmake_text) is None',
+    },
+}
+# These are concluded, opt-in HP1-HP6 prestudies, not a promotion of the
+# experimental component. HP2's owned packet carrier is the explicit HP1 edge.
+PRESTUDY_SOURCE_SLICES = {
+    "benchmarks/prestudy/hp1/": {"hp1"},
+    "benchmarks/prestudy/hp2/": {"hp1", "hp2"},
+    "benchmarks/prestudy/hp3/": {"hp3"},
+    "benchmarks/prestudy/hp4/": {"hp4"},
+    "benchmarks/prestudy/hp5/": {"hp5"},
+    "benchmarks/prestudy/hp6/": {"hp6"},
+}
+PRESTUDY_TEST_SLICES = {
+    "tests/contract/protocol/test_packet_framer_view.cpp": {"hp1"},
+    "tests/contract/runtime_model/test_spsc_mailbox.cpp": {"hp1", "hp2"},
+    "tests/contract/event_loop/test_event_loop_mailbox_source.cpp": {"hp1", "hp2"},
+    "tests/contract/io_engine/test_epoll_slot_dispatch.cpp": {"hp3"},
+    "tests/contract/tcp_connection/test_output_segment_chain.cpp": {"hp4"},
+    "tests/contract/tcp_connection/test_credit_lease.cpp": {"hp5"},
+    "tests/contract/event_loop/test_adaptive_phase_scheduler.cpp": {"hp6"},
 }
 TEXT_SUFFIXES = {
     "",
@@ -82,9 +115,13 @@ TEXT_PATTERNS = (
 )
 
 COMPONENT_REFERENCE = re.compile(
-    r"\b(?:namespace\s+gamenet::|gamenet_|GameNet::|gamenet/)"
+    r"\b(?:gamenet::|gamenet_|GameNet::|gamenet/)"
     r"(protocol|transport|game_session|game_logic|broadcast|game|experimental)\b"
 )
+PRESTUDY_NAMESPACE = re.compile(r"::(hp[1-6])\b")
+PRESTUDY_TARGET = re.compile(r"\bgamenet_hp\d+_\w+\b")
+INCLUDE_PATH = re.compile(r'#\s*include\s*[<"]([^>"\n]+)[>"]')
+PRESTUDY_INCLUDE = re.compile(r"(?:^|/)(hp\d+)/")
 
 LAYER_ALLOWED_COMPONENTS = {
     "core": set(),
@@ -152,6 +189,29 @@ def check_deferred_path(root: Path, path: Path) -> list[Violation]:
     return violations
 
 
+def allowed_prestudy_slices(rel: str) -> set[str]:
+    for prefix, slices in PRESTUDY_SOURCE_SLICES.items():
+        if rel.startswith(prefix):
+            return slices
+    return PRESTUDY_TEST_SLICES.get(rel, set())
+
+
+def status_description_tokens(rel: str, text: str) -> list[tokenize.TokenInfo]:
+    if rel != "tests/cmake/test_migration_status_contract.py":
+        return []
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError):
+        return []
+    return [
+        token for token in tokens
+        if token.type == tokenize.STRING
+        # Older Python versions tokenize an entire f-string as STRING, including
+        # executable expressions. Such strings must not exempt identifiers.
+        and "f" not in re.match(r"[a-zA-Z]*", token.string).group().lower()
+    ]
+
+
 def check_text(root: Path, path: Path) -> list[Violation]:
     rel = path.relative_to(root).as_posix()
     try:
@@ -161,14 +221,30 @@ def check_text(root: Path, path: Path) -> list[Violation]:
 
     violations: list[Violation] = []
     layer = source_layer(rel)
+    prestudy_slices = allowed_prestudy_slices(rel)
+    description_tokens = status_description_tokens(rel, text)
     for line_number, line in enumerate(text.splitlines(), start=1):
         for match in COMPONENT_REFERENCE.finditer(line):
             component = match.group(1)
-            active_io_uring_reference = component == "experimental" and (
-                any(rel.startswith(prefix) for prefix in ACTIVE_EXPERIMENTAL_REFERENCE_PREFIXES)
-                or rel in ACTIVE_EXPERIMENTAL_TEST_PATHS
+            suffix = line[match.end():]
+            active_io_uring_reference = (
+                component == "experimental"
+                and (
+                    re.match(r"(?:::|/)io_uring\b", suffix) is not None
+                    or line.strip() in IO_URING_BOUNDARY_LINES.get(rel, set())
+                )
+                and (
+                    any(rel.startswith(prefix) for prefix in ACTIVE_EXPERIMENTAL_REFERENCE_PREFIXES)
+                    or rel in ACTIVE_EXPERIMENTAL_TEST_PATHS
+                )
             )
-            if active_io_uring_reference:
+            prestudy_namespace = PRESTUDY_NAMESPACE.match(suffix)
+            active_prestudy_reference = (
+                component == "experimental"
+                and prestudy_namespace is not None
+                and prestudy_namespace.group(1) in prestudy_slices
+            )
+            if active_io_uring_reference or active_prestudy_reference:
                 continue
             if component not in ACTIVE_COMPONENTS:
                 violations.append(Violation(rel, line_number, "deferred component", match.group(0)))
@@ -176,9 +252,27 @@ def check_text(root: Path, path: Path) -> list[Violation]:
                 violations.append(
                     Violation(rel, line_number, "layer references disallowed component", match.group(0))
                 )
+        for include in INCLUDE_PATH.finditer(line):
+            include_path = include.group(1).replace("\\", "/")
+            slices = set(PRESTUDY_INCLUDE.findall(include_path))
+            if slices - prestudy_slices or ("prestudy/" in include_path and not slices):
+                violations.append(
+                    Violation(rel, line_number, "disallowed prestudy include", include.group(1))
+                )
+        if layer is not None:
+            for match in PRESTUDY_TARGET.finditer(line):
+                violations.append(
+                    Violation(rel, line_number, "production references prestudy target", match.group(0))
+                )
         for kind, pattern in TEXT_PATTERNS:
-            match = pattern.search(line)
-            if match is not None:
+            for match in pattern.finditer(line):
+                if kind == "deferred high-level module" and match.group(0) == "WebSocket":
+                    if any(
+                        token.start <= (line_number, match.start())
+                        and (line_number, match.end()) <= token.end
+                        for token in description_tokens
+                    ):
+                        continue
                 violations.append(Violation(rel, line_number, kind, match.group(0)))
     return violations
 
