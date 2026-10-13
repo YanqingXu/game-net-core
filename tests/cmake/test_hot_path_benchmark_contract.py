@@ -43,6 +43,7 @@ def main() -> None:
     runner = repo / "tools" / "run_hot_path_cost.py"
     common = repo / "tools" / "hot_path_cost_common.py"
     validator = repo / "tools" / "validate_hot_path_cost.py"
+    preflight = repo / "tools" / "preflight_hot_path_cost.py"
     docs = repo / "docs" / "development" / "hot_path_cost_lab.md"
     async_semantics = repo / "intents" / "modules" / "async_semantics.intent.md"
     coroutine_task = repo / "intents" / "modules" / "coroutine_task.intent.md"
@@ -340,7 +341,8 @@ def main() -> None:
 
     for source, fragments in (
         (common, ("LEDGER_SCHEMA", "COST_KEYS", "validate_child", "HotPathCostError")),
-        (runner, ("scenario-round-robin", "rev-parse", "--porcelain=v1", "observer-command", "missing required costs", "backslashreplace")),
+        (runner, ("scenario-round-robin", "rev-parse", "--porcelain=v1", "observer-command", "missing required costs", "backslashreplace", "validate_host_identity", "require_complete_costs")),
+        (preflight, ("observer_handshake", "probe_scenario", '"promotion_eligible": False', "require_complete_costs", "exact child stdout")),
         (validator, ("--require-fixed-lab", "raw hash mismatch", "promotion eligibility", "parameters drifted")),
         (docs, (
             "Observer contract",
@@ -355,7 +357,7 @@ def main() -> None:
         for fragment in fragments:
             require(text, fragment, source)
 
-    for script in (runner, validator):
+    for script in (runner, validator, preflight):
         result = subprocess.run(
             [sys.executable, str(script), "--help"],
             cwd=repo,
@@ -380,7 +382,20 @@ def main() -> None:
     assert invalid_manifest.returncode != 0
     assert "ledger schema mismatch" in invalid_manifest.stderr
     assert workflow.is_file(), f"missing manual fixed-lab workflow: {workflow}"
+    workflow_text = workflow.read_text(encoding="utf-8")
+    for job in ("linux-fixed-hot-path", "windows-fixed-hot-path"):
+        job_text = workflow_text.split(f"  {job}:", 1)[1].split("\n  windows-fixed-hot-path:", 1)[0]
+        assert job_text.index("tools/preflight_hot_path_cost.py") < job_text.index("tools/run_hot_path_cost.py")
+        require(job_text, "--probe --process-timeout-seconds 180", workflow)
+        require(job_text, "HP0_OBSERVER:", workflow)
     require(gitignore.read_text(encoding="utf-8"), "hot-path-results/", gitignore)
+
+    # Keep the executed behavior guards on every existing HP0 contract/CI path.
+    result = subprocess.run(
+        [sys.executable, str(repo / "tests/cmake/test_hot_path_preflight.py")],
+        cwd=repo, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 if __name__ == "__main__":

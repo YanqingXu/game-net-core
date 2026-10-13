@@ -73,10 +73,11 @@ def main() -> None:
     docs_text = ci_docs.read_text(encoding="utf-8")
     require(
         docs_text,
-        "The active CI gate defaults to `ubuntu-24.04` for Linux and the dedicated",
+        "The active CI gate defaults to `ubuntu-24.04` for Linux and `windows-latest` for",
         ci_docs,
     )
-    require(docs_text, "Trusted Windows jobs remain self-hosted", ci_docs)
+    require(docs_text, "`GAMENET_CI_RUNNER_MODE=self-hosted` routes", ci_docs)
+    require(docs_text, "Fork PRs always select GitHub-hosted", ci_docs)
     require(docs_text, "The Windows job validates the IOCP completion path", ci_docs)
     require(docs_text, "Windows MSVC Debug build", ci_docs)
     require(docs_text, "select-based", ci_docs)

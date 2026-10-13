@@ -27,6 +27,9 @@ jobs:
     name: Native Linux epoll fixed-lab ledger
     runs-on: [self-hosted, linux, x64, gamenet-performance]
     timeout-minutes: 180
+    env:
+      HP0_OBSERVER: ${{ inputs.linux_observer }}
+      HP0_FREQUENCY_POLICY: ${{ inputs.frequency_policy }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +39,7 @@ jobs:
           set -euo pipefail
           test -z "$(git status --porcelain=v1)"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test -x "${{ inputs.linux_observer }}"
+          test -x "$HP0_OBSERVER"
 
       - name: Record fixed runner identity
         shell: bash
@@ -47,7 +50,7 @@ jobs:
           c++ --version >> hot-path-results/toolchain.txt
           lscpu > hot-path-results/machine.txt
           taskset -pc $$ >> hot-path-results/machine.txt
-          printf '%s\n' '${{ inputs.frequency_policy }}' > hot-path-results/frequency-policy.txt
+          printf '%s\n' "$HP0_FREQUENCY_POLICY" > hot-path-results/frequency-policy.txt
 
       - name: Check HP0 contracts
         run: |
@@ -68,6 +71,21 @@ jobs:
           cmake --build build-hot-path
           --target gamenet_hot_path_benchmark --parallel
 
+      - name: Probe Linux observer and required costs before sampling
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/preflight_hot_path_cost.py \
+            --core-executable build-hot-path/benchmarks/gamenet_core_benchmark \
+            --phase4-executable build-hot-path/benchmarks/gamenet_phase4_benchmark \
+            --capacity-executable build-hot-path/benchmarks/gamenet_capacity_profile \
+            --queued-executable build-hot-path/benchmarks/gamenet_multi_io_queued_benchmark \
+            --observer-command "$HP0_OBSERVER" \
+            --output-root hot-path-results/preflight \
+            --platform linux --backend epoll --commit-sha "$GITHUB_SHA" \
+            --runner-id "$RUNNER_NAME" --frequency-policy "$HP0_FREQUENCY_POLICY" \
+            --probe --process-timeout-seconds 180
+
       - name: Run fixed Linux ledger
         shell: bash
         run: |
@@ -80,14 +98,14 @@ jobs:
             --phase4-executable build-hot-path/benchmarks/gamenet_phase4_benchmark \
             --capacity-executable build-hot-path/benchmarks/gamenet_capacity_profile \
             --queued-executable build-hot-path/benchmarks/gamenet_multi_io_queued_benchmark \
-            --observer-command '${{ inputs.linux_observer }}' \
+            --observer-command "$HP0_OBSERVER" \
             --output-root hot-path-results/ledger \
             --platform linux --backend epoll --build-type Release \
             --commit-sha "${GITHUB_SHA}" --working-tree clean \
             --evidence-class fixed-lab --native-runner \
             --runner-id "${RUNNER_NAME}" --cpu-model "$cpu_model" \
             --cpu-affinity "$affinity" \
-            --frequency-policy '${{ inputs.frequency_policy }}' \
+            --frequency-policy "$HP0_FREQUENCY_POLICY" \
             --compiler "$compiler" --command-context github-actions-fixed-lab \
             --warmups 1 --samples 10 --process-timeout-seconds 180
 
@@ -110,6 +128,9 @@ jobs:
     name: Native Windows IOCP fixed-lab ledger
     runs-on: [self-hosted, windows, x64, gamenet-performance]
     timeout-minutes: 180
+    env:
+      HP0_OBSERVER: ${{ inputs.windows_observer }}
+      HP0_FREQUENCY_POLICY: ${{ inputs.frequency_policy }}
     steps:
       - uses: actions/checkout@v4
 
@@ -119,7 +140,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           if (git status --porcelain=v1) { throw "working tree is dirty" }
           if ((git rev-parse HEAD) -ne "$env:GITHUB_SHA") { throw "checkout SHA mismatch" }
-          if (-not (Test-Path -LiteralPath '${{ inputs.windows_observer }}' -PathType Leaf)) {
+          if (-not (Test-Path -LiteralPath $env:HP0_OBSERVER -PathType Leaf)) {
             throw "Windows observer is missing"
           }
 
@@ -133,14 +154,17 @@ jobs:
             Set-Content hot-path-results/machine.txt
           (Get-Process -Id $PID).ProcessorAffinity |
             Add-Content hot-path-results/machine.txt
-          '${{ inputs.frequency_policy }}' |
+          $env:HP0_FREQUENCY_POLICY |
             Set-Content hot-path-results/frequency-policy.txt
 
       - name: Check HP0 contracts
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           python tests/cmake/test_hot_path_benchmark_contract.py
+          if ($LASTEXITCODE -ne 0) { throw "HP0 repository contracts failed" }
           python tests/ci/test_hot_path_benchmark_workflow.py
+          if ($LASTEXITCODE -ne 0) { throw "HP0 workflow contracts failed" }
 
       - name: Configure Release benchmark suite
         shell: pwsh
@@ -158,6 +182,22 @@ jobs:
           cmake --build build-hot-path --config Release
           --target gamenet_hot_path_benchmark --parallel
 
+      - name: Probe Windows observer and required costs before sampling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python tools/preflight_hot_path_cost.py `
+            --core-executable build-hot-path/benchmarks/Release/gamenet_core_benchmark.exe `
+            --phase4-executable build-hot-path/benchmarks/Release/gamenet_phase4_benchmark.exe `
+            --capacity-executable build-hot-path/benchmarks/Release/gamenet_capacity_profile.exe `
+            --queued-executable build-hot-path/benchmarks/Release/gamenet_multi_io_queued_benchmark.exe `
+            --observer-command "$env:HP0_OBSERVER" `
+            --output-root hot-path-results/preflight `
+            --platform windows --backend iocp --commit-sha "$env:GITHUB_SHA" `
+            --runner-id "$env:RUNNER_NAME" --frequency-policy "$env:HP0_FREQUENCY_POLICY" `
+            --probe --process-timeout-seconds 180
+          if ($LASTEXITCODE -ne 0) { throw "fixed hot-path preflight failed" }
+
       - name: Run fixed Windows ledger
         shell: pwsh
         run: |
@@ -169,14 +209,14 @@ jobs:
             --phase4-executable build-hot-path/benchmarks/Release/gamenet_phase4_benchmark.exe `
             --capacity-executable build-hot-path/benchmarks/Release/gamenet_capacity_profile.exe `
             --queued-executable build-hot-path/benchmarks/Release/gamenet_multi_io_queued_benchmark.exe `
-            --observer-command '${{ inputs.windows_observer }}' `
+            --observer-command "$env:HP0_OBSERVER" `
             --output-root hot-path-results/ledger `
             --platform windows --backend iocp --build-type Release `
             --commit-sha "$env:GITHUB_SHA" --working-tree clean `
             --evidence-class fixed-lab --native-runner `
             --runner-id "$env:RUNNER_NAME" --cpu-model "$cpuModel" `
             --cpu-affinity "$affinity" `
-            --frequency-policy '${{ inputs.frequency_policy }}' `
+            --frequency-policy "$env:HP0_FREQUENCY_POLICY" `
             --compiler msvc --command-context github-actions-fixed-lab `
             --warmups 1 --samples 10 --process-timeout-seconds 180
           if ($LASTEXITCODE -ne 0) { throw "fixed hot-path ledger failed" }

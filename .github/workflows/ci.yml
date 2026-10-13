@@ -98,6 +98,8 @@ jobs:
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_hot_path_benchmark_contract.py
+          python3 tests/cmake/test_hot_path_preflight.py
+          python3 tests/ci/test_prestudy_workflow.py
           python3 tests/cmake/test_capacity_profile_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
@@ -371,6 +373,8 @@ jobs:
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_hot_path_benchmark_contract.py
+          python3 tests/cmake/test_hot_path_preflight.py
+          python3 tests/ci/test_prestudy_workflow.py
           python3 tests/cmake/test_capacity_profile_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
@@ -603,6 +607,8 @@ jobs:
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_hot_path_benchmark_contract.py
+          python3 tests/cmake/test_hot_path_preflight.py
+          python3 tests/ci/test_prestudy_workflow.py
           python3 tests/cmake/test_capacity_profile_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
@@ -766,6 +772,8 @@ jobs:
           python3 tests/cmake/test_core_benchmark_contract.py
           python3 tests/cmake/test_phase4_benchmark_contract.py
           python3 tests/cmake/test_hot_path_benchmark_contract.py
+          python3 tests/cmake/test_hot_path_preflight.py
+          python3 tests/ci/test_prestudy_workflow.py
           python3 tests/cmake/test_capacity_profile_contract.py
           python3 tests/cmake/test_logger_thread_contract.py
           python3 tests/cmake/test_event_loop_contracts.py
@@ -894,6 +902,7 @@ jobs:
     name: Windows MSVC IOCP build and tests
     runs-on: >-
       ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
         (github.event_name != 'pull_request' ||
          github.event.pull_request.head.repo.full_name == github.repository) &&
         '["self-hosted","windows","x64","gamenet-windows"]' ||
@@ -924,6 +933,7 @@ jobs:
 
       - name: Bootstrap self-hosted Windows tool paths
         if: >-
+          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
           (github.event_name != 'pull_request' ||
            github.event.pull_request.head.repo.full_name == github.repository)
         shell: pwsh
@@ -987,6 +997,8 @@ jobs:
           python tests/cmake/test_core_benchmark_contract.py
           python tests/cmake/test_phase4_benchmark_contract.py
           python tests/cmake/test_hot_path_benchmark_contract.py
+          python tests/cmake/test_hot_path_preflight.py
+          python tests/ci/test_prestudy_workflow.py
           python tests/cmake/test_capacity_profile_contract.py
           python tests/cmake/test_logger_thread_contract.py
           python tests/cmake/test_event_loop_contracts.py
@@ -1123,6 +1135,7 @@ jobs:
     name: Windows MSVC IOCP Release build and tests
     runs-on: >-
       ${{ fromJSON(
+        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
         (github.event_name != 'pull_request' ||
          github.event.pull_request.head.repo.full_name == github.repository) &&
         '["self-hosted","windows","x64","gamenet-windows"]' ||
@@ -1153,6 +1166,7 @@ jobs:
 
       - name: Bootstrap self-hosted Windows tool paths
         if: >-
+          vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&
           (github.event_name != 'pull_request' ||
            github.event.pull_request.head.repo.full_name == github.repository)
         shell: pwsh
@@ -1216,6 +1230,8 @@ jobs:
           python tests/cmake/test_core_benchmark_contract.py
           python tests/cmake/test_phase4_benchmark_contract.py
           python tests/cmake/test_hot_path_benchmark_contract.py
+          python tests/cmake/test_hot_path_preflight.py
+          python tests/ci/test_prestudy_workflow.py
           python tests/cmake/test_capacity_profile_contract.py
           python tests/cmake/test_logger_thread_contract.py
           python tests/cmake/test_event_loop_contracts.py

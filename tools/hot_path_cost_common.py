@@ -7,6 +7,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
+import platform as host_platform
 import re
 from pathlib import Path
 from typing import Any
@@ -60,6 +62,47 @@ def require(condition: bool, message: str) -> None:
         raise HotPathCostError(message)
 
 
+def detect_host() -> dict[str, Any]:
+    """Read the executing host; CLI labels are assertions, not evidence."""
+    system = host_platform.system()
+    release = host_platform.release()
+    version = host_platform.version()
+    platform_name = {"Linux": "linux", "Windows": "windows"}.get(system)
+    kernel_identity = f"{release} {version}".lower()
+    wsl = platform_name == "linux" and (
+        "microsoft" in kernel_identity
+        or "wsl" in kernel_identity
+        or bool(os.environ.get("WSL_INTEROP") or os.environ.get("WSL_DISTRO_NAME"))
+    )
+    return {
+        "platform": platform_name,
+        "system": system,
+        "release": release,
+        "version": version,
+        "machine": host_platform.machine(),
+        "wsl": wsl,
+    }
+
+
+def validate_host_identity(
+    platform: str, backend: str, native_runner: bool, wsl: bool,
+) -> dict[str, Any]:
+    host = detect_host()
+    require(host["platform"] is not None, f"unsupported executing host: {host['system']}")
+    require(platform == host["platform"], "declared platform does not match executing host")
+    require(backend == ("epoll" if platform == "linux" else "iocp"), "platform/backend pair mismatch")
+    require(wsl == host["wsl"], "declared WSL state does not match executing host")
+    require(not (native_runner and host["wsl"]), "WSL cannot be declared a native runner")
+    return host
+
+
+def require_complete_costs(
+    costs: dict[str, int | float | None], scenario: dict[str, Any], label: str,
+) -> None:
+    missing = [key for key in scenario["required_costs"] if costs.get(key) is None]
+    require(not missing, f"{label}: missing required costs: {', '.join(missing)}")
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -69,12 +112,12 @@ def sha256_file(path: Path) -> str:
 
 
 def finite_number(value: Any, label: str) -> int | float:
-    require(
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value)),
-        f"{label} must be a finite number",
-    )
+    valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+    try:
+        valid = valid and math.isfinite(float(value))
+    except (OverflowError, ValueError):
+        valid = False
+    require(valid, f"{label} must be a finite number")
     return value
 
 
@@ -203,6 +246,7 @@ def validate_child(
     label: str,
 ) -> dict[str, Any]:
     group = scenario["executable"]
+    validate_preregistered_arguments(document, scenario, label)
     try:
         if group == "core":
             expected = "echo" if scenario["key"].startswith("readiness-send") else "connections"
@@ -240,6 +284,62 @@ def validate_child(
         raise HotPathCostError(str(error)) from error
 
 
+def validate_preregistered_arguments(
+    document: Any, scenario: dict[str, Any], label: str,
+) -> None:
+    """A self-consistent shortened workload is not the preregistered scenario."""
+    group = scenario["executable"]
+    arguments = scenario["arguments"]
+    if group == "queued":
+        require(len(arguments) == 3, f"{label}: queued inventory arguments drifted")
+        fields = ("messages_per_client", "payload_bytes", "clients")
+        pairs = zip(fields, arguments, strict=True)
+    else:
+        common = {"--scenario": "scenario", "--timeout-ms": "parameters.timeout_ms"}
+        mapping = {
+            "core": {
+                "--connections": "parameters.connections",
+                "--threads": "parameters.event_loop_threads",
+                "--messages": "parameters.messages_per_connection",
+                "--payload": "parameters.payload_bytes",
+                "--settle-ms": "parameters.settle_ms",
+            },
+            "phase4": {
+                "--messages": "parameters.messages", "--payload": "parameters.payload_bytes",
+                "--threads": "parameters.threads", "--batch": "parameters.batch_size",
+                "--fanout": "parameters.fanout", "--tick-us": "parameters.tick_interval_us",
+            },
+            "capacity": {
+                "--connections": "parameters.connections", "--threads": "parameters.threads",
+                "--messages": "parameters.messages", "--payload-bytes": "parameters.payload_bytes",
+                "--server-send-buffer-bytes": "parameters.server_send_buffer_bytes",
+                "--pressure-settle-ms": "parameters.pressure_settle_ms",
+                "--recovery-stable-ms": "parameters.recovery_stable_ms",
+                "--iocp-accept-depth": "parameters.iocp_accept_depth",
+                "--low-water-bytes": "limits.connection_low_water_bytes",
+                "--high-water-bytes": "limits.connection_high_water_bytes",
+                "--hard-limit-bytes": "limits.connection_hard_limit_bytes",
+                "--recovery-threshold-bytes": "limits.recovery_pending_threshold_bytes",
+            },
+        }
+        require(group in mapping, f"{label}: unknown executable group")
+        common.update(mapping[group])
+        require(len(arguments) % 2 == 0, f"{label}: inventory option/value pairing drifted")
+        options = list(zip(arguments[::2], arguments[1::2], strict=True))
+        require(len({option for option, _ in options}) == len(options), f"{label}: duplicate inventory option")
+        require(all(option in common for option, _ in options), f"{label}: unsupported inventory option")
+        pairs = ((common[option], value) for option, value in options)
+    for path, expected in pairs:
+        actual = extract(document, path, label)
+        if path != "scenario":
+            try:
+                expected = int(expected)
+            except ValueError as error:
+                raise HotPathCostError(f"{label}: invalid inventory integer for {path}") from error
+            require(isinstance(actual, int) and not isinstance(actual, bool), f"{label}: {path} must be an integer")
+        require(actual == expected, f"{label}: {path} differs from preregistered arguments")
+
+
 def child_parameters(document: dict[str, Any], scenario: dict[str, Any]) -> dict[str, Any]:
     if isinstance(document.get("parameters"), dict):
         return document["parameters"]
@@ -266,9 +366,16 @@ def metric_record(document: dict[str, Any], specification: dict[str, Any], label
 
 
 def load_observation(path: Path) -> dict[str, int | float | None]:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            require(key not in result, f"observer output has duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+    except (OSError, ValueError) as error:
         raise HotPathCostError(f"cannot read observer output {path}: {error}") from error
     require(isinstance(document, dict), "observer output must be an object")
     require(document.get("schema") == OBSERVATION_SCHEMA, "observer output schema mismatch")
