@@ -122,6 +122,17 @@ clean exact-commit ledgers exist, governance permits at most one isolated
 non-installed, non-exported and absent from the production Core path; it cannot
 advance a milestone, switch a default, add an installed API, or mint promotion
 evidence.
+On 2026-10-13, clean commit `41ba8f4ebeda784ff2952b87e53b48310d4f053f`
+completed the graceful output-drain fix, passed all seven jobs in
+[CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098),
+and produced independently validated Windows/IOCP and WSL Ubuntu 24.04/epoll
+development ledgers: all six original scenarios, one warmup plus ten recorded
+samples each, unchanged 10k capacity, and 132 retained child executions total.
+Each ledger still lacks 380 required sample-cost observations and has
+`promotion_eligible=false`. Native fixed Linux, complete observers, and reviewed
+CPU controls remain missing, so formal HP0 stays `DEFER`. Evidence belongs to
+that exact commit, not later documentation revisions. See the
+[validation record](docs/development/2026-10-13-graceful-drain-validation.md).
 The first such slice, HP1 borrowed-view framing, is retained as
 `KEEP-EXPERIMENTAL` after Windows Release differential and focused ASan
 contracts plus development-only measurements. HP2 SPSC mailbox/source/outbox

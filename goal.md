@@ -1,6 +1,8 @@
 # game-net-core 长期目标
 
-更新日期：2026-08-20
+长期方向形成日期：2026-08-20
+
+当前状态复核日期：2026-10-13
 
 形成本文时参考的治理提交：`1daa649`
 
@@ -320,12 +322,22 @@ Runtime Model
   两个外部 consumer 均无 datagram runtime，五个 intents 仍 deferred，旧源也缺少
   当前 typed、generation-safe、有界和双平台合同，因此 M10 以 `NO-PROMOTION`
   关闭；未增加 experimental datagram 安装面或空 v0.9 发布；M11 最后以 Core
-  `a2977c90374aa6c08a54d2d569ff369c51717345` 完成 v1.0 发布就绪审计。当前
+  `a2977c90374aa6c08a54d2d569ff369c51717345` 完成 v1.0 发布就绪审计。当次
   Windows Release 130/130、fixed-tick 20/20、安装 consumer 2/2、v0.3 工具合同
   10/10 和 stable surface 零差异均通过，但 v1 API/ABI policy、0.3→1.0 consumer、
   同提交双平台/sanitizer/capacity/endurance 与 v1 资产均缺失，因此 M11 以 `DEFER` /
   `NO-RELEASE` 关闭；stable v0.3 保持当前版本，未创建 v1 tag/Release。M1–M11 已
-  全部作出证据绑定的终态决策，当前没有开放的治理前沿；
+  全部作出证据绑定的终态决策；这是历史 M11 关闭事实，不是当前计划关闭的声明；
+
+- 2026-08-25 已在治理基线 `202bf9f993575d144c4c440a3972dd80733da0a7` 打开
+  HP0–HP8 性能计划。当前唯一性能推广与集成前沿是 HP0：schema、runner、validator
+  和隔离预研已具备，但同一干净精确提交的原生 Linux/epoll 与 Windows/IOCP
+  fixed-lab 账本仍为 `DEFER`。干净精确提交 `41ba8f4ebeda784ff2952b87e53b48310d4f053f`
+  已完成本机 Windows 与 WSL Ubuntu 24.04 六场景 development 基线，每场景各一次
+  warmup 与十次记录样本，独立验证通过；每边缺 380 项必需样本成本，推广资格为 false。
+  WSL、dirty 工作树或缺失 observer 成本
+  不能替代正式门禁。HP1–HP8 development 预研不等于集成或发布完成，正式门禁和
+  顺序以 `plan.md` 为准；
 
 - `EventLoop` 已拥有 owner、admission、公平预算和 final-drain 状态机；
 - epoll 已由 generation-safe Readiness Engine 驱动，Channel 保留在真实 readiness
@@ -369,6 +381,18 @@ Runtime Model
 
 当前张力也已经明确：
 
+- 2026-10-13 以 `bf3dab5c3f969c4bfce192dc62b2ccc1c60b3125` 为源码起点的
+  Windows/IOCP 与 WSL/Linux epoll 定向复现发现：owner 尚未 dispatch 时，同一外部
+  线程先后 Accepted 的 send 与 graceful shutdown 可能提前 half-close 并丢弃已接受
+  payload。代码修复和回归合同已完成，当前工作树 Windows Release 与 WSL Ubuntu
+  24.04/GCC 13.3 Release 各 130/130、Windows 关闭/预算/IOCP 专项 ASan 10/10、Ubuntu 24.04 专项
+  ASan/UBSan 与 TSan 各 7/7 通过；Python 工程合同 46/46 和双本地环境 HP0 行为测试
+  各 17/17 通过。修复提交 `41ba8f4` 的
+  [CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
+  已通过 7/7；完整开发基线也已形成，证据不自动归属于后续文档提交。
+  详见[验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。直接合同为
+  `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`；
+  此正确性工作先于性能推广，WSL 功能证据不替代原生 Linux fixed-lab；
 - 四个 TCP Runtime Profile 已完成垂直合同；M3 真实网关证据后的第二次跨 Profile
   共同能力审查仍以 `NO-PROMOTION` 关闭，Profile D 的 logic sharding 与 Hybrid
   合同不自动授权公共抽象；

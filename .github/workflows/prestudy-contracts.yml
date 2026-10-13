@@ -1,0 +1,75 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: Experimental prestudy contracts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prestudy-contracts:
+    name: Prestudy contracts (${{ matrix.lane }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - lane: linux-release
+            os: ubuntu-24.04
+            profile: release
+          - lane: linux-asan-ubsan
+            os: ubuntu-24.04
+            profile: asan
+          - lane: linux-tsan
+            os: ubuntu-24.04
+            profile: tsan
+          - lane: windows-release
+            os: windows-latest
+            profile: release
+          - lane: windows-asan
+            os: windows-latest
+            profile: asan
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check prestudy workflow
+        run: python tests/ci/test_prestudy_workflow.py
+
+      - name: Check sanitizer contracts
+        run: python tests/cmake/test_sanitizer_flags.py
+
+      - name: Build and run exactly seven prestudy contracts
+        run: >-
+          python tests/ci/run_prestudy_contracts.py
+          --profile ${{ matrix.profile }}
+          --build-dir build-prestudy
+          --output out/prestudy-evidence
+
+      - name: Retain development contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prestudy-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/prestudy-evidence/
+          if-no-files-found: error
+          retention-days: 30

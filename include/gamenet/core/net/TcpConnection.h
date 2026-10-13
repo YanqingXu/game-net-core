@@ -202,6 +202,8 @@ private:
     TcpConnectionCallbackExceptionHandler callbackExceptionHandler_;
     std::size_t highWaterMark_{0};
     TcpConnectionBackpressureOptions backpressureOptions_;
+    // The source-private high bit permanently seals output admission. Every
+    // byte snapshot masks it out; reservation and close share one atomic word.
     std::atomic<std::size_t> pendingOutputBytes_{0};
     std::atomic<std::size_t> peakPendingOutputBytes_{0};
     std::atomic<std::uint64_t> rejectedOutputReservations_{0};

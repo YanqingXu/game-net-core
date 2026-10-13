@@ -1,14 +1,27 @@
 # 总体判断
 
+2026-10-13 状态复核以 `bf3dab5c3f969c4bfce192dc62b2ccc1c60b3125` 为源码起点。
+本次在 Windows/IOCP 和 WSL/Linux epoll 复现了跨线程已接受发送被随后 graceful
+shutdown 提前 half-close 的正确性缺口。代码修复与回归合同已完成，本地 Windows Release
+与 WSL Ubuntu 24.04/GCC 13.3 Release 各 130/130 通过；Windows 关闭/预算/IOCP 专项 ASan 10/10、
+Ubuntu 24.04 专项 ASan/UBSan 7/7 与 TSan 7/7 通过。干净精确提交
+`41ba8f4ebeda784ff2952b87e53b48310d4f053f` 的
+[CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
+已通过 7/7，完整六场景十样本 development 基线也已完成并独立验证。证据只绑定该提交，
+不自动覆盖后续文档提交。HP0 正式 fixed-lab 门禁仍为 `DEFER`，仍是唯一性能推广与集成前沿。
+下文历史测试数字与发布证据继续绑定各自提交，不代表本次工作树已经通过相同验证。
+
 2026-08-24 的 M11 v1.0 稳定化与发布就绪审查仍以 `DEFER` / `NO-RELEASE`
 关闭，M1–M11 的历史判定不变，stable Apache-2.0 `v0.3.0@8e4a6ed` 仍是发布基线。
 2026-08-25 已在治理基线 `202bf9f993575d144c4c440a3972dd80733da0a7`
 打开性能优先的 HP0–HP8 路线；当前唯一推广与集成前沿为 HP0 成本账本与固定性能实验室。
 `gamenet.hot_path_cost.v1` 的 schema、预登记矩阵、runner、validator、静态 CI guard
-和双平台 self-hosted 工作流已进入实现，但干净 exact-commit 的 Linux/epoll 与
-Windows/IOCP 各十次正式样本尚未形成，因此当前证据结论为 `DEFER`。治理现允许并行
+和双平台 self-hosted 工作流已进入实现；本机 Windows 与 WSL development 账本已经形成，
+但原生双平台完整 fixed-lab 证据仍缺，因此正式结论为 `DEFER`。治理现允许并行
 存在至多一个隔离的 `EXPERIMENTAL-PRESTUDY` HP1–HP8 原型；它不得进入生产 Core
 路径、推进里程碑、切换默认实现、增加安装 API 或形成推广证据。
+以下 HP1–HP8 预研摘要保留 2026-08-25 的 development 判断；2026-10-13 新增的
+正确性验证列于当前优先事项，不追溯改写历史性能样本或推广结论。
 首个 HP1 borrowed-view framing 预研已判定 `KEEP-EXPERIMENTAL`：Windows Release
 差分合同 4/4、focused MSVC ASan 1/1 通过，development 样本保持 checksum 等价且
 candidate allocation/copy 为零；但 Linux/fuzz、真实 Profile A inputBuffer、HP0 fixed-lab
@@ -89,7 +102,7 @@ callback-only Gateway 与 ActorScheduler Task 不构成可替代的双 consumer 
 `f1f89f0`、Gateway `588acd0`、YanGame `b525416` 与旧迁移源 `3eba368`；两个外部
 consumer 均无 datagram runtime，旧源也不满足当前 typed/generation/bounds/双平台
 门禁，因此 M10 以 `NO-PROMOTION` 关闭。M11 最后以 Core
-`a2977c90374aa6c08a54d2d569ff369c51717345` 审计 v1.0 发布就绪性：当前 Windows
+`a2977c90374aa6c08a54d2d569ff369c51717345` 审计 v1.0 发布就绪性：当次 Windows
 Release 重建后专项 20/20、全量 130/130、安装消费者 2/2、治理工具合同 10/10，
 v0.3 稳定面零漂移；但 v1 API/ABI 政策、0.3-to-1.0 consumer、同提交双平台与
 sanitizer/capacity/endurance 证据及 v1 资产均不存在。因此 M11 以 `DEFER` /
@@ -375,10 +388,11 @@ Gateway
 correctness 修复。尚缺的是更长周期、更多独立 consumer、真实流量和运维升级反馈；
 这也是 M5 不把单一网关需求提升为通用 Runtime API 的原因。
 
-### 5. M1–M11 与 IOE-X11–IOE-X15 已关闭，当前计划已收口
+### 5. 历史迁移计划已关闭，当前性能前沿为 HP0
 
-README、roadmap、migration status、plan、assessment 和 evidence ledger 已统一为
-“M1–M11 与 IOE-X11–IOE-X15 关闭、当前无开放前沿”。`0c30124` 的同提交门禁、1h/3h endurance、package、
+M1–M11 与 IOE-X11–IOE-X15 的关闭属于历史 M11 关闭事实；2026-08-25 已另行打开
+HP0–HP8 性能计划。历史计划关闭不表示当前没有待办，也不关闭随后复现的正确性缺口。
+`0c30124` 的同提交门禁、1h/3h endurance、package、
 SPDX 和 evidence bundle 形成 `v0.3.0-internal-candidate.1`；随后 M3 网关发现的 IOCP
 生命周期 blocker 由 `736a090` 修复，并通过双平台真实网关与 1h 故障回放。`a89e2b0`
 的取消快照继续保留为历史 `NO-PROMOTION`，未被提升为当前结论。最终
@@ -435,26 +449,86 @@ send/in-flight/fragment/cache 容器、Windows 缺失运行合同和过量 raw-I
 M10 门禁。因此 M10 以 `NO-PROMOTION` 关闭，五个 intents 保持 deferred，未创建
 experimental datagram 安装面或空 v0.9 发布。
 M11-G0 最后以 Core `a2977c90374aa6c08a54d2d569ff369c51717345` 审计 v1.0。
-预重配置旧构建如实记录为 128/129；当前源码重建后 fixed-tick 20/20、Windows Release
+预重配置旧构建如实记录为 128/129；当次审计源码重建后 fixed-tick 20/20、Windows Release
 全量 130/130、安装消费者 2/2、治理工具合同 10/10，v0.3 API 比较为
 `has_changes=false`。但仓库仍是 `0.3.0` / `SameMinorVersion`，当前 release intent
 明确面向 v0.3 且 1.0 前不承诺 ABI；0.3-to-1.0 迁移 consumer、v1 独立 API/ABI 审查、
 同提交 Linux/Windows/sanitizer/fuzz/performance/capacity/1h/3h 证据和 v1 发布资产均
 缺失。因此 M11 以 `DEFER` / `NO-RELEASE` 关闭，未创建 v1 tag/Release/package，
-stable `v0.3.0@8e4a6ed` 保持发布基线，当前计划无开放治理前沿。
-当前默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
-基线为 140（8 unit、118 contract、14 integration）。
+stable `v0.3.0@8e4a6ed` 保持发布基线。M11 当时没有遗留治理前沿；当前 HP0
+fixed-lab 证据仍为 `DEFER`，不得用该历史结论替代当前性能计划。
+上述历史默认测试基线为 130（8 unit、108 contract、14 integration），Linux experimental
+基线为 140（8 unit、118 contract、14 integration）；它们不是本次工作树的重跑结果。
 
 ---
 
 # 三、下一步方向：建议的优先级
+
+## P0（修复与同提交 CI 已完成）：Accepted send 与 graceful shutdown 的顺序
+
+2026-10-13 的定向复现先在 owner 线程建立连接但暂停 loop dispatch，再由同一非 owner
+线程依次调用 `trySend(16384 bytes)` 与 `tryShutdown()`。两者均返回 `Accepted`，
+恢复 dispatch 前保留 16,384 pending bytes，peer 却收到 0 bytes 后 EOF。Windows/IOCP
+报 `WSAESHUTDOWN (10058)`，WSL/Linux epoll 报 `EPIPE (32)`；两次均无超时且最终
+pending bytes 为零。核算收敛不能替代已接受 payload 在 graceful half-close 前送达的合同。
+
+修复使用同一原子 admission word 表示永久关闭标志与 pending-byte reservation，
+half-close 等待所有已接受工作结算；最后一次 reservation 释放或回滚只通知 owner
+lifecycle，重复 shutdown 不重新创建 half-close 义务。公开字节快照排除内部标志，
+安装 API 声明不变。
+
+直接回归合同 `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`
+已覆盖 owner 暂停时的顺序调用、多个 functor 轮次、完成通知拒绝、producer 分配失败/
+post 拒绝后的最后一次 rollback、运行中的 owner 与 send/shutdown 并发，以及 EOF 后
+重复请求。修复形成 `41ba8f4ebeda784ff2952b87e53b48310d4f053f`，其独立远程 CI
+run `38336714098` 通过 7/7。下表保留此前本地验证，不能将它们与远程 run 混为同一次执行。
+
+| 范围 | 实际环境 | 结果 |
+| --- | --- | --- |
+| Core 全量 Release | Windows/IOCP | 130/130 |
+| 关闭、预算与 IOCP drain 专项 ASan | Windows，含最终 payload-size 过滤夹具 | 10/10 |
+| Core 全量 Release | WSL Ubuntu 24.04，GCC 13.3，epoll | 130/130 |
+| Core 专项 ASan/UBSan | WSL Ubuntu 24.04，GCC 13.3 | 7/7 |
+| Core 专项 TSan | WSL Ubuntu 24.04，GCC 13.3 | 7/7 |
+| Python 工程合同 | Windows | 46/46 |
+| HP0 行为测试 | Windows 与 WSL Ubuntu 24.04 | 各 17/17 |
+| 隔离性能预研合同 | Windows Release | 7/7 |
+| 隔离性能预研 sanitizer 合同 | 早先默认 WSL Ubuntu 22.04，GNU 14.3 | ASan 7/7、TSan 7/7 |
+
+Windows ASan 夹具已修正调试模式 proxy 分配误触发暂停的问题，最终仅匹配 payload
+分配大小。Ubuntu 22.04 的预研结果不归入 Ubuntu 24.04 Core 结果。全部 WSL 结果
+仅是 epoll 功能/开发证据，不是 HP0 原生 Linux 性能证据。
+
+随后在干净精确 `41ba8f4` 的独立检出中执行正式预研 runner：Windows Release 与
+ASan、WSL Ubuntu 24.04 Release、ASan/UBSan 与 TSan 五条路线各 7/7 通过，JUnit
+均无跳过。新增独立 weekly/manual 工作流保留这些七项合同；默认分支尚未包含该文件，
+本次手动触发返回 HTTP 404，因此不声明已完成远程预研 run。
+
+## P1（待闭环）：完成 HP0 固定实验室证据
+
+干净 `41ba8f4` 已使用本机 Windows/IOCP 与 WSL Ubuntu 24.04/epoll 完成原始预登记
+六场景：每场景一次不计入统计的 warmup 与十次交错 development 样本，容量保持 10k。
+每边保留 66 次原始执行（6 warmup + 60 recorded），共 132 次；两份 ledger 已分别
+独立验证通过，原始 stdout、命令、参数、hash 与全部主指标/护栏统计亦已复核。
+每边缺 380 项“样本 × 必需成本”观测，均保留 `null`，`promotion_eligible=false`。
+此开发基线不关闭 HP0，不产生 5%/3% 推广或跨 OS/backend 优胜结论。完整身份、统计与
+限制见[本次验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。
+
+2026-10-13 的仓库 runner 只读检查未发现已注册 self-hosted runner；现有本机资源
+不能提供原生 Linux fixed-lab 证明。正式闭环仍须选择干净精确提交，落实原生
+Linux/epoll 与 Windows/IOCP 固定 runner、完整 observer 成本和 CPU 策略，各执行一次
+不计入样本的 warmup 与至少十次正式样本，并通过 `--require-fixed-lab` 验证。
+HP1–HP8 预研结果不自动取得集成资格；正式推广仍须满足 5% 主指标、3% 非目标护栏
+与 owner/lifecycle/零残留合同。执行顺序和完整门禁以 `plan.md` 为准。
+
+以下保留历史迁移与发布里程碑的原始决策；标为已关闭的项目不是当前执行队列。
 
 ## P0（已关闭）：IOE-X10 与 ARCH-G1
 
 IOE-X10 listener capacity/performance decision 已输出限定范围的 `PROMOTE`，ARCH-G1
 已在两项 non-waivable blocker 和后续 destruction/rollback 缺口修复后给出
 `APPROVE`。M6 的 IOE-X11–X15 因此获得条件授权，但仍须排在 v0.3 推广和真实网关
-验证之后；当前不得继续横向增加实验功能。
+验证之后。该项记录当时的授权顺序；当前性能预研范围以 HP0–HP8 计划为准。
 
 ## P1（已关闭）：选择 promotion commit，完成 v0.3 内部证据闭环
 
@@ -592,7 +666,7 @@ UDP/KCP 应继续等到：
 
 ---
 
-# 四、当前计划的关闭里程碑
+# 四、历史 M1–M11 计划的关闭里程碑
 
 ```text
 Milestone 1
@@ -637,18 +711,20 @@ Milestone 10
 tag/Release/package。
 
 Milestone 11
-已关闭：M1–M11 已全部作出终态决策，stable v0.3 保持当前，执行计划无开放治理前沿。
+已关闭：M1–M11 已全部作出终态决策，stable v0.3 保持发布基线；此处只记录历史计划关闭。
 ```
 
 # 最终评价
 
-`game-net-core` 当前已经完成了最难的一部分：**把高性能网络库最容易失控的 ownership、cross-thread admission、generation、backpressure、callback re-entry 和 shutdown 变成了可验证合同。**
+`game-net-core` 已把 ownership、cross-thread admission、generation、backpressure、
+callback re-entry 和 shutdown 建立为可验证合同；新复现的发送/关闭顺序缺口说明这些
+合同仍须持续补强，历史验证不能替代当前源码回归。
 
 下一阶段最大的风险已经不是“底层能力不够”，而是：
 
-> **继续沉迷内部抽象和实验性功能，却迟迟没有形成一个可以在真实游戏服务器中长期运行、可以推广、可以被别人正确使用的稳定版本。**
+> **已接受工作在边界时序下违约，以及用模型性能信号替代真实负载、尾延迟和长期运行证据。**
 
-因此，当前最合理的路线是：
+历史路线与当前执行的分界如下：
 
 ```text
 M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
@@ -666,7 +742,11 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M9 已关闭（Core fff4162 / Gateway 588acd0 / YanGame b525416；NO-PROMOTION）
 → M10 已关闭（Core f1f89f0 / Gateway 588acd0 / YanGame b525416；NO-PROMOTION）
 → M11 已关闭（Core a2977c9；DEFER / NO-RELEASE；无 v1 发布）
-→ 当前计划已收口（M1–M11 全部判定；无开放治理前沿）
+→ 历史 M1–M11 计划收口（不代表后续计划关闭）
+→ 41ba8f4 发送/关闭修复：本地验证与同提交 CI 7/7 已完成
+→ 41ba8f4 本地基线：Windows + WSL Ubuntu 24.04 六场景各 1 warmup + 10 样本已验证
+→ 当前性能前沿：HP0 双平台固定实验室成本账本（DEFER）
+→ HP0 关闭后按正式切片重新验证 HP1–HP8；HP8 前不恢复 v1 发布线
 ```
 
 而不是立即启动 UDP、KCP、TLS、HTTP、WebSocket、RPC、协程以及更多 io_uring 高级特性。

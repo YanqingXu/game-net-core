@@ -101,6 +101,22 @@ so HP0 evidence remains `DEFER`. Governance now permits at most one isolated
 `EXPERIMENTAL-PRESTUDY` HP1-HP8 prototype in parallel, but it cannot enter the
 production Core path, advance a milestone, switch a default, add an installed
 API, or mint promotion evidence.
+
+Current validation checkpoint — 2026-10-13: clean commit
+`41ba8f4ebeda784ff2952b87e53b48310d4f053f` fixes accepted-output versus graceful
+half-close ordering and passed all seven jobs in
+[CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098).
+The same commit completed independently validated Windows/IOCP and WSL Ubuntu
+24.04/epoll development ledgers with all six original scenarios, one warmup plus
+ten recorded samples each, and unchanged 10k capacity. Each platform retains
+66 original child executions; each ledger lacks 380 required sample-cost
+observations and reports `promotion_eligible=false`. Native fixed Linux,
+complete observers, and reviewed CPU controls are still absent: formal HP0
+remains `DEFER`. These results do not attach to later documentation commits.
+Full evidence and limitations are recorded in
+[the validation report](development/2026-10-13-graceful-drain-validation.md).
+
+The following prestudy decisions preserve their 2026-08-25 development context.
 The first isolated slice, HP1 borrowed-view framing, has concluded
 `KEEP-EXPERIMENTAL`: Windows Release legacy/candidate protocol contracts passed
 4/4, the focused MSVC AddressSanitizer candidate contract passed 1/1, and local

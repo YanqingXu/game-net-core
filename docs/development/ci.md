@@ -3,6 +3,47 @@
 The CI gate keeps the migration focused on the frozen Reactor/TCP foundation
 plus the explicitly active Phase 4 foundations.
 
+## Isolated Experimental Prestudy Contracts
+
+`.github/workflows/prestudy-contracts.yml` runs manually or weekly on Monday
+at 03:23 UTC (11:23 Asia/Shanghai). Its five hosted lanes cover Linux Release,
+ASan/UBSan, and TSan, plus Windows MSVC Release and ASan. MSVC TSan is rejected
+at configure time rather than silently producing an uninstrumented build.
+
+The workflow explicitly enables `GAMENET_BUILD_BENCHMARKS` in a separate fresh
+build directory so the retained HP1-HP6 prototypes and their contracts exist.
+It builds only these seven contract executables: PacketFramerView, SPSC mailbox,
+EventLoop mailbox source, epoll slot dispatch, output segment chain, credit
+lease, and adaptive phase scheduler. It does not execute benchmark programs,
+install a package, or change ordinary CI/default production options.
+
+`tests/ci/run_prestudy_contracts.py` checks the exact seven `prestudy` test names
+and labels before building, uses build parallelism two and serial CTest with
+a 60-second per-test timeout, then rejects missing, duplicate, failed, or
+skipped JUnit cases. Sanitizers halt on their first diagnostic, including
+normally recoverable UBSan findings. Each lane retains command logs, selected inventory, JUnit,
+and a commit/run-bound development manifest even when execution fails.
+`tests/ci/test_prestudy_workflow.py` verifies the workflow boundaries and tests
+the evidence checks with missing/replaced/disabled/skipped/failing cases.
+All six ordinary CI producer jobs run this guard and the 17 behavioral checks
+in `tests/cmake/test_hot_path_preflight.py` after the hot-path benchmark contract.
+These checks use isolated fixtures; the seven prototype executables run only
+in the dedicated prestudy workflow. The main workflow guard rejects either
+check being omitted from any producer.
+
+This is ongoing correctness and sanitizer coverage for isolated prototypes.
+It cannot satisfy HP0 fixed-lab evidence, the 5%/3% performance decision, a
+production integration gate, or a release gate. Run the same bounded slice
+locally from the repository root with new output/build directories:
+
+```text
+python tests/ci/run_prestudy_contracts.py --profile release --build-dir build-prestudy --output out/prestudy-evidence
+```
+
+Use `--profile asan` for Linux ASan/UBSan or MSVC ASan, and `--profile tsan`
+only on Linux. Existing nonempty directories are rejected to keep stale
+executables or test reports from satisfying a new run.
+
 ## Phase 4 Preview Evidence
 
 Functional candidate `5ebad2c1a4a9487437340935e21f7468140c7e8d` is committed and
@@ -153,6 +194,9 @@ python3 tests/cmake/test_install_package_contract.py
 python3 tests/cmake/test_packet_framer_fuzz_contract.py
 python3 tests/cmake/test_core_benchmark_contract.py
 python3 tests/cmake/test_phase4_benchmark_contract.py
+python3 tests/cmake/test_hot_path_benchmark_contract.py
+python3 tests/cmake/test_hot_path_preflight.py
+python3 tests/ci/test_prestudy_workflow.py
 python3 tests/cmake/test_capacity_profile_contract.py
 python3 tests/cmake/test_logger_thread_contract.py
 python3 tests/cmake/test_event_loop_contracts.py
@@ -454,11 +498,11 @@ the six-producer aggregate gate.
 
 ### Billing-Safe Main CI Routing
 
-Main `ci` always routes the two trusted Windows producers to the dedicated
-`[self-hosted, windows, x64, gamenet-windows]` runner. The four Linux producers
-and aggregate job default to GitHub-hosted runners when repository variables
-are unset. During an account billing lock that blocks GitHub-hosted scheduling,
-trusted maintainers may temporarily set:
+Main `ci` defaults to GitHub-hosted runners on both platforms: `ubuntu-24.04`
+for the four Linux producers and aggregate job, and `windows-latest` for the
+two Windows producers. Unset, `hosted`, or unrecognized values of
+`GAMENET_CI_RUNNER_MODE` keep that default. During an account billing lock that
+blocks GitHub-hosted scheduling, trusted maintainers may temporarily set:
 
 ```bash
 gh variable set GAMENET_CI_RUNNER_MODE --body self-hosted
@@ -466,12 +510,14 @@ gh variable set GAMENET_CI_ARTIFACT_POLICY --body best-effort
 ```
 
 `GAMENET_CI_RUNNER_MODE=self-hosted` routes the four Linux producers and the
-aggregate job to `[self-hosted, linux, x64, gamenet-endurance]`. The Windows
-producers already use `[self-hosted, windows, x64, gamenet-windows]` for
-`push`, manual dispatch, and trusted same-repository PRs. Fork PRs continue to
-select GitHub-hosted Windows runners so an untrusted workflow cannot execute on
-repository-owned machines. Every selected dedicated runner must be online; the
-workflow never skips a required platform job.
+aggregate job to `[self-hosted, linux, x64, gamenet-endurance]`, and the two
+Windows producers to `[self-hosted, windows, x64, gamenet-windows]`, for `push`,
+manual dispatch, and trusted same-repository PRs. Windows tool-path bootstrap
+uses the same mode and trust condition. Fork PRs always select GitHub-hosted
+runners so an untrusted workflow cannot execute on repository-owned machines.
+Every selected dedicated runner must be online; the workflow never skips a
+required platform job. The workflow guard evaluates every real runner
+expression across unset/hosted/self-hosted/invalid modes and trusted/fork events.
 
 `GAMENET_CI_ARTIFACT_POLICY=best-effort` changes only artifact upload/download
 handling. Repository guards, configure, inventory, build, CTest, sanitizer,
@@ -488,9 +534,8 @@ gh variable delete GAMENET_CI_RUNNER_MODE
 gh variable delete GAMENET_CI_ARTIFACT_POLICY
 ```
 
-Deleting the variables restores `ubuntu-24.04` for Linux and the `required`
-artifact policy. Trusted Windows jobs remain self-hosted; fork PRs continue to
-fall back to `windows-latest`.
+Deleting the variables restores `ubuntu-24.04` for Linux, `windows-latest` for
+Windows, and the `required` artifact policy.
 
 ## Non-Default Long Soak
 
@@ -825,9 +870,9 @@ as well as link time.
 
 ## Current Platform Gate
 
-The active CI gate defaults to `ubuntu-24.04` for Linux and the dedicated
-Windows self-hosted runner for trusted events. The temporary billing-safe Linux
-route documented above preserves the same six producer contracts; it changes
+The active CI gate defaults to `ubuntu-24.04` for Linux and `windows-latest` for
+Windows. The temporary billing-safe self-hosted route documented above
+preserves the same six producer contracts; it changes
 scheduling and artifact retention policy, not the platform requirements.
 
 Linux/epoll is the Tier 1 release, sanitizer, performance, and endurance

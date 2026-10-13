@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -159,6 +160,101 @@ def step_block(job: str, step_name: str) -> str:
     )
     assert match is not None, f"missing workflow step: {step_name}"
     return match.group(0)
+
+
+def verify_prestudy_and_preflight_guards(workflow: str) -> None:
+    """Every producer checks the guard behavior without running prototypes."""
+    for job_name, contract in JOB_CONTRACTS.items():
+        guards = step_block(job_block(workflow, job_name), "Check repository guards")
+        commands = [line.strip() for line in guards.splitlines()]
+        required_commands = (
+            f"{contract.interpreter} tests/cmake/test_hot_path_benchmark_contract.py",
+            f"{contract.interpreter} tests/cmake/test_hot_path_preflight.py",
+            f"{contract.interpreter} tests/ci/test_prestudy_workflow.py",
+        )
+        for command in required_commands:
+            assert commands.count(command) == 1, (
+                f"{job_name} must execute exactly once: {command}"
+            )
+        positions = [commands.index(command) for command in required_commands]
+        assert positions == sorted(positions), (
+            f"{job_name} must check preflight and prestudy after the benchmark contract"
+        )
+        assert "tests/ci/run_prestudy_contracts.py" not in guards, (
+            f"{job_name} repository guards must not build or run prestudy prototypes"
+        )
+
+
+def verify_runner_routing(workflow: str) -> None:
+    """Evaluate each real runs-on expression for hosted/dedicated and fork cases."""
+    def evaluate(expression: str, context: dict[str, str]):
+        for variable, value in context.items():
+            expression = expression.replace(variable, repr(value))
+        tree = ast.parse(expression.replace("&&", " and ").replace("||", " or "), mode="eval")
+
+        def visit(node):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                return node.value
+            if isinstance(node, ast.Compare) and len(node.ops) == 1:
+                left, right = visit(node.left), visit(node.comparators[0])
+                if isinstance(node.ops[0], ast.Eq):
+                    return left == right
+                if isinstance(node.ops[0], ast.NotEq):
+                    return left != right
+            if isinstance(node, ast.BoolOp):
+                result = visit(node.values[0])
+                for value in node.values[1:]:
+                    if isinstance(node.op, ast.And):
+                        result = visit(value) if result else result
+                    elif isinstance(node.op, ast.Or):
+                        result = result if result else visit(value)
+                    else:
+                        raise AssertionError("unsupported runner boolean operator")
+                return result
+            raise AssertionError(f"unsupported runner expression: {ast.dump(node)}")
+
+        return visit(tree.body)
+
+    for job_name in (*JOB_CONTRACTS, "ci-evidence-set"):
+        job = job_block(workflow, job_name)
+        match = re.search(
+            r"runs-on: >-\s*\$\{\{ fromJSON\((.*?)\) \}\}", job, re.DOTALL,
+        )
+        assert match is not None, f"missing runner expression: {job_name}"
+        expression = " ".join(match.group(1).split())
+        windows = job_name.startswith("windows-")
+        hosted = ["windows-latest"] if windows else ["ubuntu-24.04"]
+        dedicated = ["self-hosted", "windows", "x64", "gamenet-windows"] if windows else [
+            "self-hosted", "linux", "x64", "gamenet-endurance",
+        ]
+        for mode in ("", "hosted", "self-hosted", "invalid"):
+            for event in ("push", "workflow_dispatch", "pull_request"):
+                for same_repository in (False, True):
+                    actual = json.loads(evaluate(expression, {
+                        "vars.GAMENET_CI_RUNNER_MODE": mode,
+                        "github.event_name": event,
+                        "github.event.pull_request.head.repo.full_name":
+                            "owner/repo" if same_repository else "fork/repo",
+                        "github.repository": "owner/repo",
+                    }))
+                    expected = dedicated if mode == "self-hosted" and (
+                        event != "pull_request" or same_repository
+                    ) else hosted
+                    assert actual == expected, (job_name, mode, event, same_repository, actual)
+        if windows:
+            bootstrap = step_block(job, "Bootstrap self-hosted Windows tool paths")
+            condition = re.search(r"if: >-\s*(.*?)\n        shell:", bootstrap, re.DOTALL)
+            assert condition is not None
+            expression = " ".join(condition.group(1).split())
+            for mode, same_repository in (("hosted", True), ("", True), ("self-hosted", False), ("self-hosted", True)):
+                actual = evaluate(expression, {
+                    "vars.GAMENET_CI_RUNNER_MODE": mode,
+                    "github.event_name": "pull_request",
+                    "github.event.pull_request.head.repo.full_name":
+                        "owner/repo" if same_repository else "fork/repo",
+                    "github.repository": "owner/repo",
+                })
+                assert actual is (mode == "self-hosted" and same_repository)
 
 
 def verify_manifest_writer(repo_root: Path) -> None:
@@ -713,6 +809,37 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     workflow = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    verify_prestudy_and_preflight_guards(workflow)
+    for job_name, contract in JOB_CONTRACTS.items():
+        original_job = job_block(workflow, job_name)
+        for guard_path in (
+            "tests/cmake/test_hot_path_preflight.py",
+            "tests/ci/test_prestudy_workflow.py",
+        ):
+            command = f"          {contract.interpreter} {guard_path}\n"
+            changed_job = original_job.replace(command, "", 1)
+            assert changed_job != original_job
+            try:
+                verify_prestudy_and_preflight_guards(
+                    workflow.replace(original_job, changed_job, 1)
+                )
+            except AssertionError:
+                pass
+            else:
+                raise AssertionError(f"{job_name} accepted missing guard: {guard_path}")
+    verify_runner_routing(workflow)
+    # The former trusted-Windows-only predicate must fail the actual routing
+    # truth table, even though the Linux jobs still contain the mode variable.
+    before_windows, windows_tail = workflow.split("  windows-msvc:\n", 1)
+    legacy_windows = windows_tail.replace(
+        "        vars.GAMENET_CI_RUNNER_MODE == 'self-hosted' &&\n", "", 1,
+    )
+    try:
+        verify_runner_routing(before_windows + "  windows-msvc:\n" + legacy_windows)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("legacy unconditional trusted-Windows routing was accepted")
     self_hosted_workflow_path = (
         repo_root / ".github" / "workflows" / "windows-self-hosted-ci.yml"
     )

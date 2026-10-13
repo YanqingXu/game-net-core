@@ -490,6 +490,12 @@ No other direct mutation path is allowed for core loop state.
   snapshot and does not expose other loop-owned state
 - Actual socket write/read handling occurs on owning EventLoop thread
 - Cross-thread send request must be marshaled back into loop thread
+- Graceful shutdown seals the same atomic admission word used to reserve
+  output. Already accepted executor payloads retain their reservation across
+  owner-loop rounds and must drain before the owner half-closes the socket
+- A last output release or rollback may signal the connection lifecycle node
+  from either thread. Half-close stays owner-only and cannot depend on normal
+  functor capacity or an optional write-complete callback
 - output-memory admission before marshaling may update only the connection's
   fixed atomic connection/loop/server/global reservation chain. It invokes no
   callbacks and grants no cross-thread access to Buffer, Channel, segment, or

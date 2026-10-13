@@ -2,6 +2,8 @@
 
 计划重制日期：2026-08-25
 
+当前执行更新：2026-10-13；本机 Windows 与 WSL Ubuntu 24.04 开发验证，正式推广门不变。
+
 长期方向：`goal.md`
 
 性能设计输入：`high-performance.md`、`high-performance2.md`
@@ -85,7 +87,8 @@ HP 切片的 `planned -> contract-ready -> implemented -> verified -> integrated
 
 状态：**基础设施已实现，exact-commit fixed-lab 证据 `DEFER`**。已建立 active intent、
 预登记矩阵、suite target、`gamenet.hot_path_cost.v1` runner/validator、普通 CI 静态守卫
-和双平台 self-hosted 手动工作流；当前工作树只能形成 development smoke，不能关闭 HP0。
+和双平台 self-hosted 手动工作流；当前工作树与 WSL 运行只能形成 development evidence，
+即使覆盖完整场景和十次样本，也不能关闭 HP0。
 
 - 新建默认关闭、非安装的 hot-path benchmark，冻结
   `gamenet.hot_path_cost.v1` 数据格式。
@@ -362,8 +365,32 @@ planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 7. 当前立即执行
 
+2026-10-13 的执行资源已明确为本机 Windows/IOCP 与 WSL Ubuntu 24.04/epoll。
+发送/关闭顺序的代码修复与回归合同已完成：Windows Release 与 WSL Ubuntu 24.04/
+GCC 13.3 Release 各 130/130，Windows 关闭/预算/IOCP 专项 ASan 10/10，Ubuntu 24.04 专项 ASan/UBSan
+与 TSan 各 7/7；Python 工程合同 46/46、Windows/Ubuntu 24.04 的 HP0 行为测试各
+17/17 均通过。随后干净 `41ba8f4` 的隔离检出已执行预研 runner 五条路线：Windows
+Release/ASan 与 WSL Ubuntu 24.04 Release/ASan/TSan 各 7/7、无跳过。独立 weekly/manual
+工作流已新增，须进入默认分支后才能触发；本次 GitHub dispatch 返回 HTTP 404。
+早先 WSL Ubuntu 22.04/GNU 14.3 的预研 sanitizer 结果继续单独保留。
+
+干净精确提交 `41ba8f4ebeda784ff2952b87e53b48310d4f053f` 的
+[CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
+已通过 7/7。同提交在上述本机 Windows 与 Ubuntu 24.04 环境完成 HP0 原始六场景：
+每场景一次不计入统计的 warmup 加十次交错 development 样本，10k 容量未缩减，
+共保留 132 次原始子执行。两份 ledger 已独立验证，完整统计与身份见
+[本次验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。这些证据
+绑定 `41ba8f4`，不自动覆盖后续文档提交；正式性能实验室仍未完成。
+
+本地 ledger 已如实标注 `development`、WSL 和 clean 工作树状态；每边 380 项必需样本
+成本未观测，保持 `null` 并记录原因，两边均 `promotion_eligible=false`。
+完整的本地场景与样本量也不能满足
+`--require-fixed-lab`、5%/3% 推广判断或干净精确提交的双平台发布验证。
+2026-10-13 仓库 runner 只读检查返回零个已注册 self-hosted runner；原生 Linux fixed
+runner 与完整 observer 成本仍是正式 HP0 的未满足条件，不能把 WSL 重新标记为原生。
+
 > **当前性能推广前沿为 HP0：成本账本与固定性能实验室。** schema、默认关闭且非安装的
-> benchmark suite、validator/CI guard 已实现；下一步仍需选择干净精确提交，在固定原生
+> benchmark suite、validator/CI guard 已实现；正式闭环仍需选择干净精确提交，在固定原生
 > Linux/epoll 与 Windows/IOCP runner 上补齐 observer 成本，并各执行 1 次不计入 warmup
 > + 至少 10 次正式样本。允许同时开展至多一个 `EXPERIMENTAL-PRESTUDY` 实现原型，但
 > 它必须默认关闭、非安装、不导出且不进入默认 Core 数据路径。HP0 关闭前，HP1–HP8

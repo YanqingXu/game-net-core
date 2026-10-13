@@ -88,6 +88,77 @@ scenario's preregistered `required_costs` remains `null`. Linux observers may
 use `perf stat` plus allocation/copy probes. Windows observers may use the
 reviewed PMC/ETW equivalent. Observer executable hashes are part of the ledger.
 
+## Laboratory preflight
+
+`tools/preflight_hot_path_cost.py` checks readiness before ten-sample collection.
+It reads the actual executing OS, kernel identity and WSL indicators, and checks
+the exact source commit and Git status itself. Supplying `--platform linux` or
+`--native-runner` cannot turn WSL or a Windows process into native Linux evidence.
+The ledger runner performs the same independent host checks.
+
+An inspection without `--probe` starts no observer or benchmark. It writes
+`preflight.json` with the missing resources and each scenario's costs that the
+observer must supply. It exits nonzero and never reports readiness. For example:
+
+```powershell
+python tools/preflight_hot_path_cost.py `
+  --platform windows --backend iocp `
+  --output-root hot-path-results/preflight-inspection
+```
+
+Provide the reviewed observer, all four Release binaries, named runner and
+frequency policy on a clean checkout, then add `--probe`:
+
+```powershell
+python tools/preflight_hot_path_cost.py `
+  --platform windows --backend iocp --commit-sha (git rev-parse HEAD) `
+  --runner-id $env:RUNNER_NAME --frequency-policy $env:HP0_FREQUENCY_POLICY `
+  --observer-command $env:HP0_OBSERVER `
+  --core-executable build-hot-path/benchmarks/Release/gamenet_core_benchmark.exe `
+  --phase4-executable build-hot-path/benchmarks/Release/gamenet_phase4_benchmark.exe `
+  --capacity-executable build-hot-path/benchmarks/Release/gamenet_capacity_profile.exe `
+  --queued-executable build-hot-path/benchmarks/Release/gamenet_multi_io_queued_benchmark.exe `
+  --output-root hot-path-results/preflight --probe
+```
+
+Linux uses `--platform linux --backend epoll` and the single-config executable
+paths from the workflow. Each output directory must be new or empty. Probes
+first execute two fresh nonce-bearing children through the actual observer:
+one succeeds and one exits nonzero. The observer must preserve stdout byte for
+byte, emit a valid observation for success, and propagate failure. Preflight
+then runs one real child per scenario with the unchanged inventory arguments,
+checks the returned parameters against every preregistered argument, reuses the
+existing child semantic validators, and checks merged required costs.
+A declarations-only observer, missing counter, conflicting child/observer value,
+changed executable, or failed lifecycle check stops preparation immediately.
+Malformed observations, duplicate JSON keys, non-finite or oversized numeric
+values are rejected with a structured failure rather than accepted as costs.
+The 10k connection scenario remains 10k during this check; no shortened load can
+pass it. No probe starts while basic prerequisites are missing.
+
+The manual workflow runs this gate before collecting the ledger. The ledger's
+own first warmup also rejects missing required costs immediately, so invoking
+the runner directly cannot postpone that failure until all ten rounds finish.
+Preflight retains its handshake/raw artifacts separately, always sets
+`promotion_eligible=false`, and never supplies ledger warmups or recorded
+samples. A ready result permits collection; it does not close HP0.
+
+This check exercises the observer rather than accepting a capabilities file.
+It does not certify the correctness of an arbitrary observer's instrumentation:
+the executable and its allocation/copy/PMC/ETW collection method still need lab
+review. The observed host is the process's OS, not proof of a particular physical
+machine or an enforced frequency policy. Runner provisioning must separately
+pin affinity, establish the reviewed policy, and register online self-hosted
+Linux and Windows `x64,gamenet-performance` runners. An observer that only
+supplies cycles/instructions/cache misses cannot complete HP0: framing also
+requires allocation and copied-byte observations; other scenarios require
+syscalls, physical wakeups and costs absent from their child JSON.
+
+Behavioral tests in `tests/cmake/test_hot_path_preflight.py` execute observer
+test doubles solely to test forwarding and fail-closed behavior. Their output
+is never performance or fixed-lab evidence. The existing HP0 repository contract
+runs these tests on its normal CI path.
+
 ## Development run
 
 Development evidence is useful for checking commands and schema but cannot
@@ -123,6 +194,15 @@ Use `--wsl` for WSL. WSL and dirty-worktree ledgers remain development-only.
 The runner independently checks `git rev-parse HEAD` and full porcelain status
 under `--source-root` (the current directory by default), so `--commit-sha` and
 `--working-tree` are assertions rather than trusted metadata.
+
+Every child invocation also retains its actual argv and byte-for-byte stdout
+and stderr in `.command.json`, `.stdout.bin`, and `.stderr.bin` sidecars beside
+its observation path. Each scenario has a separate `warmup.observation.*` set;
+recorded samples use `sample-NN.observation.*`. Nonzero exits, malformed JSON,
+invalid UTF-8, and timed-out partial output remain available for diagnosis.
+These sidecars are diagnostic artifacts outside the ledger's indexed hashes;
+the existing manifest-indexed sample JSON and observation files remain the
+authority for validation and promotion. Retained warmups do not count as samples.
 
 ## Fixed laboratory gate
 

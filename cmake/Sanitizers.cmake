@@ -7,6 +7,9 @@ function(gamenet_configure_sanitizers target_name)
     endif()
 
     if(MSVC)
+        if(GAMENET_ENABLE_TSAN)
+            message(FATAL_ERROR "GAMENET_ENABLE_TSAN is not supported by MSVC; use a Linux TSan build.")
+        endif()
         if(GAMENET_ENABLE_ASAN_UBSAN)
             # MSVC's compiler switch both instruments objects and emits the
             # ASan runtime-link directives. Passing the compiler switch

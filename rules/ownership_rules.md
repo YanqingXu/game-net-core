@@ -355,6 +355,10 @@ It must not blur these roles.
   executor closure, then transfers that allocation into the segment deque.
   Neither the legacy output Buffer nor a transport mirror owns a second full
   copy
+- The output admission word retains both reserved-byte accounting and its
+  permanent close seal. Graceful half-close does not release queued payloads:
+  their executor closures and byte reservations survive until actual write
+  progress or explicit terminal discard. Public snapshots expose bytes only
 - Each Windows TcpConnection IOCP transport uniquely owns at most one optional
   4 KiB read allocation. `WSABUF` borrows that allocation only while the read
   obligation is pending; no pool or cross-EventLoop return path exists, and

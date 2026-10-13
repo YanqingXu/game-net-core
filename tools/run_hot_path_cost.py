@@ -23,8 +23,10 @@ from hot_path_cost_common import (  # noqa: E402
     load_observation,
     metric_record,
     require,
+    require_complete_costs,
     sha256_file,
     validate_child,
+    validate_host_identity,
 )
 
 
@@ -73,12 +75,27 @@ def run_child(
     actual = command
     if observer is not None:
         actual = [str(observer), "--cost-output", str(observation_path), "--", *command]
-    completed = subprocess.run(
-        actual,
-        capture_output=True,
-        timeout=timeout_seconds,
-        check=False,
+    # Retain the exact process bytes before any exit, encoding, JSON, or semantic
+    # check can fail. These diagnostic sidecars are not manifest-indexed costs.
+    observation_path.parent.mkdir(parents=True, exist_ok=True)
+    observation_path.with_suffix(".command.json").write_text(
+        json.dumps({"argv": actual}, indent=2) + "\n", encoding="utf-8"
     )
+    stdout_path = observation_path.with_suffix(".stdout.bin")
+    stderr_path = observation_path.with_suffix(".stderr.bin")
+    try:
+        completed = subprocess.run(
+            actual,
+            capture_output=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        stdout_path.write_bytes(error.stdout or b"")
+        stderr_path.write_bytes(error.stderr or b"")
+        raise
+    stdout_path.write_bytes(completed.stdout)
+    stderr_path.write_bytes(completed.stderr)
     stderr_text = decode_stderr(completed.stderr)
     require(completed.returncode == 0, f"{label}: child failed ({completed.returncode}): {stderr_text.strip() or '<empty>'}")
     stdout_text = decode_stdout(completed.stdout, label)
@@ -118,6 +135,7 @@ def merge_costs(
 
 
 def run_suite(args: argparse.Namespace) -> dict[str, Any]:
+    validate_host_identity(args.platform, args.backend, args.native_runner, args.wsl)
     source_root = args.source_root.resolve()
     require((source_root / ".git").exists(), f"source root is not a Git worktree: {source_root}")
     require(re.fullmatch(r"[0-9a-f]{40}", args.commit_sha) is not None, "commit SHA must be 40 lowercase hex digits")
@@ -186,17 +204,18 @@ def run_suite(args: argparse.Namespace) -> dict[str, Any]:
     # ledger sample set and cannot satisfy the recorded-sample minimum.
     for scenario in inventory["scenarios"]:
         command = [str(executables[scenario["executable"]]), *scenario["arguments"]]
-        document, _, _ = run_child(
+        warmup_observation = raw_root / scenario["key"] / "warmup.observation.json"
+        document, _, observed = run_child(
             command,
             observer,
-            args.output_root / "warmup-observation.json",
+            warmup_observation,
             args.process_timeout_seconds,
             f"{scenario['key']} warmup",
         )
-        validate_child(document, scenario, args.platform, args.backend, args.build_type, f"{scenario['key']} warmup")
-        warmup_observation = args.output_root / "warmup-observation.json"
-        if warmup_observation.exists():
-            warmup_observation.unlink()
+        validated = validate_child(document, scenario, args.platform, args.backend, args.build_type, f"{scenario['key']} warmup")
+        if args.evidence_class == "fixed-lab":
+            costs, _ = merge_costs(validated, scenario, observed, f"{scenario['key']} warmup")
+            require_complete_costs(costs, scenario, f"{scenario['key']} warmup")
 
     # Scenario round-robin avoids running all samples from one subsystem in a
     # single temperature/time block.

@@ -37,6 +37,14 @@ Contract tests verify:
 - thread-affinity behavior
 - callback ordering where relevant
 
+The TcpConnection graceful-close regression contract is
+`tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`.
+It must hold owner dispatch while a producer sends then shuts down, prove all
+accepted bytes arrive before EOF, and cover direct completion, multiple
+one-functor rounds, rejected write-complete notification admission, concurrent
+send-versus-close decisions, and exact zero-reservation settlement on both
+Linux/epoll and Windows/IOCP.
+
 ## 5. EventLoop Required Test Examples
 - runInLoop executes immediately on same thread
 - queueInLoop executes later on loop thread

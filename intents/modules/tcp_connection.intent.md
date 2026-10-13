@@ -97,6 +97,16 @@ inline inside TcpConnection.
   before the owner loop advances the public connection state. A send whose
   reservation won before that publication remains accepted and drains or is
   reconciled exactly once by the normal owner lifecycle
+- output sealing and connection-byte reservation share one atomic admission
+  word, so a concurrent producer cannot reserve after the owner observes an
+  empty sealed output. The private tag is excluded from every public byte
+  snapshot; requests beyond the representable byte count return `Overloaded`
+- graceful half-close waits for all reserved output, including accepted sends
+  still held by executor closures across multiple functor-budget rounds. A
+  Channel with no write interest is not proof that accepted output is empty
+- the last reservation release or rollback signals the lifecycle node while
+  graceful half-close is pending; direct writes and rejected optional
+  write-complete notifications cannot strand that transition
 - a hierarchical reservation never exceeds any configured hard limit. Failure
   at a later scope rolls back every earlier scope before `trySend()` returns,
   and an accepted byte releases every scope exactly once
@@ -239,6 +249,9 @@ inline inside TcpConnection.
 - lifecycle-node callbacks run on the connection owner loop and may consume
   coalesced send-shutdown, force-close, socket-close, and completion-drain
   work; every visit must re-read the explicit close state
+- the graceful request remains pending until owner-thread half-close completes;
+  zero-byte settlement only signals owner lifecycle work and never performs a
+  socket operation or invokes a callback on a producer thread
 
 ---
 
@@ -364,7 +377,11 @@ inline inside TcpConnection.
   verifies shutdown waits for pending output to drain before peer EOF
 - `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`
   verifies cross-thread shutdown marshals to the owner loop, drains pending
-  output, and then half-closes exactly once
+  output, and then half-closes exactly once. It also holds owner dispatch while
+  one producer sends then shuts down, covers direct writes and multiple
+  one-functor rounds, rejects later sends, survives dropped write-complete
+  notifications, and reconciles concurrent send-versus-shutdown to the exact
+  accepted payload before EOF with zero reserved output
 - `tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp` verifies that
   an accepted foreign Send reaches the peer before EOF while a Send issued
   after the same thread's accepted graceful request returns `Closed` on Linux
