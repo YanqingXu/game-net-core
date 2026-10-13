@@ -9,6 +9,15 @@ Ubuntu 24.04 专项 ASan/UBSan 7/7 与 TSan 7/7 通过。干净精确提交
 [CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
 已通过 7/7，完整六场景十样本 development 基线也已完成并独立验证。证据只绑定该提交，
 不自动覆盖后续文档提交。HP0 正式 fixed-lab 门禁仍为 `DEFER`，仍是唯一性能推广与集成前沿。
+本轮本机 Windows + WSL Ubuntu 24.04 的资源执行已按用户决定以 `DEFER` 收束。
+[PR #15](https://github.com/YanqingXu/game-net-core/pull/15) 已合入 `main` 的
+`af01a814f758aa6b02fa1bfed95810d8495ed58e`；该提交的
+[CI run 38341614323](https://github.com/YanqingXu/game-net-core/actions/runs/38341614323)
+通过 7/7，独立预研的
+[manual run 38341836902](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
+通过 5/5 路线、35/35 合同。两组 artifact 和独立验证均通过。weekly 工作流已启用；
+本次执行事件为 `workflow_dispatch`，未将其记为 cron 已执行。`af01a81` 的合入与软件
+验证不迁移 `41ba8f4` 的性能样本身份，后续文档提交也不自动继承这些测量。
 下文历史测试数字与发布证据继续绑定各自提交，不代表本次工作树已经通过相同验证。
 
 2026-08-24 的 M11 v1.0 稳定化与发布就绪审查仍以 `DEFER` / `NO-RELEASE`
@@ -501,10 +510,14 @@ Windows ASan 夹具已修正调试模式 proxy 分配误触发暂停的问题，
 
 随后在干净精确 `41ba8f4` 的独立检出中执行正式预研 runner：Windows Release 与
 ASan、WSL Ubuntu 24.04 Release、ASan/UBSan 与 TSan 五条路线各 7/7 通过，JUnit
-均无跳过。新增独立 weekly/manual 工作流保留这些七项合同；默认分支尚未包含该文件，
-本次手动触发返回 HTTP 404，因此不声明已完成远程预研 run。
+均无跳过。当时默认分支尚未包含新增 weekly/manual 工作流，首次手动触发返回
+HTTP 404；这是合入前的历史结果。PR #15 合入后，`af01a81` 的远程 manual run
+`38341836902` 已通过全部五条路线、35/35 合同，无 disabled/skipped/failed 合同，
+五份完整 ZIP 的 digest、manifest、inventory 与 JUnit 已独立验证。工作流
+`382781923` 的 API 状态为 `active`，weekly cron 为 `23 3 * * 1`；本次成功证据
+来自 `workflow_dispatch`，不声明已发生定时触发。
 
-## P1（待闭环）：完成 HP0 固定实验室证据
+## P1（本轮 DEFER 收束）：保留未来 HP0 固定实验室门禁
 
 干净 `41ba8f4` 已使用本机 Windows/IOCP 与 WSL Ubuntu 24.04/epoll 完成原始预登记
 六场景：每场景一次不计入统计的 warmup 与十次交错 development 样本，容量保持 10k。
@@ -515,7 +528,8 @@ ASan、WSL Ubuntu 24.04 Release、ASan/UBSan 与 TSan 五条路线各 7/7 通过
 限制见[本次验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。
 
 2026-10-13 的仓库 runner 只读检查未发现已注册 self-hosted runner；现有本机资源
-不能提供原生 Linux fixed-lab 证明。正式闭环仍须选择干净精确提交，落实原生
+不能提供原生 Linux fixed-lab 证明。本轮按用户决定以 `DEFER` 收束，不再等待本机
+补齐正式实验室；未来正式闭环仍须选择干净精确提交，落实原生
 Linux/epoll 与 Windows/IOCP 固定 runner、完整 observer 成本和 CPU 策略，各执行一次
 不计入样本的 warmup 与至少十次正式样本，并通过 `--require-fixed-lab` 验证。
 HP1–HP8 预研结果不自动取得集成资格；正式推广仍须满足 5% 主指标、3% 非目标护栏
@@ -745,7 +759,9 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → 历史 M1–M11 计划收口（不代表后续计划关闭）
 → 41ba8f4 发送/关闭修复：本地验证与同提交 CI 7/7 已完成
 → 41ba8f4 本地基线：Windows + WSL Ubuntu 24.04 六场景各 1 warmup + 10 样本已验证
-→ 当前性能前沿：HP0 双平台固定实验室成本账本（DEFER）
+→ PR #15 已合入 af01a81：main CI 7/7、预研 manual 5/5 路线与 35/35 合同已验证
+→ weekly 工作流 active；本次证明为手动触发，不冒称 cron 已执行
+→ 本轮本机资源执行以 DEFER 收束；未来性能门仍为 HP0 双平台固定实验室成本账本
 → HP0 关闭后按正式切片重新验证 HP1–HP8；HP8 前不恢复 v1 发布线
 ```
 

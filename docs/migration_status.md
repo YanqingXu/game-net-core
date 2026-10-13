@@ -102,7 +102,7 @@ so HP0 evidence remains `DEFER`. Governance now permits at most one isolated
 production Core path, advance a milestone, switch a default, add an installed
 API, or mint promotion evidence.
 
-Current validation checkpoint — 2026-10-13: clean commit
+Measured-source checkpoint — 2026-10-13: clean commit
 `41ba8f4ebeda784ff2952b87e53b48310d4f053f` fixes accepted-output versus graceful
 half-close ordering and passed all seven jobs in
 [CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098).
@@ -115,6 +115,22 @@ complete observers, and reviewed CPU controls are still absent: formal HP0
 remains `DEFER`. These results do not attach to later documentation commits.
 Full evidence and limitations are recorded in
 [the validation report](development/2026-10-13-graceful-drain-validation.md).
+
+Current deployment checkpoint — 2026-10-13:
+[PR #15](https://github.com/YanqingXu/game-net-core/pull/15) merged into `main`
+at `af01a814f758aa6b02fa1bfed95810d8495ed58e`. Its
+[main CI 38341614323](https://github.com/YanqingXu/game-net-core/actions/runs/38341614323)
+passed all seven jobs; seven artifact digests and the six-producer evidence
+set passed independent verification. The
+[manual prestudy run 38341836902](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
+passed five lanes and 35/35 contracts with no skips; all five ZIP digests,
+manifests, inventories and JUnit results were independently verified. Workflow
+`382781923` is `active`, with weekly cron `23 3 * * 1`. This successful run was
+`workflow_dispatch`, not proof that the cron has fired. The earlier HTTP 404
+belongs to the pre-merge attempt, when the default branch lacked the workflow.
+The user-directed local Windows/WSL execution is closed with `DEFER`; formal
+HP0 remains a future promotion gate. Software validation at `af01a81` does not
+rebind the `41ba8f4` performance measurements to it or later documentation.
 
 The following prestudy decisions preserve their 2026-08-25 development context.
 The first isolated slice, HP1 borrowed-view framing, has concluded

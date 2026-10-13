@@ -183,3 +183,42 @@ above remain the conditions for any future promotion; this decision does not
 reclassify development samples or relax those conditions. The current software
 delivery is the graceful-drain fix, validated measurement tools, full local
 development baseline, and isolated prestudy workflow in PR #15.
+
+## Merged main and enabled weekly verification
+
+The user then authorized merging PR #15 and enabling/verifying the weekly
+prestudy workflow. PR #15 merged on 2026-10-13 at 03:25:09 UTC as
+`af01a814f758aa6b02fa1bfed95810d8495ed58e`. This commit contains the unchanged
+production/test/tool paths measured at `41ba8f4`; it retains that commit as an
+ancestor. The measured performance ledgers continue to bind `41ba8f4`.
+
+[Main CI 38341614323, attempt 1](https://github.com/YanqingXu/game-net-core/actions/runs/38341614323)
+passed all seven jobs on exact `af01a814`. The run head, candidate, actual
+checkout and GitHub SHA all match that main commit. Five full lanes executed
+130/130 tests each; Linux TSan executed 103/103; the ASan fuzz smoke executed
+1,000 units. All seven complete artifact ZIP digests matched GitHub, and the
+six-producer verifier reproduced the aggregate except its generation time.
+
+The prestudy workflow is now `active` on the default branch. Its cron is
+`23 3 * * 1` (planned every Monday at 03:23 UTC / 11:23 Asia/Shanghai).
+[Manual prestudy run 38341836902, attempt 1](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
+passed all five lanes on exact `af01a814`: Linux Release, ASan/UBSan and TSan,
+and Windows Release and ASan. Each lane configured and executed exactly the
+seven contracts, totaling 35 executions with no skipped tests. All five original
+ZIP digests matched GitHub; their manifests, profile/OS, clean worktree,
+inventory labels and JUnit results were independently checked using the exact
+source runner's validators. These remain `development-contracts`, with
+`promotion_eligible=false`.
+
+This successful verification used `workflow_dispatch`, not a cron event. The
+initial pre-merge HTTP 404 above is retained as historical evidence and no longer
+describes workflow availability on main. Compact main/prestudy verification
+records are in
+[`post-merge-verification.json`](benchmark_results/2026-10-13-local-hp0-41ba8f4/post-merge-verification.json);
+original archives, logs and indexed file hashes remain in
+`out/project-review/ci-main-af01a81-38341614323/` and
+`out/project-review/prestudy-main-af01a81-38341836902/`.
+
+This later documentation update records source evidence; it does not claim that
+its own commit was benchmarked. HP0 remains the user-approved `DEFER`, and no
+HP1–HP8 fast path or release promotion follows from the software CI results.

@@ -133,6 +133,20 @@ Each ledger still lacks 380 required sample-cost observations and has
 CPU controls remain missing, so formal HP0 stays `DEFER`. Evidence belongs to
 that exact commit, not later documentation revisions. See the
 [validation record](docs/development/2026-10-13-graceful-drain-validation.md).
+
+The user-directed local Windows/WSL execution is now closed with `DEFER`.
+[PR #15](https://github.com/YanqingXu/game-net-core/pull/15) is merged at
+`af01a814f758aa6b02fa1bfed95810d8495ed58e`; its
+[main CI](https://github.com/YanqingXu/game-net-core/actions/runs/38341614323)
+passed 7/7 jobs, and the
+[manual prestudy run](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
+passed all five lanes and 35/35 contracts, with artifact digests and evidence
+independently verified. The weekly workflow is `active` with cron `23 3 * * 1`.
+The verified execution used `workflow_dispatch`; no scheduled execution is
+claimed. This deployment and software validation does not transfer the
+`41ba8f4` benchmark measurements to the merge or later documentation commits.
+Formal HP0 remains a future promotion gate.
+
 The first such slice, HP1 borrowed-view framing, is retained as
 `KEEP-EXPERIMENTAL` after Windows Release differential and focused ASan
 contracts plus development-only measurements. HP2 SPSC mailbox/source/outbox

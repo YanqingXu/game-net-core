@@ -1,0 +1,261 @@
+{
+  "schema": "gamenet.post_merge_validation.v1",
+  "source_commit_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+  "performance_source_sha": "41ba8f4ebeda784ff2952b87e53b48310d4f053f",
+  "later_documentation_commit_is_not_measured": true,
+  "pull_request": {
+    "number": 15,
+    "url": "https://github.com/YanqingXu/game-net-core/pull/15",
+    "state": "MERGED",
+    "merged_at": "2026-10-13T03:25:09Z"
+  },
+  "resource_decision": {
+    "resources": "local Windows and WSL Ubuntu 24.04 only for HP0",
+    "formal_hp0_status": "DEFER",
+    "promotion_eligible": false
+  },
+  "weekly_workflow": {
+    "id": 382781923,
+    "path": ".github/workflows/prestudy-contracts.yml",
+    "state": "active",
+    "cron": "23 3 * * 1",
+    "timezone": "UTC",
+    "verified_trigger": "workflow_dispatch",
+    "cron_event_not_claimed": true
+  },
+  "main_ci": {
+    "run_id": 38341614323,
+    "run_url": "https://github.com/YanqingXu/game-net-core/actions/runs/38341614323",
+    "run_head_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+    "evidence_scope": "Merged main push validation; run head, candidate, checkout and GitHub SHA are identical",
+    "prior_boundary_pr_evidence": {
+      "pr_head_sha": "d0bc7411c602911d3af15f65f5385b405e576712",
+      "run_id": 38340684596,
+      "summary_path": "out/project-review/ci-pr15-d0bc741-38340684596/verification-summary.json"
+    },
+    "prior_pr_evidence": {
+      "pr_head_sha": "a9426ebd451613ae5e4b4c1184653feb905e8543",
+      "run_id": 38338919845,
+      "summary_path": "out/project-review/ci-pr15-38338919845/verification-summary.json"
+    },
+    "prior_exact_source_evidence": {
+      "source_sha": "41ba8f4ebeda784ff2952b87e53b48310d4f053f",
+      "run_id": 38336714098,
+      "summary_path": "out/project-review/ci-41ba8f4/verification-summary.json"
+    },
+    "candidate_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+    "pr_head_sha": null,
+    "checkout_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+    "github_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+    "merge_or_current_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+    "event_name": "push",
+    "ref": "refs/heads/main",
+    "run_attempt": 1,
+    "jobs_successful": 7,
+    "producer_count": 6,
+    "downloaded_artifacts": 7,
+    "all_archive_digests_match_github": true,
+    "independent_verification": "passed",
+    "remote_aggregate_matches_independent_except_generated_time": true,
+    "remote_aggregate_sha256": "246eb25c2444be37f6970d0975339631901eb56566965572cd334d863a5189c0",
+    "independent_aggregate_sha256": "597a1b12b522c20aa99cc5228e812262a1e41e2766ab6cda2984407824d172fd",
+    "producers": [
+      {
+        "job": "linux-cmake",
+        "artifact_name": "ci-evidence-linux-cmake-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341614323-1",
+        "producer_manifest_sha256": "7e8388a187700ed8df3a3865995371695b93f370a7e927dac506dd7a1ff0bedb",
+        "evidence_file_count": 16,
+        "evidence_bytes": 150733,
+        "configured_tests": 130,
+        "executed_tests": 130,
+        "consumer_executed_tests": 2,
+        "experimental_consumer_executed_tests": 1,
+        "fuzz_executed_units": null
+      },
+      {
+        "job": "linux-asan-ubsan",
+        "artifact_name": "ci-evidence-linux-asan-ubsan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341614323-1",
+        "producer_manifest_sha256": "22afa038465d24545c5878951a9a799145c4a2f8e3c099daa96cfcbdfedf3db9",
+        "evidence_file_count": 104,
+        "evidence_bytes": 156560,
+        "configured_tests": 130,
+        "executed_tests": 130,
+        "consumer_executed_tests": null,
+        "experimental_consumer_executed_tests": null,
+        "fuzz_executed_units": 1000
+      },
+      {
+        "job": "linux-tsan",
+        "artifact_name": "ci-evidence-linux-tsan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341614323-1",
+        "producer_manifest_sha256": "9cefbbd5e3393efc7f180f84e2b589bad8777c6fdfabdb182b2d107c2eee0c2a",
+        "evidence_file_count": 4,
+        "evidence_bytes": 91010,
+        "configured_tests": 130,
+        "executed_tests": 103,
+        "consumer_executed_tests": null,
+        "experimental_consumer_executed_tests": null,
+        "fuzz_executed_units": null
+      },
+      {
+        "job": "linux-release",
+        "artifact_name": "ci-evidence-linux-release-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341614323-1",
+        "producer_manifest_sha256": "558948bf2b408910e97677129c955a1ee20277a6c4d1cb9e90840b1866984fe8",
+        "evidence_file_count": 30,
+        "evidence_bytes": 643647,
+        "configured_tests": 130,
+        "executed_tests": 130,
+        "consumer_executed_tests": null,
+        "experimental_consumer_executed_tests": null,
+        "fuzz_executed_units": null
+      },
+      {
+        "job": "windows-msvc",
+        "artifact_name": "ci-evidence-windows-msvc-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341614323-1",
+        "producer_manifest_sha256": "6486306d110112c34ca7effb86307f3a13455eee4e2568cc5e4b0de552e36d7c",
+        "evidence_file_count": 7,
+        "evidence_bytes": 106472,
+        "configured_tests": 130,
+        "executed_tests": 130,
+        "consumer_executed_tests": 2,
+        "experimental_consumer_executed_tests": null,
+        "fuzz_executed_units": null
+      },
+      {
+        "job": "windows-msvc-release",
+        "artifact_name": "ci-evidence-windows-msvc-release-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341614323-1",
+        "producer_manifest_sha256": "24431d7bba258b4cbf5fafddaa71839cdfaa3b3ff41437e6326fbf4ab7632534",
+        "evidence_file_count": 33,
+        "evidence_bytes": 2312580,
+        "configured_tests": 130,
+        "executed_tests": 130,
+        "consumer_executed_tests": 2,
+        "experimental_consumer_executed_tests": null,
+        "fuzz_executed_units": null
+      }
+    ]
+  },
+  "prestudy": {
+    "schema": "gamenet.prestudy_remote_verification.v1",
+    "status": "passed",
+    "source_commit_sha": "af01a814f758aa6b02fa1bfed95810d8495ed58e",
+    "run_id": 38341836902,
+    "run_attempt": 1,
+    "url": "https://github.com/YanqingXu/game-net-core/actions/runs/38341836902",
+    "trigger": "workflow_dispatch",
+    "workflow_state": "active",
+    "jobs_passed": 5,
+    "jobs_total": 5,
+    "contracts_per_lane": 7,
+    "executed_contracts": 35,
+    "evidence_class": "development-contracts",
+    "promotion_eligible": false,
+    "exact_source_runner_sha256": "dffcb7d76b7e06f9895d76445d7b161800b803e7c62bdc10aed4fbe30beb5218",
+    "lanes": [
+      {
+        "lane": "linux-release",
+        "profile": "release",
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "status": "passed",
+        "configured_tests": 7,
+        "executed_tests": 7,
+        "promotion_eligible": false,
+        "artifact_id": 11787221904,
+        "artifact_name": "prestudy-linux-release-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1",
+        "archive_path": "archives/prestudy-linux-release-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1.zip",
+        "archive_bytes": 6614,
+        "archive_sha256": "b5df40be1deafef69b612a88dc9de42335cae5ba08e1d1c79634186ed12cef45",
+        "github_digest_matches": true,
+        "manifest_sha256": "dd6912eeddd3648e2dc5b93ee38c105c81e6979194a723b5f57bc5ad298dfada",
+        "junit_sha256": "f55f877dafb8c803ac5a77aecdc2bbd1d7d127ec786348a94c18e2e38bc2a7af",
+        "exact_runner_verify_inventory": "passed",
+        "exact_runner_verify_results": "passed"
+      },
+      {
+        "lane": "linux-asan-ubsan",
+        "profile": "asan",
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "status": "passed",
+        "configured_tests": 7,
+        "executed_tests": 7,
+        "promotion_eligible": false,
+        "artifact_id": 11787062298,
+        "artifact_name": "prestudy-linux-asan-ubsan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1",
+        "archive_path": "archives/prestudy-linux-asan-ubsan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1.zip",
+        "archive_bytes": 6639,
+        "archive_sha256": "fe582de46d4e0d11b674b34c0cba398ebc537ebf9ec34ac86575137c4fb7f6aa",
+        "github_digest_matches": true,
+        "manifest_sha256": "aa1b84787a80b1b8d5a3cfd18b6e18fa7123b32d611b95cece966f83aea29d5d",
+        "junit_sha256": "e11260c6e6e682e613ff628efd32ed5504bcb278514d9d6478aa43b0b95ba056",
+        "exact_runner_verify_inventory": "passed",
+        "exact_runner_verify_results": "passed"
+      },
+      {
+        "lane": "linux-tsan",
+        "profile": "tsan",
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "status": "passed",
+        "configured_tests": 7,
+        "executed_tests": 7,
+        "promotion_eligible": false,
+        "artifact_id": 11787137171,
+        "artifact_name": "prestudy-linux-tsan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1",
+        "archive_path": "archives/prestudy-linux-tsan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1.zip",
+        "archive_bytes": 6630,
+        "archive_sha256": "660c7525dd1de15df8bc26101b0fe9a8d7efb74d8d919060df79b62e2af49d9c",
+        "github_digest_matches": true,
+        "manifest_sha256": "f8fc3574a4fe1ec7f2f8925dfc016d81d6546a9f5bcb2b728a6603f4185a89e6",
+        "junit_sha256": "314c738226731224a6f5c8f69670f284120f7bf3db1a74661749db24a63b6ca2",
+        "exact_runner_verify_inventory": "passed",
+        "exact_runner_verify_results": "passed"
+      },
+      {
+        "lane": "windows-release",
+        "profile": "release",
+        "platform": "Windows-2025Server-10.0.26100-SP0",
+        "status": "passed",
+        "configured_tests": 7,
+        "executed_tests": 7,
+        "promotion_eligible": false,
+        "artifact_id": 11786794789,
+        "artifact_name": "prestudy-windows-release-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1",
+        "archive_path": "archives/prestudy-windows-release-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1.zip",
+        "archive_bytes": 6645,
+        "archive_sha256": "0d3a1eaa1a471d726356653b64f6cb034671e252155aa272a3e2c8d062739d2d",
+        "github_digest_matches": true,
+        "manifest_sha256": "c218eb2000345729acc2f036066f66bea0ea3d31f89be116b90438dce94ca5d3",
+        "junit_sha256": "031bd18fa19654c86930044afbe5f3219631ebe95c4950156ed9880ff0972cc2",
+        "exact_runner_verify_inventory": "passed",
+        "exact_runner_verify_results": "passed"
+      },
+      {
+        "lane": "windows-asan",
+        "profile": "asan",
+        "platform": "Windows-2025Server-10.0.26100-SP0",
+        "status": "passed",
+        "configured_tests": 7,
+        "executed_tests": 7,
+        "promotion_eligible": false,
+        "artifact_id": 11786813585,
+        "artifact_name": "prestudy-windows-asan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1",
+        "archive_path": "archives/prestudy-windows-asan-af01a814f758aa6b02fa1bfed95810d8495ed58e-38341836902-1.zip",
+        "archive_bytes": 7920,
+        "archive_sha256": "23300c431a85a38f3e5efd9bbbccb94d5bc0fc5de27da5442c6a02b508037399",
+        "github_digest_matches": true,
+        "manifest_sha256": "031e031e0bf72cfed14a510b4d69afd3d52103a328b0f40f1af8f04f2f3a4ce3",
+        "junit_sha256": "803c67fb567abfa5bfd6911b7588315eb010f19ae69ab42d8d690ebffb1a5ee3",
+        "exact_runner_verify_inventory": "passed",
+        "exact_runner_verify_results": "passed"
+      }
+    ]
+  },
+  "original_verification_records": [
+    {
+      "workspace_path": "out/project-review/ci-main-af01a81-38341614323/verification-summary.json",
+      "sha256": "3a93e83fff683874ce2aa0e18cae76fd6cb7a11d62488134a1e30789e7a55c78"
+    },
+    {
+      "workspace_path": "out/project-review/prestudy-main-af01a81-38341836902/verification-summary.json",
+      "sha256": "ed56c1fb1eb828ce1a875e866aa43a764a30381c9f55c70eaa8d6ca30d03e7c8"
+    }
+  ]
+}

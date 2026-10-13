@@ -2,7 +2,8 @@
 
 计划重制日期：2026-08-25
 
-当前执行更新：2026-10-13；本机 Windows 与 WSL Ubuntu 24.04 开发验证，正式推广门不变。
+当前执行更新：2026-10-13；本机 Windows 与 WSL Ubuntu 24.04 执行以 DEFER 收束；
+PR #15 已合入，main CI 与预研手动验证完成，weekly 已启用，正式推广门不变。
 
 长期方向：`goal.md`
 
@@ -83,12 +84,12 @@ HP 切片的 `planned -> contract-ready -> implemented -> verified -> integrated
 
 ## 3. 执行里程碑
 
-### HP0：成本账本与固定性能实验室——当前立即执行
+### HP0：成本账本与固定性能实验室——未来推广门，本轮 DEFER 收束
 
 状态：**基础设施已实现，exact-commit fixed-lab 证据 `DEFER`**。已建立 active intent、
 预登记矩阵、suite target、`gamenet.hot_path_cost.v1` runner/validator、普通 CI 静态守卫
-和双平台 self-hosted 手动工作流；当前工作树与 WSL 运行只能形成 development evidence，
-即使覆盖完整场景和十次样本，也不能关闭 HP0。
+和双平台 self-hosted 手动工作流；`41ba8f4` 的本机 Windows/WSL 完整六场景十样本
+development evidence 已完成，本轮资源执行以 `DEFER` 收束，不能关闭正式 HP0。
 
 - 新建默认关闭、非安装的 hot-path benchmark，冻结
   `gamenet.hot_path_cost.v1` 数据格式。
@@ -363,15 +364,15 @@ planned -> contract-ready -> implemented -> verified -> integrated
 - README、roadmap、migration status、assessment、plan 和 evidence ledger 描述同一
   当前事实。
 
-## 7. 当前立即执行
+## 7. 本轮执行收束与未来门禁
 
 2026-10-13 的执行资源已明确为本机 Windows/IOCP 与 WSL Ubuntu 24.04/epoll。
 发送/关闭顺序的代码修复与回归合同已完成：Windows Release 与 WSL Ubuntu 24.04/
 GCC 13.3 Release 各 130/130，Windows 关闭/预算/IOCP 专项 ASan 10/10，Ubuntu 24.04 专项 ASan/UBSan
 与 TSan 各 7/7；Python 工程合同 46/46、Windows/Ubuntu 24.04 的 HP0 行为测试各
 17/17 均通过。随后干净 `41ba8f4` 的隔离检出已执行预研 runner 五条路线：Windows
-Release/ASan 与 WSL Ubuntu 24.04 Release/ASan/TSan 各 7/7、无跳过。独立 weekly/manual
-工作流已新增，须进入默认分支后才能触发；本次 GitHub dispatch 返回 HTTP 404。
+Release/ASan 与 WSL Ubuntu 24.04 Release/ASan/TSan 各 7/7、无跳过。新增 weekly/manual
+工作流在合入前首次 GitHub dispatch 返回 HTTP 404；该结果保留为初始历史证据。
 早先 WSL Ubuntu 22.04/GNU 14.3 的预研 sanitizer 结果继续单独保留。
 
 干净精确提交 `41ba8f4ebeda784ff2952b87e53b48310d4f053f` 的
@@ -382,12 +383,24 @@ Release/ASan 与 WSL Ubuntu 24.04 Release/ASan/TSan 各 7/7、无跳过。独立
 [本次验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。这些证据
 绑定 `41ba8f4`，不自动覆盖后续文档提交；正式性能实验室仍未完成。
 
+[PR #15](https://github.com/YanqingXu/game-net-core/pull/15) 已合入 `main` 的精确提交
+`af01a814f758aa6b02fa1bfed95810d8495ed58e`。该提交的
+[main CI 38341614323](https://github.com/YanqingXu/game-net-core/actions/runs/38341614323)
+通过 7/7；七份 artifact digest 与六 producer 独立验证均通过。
+[预研手动验证 38341836902](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
+通过全部 5/5 路线、35/35 合同，五份 ZIP digest、manifest、inventory 与 JUnit
+独立验证通过且无跳过。weekly 工作流 `382781923` 已启用，API 状态 `active`，
+cron 为 `23 3 * * 1`；实际成功事件为 `workflow_dispatch`，不声明 cron 已执行。
+`af01a81` 证明合入与软件 CI，性能样本仍只绑定 `41ba8f4`。
+
 本地 ledger 已如实标注 `development`、WSL 和 clean 工作树状态；每边 380 项必需样本
 成本未观测，保持 `null` 并记录原因，两边均 `promotion_eligible=false`。
 完整的本地场景与样本量也不能满足
 `--require-fixed-lab`、5%/3% 推广判断或干净精确提交的双平台发布验证。
 2026-10-13 仓库 runner 只读检查返回零个已注册 self-hosted runner；原生 Linux fixed
 runner 与完整 observer 成本仍是正式 HP0 的未满足条件，不能把 WSL 重新标记为原生。
+本轮已按用户决定以 `DEFER` 收束本机资源执行；合入与 weekly 启用/手动验证也已完成。
+以下正式实验室条件保留为未来推广门，不作为本轮继续等待资源的任务。
 
 > **当前性能推广前沿为 HP0：成本账本与固定性能实验室。** schema、默认关闭且非安装的
 > benchmark suite、validator/CI guard 已实现；正式闭环仍需选择干净精确提交，在固定原生
