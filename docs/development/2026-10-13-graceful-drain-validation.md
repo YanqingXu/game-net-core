@@ -172,3 +172,14 @@ wakeup observer, pass preflight, then collect and independently validate both
 same-commit ledgers with `--require-fixed-lab`. The existing full-load gate was
 not weakened. HP1–HP8 integration, default-path switches and release promotion
 remain behind formal HP0 and their original 5%/3% criteria.
+
+## Execution resource decision
+
+After reviewing the completed local baseline and PR evidence, the user explicitly
+chose on 2026-10-13 to use only the current Windows and WSL Ubuntu 24.04 resources
+and retain HP0 as `DEFER`. Native fixed-lab provisioning and formal HP0 closure
+are therefore outside this execution's resource boundary. The unmet conditions
+above remain the conditions for any future promotion; this decision does not
+reclassify development samples or relax those conditions. The current software
+delivery is the graceful-drain fix, validated measurement tools, full local
+development baseline, and isolated prestudy workflow in PR #15.
