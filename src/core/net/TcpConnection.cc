@@ -30,6 +30,12 @@ namespace gamenet::net {
 
 namespace {
 
+// Reservation and close sealing share one modification order. A separate
+// close flag cannot protect an empty-output observation from a late producer.
+constexpr std::size_t kOutputAdmissionSealedBit =
+    std::size_t{1} << (std::numeric_limits<std::size_t>::digits - 1);
+constexpr std::size_t kOutputByteCountMask = kOutputAdmissionSealedBit - 1;
+
 constexpr std::uint64_t kCloseInfoPublished =
     std::uint64_t{1} << 63;
 constexpr std::uint64_t kCloseReasonMask =
@@ -233,7 +239,9 @@ TcpSendResult TcpConnection::trySend(std::string_view message) {
 }
 
 TcpSendResult TcpConnection::trySend(const void* data, std::size_t len) {
-    if (gracefulShutdownRequested_.load(std::memory_order_acquire) ||
+    if ((pendingOutputBytes_.load(std::memory_order_acquire) &
+         kOutputAdmissionSealedBit) != 0 ||
+        gracefulShutdownRequested_.load(std::memory_order_acquire) ||
         forceCloseRequested_.load(std::memory_order_acquire)) {
         return TcpSendResult::Closed;
     }
@@ -339,8 +347,14 @@ PostResult TcpConnection::tryShutdown() {
     if (state == kDisconnected) {
         return PostResult::Shutdown;
     }
+    const auto previous = pendingOutputBytes_.fetch_or(
+        kOutputAdmissionSealedBit, std::memory_order_acq_rel);
     publishCloseInfo(TcpConnectionCloseReason::GracefulShutdown);
-    gracefulShutdownRequested_.store(true, std::memory_order_release);
+    // Only the first close request creates a half-close obligation. Repeated
+    // requests must not reopen it after the owner has completed shutdownWrite.
+    if ((previous & kOutputAdmissionSealedBit) == 0) {
+        gracefulShutdownRequested_.store(true, std::memory_order_release);
+    }
     if (loop_->isInLoopThread()) {
         driveLifecycleInLoop();
         return PostResult::Accepted;
@@ -353,6 +367,8 @@ PostResult TcpConnection::tryForceClose() {
     if (state == kDisconnected) {
         return PostResult::Shutdown;
     }
+    pendingOutputBytes_.fetch_or(
+        kOutputAdmissionSealedBit, std::memory_order_acq_rel);
     publishCloseInfo(TcpConnectionCloseReason::ForcedShutdown);
     forceCloseRequested_.store(true, std::memory_order_release);
     if (loop_->isInLoopThread()) {
@@ -430,14 +446,16 @@ void TcpConnection::setBackpressureOptions(TcpConnectionBackpressureOptions opti
 }
 
 std::size_t TcpConnection::pendingOutputBytes() const noexcept {
-    return pendingOutputBytes_.load(std::memory_order_relaxed);
+    return pendingOutputBytes_.load(std::memory_order_relaxed) &
+        kOutputByteCountMask;
 }
 
 TcpOutputMemoryBudgetSnapshot
 TcpConnection::outputMemorySnapshot() const noexcept {
     return TcpOutputMemoryBudgetSnapshot{
         .pendingBytes =
-            pendingOutputBytes_.load(std::memory_order_acquire),
+            pendingOutputBytes_.load(std::memory_order_acquire) &
+            kOutputByteCountMask,
         .peakPendingBytes =
             peakPendingOutputBytes_.load(std::memory_order_relaxed),
         .rejectedReservations =
@@ -774,6 +792,9 @@ void TcpConnection::beginCloseInLoop() {
     if (state_.load(std::memory_order_relaxed) == kDisconnected) {
         return;
     }
+    pendingOutputBytes_.fetch_or(
+        kOutputAdmissionSealedBit, std::memory_order_acq_rel);
+    gracefulShutdownRequested_.store(false, std::memory_order_release);
     if (!closeInfo()) {
         publishCloseInfo(TcpConnectionCloseReason::InternalError);
     }
@@ -995,8 +1016,12 @@ void TcpConnection::sendReservedInLoop(
 
 void TcpConnection::shutdownInLoop() {
     loop_->assertInLoopThread();
-    if (!socketClosed() && !channel_->isWriting()) {
+    if (gracefulShutdownRequested_.load(std::memory_order_acquire) &&
+        !socketClosed() && !channel_->isWriting() &&
+        (pendingOutputBytes_.load(std::memory_order_acquire) &
+         kOutputByteCountMask) == 0) {
         socket_->shutdownWrite();
+        gracefulShutdownRequested_.store(false, std::memory_order_release);
     }
 }
 
@@ -1010,9 +1035,8 @@ void TcpConnection::forceCloseInLoop() {
 
 void TcpConnection::driveLifecycleInLoop() {
     loop_->assertInLoopThread();
-    // Keep each request published until the owner state has advanced. Clearing
-    // it first would briefly reopen cross-thread output admission while the
-    // connection still reports kConnected.
+    // The permanent admission seal outlives either request flag. Graceful work
+    // stays pending across lifecycle visits until every accepted byte settles.
     if (forceCloseRequested_.load(std::memory_order_acquire)) {
         forceCloseInLoop();
         forceCloseRequested_.store(false, std::memory_order_release);
@@ -1020,9 +1044,10 @@ void TcpConnection::driveLifecycleInLoop() {
     if (gracefulShutdownRequested_.load(std::memory_order_acquire)) {
         if (state_.load(std::memory_order_relaxed) == kConnected) {
             setState(kDisconnecting);
+        }
+        if (state_.load(std::memory_order_relaxed) == kDisconnecting) {
             shutdownInLoop();
         }
-        gracefulShutdownRequested_.store(false, std::memory_order_release);
     }
 }
 
@@ -1089,9 +1114,15 @@ void TcpConnection::recordDroppedNotification() noexcept {
 
 TcpSendResult TcpConnection::tryReserveOutputBytes(
     std::size_t bytes) noexcept {
-    const std::size_t limit = backpressureOptions_.hardLimitBytes;
+    const std::size_t limit =
+        backpressureOptions_.hardLimitBytes < kOutputByteCountMask
+        ? backpressureOptions_.hardLimitBytes
+        : kOutputByteCountMask;
     std::size_t current = pendingOutputBytes_.load(std::memory_order_relaxed);
     for (;;) {
+        if ((current & kOutputAdmissionSealedBit) != 0) {
+            return TcpSendResult::Closed;
+        }
         if (outputAdmissionOverloaded_.load(
                 std::memory_order_acquire)) {
             if (current > backpressureOptions_.lowWaterMarkBytes) {
@@ -1155,7 +1186,8 @@ TcpSendResult TcpConnection::tryReserveOutputBytes(
     }
 
     const std::size_t candidate =
-        pendingOutputBytes_.load(std::memory_order_relaxed);
+        pendingOutputBytes_.load(std::memory_order_relaxed) &
+        kOutputByteCountMask;
     std::size_t peak =
         peakPendingOutputBytes_.load(std::memory_order_relaxed);
     while (peak < candidate &&
@@ -1188,12 +1220,20 @@ void TcpConnection::releaseConnectionOutputBytes(
     std::size_t bytes) noexcept {
     const std::size_t previous =
         pendingOutputBytes_.fetch_sub(bytes, std::memory_order_acq_rel);
-    if (previous < bytes) {
+    const std::size_t previousBytes = previous & kOutputByteCountMask;
+    if (previousBytes < bytes) {
         LOG_FATAL << "TcpConnection output reservation underflow on " << name_;
     }
-    if (previous - bytes <= backpressureOptions_.lowWaterMarkBytes) {
+    if (previousBytes - bytes <= backpressureOptions_.lowWaterMarkBytes) {
         outputAdmissionOverloaded_.store(
             false, std::memory_order_release);
+    }
+    // Includes direct-write completion and producer-side reservation rollback.
+    // Signal rather than drive inline: write/backpressure callbacks may still
+    // be on the owner stack, and normal functor admission may be saturated.
+    if ((previous & kOutputAdmissionSealedBit) != 0 &&
+        previousBytes == bytes) {
+        (void)signalLifecycle();
     }
 }
 
