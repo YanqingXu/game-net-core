@@ -332,8 +332,10 @@ Runtime Model
 - 2026-08-25 已在治理基线 `202bf9f993575d144c4c440a3972dd80733da0a7` 打开
   HP0–HP8 性能计划。当前唯一性能推广与集成前沿是 HP0：schema、runner、validator
   和隔离预研已具备，但同一干净精确提交的原生 Linux/epoll 与 Windows/IOCP
-  fixed-lab 账本仍为 `DEFER`。当前先使用用户指定的本机 Windows 与 WSL Ubuntu
-  24.04 建立完整六场景 development 基线；WSL、dirty 工作树或缺失 observer 成本
+  fixed-lab 账本仍为 `DEFER`。干净精确提交 `41ba8f4ebeda784ff2952b87e53b48310d4f053f`
+  已完成本机 Windows 与 WSL Ubuntu 24.04 六场景 development 基线，每场景各一次
+  warmup 与十次记录样本，独立验证通过；每边缺 380 项必需样本成本，推广资格为 false。
+  WSL、dirty 工作树或缺失 observer 成本
   不能替代正式门禁。HP1–HP8 development 预研不等于集成或发布完成，正式门禁和
   顺序以 `plan.md` 为准；
 
@@ -385,7 +387,10 @@ Runtime Model
   payload。代码修复和回归合同已完成，当前工作树 Windows Release 与 WSL Ubuntu
   24.04/GCC 13.3 Release 各 130/130、Windows 关闭/预算/IOCP 专项 ASan 10/10、Ubuntu 24.04 专项
   ASan/UBSan 与 TSan 各 7/7 通过；Python 工程合同 46/46 和双本地环境 HP0 行为测试
-  各 17/17 通过。exact-commit CI 与完整六场景十样本开发基线尚未完成。直接合同为
+  各 17/17 通过。修复提交 `41ba8f4` 的
+  [CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
+  已通过 7/7；完整开发基线也已形成，证据不自动归属于后续文档提交。
+  详见[验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。直接合同为
   `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`；
   此正确性工作先于性能推广，WSL 功能证据不替代原生 Linux fixed-lab；
 - 四个 TCP Runtime Profile 已完成垂直合同；M3 真实网关证据后的第二次跨 Profile

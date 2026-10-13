@@ -369,16 +369,22 @@ planned -> contract-ready -> implemented -> verified -> integrated
 发送/关闭顺序的代码修复与回归合同已完成：Windows Release 与 WSL Ubuntu 24.04/
 GCC 13.3 Release 各 130/130，Windows 关闭/预算/IOCP 专项 ASan 10/10，Ubuntu 24.04 专项 ASan/UBSan
 与 TSan 各 7/7；Python 工程合同 46/46、Windows/Ubuntu 24.04 的 HP0 行为测试各
-17/17 均通过。隔离预研另有 Windows Release 7/7、早先默认 WSL Ubuntu 22.04/
-GNU 14.3 的 ASan 7/7 与 TSan 7/7；这些结果不冒充 Ubuntu 24.04 Core 验证。
+17/17 均通过。随后干净 `41ba8f4` 的隔离检出已执行预研 runner 五条路线：Windows
+Release/ASan 与 WSL Ubuntu 24.04 Release/ASan/TSan 各 7/7、无跳过。独立 weekly/manual
+工作流已新增，须进入默认分支后才能触发；本次 GitHub dispatch 返回 HTTP 404。
+早先 WSL Ubuntu 22.04/GNU 14.3 的预研 sanitizer 结果继续单独保留。
 
-下一步在文档与源码定稿后选择干净提交，执行 exact-commit CI，并在上述本机 Windows
-与 Ubuntu 24.04 环境运行 HP0 预登记的全部六个场景：每场景一次不计入样本的 warmup
-加十次交错 development 样本，保存原始输出、命令、机器和二进制身份并执行 validator。
-当前这一步不等待另行提供外部 runner，也不声称已完成正式性能实验室。
+干净精确提交 `41ba8f4ebeda784ff2952b87e53b48310d4f053f` 的
+[CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
+已通过 7/7。同提交在上述本机 Windows 与 Ubuntu 24.04 环境完成 HP0 原始六场景：
+每场景一次不计入统计的 warmup 加十次交错 development 样本，10k 容量未缩减，
+共保留 132 次原始子执行。两份 ledger 已独立验证，完整统计与身份见
+[本次验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。这些证据
+绑定 `41ba8f4`，不自动覆盖后续文档提交；正式性能实验室仍未完成。
 
-本地 ledger 必须如实标注 `development`、WSL 和工作树状态；尚未观测的成本保持
-`null` 并记录原因，不使用合成零值。完整的本地场景与样本量也不能满足
+本地 ledger 已如实标注 `development`、WSL 和 clean 工作树状态；每边 380 项必需样本
+成本未观测，保持 `null` 并记录原因，两边均 `promotion_eligible=false`。
+完整的本地场景与样本量也不能满足
 `--require-fixed-lab`、5%/3% 推广判断或干净精确提交的双平台发布验证。
 2026-10-13 仓库 runner 只读检查返回零个已注册 self-hosted runner；原生 Linux fixed
 runner 与完整 observer 成本仍是正式 HP0 的未满足条件，不能把 WSL 重新标记为原生。

@@ -1,0 +1,1180 @@
+{
+  "schema": "gamenet.local_hot_path_summary.v1",
+  "status": "validated-development-baseline",
+  "evidence_class": "development",
+  "promotion_eligible": false,
+  "exact_commit_sha": "41ba8f4ebeda784ff2952b87e53b48310d4f053f",
+  "inventory_sha256": "d7cda9267ed8a349d46d643f8a727656b5ecc21486717c511536bf5e4aed37fe",
+  "statistical_scope": "Ten recorded samples per scenario; warmups excluded from statistics.",
+  "comparison_boundary": "These are separate OS/environment baselines, not a paired candidate comparison or a backend performance ranking.",
+  "formal_hp0_status": "DEFER",
+  "formal_limitations": [
+    "No configured cost observer; each ledger has 380 missing required sample-cost entries.",
+    "Linux evidence executes under WSL Ubuntu 24.04, not native Linux.",
+    "CPU affinity and frequency policy are not fixed reviewed lab controls.",
+    "No 5%/3% promotion or default-path integration decision is made."
+  ],
+  "platforms": {
+    "windows": {
+      "ledger_path": "out/project-review/hp0-local-41ba8f4/windows/hot-path-cost.json",
+      "ledger_sha256": "9917591eef4ce8d8beb0a8a9f06d9b2e937ae09e3f027a8672aa301855625260",
+      "inventory_sha256": "d7cda9267ed8a349d46d643f8a727656b5ecc21486717c511536bf5e4aed37fe",
+      "identity": {
+        "commit_sha": "41ba8f4ebeda784ff2952b87e53b48310d4f053f",
+        "working_tree": "clean",
+        "platform": "windows",
+        "backend": "iocp",
+        "build_type": "Release",
+        "native_runner": true,
+        "wsl": false,
+        "runner_id": "local-windows-i5-14600k",
+        "source_root": "G:\\github\\game-net-core"
+      },
+      "environment": {
+        "cpu_model": "Intel(R) Core(TM) i5-14600K",
+        "cpu_affinity": "inherited mask 0xfffff; logical CPUs 0-19; no pinning",
+        "frequency_policy": "Balanced GUID 381b4222-f694-41f0-9685-ff5bb260df2e; unmanaged frequency",
+        "compiler": "MSVC 19.51.36256.0 (Visual Studio 18 2026), Release",
+        "command_context": "local native Windows original six HP0 scenarios after WSL Ubuntu24 sampling; no lab observer"
+      },
+      "executables": {
+        "capacity": {
+          "path": "G:\\github\\game-net-core\\out\\build\\local-hp0-windows\\benchmarks\\Release\\gamenet_capacity_profile.exe",
+          "sha256": "6087a673a0df5a63c08577bc353c76479220b346acc8bf7d03c61049ff95b307"
+        },
+        "core": {
+          "path": "G:\\github\\game-net-core\\out\\build\\local-hp0-windows\\benchmarks\\Release\\gamenet_core_benchmark.exe",
+          "sha256": "07356008b88570e1fa685baac372fab9243359cca37231675c964fe1f52ad509"
+        },
+        "phase4": {
+          "path": "G:\\github\\game-net-core\\out\\build\\local-hp0-windows\\benchmarks\\Release\\gamenet_phase4_benchmark.exe",
+          "sha256": "173feacf8c5377478a081d9099434295638098736db1a0b2324db5dfac082cdf"
+        },
+        "queued": {
+          "path": "G:\\github\\game-net-core\\out\\build\\local-hp0-windows\\benchmarks\\Release\\gamenet_multi_io_queued_benchmark.exe",
+          "sha256": "7ae38270bc998cfed6c6415bd8f82989763db660d914a761c8ee7203f2c04a02"
+        }
+      },
+      "observer": null,
+      "sampling": {
+        "warmups_per_scenario": 1,
+        "recorded_samples_per_scenario": 10,
+        "order": "scenario-round-robin"
+      },
+      "validation": {
+        "validator": "tools/validate_hot_path_cost.py",
+        "validator_sha256": "408e90f4634802b10515aef6a9adbb979cb324c74685a547d44b4b59a0a3de7d",
+        "development_passed": true,
+        "recorded_raw_hashes_and_parameters_verified": true,
+        "raw_stdout_and_command_sidecars_independently_verified": true,
+        "warmup_semantics_and_parameters_independently_verified": true
+      },
+      "promotion_eligible": false,
+      "scenarios": [
+        {
+          "key": "framing.callback-copy",
+          "baseline": "callback+copy",
+          "arguments": [
+            "--scenario",
+            "framing",
+            "--messages",
+            "250000",
+            "--payload",
+            "256",
+            "--threads",
+            "1",
+            "--batch",
+            "64",
+            "--fanout",
+            "1",
+            "--tick-us",
+            "1000",
+            "--timeout-ms",
+            "30000"
+          ],
+          "child_parameters": {
+            "messages": 250000,
+            "payload_bytes": 256,
+            "threads": 1,
+            "batch_size": 64,
+            "fanout": 1,
+            "tick_interval_us": 1000,
+            "timeout_ms": 30000
+          },
+          "primary": {
+            "name": "operations_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.operations_per_second",
+            "sample_count": 10,
+            "median": 7140204.995924,
+            "min": 6446921.208308,
+            "max": 9965002.909781
+          },
+          "guardrails": [
+            {
+              "name": "throughput_mib_per_second",
+              "direction": "higher",
+              "raw_source": "measurements.throughput_mib_per_second",
+              "sample_count": 10,
+              "median": 1770.4518305000001,
+              "min": 1598.548426,
+              "max": 2470.875508
+            }
+          ],
+          "missing_required_cost_entries": 50,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10
+          }
+        },
+        {
+          "key": "network-logic.callback-mutex",
+          "baseline": "callback+mutex",
+          "arguments": [
+            "5000",
+            "256",
+            "4"
+          ],
+          "child_parameters": {
+            "arguments": [
+              "5000",
+              "256",
+              "4"
+            ],
+            "clients": 4,
+            "io_threads": 2,
+            "messages_per_client": 5000,
+            "payload_bytes": 256
+          },
+          "primary": {
+            "name": "messages_per_second",
+            "direction": "higher",
+            "raw_source": "messages_per_second",
+            "sample_count": 10,
+            "median": 353719.855,
+            "min": 311765.889,
+            "max": 461271.634
+          },
+          "guardrails": [
+            {
+              "name": "network_to_logic_p99_us",
+              "direction": "lower",
+              "raw_source": "network_to_logic_p99_us",
+              "sample_count": 10,
+              "median": 128.0,
+              "min": 64,
+              "max": 128
+            },
+            {
+              "name": "network_to_logic_p999_us",
+              "direction": "lower",
+              "raw_source": "network_to_logic_p999_us",
+              "sample_count": 10,
+              "median": 128.0,
+              "min": 64,
+              "max": 512
+            },
+            {
+              "name": "logic_to_network_p99_us",
+              "direction": "lower",
+              "raw_source": "logic_to_network_p99_us",
+              "sample_count": 10,
+              "median": 64.0,
+              "min": 64,
+              "max": 128
+            },
+            {
+              "name": "logic_to_network_p999_us",
+              "direction": "lower",
+              "raw_source": "logic_to_network_p999_us",
+              "sample_count": 10,
+              "median": 128.0,
+              "min": 64,
+              "max": 256
+            },
+            {
+              "name": "working_set_after_bytes",
+              "direction": "lower",
+              "raw_source": "working_set_after_bytes",
+              "sample_count": 10,
+              "median": 5582848.0,
+              "min": 5414912,
+              "max": 5771264
+            },
+            {
+              "name": "drain_callbacks",
+              "direction": "lower",
+              "raw_source": "drain_callbacks",
+              "sample_count": 10,
+              "median": 868.5,
+              "min": 740,
+              "max": 1085
+            },
+            {
+              "name": "shutdown_us",
+              "direction": "lower",
+              "raw_source": "shutdown_us",
+              "sample_count": 10,
+              "median": 1939.5,
+              "min": 1082,
+              "max": 2178
+            }
+          ],
+          "missing_required_cost_entries": 70,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10,
+            "wakeups": 10
+          }
+        },
+        {
+          "key": "readiness-send.callback-borrowed",
+          "baseline": "callback+borrowed",
+          "arguments": [
+            "--scenario",
+            "echo",
+            "--connections",
+            "16",
+            "--threads",
+            "4",
+            "--messages",
+            "5000",
+            "--payload",
+            "256",
+            "--settle-ms",
+            "500",
+            "--timeout-ms",
+            "60000"
+          ],
+          "child_parameters": {
+            "connections": 16,
+            "connect_concurrency": 1,
+            "iocp_accept_depth": 4,
+            "preload_before_loop": false,
+            "event_loop_threads": 4,
+            "messages_per_connection": 5000,
+            "payload_bytes": 256,
+            "churn_target_per_second": 1000,
+            "churn_duration_ms": 5000,
+            "churn_connect_timeout_ms": 1000,
+            "slow_bytes_per_connection": 8388608,
+            "low_water_bytes": 32768,
+            "high_water_bytes": 65536,
+            "hard_limit_bytes": 16777216,
+            "max_input_buffer_bytes": 2097152,
+            "settle_ms": 500,
+            "timeout_ms": 60000
+          },
+          "primary": {
+            "name": "messages_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.messages_per_second",
+            "sample_count": 10,
+            "median": 284956.1559499555,
+            "min": 246943.533582932,
+            "max": 300242.821381793
+          },
+          "guardrails": [
+            {
+              "name": "p99_latency_us",
+              "direction": "lower",
+              "raw_source": "measurements.p99_latency_us",
+              "sample_count": 10,
+              "median": 129.14999999999998,
+              "min": 111.4,
+              "max": 315.5
+            },
+            {
+              "name": "p999_latency_us",
+              "direction": "lower",
+              "raw_source": "measurements.p999_latency_us",
+              "sample_count": 10,
+              "median": 229.60000000000002,
+              "min": 143.4,
+              "max": 825.0
+            },
+            {
+              "name": "working_set_after_bytes",
+              "direction": "lower",
+              "raw_source": "measurements.working_set_after_bytes",
+              "sample_count": 10,
+              "median": 4898816.0,
+              "min": 4890624,
+              "max": 4960256
+            },
+            {
+              "name": "server_stop_seconds",
+              "direction": "lower",
+              "raw_source": "measurements.server_stop_seconds",
+              "sample_count": 10,
+              "median": 0.00034505,
+              "min": 0.0003214,
+              "max": 0.0004404
+            }
+          ],
+          "missing_required_cost_entries": 60,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10
+          }
+        },
+        {
+          "key": "broadcast.current-owner-tasks",
+          "baseline": "callback+owner-tasks",
+          "arguments": [
+            "--scenario",
+            "broadcast-fanout",
+            "--messages",
+            "32",
+            "--payload",
+            "256",
+            "--threads",
+            "4",
+            "--batch",
+            "64",
+            "--fanout",
+            "4096",
+            "--tick-us",
+            "1000",
+            "--timeout-ms",
+            "60000"
+          ],
+          "child_parameters": {
+            "messages": 32,
+            "payload_bytes": 256,
+            "threads": 4,
+            "batch_size": 64,
+            "fanout": 4096,
+            "tick_interval_us": 1000,
+            "timeout_ms": 60000
+          },
+          "primary": {
+            "name": "operations_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.operations_per_second",
+            "sample_count": 10,
+            "median": 3731924.374085,
+            "min": 3006231.637083,
+            "max": 4018394.751364
+          },
+          "guardrails": [
+            {
+              "name": "fanout_completion_p99_us",
+              "direction": "lower",
+              "raw_source": "measurements.broadcast_fanout_completion_p99_us",
+              "sample_count": 10,
+              "median": 3512.7,
+              "min": 1084.6,
+              "max": 11754.5
+            },
+            {
+              "name": "endpoint_latency_p99_us",
+              "direction": "lower",
+              "raw_source": "measurements.broadcast_endpoint_latency_p99_us",
+              "sample_count": 10,
+              "median": 1067.8,
+              "min": 1045.3,
+              "max": 4791.3
+            },
+            {
+              "name": "working_set_peak_bytes",
+              "direction": "lower",
+              "raw_source": "measurements.working_set_peak_bytes",
+              "sample_count": 10,
+              "median": 7622656.0,
+              "min": 7548928,
+              "max": 7819264
+            }
+          ],
+          "missing_required_cost_entries": 80,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10,
+            "wakeups": 10,
+            "generic_posts": 10
+          }
+        },
+        {
+          "key": "connection-capacity.current",
+          "baseline": "callback+current-storage",
+          "arguments": [
+            "--scenario",
+            "connections",
+            "--connections",
+            "10000",
+            "--threads",
+            "4",
+            "--settle-ms",
+            "2000",
+            "--timeout-ms",
+            "120000"
+          ],
+          "child_parameters": {
+            "connections": 10000,
+            "connect_concurrency": 1,
+            "iocp_accept_depth": 4,
+            "preload_before_loop": false,
+            "event_loop_threads": 4,
+            "messages_per_connection": 1000,
+            "payload_bytes": 256,
+            "churn_target_per_second": 1000,
+            "churn_duration_ms": 5000,
+            "churn_connect_timeout_ms": 1000,
+            "slow_bytes_per_connection": 8388608,
+            "low_water_bytes": 32768,
+            "high_water_bytes": 65536,
+            "hard_limit_bytes": 16777216,
+            "max_input_buffer_bytes": 2097152,
+            "settle_ms": 2000,
+            "timeout_ms": 120000
+          },
+          "primary": {
+            "name": "connection_establish_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.connection_establish_per_second",
+            "sample_count": 10,
+            "median": 17145.467720578497,
+            "min": 16702.395875176,
+            "max": 17338.417650925
+          },
+          "guardrails": [
+            {
+              "name": "approx_bytes_per_connection",
+              "direction": "lower",
+              "raw_source": "measurements.approx_bytes_per_connection",
+              "sample_count": 10,
+              "median": 10691.7888,
+              "min": 10642.2272,
+              "max": 10771.6608
+            },
+            {
+              "name": "connection_close_seconds",
+              "direction": "lower",
+              "raw_source": "measurements.connection_close_seconds",
+              "sample_count": 10,
+              "median": 0.14751145,
+              "min": 0.1387896,
+              "max": 0.1654341
+            },
+            {
+              "name": "server_stop_seconds",
+              "direction": "lower",
+              "raw_source": "measurements.server_stop_seconds",
+              "sample_count": 10,
+              "median": 0.000673,
+              "min": 0.000505,
+              "max": 0.0018222
+            }
+          ],
+          "missing_required_cost_entries": 50,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "syscalls": 10
+          }
+        },
+        {
+          "key": "overload-recovery.current",
+          "baseline": "callback+hierarchical-budgets",
+          "arguments": [
+            "--scenario",
+            "slow-broadcast-recovery",
+            "--connections",
+            "100",
+            "--threads",
+            "4",
+            "--messages",
+            "10",
+            "--payload-bytes",
+            "32768",
+            "--low-water-bytes",
+            "32768",
+            "--high-water-bytes",
+            "65536",
+            "--hard-limit-bytes",
+            "262144",
+            "--server-send-buffer-bytes",
+            "4096",
+            "--recovery-threshold-bytes",
+            "0",
+            "--pressure-settle-ms",
+            "500",
+            "--recovery-stable-ms",
+            "250",
+            "--timeout-ms",
+            "120000",
+            "--iocp-accept-depth",
+            "32"
+          ],
+          "child_parameters": {
+            "connections": 100,
+            "threads": 4,
+            "messages": 10,
+            "payload_bytes": 32768,
+            "server_send_buffer_bytes": 4096,
+            "pressure_settle_ms": 500,
+            "recovery_stable_ms": 250,
+            "timeout_ms": 120000,
+            "iocp_accept_depth": 32
+          },
+          "primary": {
+            "name": "recovery_elapsed_ms",
+            "direction": "lower",
+            "raw_source": "recovery.elapsed_ms",
+            "sample_count": 10,
+            "median": 272.2144,
+            "min": 264.9374,
+            "max": 315.46
+          },
+          "guardrails": [
+            {
+              "name": "pending_peak_bytes",
+              "direction": "lower",
+              "raw_source": "pressure.pending_peak_bytes",
+              "sample_count": 10,
+              "median": 26214400.0,
+              "min": 26214400,
+              "max": 26214400
+            },
+            {
+              "name": "working_set_peak_bytes",
+              "direction": "lower",
+              "raw_source": "process.working_set_peak_bytes",
+              "sample_count": 10,
+              "median": 31467520.0,
+              "min": 30396416,
+              "max": 32382976
+            },
+            {
+              "name": "teardown_released",
+              "direction": "exact",
+              "raw_source": "checks.teardown_released",
+              "sample_count": 10,
+              "median": true,
+              "min": true,
+              "max": true
+            }
+          ],
+          "missing_required_cost_entries": 70,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10,
+            "shutdown_convergence_us": 10
+          }
+        }
+      ],
+      "unknown_required_cost_count": 380,
+      "raw_counts": {
+        "child_executions_with_original_stdout_stderr_and_command": 66,
+        "warmups": 6,
+        "recorded_samples": 60,
+        "execution_sidecar_files": 198
+      },
+      "raw_sidecar_manifest_sha256": "fc4b0ef6518c4d0da343e795eeb791e6e567299c876ef430469448ce882e7526",
+      "raw_sidecar_manifest_hash_scheme": "SHA256 of compact sorted-key JSON array of {path,sha256}, sorted by platform-relative POSIX path, UTF-8"
+    },
+    "linux": {
+      "ledger_path": "out/project-review/hp0-local-41ba8f4/linux/hot-path-cost.json",
+      "ledger_sha256": "19d6cf216f2fac40de1aaebca17cf53563b6926f6978c6814c1fb788c7bd0199",
+      "inventory_sha256": "d7cda9267ed8a349d46d643f8a727656b5ecc21486717c511536bf5e4aed37fe",
+      "identity": {
+        "commit_sha": "41ba8f4ebeda784ff2952b87e53b48310d4f053f",
+        "working_tree": "clean",
+        "platform": "linux",
+        "backend": "epoll",
+        "build_type": "Release",
+        "native_runner": false,
+        "wsl": true,
+        "runner_id": "local-ubuntu24-wsl",
+        "source_root": "/mnt/g/github/game-net-core"
+      },
+      "environment": {
+        "cpu_model": "Intel(R) Core(TM) i5-14600K",
+        "cpu_affinity": "0,1,2,3,4,5,6,7,8,9,10,11",
+        "frequency_policy": "unmanaged",
+        "compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+        "command_context": "local-development-full-inventory; child soft RLIMIT_NOFILE=65536"
+      },
+      "executables": {
+        "capacity": {
+          "path": "/home/xyq/gamenet-followup-builds/hp0/benchmarks/gamenet_capacity_profile",
+          "sha256": "4ce4e1b0fb308391e5ef0defa52fb5fb5f95dd83ddecb7a5504bf39d28f45591"
+        },
+        "core": {
+          "path": "/home/xyq/gamenet-followup-builds/hp0/benchmarks/gamenet_core_benchmark",
+          "sha256": "5e1e9a436e2baf1336941f02d59ba0c6c4819dd8416ec942846c2f33ba62b544"
+        },
+        "phase4": {
+          "path": "/home/xyq/gamenet-followup-builds/hp0/benchmarks/gamenet_phase4_benchmark",
+          "sha256": "72f4d20b7b58ed036f89421db82f83649c6aa571138bfe7501a5f4fd997909f7"
+        },
+        "queued": {
+          "path": "/home/xyq/gamenet-followup-builds/hp0/benchmarks/gamenet_multi_io_queued_benchmark",
+          "sha256": "6e6d7054bd0d22556ad320997b0238af418dc3b7cb7e2ff88e1d6c02e909268b"
+        }
+      },
+      "observer": null,
+      "sampling": {
+        "warmups_per_scenario": 1,
+        "recorded_samples_per_scenario": 10,
+        "order": "scenario-round-robin"
+      },
+      "validation": {
+        "validator": "tools/validate_hot_path_cost.py",
+        "validator_sha256": "408e90f4634802b10515aef6a9adbb979cb324c74685a547d44b4b59a0a3de7d",
+        "development_passed": true,
+        "recorded_raw_hashes_and_parameters_verified": true,
+        "raw_stdout_and_command_sidecars_independently_verified": true,
+        "warmup_semantics_and_parameters_independently_verified": true
+      },
+      "promotion_eligible": false,
+      "scenarios": [
+        {
+          "key": "framing.callback-copy",
+          "baseline": "callback+copy",
+          "arguments": [
+            "--scenario",
+            "framing",
+            "--messages",
+            "250000",
+            "--payload",
+            "256",
+            "--threads",
+            "1",
+            "--batch",
+            "64",
+            "--fanout",
+            "1",
+            "--tick-us",
+            "1000",
+            "--timeout-ms",
+            "30000"
+          ],
+          "child_parameters": {
+            "messages": 250000,
+            "payload_bytes": 256,
+            "threads": 1,
+            "batch_size": 64,
+            "fanout": 1,
+            "tick_interval_us": 1000,
+            "timeout_ms": 30000
+          },
+          "primary": {
+            "name": "operations_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.operations_per_second",
+            "sample_count": 10,
+            "median": 36202976.5506285,
+            "min": 33849360.057538,
+            "max": 37239509.630137
+          },
+          "guardrails": [
+            {
+              "name": "throughput_mib_per_second",
+              "direction": "higher",
+              "raw_source": "measurements.throughput_mib_per_second",
+              "sample_count": 10,
+              "median": 8976.7207175,
+              "min": 8393.128982,
+              "max": 9233.734611
+            }
+          ],
+          "missing_required_cost_entries": 50,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10
+          }
+        },
+        {
+          "key": "network-logic.callback-mutex",
+          "baseline": "callback+mutex",
+          "arguments": [
+            "5000",
+            "256",
+            "4"
+          ],
+          "child_parameters": {
+            "arguments": [
+              "5000",
+              "256",
+              "4"
+            ],
+            "clients": 4,
+            "io_threads": 2,
+            "messages_per_client": 5000,
+            "payload_bytes": 256
+          },
+          "primary": {
+            "name": "messages_per_second",
+            "direction": "higher",
+            "raw_source": "messages_per_second",
+            "sample_count": 10,
+            "median": 5567.3285,
+            "min": 5486.529,
+            "max": 5630.648
+          },
+          "guardrails": [
+            {
+              "name": "network_to_logic_p99_us",
+              "direction": "lower",
+              "raw_source": "network_to_logic_p99_us",
+              "sample_count": 10,
+              "median": 256.0,
+              "min": 128,
+              "max": 256
+            },
+            {
+              "name": "network_to_logic_p999_us",
+              "direction": "lower",
+              "raw_source": "network_to_logic_p999_us",
+              "sample_count": 10,
+              "median": 256.0,
+              "min": 256,
+              "max": 512
+            },
+            {
+              "name": "logic_to_network_p99_us",
+              "direction": "lower",
+              "raw_source": "logic_to_network_p99_us",
+              "sample_count": 10,
+              "median": 128.0,
+              "min": 128,
+              "max": 256
+            },
+            {
+              "name": "logic_to_network_p999_us",
+              "direction": "lower",
+              "raw_source": "logic_to_network_p999_us",
+              "sample_count": 10,
+              "median": 256.0,
+              "min": 128,
+              "max": 256
+            },
+            {
+              "name": "working_set_after_bytes",
+              "direction": "lower",
+              "raw_source": "working_set_after_bytes",
+              "sample_count": 10,
+              "median": 5097472.0,
+              "min": 5050368,
+              "max": 5140480
+            },
+            {
+              "name": "drain_callbacks",
+              "direction": "lower",
+              "raw_source": "drain_callbacks",
+              "sample_count": 10,
+              "median": 290.5,
+              "min": 268,
+              "max": 297
+            },
+            {
+              "name": "shutdown_us",
+              "direction": "lower",
+              "raw_source": "shutdown_us",
+              "sample_count": 10,
+              "median": 1281.5,
+              "min": 1194,
+              "max": 1331
+            }
+          ],
+          "missing_required_cost_entries": 70,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10,
+            "wakeups": 10
+          }
+        },
+        {
+          "key": "readiness-send.callback-borrowed",
+          "baseline": "callback+borrowed",
+          "arguments": [
+            "--scenario",
+            "echo",
+            "--connections",
+            "16",
+            "--threads",
+            "4",
+            "--messages",
+            "5000",
+            "--payload",
+            "256",
+            "--settle-ms",
+            "500",
+            "--timeout-ms",
+            "60000"
+          ],
+          "child_parameters": {
+            "connections": 16,
+            "connect_concurrency": 1,
+            "iocp_accept_depth": 4,
+            "preload_before_loop": false,
+            "event_loop_threads": 4,
+            "messages_per_connection": 5000,
+            "payload_bytes": 256,
+            "churn_target_per_second": 1000,
+            "churn_duration_ms": 5000,
+            "churn_connect_timeout_ms": 1000,
+            "slow_bytes_per_connection": 8388608,
+            "low_water_bytes": 32768,
+            "high_water_bytes": 65536,
+            "hard_limit_bytes": 16777216,
+            "max_input_buffer_bytes": 2097152,
+            "settle_ms": 500,
+            "timeout_ms": 60000
+          },
+          "primary": {
+            "name": "messages_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.messages_per_second",
+            "sample_count": 10,
+            "median": 277998.4514643515,
+            "min": 263966.117309182,
+            "max": 298050.479013876
+          },
+          "guardrails": [
+            {
+              "name": "p99_latency_us",
+              "direction": "lower",
+              "raw_source": "measurements.p99_latency_us",
+              "sample_count": 10,
+              "median": 193.3005,
+              "min": 175.908,
+              "max": 215.196
+            },
+            {
+              "name": "p999_latency_us",
+              "direction": "lower",
+              "raw_source": "measurements.p999_latency_us",
+              "sample_count": 10,
+              "median": 449.6365,
+              "min": 365.842,
+              "max": 613.781
+            },
+            {
+              "name": "working_set_after_bytes",
+              "direction": "lower",
+              "raw_source": "measurements.working_set_after_bytes",
+              "sample_count": 10,
+              "median": 4444160.0,
+              "min": 4395008,
+              "max": 4485120
+            },
+            {
+              "name": "server_stop_seconds",
+              "direction": "lower",
+              "raw_source": "measurements.server_stop_seconds",
+              "sample_count": 10,
+              "median": 0.00036760199999999997,
+              "min": 0.000313501,
+              "max": 0.000450981
+            }
+          ],
+          "missing_required_cost_entries": 60,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10
+          }
+        },
+        {
+          "key": "broadcast.current-owner-tasks",
+          "baseline": "callback+owner-tasks",
+          "arguments": [
+            "--scenario",
+            "broadcast-fanout",
+            "--messages",
+            "32",
+            "--payload",
+            "256",
+            "--threads",
+            "4",
+            "--batch",
+            "64",
+            "--fanout",
+            "4096",
+            "--tick-us",
+            "1000",
+            "--timeout-ms",
+            "60000"
+          ],
+          "child_parameters": {
+            "messages": 32,
+            "payload_bytes": 256,
+            "threads": 4,
+            "batch_size": 64,
+            "fanout": 4096,
+            "tick_interval_us": 1000,
+            "timeout_ms": 60000
+          },
+          "primary": {
+            "name": "operations_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.operations_per_second",
+            "sample_count": 10,
+            "median": 4391122.795529,
+            "min": 3591136.2892,
+            "max": 4630293.633926
+          },
+          "guardrails": [
+            {
+              "name": "fanout_completion_p99_us",
+              "direction": "lower",
+              "raw_source": "measurements.broadcast_fanout_completion_p99_us",
+              "sample_count": 10,
+              "median": 1095.0685,
+              "min": 997.93,
+              "max": 1522.779
+            },
+            {
+              "name": "endpoint_latency_p99_us",
+              "direction": "lower",
+              "raw_source": "measurements.broadcast_endpoint_latency_p99_us",
+              "sample_count": 10,
+              "median": 982.5485000000001,
+              "min": 925.375,
+              "max": 1383.813
+            },
+            {
+              "name": "working_set_peak_bytes",
+              "direction": "lower",
+              "raw_source": "measurements.working_set_peak_bytes",
+              "sample_count": 10,
+              "median": 7342080.0,
+              "min": 7299072,
+              "max": 7348224
+            }
+          ],
+          "missing_required_cost_entries": 80,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10,
+            "wakeups": 10,
+            "generic_posts": 10
+          }
+        },
+        {
+          "key": "connection-capacity.current",
+          "baseline": "callback+current-storage",
+          "arguments": [
+            "--scenario",
+            "connections",
+            "--connections",
+            "10000",
+            "--threads",
+            "4",
+            "--settle-ms",
+            "2000",
+            "--timeout-ms",
+            "120000"
+          ],
+          "child_parameters": {
+            "connections": 10000,
+            "connect_concurrency": 1,
+            "iocp_accept_depth": 4,
+            "preload_before_loop": false,
+            "event_loop_threads": 4,
+            "messages_per_connection": 1000,
+            "payload_bytes": 256,
+            "churn_target_per_second": 1000,
+            "churn_duration_ms": 5000,
+            "churn_connect_timeout_ms": 1000,
+            "slow_bytes_per_connection": 8388608,
+            "low_water_bytes": 32768,
+            "high_water_bytes": 65536,
+            "hard_limit_bytes": 16777216,
+            "max_input_buffer_bytes": 2097152,
+            "settle_ms": 2000,
+            "timeout_ms": 120000
+          },
+          "primary": {
+            "name": "connection_establish_per_second",
+            "direction": "higher",
+            "raw_source": "measurements.connection_establish_per_second",
+            "sample_count": 10,
+            "median": 8027.9315184775,
+            "min": 7884.106821215,
+            "max": 8281.123067593
+          },
+          "guardrails": [
+            {
+              "name": "approx_bytes_per_connection",
+              "direction": "lower",
+              "raw_source": "measurements.approx_bytes_per_connection",
+              "sample_count": 10,
+              "median": 4210.688,
+              "min": 4210.2784,
+              "max": 4211.5072
+            },
+            {
+              "name": "connection_close_seconds",
+              "direction": "lower",
+              "raw_source": "measurements.connection_close_seconds",
+              "sample_count": 10,
+              "median": 0.10123270449999999,
+              "min": 0.082424351,
+              "max": 0.11642915
+            },
+            {
+              "name": "server_stop_seconds",
+              "direction": "lower",
+              "raw_source": "measurements.server_stop_seconds",
+              "sample_count": 10,
+              "median": 0.000787172,
+              "min": 0.000469739,
+              "max": 0.000985217
+            }
+          ],
+          "missing_required_cost_entries": 50,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "syscalls": 10
+          }
+        },
+        {
+          "key": "overload-recovery.current",
+          "baseline": "callback+hierarchical-budgets",
+          "arguments": [
+            "--scenario",
+            "slow-broadcast-recovery",
+            "--connections",
+            "100",
+            "--threads",
+            "4",
+            "--messages",
+            "10",
+            "--payload-bytes",
+            "32768",
+            "--low-water-bytes",
+            "32768",
+            "--high-water-bytes",
+            "65536",
+            "--hard-limit-bytes",
+            "262144",
+            "--server-send-buffer-bytes",
+            "4096",
+            "--recovery-threshold-bytes",
+            "0",
+            "--pressure-settle-ms",
+            "500",
+            "--recovery-stable-ms",
+            "250",
+            "--timeout-ms",
+            "120000",
+            "--iocp-accept-depth",
+            "32"
+          ],
+          "child_parameters": {
+            "connections": 100,
+            "threads": 4,
+            "messages": 10,
+            "payload_bytes": 32768,
+            "server_send_buffer_bytes": 4096,
+            "pressure_settle_ms": 500,
+            "recovery_stable_ms": 250,
+            "timeout_ms": 120000,
+            "iocp_accept_depth": 32
+          },
+          "primary": {
+            "name": "recovery_elapsed_ms",
+            "direction": "lower",
+            "raw_source": "recovery.elapsed_ms",
+            "sample_count": 10,
+            "median": 273.888608,
+            "min": 267.949,
+            "max": 279.214116
+          },
+          "guardrails": [
+            {
+              "name": "pending_peak_bytes",
+              "direction": "lower",
+              "raw_source": "pressure.pending_peak_bytes",
+              "sample_count": 10,
+              "median": 25600000.0,
+              "min": 25600000,
+              "max": 25600000
+            },
+            {
+              "name": "working_set_peak_bytes",
+              "direction": "lower",
+              "raw_source": "process.working_set_peak_bytes",
+              "sample_count": 10,
+              "median": 41152512.0,
+              "min": 36765696,
+              "max": 42004480
+            },
+            {
+              "name": "teardown_released",
+              "direction": "exact",
+              "raw_source": "checks.teardown_released",
+              "sample_count": 10,
+              "median": true,
+              "min": true,
+              "max": true
+            }
+          ],
+          "missing_required_cost_entries": 70,
+          "missing_required_cost_entries_by_name": {
+            "cycles": 10,
+            "instructions": 10,
+            "llc_load_misses": 10,
+            "allocations": 10,
+            "copied_bytes": 10,
+            "syscalls": 10,
+            "shutdown_convergence_us": 10
+          }
+        }
+      ],
+      "unknown_required_cost_count": 380,
+      "raw_counts": {
+        "child_executions_with_original_stdout_stderr_and_command": 66,
+        "warmups": 6,
+        "recorded_samples": 60,
+        "execution_sidecar_files": 198
+      },
+      "raw_sidecar_manifest_sha256": "43d07887dbe26344ed371f534984ea41d3c0b3d650c588823f8be75c3cdf7400",
+      "raw_sidecar_manifest_hash_scheme": "SHA256 of compact sorted-key JSON array of {path,sha256}, sorted by platform-relative POSIX path, UTF-8"
+    }
+  },
+  "total_original_child_executions": 132,
+  "total_recorded_samples": 120,
+  "total_warmups": 12
+}

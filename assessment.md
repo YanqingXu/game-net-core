@@ -4,8 +4,11 @@
 本次在 Windows/IOCP 和 WSL/Linux epoll 复现了跨线程已接受发送被随后 graceful
 shutdown 提前 half-close 的正确性缺口。代码修复与回归合同已完成，本地 Windows Release
 与 WSL Ubuntu 24.04/GCC 13.3 Release 各 130/130 通过；Windows 关闭/预算/IOCP 专项 ASan 10/10、
-Ubuntu 24.04 专项 ASan/UBSan 7/7 与 TSan 7/7 通过。exact-commit CI 与完整六场景
-十样本开发基线仍待执行，HP0 正式 fixed-lab 门禁未关闭，仍是唯一性能推广与集成前沿。
+Ubuntu 24.04 专项 ASan/UBSan 7/7 与 TSan 7/7 通过。干净精确提交
+`41ba8f4ebeda784ff2952b87e53b48310d4f053f` 的
+[CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
+已通过 7/7，完整六场景十样本 development 基线也已完成并独立验证。证据只绑定该提交，
+不自动覆盖后续文档提交。HP0 正式 fixed-lab 门禁仍为 `DEFER`，仍是唯一性能推广与集成前沿。
 下文历史测试数字与发布证据继续绑定各自提交，不代表本次工作树已经通过相同验证。
 
 2026-08-24 的 M11 v1.0 稳定化与发布就绪审查仍以 `DEFER` / `NO-RELEASE`
@@ -13,8 +16,8 @@ Ubuntu 24.04 专项 ASan/UBSan 7/7 与 TSan 7/7 通过。exact-commit CI 与完�
 2026-08-25 已在治理基线 `202bf9f993575d144c4c440a3972dd80733da0a7`
 打开性能优先的 HP0–HP8 路线；当前唯一推广与集成前沿为 HP0 成本账本与固定性能实验室。
 `gamenet.hot_path_cost.v1` 的 schema、预登记矩阵、runner、validator、静态 CI guard
-和双平台 self-hosted 工作流已进入实现，但干净 exact-commit 的 Linux/epoll 与
-Windows/IOCP 各十次正式样本尚未形成，因此当前证据结论为 `DEFER`。治理现允许并行
+和双平台 self-hosted 工作流已进入实现；本机 Windows 与 WSL development 账本已经形成，
+但原生双平台完整 fixed-lab 证据仍缺，因此正式结论为 `DEFER`。治理现允许并行
 存在至多一个隔离的 `EXPERIMENTAL-PRESTUDY` HP1–HP8 原型；它不得进入生产 Core
 路径、推进里程碑、切换默认实现、增加安装 API 或形成推广证据。
 以下 HP1–HP8 预研摘要保留 2026-08-25 的 development 判断；2026-10-13 新增的
@@ -461,7 +464,7 @@ fixed-lab 证据仍为 `DEFER`，不得用该历史结论替代当前性能计�
 
 # 三、下一步方向：建议的优先级
 
-## P0（实现完成，验证待闭环）：Accepted send 与 graceful shutdown 的顺序
+## P0（修复与同提交 CI 已完成）：Accepted send 与 graceful shutdown 的顺序
 
 2026-10-13 的定向复现先在 owner 线程建立连接但暂停 loop dispatch，再由同一非 owner
 线程依次调用 `trySend(16384 bytes)` 与 `tryShutdown()`。两者均返回 `Accepted`，
@@ -477,7 +480,8 @@ lifecycle，重复 shutdown 不重新创建 half-close 义务。公开字节快�
 直接回归合同 `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`
 已覆盖 owner 暂停时的顺序调用、多个 functor 轮次、完成通知拒绝、producer 分配失败/
 post 拒绝后的最后一次 rollback、运行中的 owner 与 send/shutdown 并发，以及 EOF 后
-重复请求。本次工作树的本地验证如下；它们不是干净精确提交的远程 CI 证据。
+重复请求。修复形成 `41ba8f4ebeda784ff2952b87e53b48310d4f053f`，其独立远程 CI
+run `38336714098` 通过 7/7。下表保留此前本地验证，不能将它们与远程 run 混为同一次执行。
 
 | 范围 | 实际环境 | 结果 |
 | --- | --- | --- |
@@ -495,12 +499,20 @@ Windows ASan 夹具已修正调试模式 proxy 分配误触发暂停的问题，
 分配大小。Ubuntu 22.04 的预研结果不归入 Ubuntu 24.04 Core 结果。全部 WSL 结果
 仅是 epoll 功能/开发证据，不是 HP0 原生 Linux 性能证据。
 
+随后在干净精确 `41ba8f4` 的独立检出中执行正式预研 runner：Windows Release 与
+ASan、WSL Ubuntu 24.04 Release、ASan/UBSan 与 TSan 五条路线各 7/7 通过，JUnit
+均无跳过。新增独立 weekly/manual 工作流保留这些七项合同；默认分支尚未包含该文件，
+本次手动触发返回 HTTP 404，因此不声明已完成远程预研 run。
+
 ## P1（待闭环）：完成 HP0 固定实验室证据
 
-当前使用用户指定的本机 Windows/IOCP 与 WSL Ubuntu 24.04/epoll，先跑预登记的全部
-六个场景，各执行一次不计入样本的 warmup 与十次 development 样本。记录实际机器、
-WSL 分类、工作树状态、缺失成本字段及二进制 hash；缺失计数保留 `null`，不能填零。
-该开发基线用于验证工具链与实际场景，不关闭 HP0，也不产生 5%/3% 推广结论。
+干净 `41ba8f4` 已使用本机 Windows/IOCP 与 WSL Ubuntu 24.04/epoll 完成原始预登记
+六场景：每场景一次不计入统计的 warmup 与十次交错 development 样本，容量保持 10k。
+每边保留 66 次原始执行（6 warmup + 60 recorded），共 132 次；两份 ledger 已分别
+独立验证通过，原始 stdout、命令、参数、hash 与全部主指标/护栏统计亦已复核。
+每边缺 380 项“样本 × 必需成本”观测，均保留 `null`，`promotion_eligible=false`。
+此开发基线不关闭 HP0，不产生 5%/3% 推广或跨 OS/backend 优胜结论。完整身份、统计与
+限制见[本次验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。
 
 2026-10-13 的仓库 runner 只读检查未发现已注册 self-hosted runner；现有本机资源
 不能提供原生 Linux fixed-lab 证明。正式闭环仍须选择干净精确提交，落实原生
@@ -731,8 +743,8 @@ M1 已关闭（X10 PROMOTE + ARCH-G1 APPROVE）
 → M10 已关闭（Core f1f89f0 / Gateway 588acd0 / YanGame b525416；NO-PROMOTION）
 → M11 已关闭（Core a2977c9；DEFER / NO-RELEASE；无 v1 发布）
 → 历史 M1–M11 计划收口（不代表后续计划关闭）
-→ 当前正确性优先事项：发送/关闭修复及本地平台验证完成，exact-commit CI 待执行
-→ 当前本地执行：Windows + WSL Ubuntu 24.04 六场景 development 基线
+→ 41ba8f4 发送/关闭修复：本地验证与同提交 CI 7/7 已完成
+→ 41ba8f4 本地基线：Windows + WSL Ubuntu 24.04 六场景各 1 warmup + 10 样本已验证
 → 当前性能前沿：HP0 双平台固定实验室成本账本（DEFER）
 → HP0 关闭后按正式切片重新验证 HP1–HP8；HP8 前不恢复 v1 发布线
 ```

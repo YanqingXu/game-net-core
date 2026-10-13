@@ -1,0 +1,88 @@
+{
+  "run_id": 38336714098,
+  "run_url": "https://github.com/YanqingXu/game-net-core/actions/runs/38336714098",
+  "commit_sha": "41ba8f4ebeda784ff2952b87e53b48310d4f053f",
+  "run_attempt": 1,
+  "jobs_successful": 7,
+  "producer_count": 6,
+  "downloaded_artifacts": 7,
+  "all_archive_digests_match_github": true,
+  "independent_verification": "passed",
+  "remote_aggregate_matches_independent_except_generated_time": true,
+  "remote_aggregate_sha256": "5d4a0abe09b8226138f8c7c8d2288fa2ac41303f0d1f1c6465c796eeebbdcab7",
+  "independent_aggregate_sha256": "91c9a1c26c3e6c19b8acf4feb3e931d19e8692f2b926975a50198458a9e38955",
+  "producers": [
+    {
+      "job": "linux-cmake",
+      "artifact_name": "ci-evidence-linux-cmake-41ba8f4ebeda784ff2952b87e53b48310d4f053f-38336714098-1",
+      "producer_manifest_sha256": "43741f7acd8f60c88c444db41a6f4599e80d405d1a2d28515b6af53adba6a8de",
+      "evidence_file_count": 16,
+      "evidence_bytes": 150737,
+      "configured_tests": 130,
+      "executed_tests": 130,
+      "consumer_executed_tests": 2,
+      "experimental_consumer_executed_tests": 1,
+      "fuzz_executed_units": null
+    },
+    {
+      "job": "linux-asan-ubsan",
+      "artifact_name": "ci-evidence-linux-asan-ubsan-41ba8f4ebeda784ff2952b87e53b48310d4f053f-38336714098-1",
+      "producer_manifest_sha256": "70f773ff3198278356fcd37ad61dc4acb224ec651d50ee9637d6f6614c02e943",
+      "evidence_file_count": 104,
+      "evidence_bytes": 156559,
+      "configured_tests": 130,
+      "executed_tests": 130,
+      "consumer_executed_tests": null,
+      "experimental_consumer_executed_tests": null,
+      "fuzz_executed_units": 1000
+    },
+    {
+      "job": "linux-tsan",
+      "artifact_name": "ci-evidence-linux-tsan-41ba8f4ebeda784ff2952b87e53b48310d4f053f-38336714098-1",
+      "producer_manifest_sha256": "acfcd09c60364bde3d7a7c46e15dcc6d3e1e569416e6255f7996480f28068ecf",
+      "evidence_file_count": 4,
+      "evidence_bytes": 90892,
+      "configured_tests": 130,
+      "executed_tests": 103,
+      "consumer_executed_tests": null,
+      "experimental_consumer_executed_tests": null,
+      "fuzz_executed_units": null
+    },
+    {
+      "job": "linux-release",
+      "artifact_name": "ci-evidence-linux-release-41ba8f4ebeda784ff2952b87e53b48310d4f053f-38336714098-1",
+      "producer_manifest_sha256": "bc82d4b427190f93701ca7e867a86d6b334ca23d0a87ee0aec25719b3706d446",
+      "evidence_file_count": 30,
+      "evidence_bytes": 643518,
+      "configured_tests": 130,
+      "executed_tests": 130,
+      "consumer_executed_tests": null,
+      "experimental_consumer_executed_tests": null,
+      "fuzz_executed_units": null
+    },
+    {
+      "job": "windows-msvc",
+      "artifact_name": "ci-evidence-windows-msvc-41ba8f4ebeda784ff2952b87e53b48310d4f053f-38336714098-1",
+      "producer_manifest_sha256": "44da0bbe6f424f8457d7cb3482a03820c20caee59c94ca837f6687f63bc28414",
+      "evidence_file_count": 7,
+      "evidence_bytes": 106484,
+      "configured_tests": 130,
+      "executed_tests": 130,
+      "consumer_executed_tests": 2,
+      "experimental_consumer_executed_tests": null,
+      "fuzz_executed_units": null
+    },
+    {
+      "job": "windows-msvc-release",
+      "artifact_name": "ci-evidence-windows-msvc-release-41ba8f4ebeda784ff2952b87e53b48310d4f053f-38336714098-1",
+      "producer_manifest_sha256": "13fad103b29a6d8d95018194ae77a4601362fbd30e7f7db0b4aac3e653d140a0",
+      "evidence_file_count": 33,
+      "evidence_bytes": 2312598,
+      "configured_tests": 130,
+      "executed_tests": 130,
+      "consumer_executed_tests": 2,
+      "experimental_consumer_executed_tests": null,
+      "fuzz_executed_units": null
+    }
+  ]
+}
