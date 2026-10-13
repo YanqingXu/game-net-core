@@ -335,6 +335,7 @@ Runtime Model
   fixed-lab 账本仍为 `DEFER`。干净精确提交 `41ba8f4ebeda784ff2952b87e53b48310d4f053f`
   已完成本机 Windows 与 WSL Ubuntu 24.04 六场景 development 基线，每场景各一次
   warmup 与十次记录样本，独立验证通过；每边缺 380 项必需样本成本，推广资格为 false。
+  本轮本机资源执行已按用户决定以 `DEFER` 收束，正式实验室要求保留为未来推广门。
   WSL、dirty 工作树或缺失 observer 成本
   不能替代正式门禁。HP1–HP8 development 预研不等于集成或发布完成，正式门禁和
   顺序以 `plan.md` 为准；
@@ -384,12 +385,19 @@ Runtime Model
 - 2026-10-13 以 `bf3dab5c3f969c4bfce192dc62b2ccc1c60b3125` 为源码起点的
   Windows/IOCP 与 WSL/Linux epoll 定向复现发现：owner 尚未 dispatch 时，同一外部
   线程先后 Accepted 的 send 与 graceful shutdown 可能提前 half-close 并丢弃已接受
-  payload。代码修复和回归合同已完成，当前工作树 Windows Release 与 WSL Ubuntu
+  payload。代码修复和回归合同已完成，提交前本地验证中 Windows Release 与 WSL Ubuntu
   24.04/GCC 13.3 Release 各 130/130、Windows 关闭/预算/IOCP 专项 ASan 10/10、Ubuntu 24.04 专项
   ASan/UBSan 与 TSan 各 7/7 通过；Python 工程合同 46/46 和双本地环境 HP0 行为测试
   各 17/17 通过。修复提交 `41ba8f4` 的
   [CI run 38336714098](https://github.com/YanqingXu/game-net-core/actions/runs/38336714098)
   已通过 7/7；完整开发基线也已形成，证据不自动归属于后续文档提交。
+  [PR #15](https://github.com/YanqingXu/game-net-core/pull/15) 已合入 `main` 的
+  `af01a814f758aa6b02fa1bfed95810d8495ed58e`；该提交
+  [CI](https://github.com/YanqingXu/game-net-core/actions/runs/38341614323) 通过 7/7，
+  [预研手动验证](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
+  通过 5/5 路线、35/35 合同并完成独立证据验证。weekly 已启用（`active`，
+  `23 3 * * 1`）；本次事件为 `workflow_dispatch`，未声明 cron 已执行。
+  合入与软件 CI 绑定 `af01a81`，已有性能测量仍绑定 `41ba8f4`。
   详见[验证记录](docs/development/2026-10-13-graceful-drain-validation.md)。直接合同为
   `tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp`；
   此正确性工作先于性能推广，WSL 功能证据不替代原生 Linux fixed-lab；
