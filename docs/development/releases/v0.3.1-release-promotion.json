@@ -1,0 +1,77 @@
+{
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "capacity": {
+    "endpoint_attempts": 100000,
+    "pair_manifest_file": "pair-manifest.json",
+    "pair_manifest_sha256": "08ecd5771f76db5a34d87ac876a13073f6ece4549bfe655a8711e33f2aec3822",
+    "platforms": [
+      {
+        "artifact_name": "capacity-gate-dedicated-100k-linux-capacity-gate-9facdbaffe994c7227b0118e93cd642357e6f011-42787863670-1",
+        "backend": "epoll",
+        "executable_sha256": "35fdccc7ca621e366319ced4a891f5714c9b0f1e8aec150d1b35c1f5bc534ca8",
+        "job": "linux-capacity-gate",
+        "manifest_sha256": "5f541dc552a65d9fb5f1db7209f78048d4a0cd1865f1f4c37f15c67f68d47ca2",
+        "platform": "linux",
+        "samples": [
+          {
+            "path": "sample-1.json",
+            "repetition": 1,
+            "sha256": "89fe3417efca8ebf6fe895ebe49766f1068b55cb0eee53cb52c2fd2469b4a79c"
+          }
+        ]
+      },
+      {
+        "artifact_name": "capacity-gate-dedicated-100k-windows-capacity-gate-9facdbaffe994c7227b0118e93cd642357e6f011-42787863670-1",
+        "backend": "iocp",
+        "executable_sha256": "6e8e738872fdd5f5cadaca4fdc400bb4056d275496308523fe6df9c1af47cf17",
+        "job": "windows-capacity-gate",
+        "manifest_sha256": "38a24a78c5f7159176b7df396980cb491e5e7f6ba1461f9eca050f26b60f7a4b",
+        "platform": "windows",
+        "samples": [
+          {
+            "path": "sample-1.json",
+            "repetition": 1,
+            "sha256": "f94fc312029a485938c26fe0347753c4dc88431f5c7fa94cb366e3bbe862ebc3"
+          }
+        ]
+      }
+    ],
+    "probe_attempts": 10000,
+    "profile": "dedicated-100k",
+    "workflow_run_attempt": 1,
+    "workflow_run_id": "42787863670"
+  },
+  "endurance": [
+    {
+      "completed_cycles": 3074,
+      "elapsed_milliseconds": 3600001,
+      "log_file": "fault-injection.log",
+      "log_sha256": "02ebac071677bb0245a84e0aa37e86a705e40a5904a09036badce45771353199",
+      "mode": "candidate-1h",
+      "result_file": "result.json",
+      "result_sha256": "f1533f7f3256fd7684efa9333fd47a8670bc5dd1811400f4312ae4945e7281d5",
+      "role": "candidate",
+      "workflow_run_attempt": 1,
+      "workflow_run_id": "42789359152"
+    },
+    {
+      "completed_cycles": 9207,
+      "elapsed_milliseconds": 10800002,
+      "log_file": "fault-injection.log",
+      "log_sha256": "0bc5ffcc618e96ebf1fd11e27f98f72a30b7cddda4071d9917a601933de32355",
+      "mode": "release-3h",
+      "result_file": "result.json",
+      "result_sha256": "dba83df40ec6544d2bbf64dfe6bff3f8fe4c881f1c81c93b0a0bb81c0b7ac814",
+      "role": "release",
+      "workflow_run_attempt": 1,
+      "workflow_run_id": "42808773572"
+    }
+  ],
+  "promotion_source": {
+    "workflow_run_attempt": 1,
+    "workflow_run_id": "42808773572"
+  },
+  "schema": "gamenet.production_promotion_evidence.v2",
+  "stage": "release",
+  "status": "success"
+}

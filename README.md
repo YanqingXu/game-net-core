@@ -28,10 +28,12 @@ The published integration/contract preview is
 [`v0.2.0-phase4-preview`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview);
 it does not declare production readiness or API/ABI stability.
 The active maintenance candidate installs as `GameNetCore 0.3.1` and includes
-the accepted-output graceful-shutdown fix. It is in release preparation;
+the accepted-output graceful-shutdown fix. Its frozen candidate has completed
+pre-publication validation and canonical packaging;
 the latest published release remains `v0.3.0`. See the
 [v0.3.1 release preparation](docs/development/releases/v0.3.1.md) for scope and
-validation status. M1 closed on 2026-08-22 with
+validation status. Published v0.3.0 predates this graceful-shutdown correction.
+M1 closed on 2026-08-22 with
 IOE-X10 implementation/evidence checkpoint
 `f5d39b800b4dd943531670aa09840c931c3dee4d`: a fixed 256-route listener
 comparison produced a narrowly scoped `PROMOTE` for later source-private

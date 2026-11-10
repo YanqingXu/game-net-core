@@ -1,0 +1,31 @@
+{
+  "schema": "gamenet.release_repeat_independent.v1",
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "run_id": "42788591238",
+  "run_attempt": 1,
+  "status": "success",
+  "hashed_files": 6,
+  "selections": [
+    {
+      "selection": {
+        "match": "any-label",
+        "labels": [
+          "threading"
+        ],
+        "selected_tests": 103
+      },
+      "executions": 5150
+    },
+    {
+      "selection": {
+        "match": "any-label",
+        "labels": [
+          "broadcast",
+          "game_pipeline"
+        ],
+        "selected_tests": 12
+      },
+      "executions": 600
+    }
+  ]
+}

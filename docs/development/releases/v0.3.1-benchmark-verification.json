@@ -1,0 +1,66 @@
+{
+  "schema": "gamenet.release_benchmark_independent.v1",
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "run_id": "42786217774",
+  "run_attempt": 3,
+  "status": "success",
+  "artifacts": [
+    {
+      "id": 13755211877,
+      "name": "phase4-benchmark-windows-release-benchmark-9facdbaffe994c7227b0118e93cd642357e6f011-42786217774-3",
+      "digest": "sha256:17e66bb5cee845031ba3d95774e02b922d94840d2188f34ad7681c9b66f0784d",
+      "size_in_bytes": 180609
+    },
+    {
+      "id": 13754027502,
+      "name": "phase4-benchmark-pair-9facdbaffe994c7227b0118e93cd642357e6f011-42786217774-3",
+      "digest": "sha256:7e464959b17080f06120b532fe55cc0c6d3bf2d0047eb0f57dd2f5e80b90165b",
+      "size_in_bytes": 2291
+    },
+    {
+      "id": 13753817389,
+      "name": "phase4-benchmark-linux-release-benchmark-9facdbaffe994c7227b0118e93cd642357e6f011-42786217774-3",
+      "digest": "sha256:73b2f22776f2e310d5cc439c2eb3e3c7d22d57caf9f5c9c7327b01c137a77ea3",
+      "size_in_bytes": 181115
+    }
+  ],
+  "recomputed_comparisons": [
+    {
+      "platform": "linux",
+      "profile": "regression",
+      "result": "pass",
+      "comparisons": 12,
+      "budget_encoding": "LF",
+      "budget_sha256": "950450566e5eef5b72a3e7dd33ec7576f0cd111f4a63cac794c7097e2b7259b6"
+    },
+    {
+      "platform": "linux",
+      "profile": "core-capacity",
+      "result": "pass",
+      "comparisons": 12,
+      "budget_encoding": "LF",
+      "budget_sha256": "1e8b1cfd95498fc62585c09d786fdbf873943fb812765dcbefafddfa929f3eff"
+    },
+    {
+      "platform": "windows",
+      "profile": "regression",
+      "result": "pass",
+      "comparisons": 12,
+      "budget_encoding": "CRLF",
+      "budget_sha256": "b3ba8e646972a24fd0d08778484861ed3fb62ef921828366cb90ed152ce79b59"
+    },
+    {
+      "platform": "windows",
+      "profile": "core-capacity",
+      "result": "pass",
+      "comparisons": 12,
+      "budget_encoding": "CRLF",
+      "budget_sha256": "4625e898b224b1491791854e2f6ee4b6b50389bc6a536a76fbce6a63e6f6306e"
+    }
+  ],
+  "pair_reproduced": true,
+  "earlier_failed_attempts_retained": [
+    1,
+    2
+  ]
+}

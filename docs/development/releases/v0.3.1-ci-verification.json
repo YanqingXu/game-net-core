@@ -1,0 +1,63 @@
+{
+  "run_id": "42786204863",
+  "run_attempt": 1,
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "artifact_count": 7,
+  "artifacts": [
+    {
+      "id": 13749897872,
+      "name": "ci-evidence-windows-msvc-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:7b10feba7179da50c65b6f6868ff22f574500222038388ed0e6d3a8d3db06088",
+      "size_in_bytes": 13414
+    },
+    {
+      "id": 13749857659,
+      "name": "ci-evidence-linux-release-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:ade180406f1ea933aa68c70404e95c4cfd6b869dbdaaa637e8204a400d4c5502",
+      "size_in_bytes": 529384
+    },
+    {
+      "id": 13749772628,
+      "name": "ci-evidence-linux-cmake-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:0c274e238a7300ec9bfb9ddd7cb2217812ca52dae7e62e3107068bdaecbf8ed8",
+      "size_in_bytes": 23129
+    },
+    {
+      "id": 13749717769,
+      "name": "ci-evidence-linux-tsan-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:28390ce708f698c0e0e487d559884b0d3a3c1df07bca92be37775b0d769c06c5",
+      "size_in_bytes": 10934
+    },
+    {
+      "id": 13749663606,
+      "name": "ci-evidence-windows-msvc-release-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:dc32ea3145577447fc2d7c5bd64edba7ea8accccdb4efcaecdc740173f1f870b",
+      "size_in_bytes": 2163441
+    },
+    {
+      "id": 13749218924,
+      "name": "ci-evidence-set-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:ff64c1a61fe2696f8f8543c656712e54124a09956c78f5f90caf0089a9ec4916",
+      "size_in_bytes": 1043
+    },
+    {
+      "id": 13748014434,
+      "name": "ci-evidence-linux-asan-ubsan-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1",
+      "digest": "sha256:d9704dcc224bdb4a1188b32f653b7e87787a6d2bf1e85802bb62d34c9fce56f8",
+      "size_in_bytes": 47604
+    }
+  ],
+  "release_consumers": [
+    {
+      "platform": "windows",
+      "package_version": "0.3.1",
+      "path": "ci-producers/ci-evidence-windows-msvc-release-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1/release-consumer/manifest.json"
+    },
+    {
+      "platform": "linux",
+      "package_version": "0.3.1",
+      "path": "ci-producers/ci-evidence-linux-release-9facdbaffe994c7227b0118e93cd642357e6f011-42786204863-1/release-consumer/manifest.json"
+    }
+  ],
+  "aggregate_reproduced": true
+}
