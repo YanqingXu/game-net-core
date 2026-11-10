@@ -68,7 +68,7 @@ def main() -> None:
 
     assert consumer_cmake.exists(), f"missing install consumer CMake fixture: {consumer_cmake}"
     consumer_cmake_text = consumer_cmake.read_text(encoding="utf-8")
-    require(consumer_cmake_text, "find_package(GameNetCore 0.3.0 EXACT REQUIRED)", consumer_cmake)
+    require(consumer_cmake_text, f"find_package(GameNetCore {manifest['package_version']} EXACT REQUIRED)", consumer_cmake)
     require(consumer_cmake_text, 'GameNetCore_LICENSE STREQUAL "Apache-2.0"', consumer_cmake)
     for variable in (
         "GameNetCore_LICENSE_FILE",
@@ -102,6 +102,8 @@ def main() -> None:
         consumer_cmake,
     )
     require(consumer_cmake_text, "assert_gamenet_version(0.3.0 TRUE)", consumer_cmake)
+    require(consumer_cmake_text, "assert_gamenet_version(0.3.1 TRUE)", consumer_cmake)
+    require(consumer_cmake_text, "assert_gamenet_version(0.3.2 FALSE)", consumer_cmake)
     require(consumer_cmake_text, "assert_gamenet_version(0.2.99 FALSE)", consumer_cmake)
     require(consumer_cmake_text, "assert_gamenet_version(0.4.0 FALSE)", consumer_cmake)
 

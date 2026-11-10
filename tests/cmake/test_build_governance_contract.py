@@ -259,7 +259,8 @@ def main() -> None:
     notice_file = repo_root / "NOTICE"
     third_party_notices = repo_root / "THIRD_PARTY_NOTICES.md"
     release_packaging = repo_root / "docs" / "development" / "release_packaging.md"
-    release_metadata = repo_root / "release" / "v0.3.0.json"
+    package_version = json.loads((repo_root / "api/public_api_manifest.json").read_text(encoding="utf-8"))["package_version"]
+    release_metadata = repo_root / "release" / f"v{package_version}.json"
     ci_docs = repo_root / "docs" / "development" / "ci.md"
     readme = repo_root / "README.md"
     ci_workflow = repo_root / ".github" / "workflows" / "ci.yml"
@@ -293,7 +294,7 @@ def main() -> None:
     require(root_text, "GAMENET_ENABLE_NATIVE_TUNING", root_cmake)
     require(root_text, "GAMENET_ENABLE_BENCHMARK_INSTRUMENTATION", root_cmake)
     require(root_text, "include(BuildProfiles)", root_cmake)
-    assert root_text.index('project(GameNetCore VERSION 0.3.0 LANGUAGES CXX)') < root_text.index(
+    assert root_text.index(f'project(GameNetCore VERSION {package_version} LANGUAGES CXX)') < root_text.index(
         "game-net-core currently supports only Linux and Windows"
     )
     assert root_text.index('option(GAMENET_ENABLE_EXPERIMENTAL "Build experimental modules" OFF)') < (
@@ -509,7 +510,7 @@ def main() -> None:
 
     packaging_text = " ".join(release_packaging.read_text(encoding="utf-8").split())
     for fragment in (
-        "only supported v0.3.0 external-release assembler",
+        "only supported external-release assembler",
         "immutable Git commit",
         "SPDX 2.3 JSON SBOM",
         "byte-identical output",
@@ -518,8 +519,8 @@ def main() -> None:
         require(packaging_text, fragment, release_packaging)
     release = json.loads(release_metadata.read_text(encoding="utf-8"))
     assert release["schema"] == "gamenet.release_metadata.v1"
-    assert release["name"] == "v0.3.0"
-    assert release["version"] == "0.3.0"
+    assert release["name"] == f"v{package_version}"
+    assert release["version"] == package_version
     assert release["license"] == "Apache-2.0"
     assert release["support"]["linux-x86_64"]["tier"] == 1
     assert release["support"]["windows-x86_64"]["tier"] == 2

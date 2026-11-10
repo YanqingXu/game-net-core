@@ -20,6 +20,7 @@ from typing import Sequence
 from assemble_release import (
     artifact_record,
     files_from_directory,
+    package_version_from_git,
     resolve_commit,
     validate_project_metadata,
     write_tar_gz,
@@ -266,7 +267,7 @@ def _run_consumer(
     )
     return {
         "name": name,
-        "version": expected_version or "0.3.0",
+        "version": expected_version or args.package_version,
         "tests": f"{expected_tests}/{expected_tests}",
         "status": "success",
         "inventory": inventory_path.name,
@@ -294,6 +295,7 @@ def run_gate(args: argparse.Namespace) -> None:
     commit, tree, epoch = resolve_commit(args.repo_root, args.candidate_sha)
     if commit != args.candidate_sha or args.candidate_sha != resolve_commit(args.repo_root, "HEAD")[0]:
         raise ValueError("consumer gate candidate must be the exact checked-out HEAD commit")
+    args.package_version = package_version_from_git(args.repo_root, commit)
     if args.platform == "linux":
         package_kind = "linux-x86_64"
         archive_suffix = ".tar.gz"
@@ -304,9 +306,9 @@ def run_gate(args: argparse.Namespace) -> None:
         backend = "iocp"
 
     install_files = files_from_directory(args.current_install_tree)
-    validate_project_metadata(install_files, "0.3.0")
-    package_root = f"game-net-core-v0.3.0-{package_kind}"
-    package_path = args.work_root / f"game-net-core-v0.3.0-{package_kind}{archive_suffix}"
+    validate_project_metadata(install_files, args.package_version)
+    package_root = f"game-net-core-v{args.package_version}-{package_kind}"
+    package_path = args.work_root / f"{package_root}{archive_suffix}"
     if archive_suffix == ".zip":
         write_zip(package_path, install_files, package_root)
     else:
@@ -327,7 +329,7 @@ def run_gate(args: argparse.Namespace) -> None:
         item.path: item.data for item in install_files
     }:
         raise ValueError("extracted current package differs from the staged install tree")
-    validate_project_metadata(extracted_files, "0.3.0")
+    validate_project_metadata(extracted_files, args.package_version)
 
     if args.v02_source_archive.name != V02_ASSET_NAME:
         raise ValueError(f"v0.2 source asset must be named {V02_ASSET_NAME}")
@@ -375,12 +377,13 @@ def run_gate(args: argparse.Namespace) -> None:
             build=args.work_root / "upgrade-v03-consumer",
             prefix=current_prefix,
             expected_tests=1,
-            expected_version="0.3.0",
+            expected_version=args.package_version,
         ),
     ]
     manifest = {
         "schema": "gamenet.release_consumer_evidence.v1",
         "status": "success",
+        "package_version": args.package_version,
         "candidate_sha": commit,
         "source_tree_sha1": tree,
         "platform": args.platform,

@@ -117,6 +117,14 @@ def resolve_commit(repo_root: Path, revision: str) -> tuple[str, str, int]:
     return commit, tree, epoch
 
 
+def package_version_from_git(repo_root: Path, commit: str) -> str:
+    cmake = _git(repo_root, "show", f"{commit}:CMakeLists.txt").decode("utf-8")
+    match = re.search(r"project\(GameNetCore VERSION ([0-9]+\.[0-9]+\.[0-9]+) LANGUAGES CXX\)", cmake)
+    if match is None:
+        raise ValueError("cannot determine immutable source package version")
+    return match.group(1)
+
+
 def source_files_from_git(repo_root: Path, commit: str, archive_root: str) -> list[ReleaseFile]:
     archive = _git(
         repo_root,
@@ -217,6 +225,9 @@ def validate_project_metadata(files: Sequence[ReleaseFile], version: str) -> Non
         ]
         if len(config_candidates) != 1 or b'GameNetCore_LICENSE "Apache-2.0"' not in config_candidates[0]:
             raise ValueError("installed package does not export GameNetCore_LICENSE=Apache-2.0")
+        version_files = [item.data for item in files if item.path.endswith("GameNetCoreConfigVersion.cmake")]
+        if len(version_files) != 1 or f'set(PACKAGE_VERSION "{version}")'.encode() not in version_files[0]:
+            raise ValueError("installed package version does not match the release version")
 
 
 def _canonical_tar(files: Sequence[ReleaseFile], archive_root: str, epoch: int) -> bytes:
@@ -472,7 +483,7 @@ def assemble(args: argparse.Namespace) -> Path:
         raise ValueError(f"resolved commit {commit} does not match --expected-commit {args.expected_commit}")
     epoch = args.source_date_epoch if args.source_date_epoch is not None else commit_epoch
     created = dt.datetime.fromtimestamp(epoch, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    version = args.version
+    version = args.version or package_version_from_git(repo_root, commit)
     release_name = f"v{version}"
     archive_root = f"game-net-core-{release_name}"
 
@@ -606,7 +617,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--commit", default="HEAD")
     parser.add_argument("--expected-commit")
-    parser.add_argument("--version", default="0.3.0")
+    parser.add_argument("--version", help="Defaults to the immutable source CMake version.")
     parser.add_argument("--source-date-epoch", type=int)
     parser.add_argument("--linux-install-tree", type=Path, required=True)
     parser.add_argument("--windows-install-tree", type=Path, required=True)

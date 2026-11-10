@@ -65,7 +65,14 @@ matrix, and immutable evidence are explicit and machine checked.
   visibly distinct from complete production endurance evidence
 
 ## 4. Compatibility Contract
-- the frozen candidate declares package version `0.3.0`; the CMake package,
+- v0.3.1 delivers the accepted-output graceful-shutdown correction already on
+  main. It adds no installed API or target and preserves the `0.3` source
+  compatibility line. v0.3.0 metadata, freeze records, tags and measured evidence
+  remain historical; none are relabeled as v0.3.1 results
+- maintenance preparation does not waive the existing exact-commit capacity,
+  benchmark, sanitizer, package-consumer or 1h/3h release gates. HP0 remains
+  `DEFER` and is not promoted by this correctness release
+- the active maintenance candidate declares package version `0.3.1`; the CMake package,
   public API manifest, exact-version consumer, and candidate baseline label
   must agree before any long-duration evidence is eligible
 - `api/public_api_manifest.json` is the authoritative installed-surface
@@ -93,8 +100,8 @@ matrix, and immutable evidence are explicit and machine checked.
   third-party notices, and release SBOM must consistently declare
   `Apache-2.0`
 - authorization permits publication only after the exact-commit release gates
-  pass; an Apache-2.0 working tree is not by itself a successful `v0.3.0`
-  release
+  pass; an Apache-2.0 working tree is not by itself a successful release
+  decision
 
 ## 5. Threading and Ownership Rules
 - compatibility verification is a build-time repository guard and owns no

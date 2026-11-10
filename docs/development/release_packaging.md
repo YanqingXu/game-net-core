@@ -1,10 +1,16 @@
-# v0.3.0 Release Packaging
+# Release Packaging
 
-`tools/assemble_release.py` is the only supported v0.3.0 external-release
+`tools/assemble_release.py` is the only supported external-release
 assembler. It reads the source payload from an immutable Git commit rather
 than from the working tree, packages explicit Linux and Windows install trees,
 and includes one or more labeled evidence directories. It refuses to overwrite
 an existing output directory.
+
+The active maintenance candidate is v0.3.1. The assembler defaults to the
+version declared by the immutable source commit, not the working tree.
+`--version` may pin that version explicitly; mismatched source, manifest,
+release metadata or installed package versions are rejected. Historical
+v0.3.0 metadata and evidence remain unchanged.
 
 The operation emits deterministic source tar/zip archives, Linux and Windows
 binary archives, an evidence archive, canonical license/notice files, an SPDX
@@ -20,17 +26,18 @@ Example (PowerShell):
 python tools/assemble_release.py `
   --commit $candidateSha `
   --expected-commit $candidateSha `
+  --version 0.3.1 `
   --linux-install-tree out/release-input/linux-install `
   --windows-install-tree out/release-input/windows-install `
   --evidence promotion=out/release-input/promotion-evidence `
   --evidence ci=out/release-input/ci-evidence `
   --promotion-manifest out/release-input/promotion-evidence/release-promotion.json `
-  --output out/game-net-core-v0.3.0
+  --output out/game-net-core-v0.3.1
 
 python tools/verify_release_bundle.py `
-  --bundle out/game-net-core-v0.3.0 `
+  --bundle out/game-net-core-v0.3.1 `
   --expected-commit $candidateSha `
-  --expected-version 0.3.0 `
+  --expected-version 0.3.1 `
   --spdx-schema out/tooling/spdx-2.3-schema.json
 ```
 
@@ -45,8 +52,10 @@ candidate-1h plus release-3h endurance evidence.
 
 The Linux and Windows Release CI producers create the same platform binary
 archive form before final assembly and run `tools/run_release_consumer_gate.py`.
-That gate builds the 2-test current consumer from the extracted v0.3 package,
+That gate builds the 2-test current consumer from the extracted v0.3.1 package,
 pins and hashes the published canonical v0.2 source asset, and builds the same
-1-test stable-Core upgrade consumer against v0.2 and v0.3. The retained package,
+1-test stable-Core upgrade consumer against v0.2 and the exact current version.
+The retained package name and consumer manifest bind that patch version.
+The retained package,
 inventories, JUnit, raw CTest logs, command logs, and manifest are rechecked by
 `tools/verify_release_consumer_evidence.py` before CI uploads them.

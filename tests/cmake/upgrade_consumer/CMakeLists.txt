@@ -15,10 +15,10 @@ endif()
 
 find_package(GameNetCore ${GAMENET_EXPECTED_VERSION} EXACT REQUIRED)
 
-if(GAMENET_EXPECTED_VERSION STREQUAL "0.3.0")
+if(GAMENET_EXPECTED_VERSION VERSION_GREATER_EQUAL "0.3.0")
     if(NOT GameNetCore_LICENSE STREQUAL "Apache-2.0")
         message(FATAL_ERROR
-            "GameNetCore 0.3.0 package license mismatch: '${GameNetCore_LICENSE}'"
+            "GameNetCore ${GAMENET_EXPECTED_VERSION} package license mismatch: '${GameNetCore_LICENSE}'"
         )
     endif()
 endif()

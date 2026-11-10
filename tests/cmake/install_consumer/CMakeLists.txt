@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(GameNetCore 0.3.0 EXACT REQUIRED)
+find_package(GameNetCore 0.3.1 EXACT REQUIRED)
 
 if(NOT GameNetCore_LICENSE STREQUAL "Apache-2.0")
     message(FATAL_ERROR
@@ -68,5 +68,7 @@ function(assert_gamenet_version request expected_compatible)
 endfunction()
 
 assert_gamenet_version(0.3.0 TRUE)
+assert_gamenet_version(0.3.1 TRUE)
+assert_gamenet_version(0.3.2 FALSE)
 assert_gamenet_version(0.2.99 FALSE)
 assert_gamenet_version(0.4.0 FALSE)

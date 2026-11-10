@@ -41,22 +41,22 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def create_source_repository(root: Path) -> str:
+def create_source_repository(root: Path, version: str) -> str:
     write_text(root / "LICENSE", LICENSE)
     write_text(root / "NOTICE", NOTICE)
     write_text(root / "THIRD_PARTY_NOTICES.md", THIRD_PARTY)
     write_text(
         root / "CMakeLists.txt",
-        HEADER + "cmake_minimum_required(VERSION 3.20)\nproject(GameNetCore VERSION 0.3.0 LANGUAGES CXX)\n",
+        HEADER + f"cmake_minimum_required(VERSION 3.20)\nproject(GameNetCore VERSION {version} LANGUAGES CXX)\n",
     )
     write_text(
         root / "api" / "public_api_manifest.json",
-        '{"package_version":"0.3.0","package_license":"Apache-2.0"}\n',
+        f'{{"package_version":"{version}","package_license":"Apache-2.0"}}\n',
     )
     write_text(
-        root / "release" / "v0.3.0.json",
-        '{"schema":"gamenet.release_metadata.v1","name":"v0.3.0",'
-        '"version":"0.3.0","license":"Apache-2.0",'
+        root / "release" / f"v{version}.json",
+        f'{{"schema":"gamenet.release_metadata.v1","name":"v{version}",'
+        f'"version":"{version}","license":"Apache-2.0",'
         '"support":{"linux-x86_64":{"tier":1},"windows-x86_64":{"tier":2}},'
         '"known_limitations":["fixture limitation"]}\n',
     )
@@ -81,7 +81,7 @@ def create_source_repository(root: Path) -> str:
     return run(["git", "rev-parse", "HEAD"], root).stdout.strip()
 
 
-def create_install_tree(root: Path, platform: str) -> None:
+def create_install_tree(root: Path, platform: str, version: str) -> None:
     write_text(root / "share" / "doc" / "GameNetCore" / "LICENSE", LICENSE)
     write_text(root / "share" / "doc" / "GameNetCore" / "NOTICE", NOTICE)
     write_text(
@@ -93,6 +93,10 @@ def create_install_tree(root: Path, platform: str) -> None:
         'set(GameNetCore_LICENSE "Apache-2.0")\n',
     )
     write_text(root / "include" / "gamenet" / "fixture.hpp", f"fixture-{platform}\n")
+    write_text(
+        root / "lib" / "cmake" / "GameNetCore" / "GameNetCoreConfigVersion.cmake",
+        f'set(PACKAGE_VERSION "{version}")\n',
+    )
     (root / "lib").mkdir(parents=True, exist_ok=True)
     (root / "lib" / ("GameNetCore.lib" if platform == "windows" else "libGameNetCore.a")).write_bytes(
         f"binary-{platform}".encode("ascii")
@@ -107,7 +111,7 @@ def directory_hashes(root: Path) -> dict[str, str]:
     }
 
 
-def main() -> None:
+def main(version: str) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     assembler = repo_root / "tools" / "assemble_release.py"
     verifier = repo_root / "tools" / "verify_release_bundle.py"
@@ -117,11 +121,11 @@ def main() -> None:
         work = Path(temporary)
         source = work / "source"
         source.mkdir()
-        commit = create_source_repository(source)
+        commit = create_source_repository(source, version)
         linux_install = work / "linux-install"
         windows_install = work / "windows-install"
-        create_install_tree(linux_install, "linux")
-        create_install_tree(windows_install, "windows")
+        create_install_tree(linux_install, "linux", version)
+        create_install_tree(windows_install, "windows", version)
         evidence = work / "evidence"
         write_text(
             evidence / "promotion.json",
@@ -162,6 +166,8 @@ def main() -> None:
                 [
                     sys.executable,
                     str(verifier),
+                    "--expected-version",
+                    version,
                     "--bundle",
                     str(output),
                     "--expected-commit",
@@ -174,6 +180,19 @@ def main() -> None:
         assert directory_hashes(outputs[0]) == directory_hashes(outputs[1]), (
             "identical immutable inputs must produce byte-identical release bundles"
         )
+
+        sys.path.insert(0, str(repo_root / "tools"))
+        from assemble_release import files_from_directory, validate_project_metadata
+        version_file = windows_install / "lib/cmake/GameNetCore/GameNetCoreConfigVersion.cmake"
+        original = version_file.read_bytes()
+        version_file.write_text('set(PACKAGE_VERSION "9.9.9")\n', encoding="utf-8")
+        try:
+            validate_project_metadata(files_from_directory(windows_install), version)
+        except ValueError as error:
+            assert "installed package version does not match" in str(error)
+        else:
+            raise AssertionError("a stale install tree cannot be relabeled as the release")
+        version_file.write_bytes(original)
 
         write_text(
             evidence / "wrong-promotion.json",
@@ -218,6 +237,8 @@ def main() -> None:
             [
                 sys.executable,
                 str(verifier),
+                "--expected-version",
+                version,
                 "--bundle",
                 str(tampered),
                 "--expected-commit",
@@ -234,4 +255,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    for version in ("0.3.0", "0.3.1"):
+        main(version)
