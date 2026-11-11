@@ -88,6 +88,55 @@ prototype, so the prestudy decision is `KEEP-EXPERIMENTAL`. The implementation
 slot is released for the next HP prestudy. Formal HP1 remains `planned` until
 HP0 closes and the candidate is replayed through the normal slice.
 
+## Real TCP Receiver Follow-up — 2026-11-11
+
+`PacketFramerViewReceiver` composes the view framer with a real connection's
+message callback. The connection context owns receiver state, and the receiver
+weakly observes its connection. Borrowed payloads are visited on the connection
+owner directly from its Buffer. Each dispatch consumes only fully returned
+frames, and partial input stays in that Buffer.
+
+Handlers return `FrameVisitAction::Continue` or `Stop`. A typed stop consumes
+the current frame and returns `VisitorStopped` before another handler starts.
+Void visitors continue to use the original framer behavior. A handler may also
+call `receiver.stop()` reentrantly. Buffer discard and shutdown are deferred
+until the active borrowed visit returns.
+
+The receiver queues at most one continuation through the existing bounded
+owner executor. That callback pins the receiver and connection, then acquires
+a fresh readable span. Queue rejection terminates input admission and uses the
+same graceful output-drain policy as the existing Profile A. Protocol errors
+and handler overruns force close. A composition stopping TcpServer first stops
+its receivers, then delegates asynchronous server drain.
+
+The owner-only snapshot reports consumed/discarded bytes, handler calls,
+continuations, rejections, failures and terminal input settlement. The
+`test_packet_framer_view_receiver.cpp` source is part of the existing HP1
+contract executable, so the seven-contract prestudy inventory includes the
+new real TCP scenarios on each configured platform and sanitizer lane.
+
+Local validation passed 20 consecutive runs of the complete HP1 contract on
+Windows MSVC Release/IOCP and 20 under WSL Ubuntu 24.04 Clang ASan/UBSan.
+Both runnable echo builds returned text, empty and binary frames exactly.
+
+Build and run the framed TCP echo entry point:
+
+```sh
+cmake -S . -B out/hp1-tcp -DGAMENET_BUILD_BENCHMARKS=ON
+cmake --build out/hp1-tcp --config Release --target gamenet_hp1_borrowed_tcp_echo
+# Linux
+out/hp1-tcp/benchmarks/gamenet_hp1_borrowed_tcp_echo 7005
+# Windows, with a Visual Studio generator
+out/hp1-tcp/benchmarks/Release/gamenet_hp1_borrowed_tcp_echo.exe 7005
+```
+
+Wire framing is the existing four-byte big-endian length followed by payload.
+The entry point binds the receiver to a zero-worker TcpServer and echoes each
+borrowed payload through the existing bounded `trySend` API. This functionality
+is available in the opt-in HP1 build graph under the existing
+`KEEP-EXPERIMENTAL` decision. Formal HP1 still requires the HP0 fixed-lab ledger
+and performance/review gates.
+
 ## Differential Fuzz Follow-up — 2026-11-11
 
 The opt-in `gamenet_fuzz_packet_framer_view` target compares legacy `push()`

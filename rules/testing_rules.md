@@ -674,6 +674,13 @@ For lifecycle-sensitive modules, tests should include:
   prefix with zero visitor side effects, sticky fault/reset, visitor exception,
   nested visit/reset rejection, exact `consumedBytes`, and randomized valid
   streams against legacy `PacketFramer::push()`
+- the optional HP1 TCP receiver contract is linked into the existing HP1 test
+  executable. It uses real loopback TCP and the connection's message Buffer to
+  verify partial input, bounded continuation, retained payloads, typed stop,
+  stop with a queued continuation, queue rejection, handler failure/overrun,
+  protocol failure and reentrant connection/server close. Accepted continuations
+  must retire and consumed plus explicitly discarded input must settle.
+
 - the optional HP1 differential fuzzer compares each call's status, payloads,
   continuation, consumed frame bytes and remaining buffered-byte count against
   the installed framer under identical bounded options and input segmentation.

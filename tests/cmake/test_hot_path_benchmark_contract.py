@@ -84,6 +84,8 @@ def main() -> None:
     for fragment in (
         "add_library(gamenet_hp1_packet_framer_view STATIC",
         "add_executable(gamenet_hp1_packet_framer_view_benchmark",
+        "add_executable(gamenet_hp1_borrowed_tcp_echo",
+        "prestudy/hp1/PacketFramerViewReceiver.cc",
         "add_custom_target(gamenet_hp1_packet_framer_view_prestudy",
         "GAMENET_BUILD_BENCHMARKS",
     ):

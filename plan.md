@@ -34,7 +34,7 @@ RPC-C1 自身不扩展协程、HTTP/WebSocket、UDP/KCP、Lua、服务发现或�
 
 计划重制日期：2026-08-25
 
-当前执行更新：2026-11-11；v0.3.1 已发布，HP1 借用视图解帧补充逐调用差分 fuzz 验证。
+当前执行更新：2026-11-11；v0.3.1 已发布，HP1 补充差分 fuzz 和可选 TCP 借用接收器。
 HP0 本机 Windows 与 WSL Ubuntu 24.04 执行仍以 DEFER 收束；预研 weekly 持续运行。
 
 长期方向：`goal.md`
@@ -141,9 +141,13 @@ development evidence 已完成，本轮资源执行以 `DEFER` 收束，不能�
 ### HP1：零额外复制的 owner-local 解帧
 
 预研状态：`KEEP-EXPERIMENTAL`（2026-08-25）。隔离 target 已完成 borrowed view、
-move-only retain、差分合同和 Windows development benchmark；未完成 Linux/fuzz、真实
-Profile A inputBuffer、fixed-lab 和 5%/3% 推广门，因此 HP1 里程碑仍为 `planned`，默认
+move-only retain、差分合同和 Windows development benchmark；初始检查点尚缺 Linux/fuzz、真实
+Profile A inputBuffer、fixed-lab 和 5%/3% 推广门。下述补充扩展开发验证，HP1 里程碑仍为 `planned`，默认
 路径与安装 API 不变。预研实现槽已释放。
+
+2026-11-11 功能补充：在 HP1 可选目标中加入真实 TCP 借用解帧接收器和可运行的 echo
+入口。处理函数可请求停止当前批次，分片输入留在连接 Buffer，预算续跑经过有界 owner
+队列。真实回环合同覆盖重入关闭、续跑拒绝和输入字节清算；正式 HP1 仍遵循 HP0 推广门。
 
 2026-11-11 验证补强：增加 HP1 候选与 legacy 解帧器的逐调用差分 libFuzzer 入口，
 覆盖任意分片、预算、非法输入和 reset 恢复。WSL Clang ASan/UBSan 本地两轮各

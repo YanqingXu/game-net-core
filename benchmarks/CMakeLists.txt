@@ -29,16 +29,21 @@ add_executable(gamenet_multi_io_sharded_hybrid_benchmark
 # targets exist only when GAMENET_BUILD_BENCHMARKS=ON and are never installed.
 add_library(gamenet_hp1_packet_framer_view STATIC
     prestudy/hp1/PacketFramerView.cc
+    prestudy/hp1/PacketFramerViewReceiver.cc
 )
 target_include_directories(gamenet_hp1_packet_framer_view
     PUBLIC ${PROJECT_SOURCE_DIR}/benchmarks/prestudy
 )
-target_link_libraries(gamenet_hp1_packet_framer_view PUBLIC GameNet::protocol)
+target_link_libraries(gamenet_hp1_packet_framer_view PUBLIC GameNet::protocol GameNet::core)
 target_compile_features(gamenet_hp1_packet_framer_view PUBLIC cxx_std_23)
 target_compile_options(gamenet_hp1_packet_framer_view
     PUBLIC $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
 )
 gamenet_configure_sanitizers(gamenet_hp1_packet_framer_view)
+
+add_executable(gamenet_hp1_borrowed_tcp_echo prestudy/hp1/tcp_echo.cpp)
+target_link_libraries(gamenet_hp1_borrowed_tcp_echo PRIVATE gamenet_hp1_packet_framer_view)
+gamenet_configure_sanitizers(gamenet_hp1_borrowed_tcp_echo)
 
 add_executable(gamenet_hp1_packet_framer_view_benchmark
     prestudy/hp1/main.cpp
@@ -52,7 +57,7 @@ target_compile_definitions(gamenet_hp1_packet_framer_view_benchmark PRIVATE
 gamenet_configure_sanitizers(gamenet_hp1_packet_framer_view_benchmark)
 
 add_custom_target(gamenet_hp1_packet_framer_view_prestudy
-    DEPENDS gamenet_hp1_packet_framer_view_benchmark
+    DEPENDS gamenet_hp1_packet_framer_view_benchmark gamenet_hp1_borrowed_tcp_echo
 )
 
 # HP2 EXPERIMENTAL-PRESTUDY: fixed-capacity SPSC mailbox/source/outbox. It is

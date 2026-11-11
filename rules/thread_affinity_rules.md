@@ -79,6 +79,11 @@ No other direct mutation path is allowed for core loop state.
   resulting `OwnedPacket` through a typed bounded mechanism outside HP1
 - after `visitFrames` returns and every borrowed view is dead, only the owner
   may call `Buffer::retrieve(consumedBytes)` or otherwise grow/trim the Buffer
+- the optional HP1 TCP receiver runs only on the connection owner. Its bounded
+  normal-queue continuation retains the connection and receiver, then borrows
+  a fresh span from the message callback's Buffer on that same owner. Reentrant
+  stop revokes later handlers immediately and defers Buffer mutation and
+  transport close until the active visitor returns.
 
 ## 3.2 Runtime Profile B
 - `MultiIoQueuedEvent` uses one base accept EventLoop, at least two TcpServer

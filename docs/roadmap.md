@@ -46,6 +46,8 @@ See `migration_status.md` for the current checked state of these phases.
   libFuzzer coverage and a bounded Linux ASan/UBSan workflow, with two local
   WSL 50,000-run campaigns passing. HP1 remains planned pending its native
   HP0 ledger, real Profile A contracts and performance gates.
+  The optional real TCP receiver now exercises borrowed input, bounded owner
+  continuation and shutdown contracts within the same isolated HP1 target.
   HP2 SPSC mailbox/source/outbox is likewise
   `KEEP-EXPERIMENTAL`: Release/ASan and current Profile B contracts pass and
   structural queue allocation/lock/generic-post costs are zero, but the local
