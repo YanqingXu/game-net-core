@@ -8,6 +8,7 @@
 #include "support/SocketPair.h"
 #include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include <atomic>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -267,10 +268,29 @@ void inboundByteLimitAndForeignReply() {
     f.feed(Fixture::wire({RpcMessageKind::Request, 2, 1, 1000, ""}));
     GAMENET_TEST_ASSERT(f.rpc->snapshot().closed); // request ID replay is a protocol fault
 }
+void foreignReplyRacesOwnerRelease() {
+    RpcChannel::Reply reply;
+    Fixture f({}, [&](const auto&, auto value) { reply = std::move(value); });
+    f.feed(Fixture::wire({RpcMessageKind::Request, 1, 1, 1000, ""}));
+    std::atomic<bool> started{false}, stop{false};
+    std::thread worker([&] {
+        started.store(true, std::memory_order_release);
+        while (!stop.load(std::memory_order_acquire)) {
+            const auto result = reply({RpcStatus::Ok, ""});
+            GAMENET_TEST_ASSERT(result == RpcOperation::WrongThread || result == RpcOperation::Closed);
+        }
+    });
+    while (!started.load(std::memory_order_acquire)) std::this_thread::yield();
+    f.rpc.reset(); // its weak foreign reply must not take over final ownership
+    stop.store(true, std::memory_order_release);
+    worker.join();
+    GAMENET_TEST_ASSERT(reply({RpcStatus::Ok, ""}) == RpcOperation::Closed);
+}
 }  // namespace
 int main() {
     limitsAndReentry(); byteLimitAndSendRejection(); sendRejection();
     deadlinesAndLateResponses(); disconnectAndDestructor(); shutdownAndWeakReply();
     inboundAndPartialFrames(); malformedAndBoundedContinuation(); protocolAndThreadRules();
     continuationReentryAndRelease(); terminalCallbackReleasesCaller(); inboundByteLimitAndForeignReply();
+    foreignReplyRacesOwnerRelease();
 }

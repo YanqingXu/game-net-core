@@ -152,7 +152,12 @@ struct RpcChannel::Impl {
         stats.inboundBytes += weight;
         if (!handler) { (void)replyError(id, "unknown method"); return; }
         try {
-            handler(message, [weak, id](RpcResult result) {
+            handler(message, [weak, id, owner = executor](RpcResult result) {
+                // A foreign caller must not acquire a temporary strong lease:
+                // racing owner teardown could then destroy the channel there.
+                if (!owner.isInOwnerThread())
+                    return weak.expired() || !owner.available()
+                        ? RpcOperation::Closed : RpcOperation::WrongThread;
                 const auto self = weak.lock();
                 return self ? self->reply(id, std::move(result)) : RpcOperation::Closed;
             });
