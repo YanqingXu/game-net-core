@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+void runPacketFramerViewReceiverContracts();
+
 namespace {
 
 std::atomic<std::size_t> countedAllocations{};
@@ -304,6 +306,32 @@ void testRandomizedLegacyDifferential() {
     GAMENET_TEST_ASSERT(candidateFrames == expected);
 }
 
+void testTypedVisitorStop() {
+    PacketFramerViewPrototype framer({
+        .maxPayloadBytes = 8, .maxBufferedBytes = 64,
+        .maxFramesPerPush = 8, .maxFrameBytesPerPush = 64,
+    });
+    gamenet::net::Buffer input;
+    input.append(frame("first") + frame("second"));
+    std::size_t calls = 0;
+    const auto result = framer.visitFrames(readableSpan(input), [&](PacketView) {
+        ++calls;
+        return gamenet::experimental::hp1::FrameVisitAction::Stop;
+    });
+    GAMENET_TEST_ASSERT(result.status == FrameVisitStatus::VisitorStopped);
+    GAMENET_TEST_ASSERT(calls == 1 && result.frameCount == 1);
+    GAMENET_TEST_ASSERT(result.consumedBytes == frame("first").size());
+    GAMENET_TEST_ASSERT(!result.needsContinuation && !framer.faulted());
+    input.retrieve(result.consumedBytes);
+    GAMENET_TEST_ASSERT(input.readableBytes() == frame("second").size());
+    const auto resumed = framer.visitFrames(readableSpan(input), [&](PacketView) {
+        ++calls;
+        return gamenet::experimental::hp1::FrameVisitAction::Continue;
+    });
+    GAMENET_TEST_ASSERT(resumed.status == FrameVisitStatus::FramesVisited);
+    GAMENET_TEST_ASSERT(calls == 2 && resumed.consumedBytes == input.readableBytes());
+}
+
 }  // namespace
 
 void* operator new(std::size_t size) {
@@ -346,4 +374,6 @@ int main() {
     testFailClosedAndReset();
     testVisitorFailureAndReentryRejection();
     testRandomizedLegacyDifferential();
+    testTypedVisitorStop();
+    runPacketFramerViewReceiverContracts();
 }

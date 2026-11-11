@@ -13,6 +13,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace gamenet::experimental::hp1 {
@@ -66,6 +67,12 @@ enum class FrameVisitStatus {
     Faulted,
     VisitorException,
     ReentrantVisitRejected,
+    VisitorStopped,
+};
+
+enum class FrameVisitAction {
+    Continue,
+    Stop,
 };
 
 struct FrameVisitResult {
@@ -138,8 +145,15 @@ public:
             const auto payload = input.subspan(
                 consumedBytes + protocol::PacketFramer::kLengthBytes,
                 payloadBytes);
+            FrameVisitAction action = FrameVisitAction::Continue;
             try {
-                std::invoke(visitor, PacketView(payload));
+                if constexpr (std::is_same_v<
+                                  std::invoke_result_t<Visitor&, PacketView>,
+                                  FrameVisitAction>) {
+                    action = std::invoke(visitor, PacketView(payload));
+                } else {
+                    std::invoke(visitor, PacketView(payload));
+                }
             } catch (...) {
                 return {
                     .status = FrameVisitStatus::VisitorException,
@@ -152,6 +166,15 @@ public:
             consumedBytes += frameBytes;
             visitedFrameBytes += frameBytes;
             ++visitedFrames;
+            if (action == FrameVisitAction::Stop) {
+                return {
+                    .status = FrameVisitStatus::VisitorStopped,
+                    .consumedBytes = consumedBytes,
+                    .frameCount = visitedFrames,
+                    .processedFrameBytes = visitedFrameBytes,
+                    .needsContinuation = false,
+                };
+            }
         }
 
         return {

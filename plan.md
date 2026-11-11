@@ -112,6 +112,10 @@ move-only retain、差分合同和 Windows development benchmark；未完成 Lin
 Profile A inputBuffer、fixed-lab 和 5%/3% 推广门，因此 HP1 里程碑仍为 `planned`，默认
 路径与安装 API 不变。预研实现槽已释放。
 
+2026-11-11 功能补充：在 HP1 可选目标中加入真实 TCP 借用解帧接收器和可运行的 echo
+入口。处理函数可请求停止当前批次，分片输入留在连接 Buffer，预算续跑经过有界 owner
+队列。真实回环合同覆盖重入关闭、续跑拒绝和输入字节清算；正式 HP1 仍遵循 HP0 推广门。
+
 - 更新 active PacketFramer、Buffer、Profile A intent/rules，明确 `PacketView`
   生命周期和 callback re-entry 限制。
 - `visitFrames` 直接读取调用方连续可读区；只在完整帧处理后返回消费长度，partial

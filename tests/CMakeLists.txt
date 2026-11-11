@@ -414,6 +414,7 @@ if(TARGET gamenet_hp1_packet_framer_view)
     add_executable(
         gamenet_hp1_packet_framer_view_contract
         ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_view.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/contract/protocol/test_packet_framer_view_receiver.cpp
     )
     target_include_directories(
         gamenet_hp1_packet_framer_view_contract
@@ -429,7 +430,7 @@ if(TARGET gamenet_hp1_packet_framer_view)
     )
     set_tests_properties(
         contract.protocol.test_packet_framer_view
-        PROPERTIES LABELS "contract;protocol;experimental;prestudy"
+        PROPERTIES LABELS "contract;protocol;threading;lifecycle;experimental;prestudy"
     )
     gamenet_configure_test_runtime(contract.protocol.test_packet_framer_view)
     add_dependencies(

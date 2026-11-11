@@ -105,6 +105,43 @@ The prototype names are isolated in `gamenet::experimental::hp1`:
   only `KEEP-EXPERIMENTAL`, `REJECT`, or `DEFER`; it cannot switch Profile A,
   add the planned installed API, satisfy 5%/3%, or output `INTEGRATE`.
 
+## Real TCP Receiver Follow-up
+
+The optional HP1 target may compose the prototype with real TcpServer and
+TcpConnection callbacks through `PacketFramerViewReceiver`. One connection
+owner creates, drives, snapshots and stops its receiver. The connection
+context or caller owns the receiver, which holds only a weak connection.
+Its synchronous handler receives a borrowed PacketView and may request stop.
+
+- A typed `FrameVisitAction::Stop` returns `VisitorStopped` after counting the
+  current normally returned frame. Later frames in that span are not visited.
+  Existing void visitors retain their current behavior.
+- The receiver reads the Buffer supplied to the message callback and retrieves
+  consumed bytes after visit returns. It retains no payload span between turns.
+- One queued continuation captures the receiver, the connection and the Buffer
+  object pointer. The connection pins that Buffer object's lifetime. The next
+  turn reacquires a fresh readable span on the same owner thread.
+- While a continuation is queued, later message callbacks leave input for that
+  turn. Frame-count and frame-byte budgets bound each dispatch independently.
+- Normal-queue rejection closes receiver admission and clears unread input.
+  No recursive drain or secondary queue is used.
+- Reentrant stop first revokes handler admission. Buffer consumption, discard
+  and connection shutdown happen only after the borrowed visitor returns.
+  Normal stop and continuation rejection drain accepted TCP output using
+  shutdown, matching the current Profile A close policy. Protocol failure and
+  handler overrun force close. A composition stopping TcpServer revokes its
+  receivers first, before delegating the server's asynchronous drain.
+- A handler exception is contained and terminates input admission. Pending
+  continuation callbacks still retire, and no later handler starts.
+- Snapshots expose handler calls, consumed/discarded bytes, continuation
+  posts/rejections, handler/protocol failures and terminal input settlement.
+- `gamenet_hp1_borrowed_tcp_echo` is the optional runnable zero-worker TCP
+  composition using the receiver and the existing bounded send API.
+- `tests/contract/protocol/test_packet_framer_view_receiver.cpp`, linked into
+  the existing HP1 contract executable, verifies real loopback TCP, segmented
+  input, bounded continuation, retained ownership, reentrant stop, exception,
+  queue rejection and pending-continuation shutdown on both supported backends.
+
 ## Verification
 
 - `tests/contract/protocol/test_packet_framer_view.cpp` verifies borrowed and

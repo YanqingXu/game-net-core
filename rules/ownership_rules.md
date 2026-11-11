@@ -596,6 +596,11 @@ It must not blur these roles.
   retained payload, or shutdown obligation
 - visitor exception, nested visit, reset rejection, protocol fault, and normal
   completion all leave zero retained view/packet state in the prototype
+- the optional TCP receiver weakly observes its connection. Its caller or the
+  connection context owns receiver state. An accepted continuation owns strong
+  receiver/connection guards and borrows the stable Buffer object, never a
+  readable payload span. Closing input admission discards unread bytes after
+  the current visitor and retires every accepted continuation before settlement.
 
 ## 11.2 Runtime Profile A Ownership
 - the caller owns and outlives the EventLoop and non-installed
