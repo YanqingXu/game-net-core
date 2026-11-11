@@ -1,6 +1,8 @@
 # Copyright 2026 Yanqing Xu
 # SPDX-License-Identifier: Apache-2.0
 
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -32,6 +34,29 @@ def main() -> None:
     require(fuzz_text, "-fsanitize=fuzzer,address,undefined", fuzz_cmake)
     require(harness_text, 'extern "C" int LLVMFuzzerTestOneInput', harness)
     require(harness_text, "needsContinuation", harness)
+    hp1_harness = repo_root / "tests/fuzz/prestudy/fuzz_packet_framer_view.cpp"
+    hp1_workflow = repo_root / ".github/workflows/hp1-framing-fuzz.yml"
+    hp1_gate = "if(TARGET gamenet_hp1_packet_framer_view)"
+    require(fuzz_text, hp1_gate, fuzz_cmake)
+    hp1_block = fuzz_text.split(hp1_gate, 1)[1].split("endif()", 1)[0]
+    require(hp1_block, "add_executable(gamenet_fuzz_packet_framer_view", fuzz_cmake)
+    require(hp1_block, "-fsanitize=fuzzer,address,undefined", fuzz_cmake)
+    assert "install(" not in hp1_block and "export(" not in hp1_block
+    hp1_text = hp1_harness.read_text(encoding="utf-8")
+    for fragment in (
+        "legacy_.push(chunk)", "candidate_.visitFrames(readable",
+        "verifyRecovery", "view.retain()",
+    ):
+        require(hp1_text, fragment, hp1_harness)
+    hp1_workflow_text = hp1_workflow.read_text(encoding="utf-8")
+    for fragment in (
+        "-DGAMENET_BUILD_BENCHMARKS=ON", "-DGAMENET_BUILD_FUZZING=ON",
+        "-DGAMENET_ENABLE_ASAN_UBSAN=ON", "-runs=20000", "-max_len=8192",
+        "-timeout=2", "-rss_limit_mb=512", "--no-tests=error",
+        "actions/upload-artifact@v4", "if: always()",
+    ):
+        require(hp1_workflow_text, fragment, hp1_workflow)
+    subprocess.run([sys.executable, str(corpus_generator), "--check", "--hp1"], check=True)
     assert corpus_generator.exists(), f"missing deterministic corpus generator: {corpus_generator}"
     generator_text = corpus_generator.read_text(encoding="utf-8")
     require(generator_text, '"valid-empty-frame": b"\\x00\\x00\\x00\\x00"', corpus_generator)

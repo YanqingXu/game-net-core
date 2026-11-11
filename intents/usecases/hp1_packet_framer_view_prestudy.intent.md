@@ -117,6 +117,15 @@ The prototype names are isolated in `gamenet::experimental::hp1`:
   non-installed, and registered with its exact contract and benchmark.
 - Existing PacketFramer contracts and fuzz remain the legacy semantic baseline
   and must stay green; this prototype does not weaken them.
+- `tests/fuzz/prestudy/fuzz_packet_framer_view.cpp` compares every owner-local
+  visit with legacy `push()` over arbitrary bytes and generated valid streams.
+  Both paths receive identical chunks and options. Status, emitted payloads,
+  continuation, consumed frame bytes, sticky fault and reset recovery must
+  agree. The candidate reads a real caller-owned Buffer, and retained payloads
+  are checked after the owner retrieves consumed bytes.
+- The differential libFuzzer target requires both `GAMENET_BUILD_FUZZING=ON`
+  and `GAMENET_BUILD_BENCHMARKS=ON`. Its bounded Linux ASan/UBSan workflow
+  retains the corpus, log and crash artifacts as development validation.
 
 ## Non-Goals
 
@@ -134,7 +143,12 @@ bytes) each ran ten sequential samples with equal legacy/candidate checksums,
 zero candidate allocations, and zero candidate payload-copy bytes. Observed
 median elapsed improvement ranged from 31.99% to 74.97%.
 
-Decision: `KEEP-EXPERIMENTAL`. Linux, libFuzzer integration, real Profile A
-TcpConnection input-Buffer execution, fixed-lab observer counters, and the HP0
-5%/3% gate are not present, so the HP1 milestone remains planned and no default
-or installed surface changes.
+Decision: `KEEP-EXPERIMENTAL`. At the initial 2026-08-25 checkpoint, Linux,
+libFuzzer integration, real Profile A TcpConnection input-Buffer execution,
+fixed-lab observer counters and the HP0 5%/3% gate were absent.
+
+The 2026-11-11 follow-up adds the optional differential libFuzzer entry and a
+bounded Linux ASan/UBSan workflow. Local WSL Clang checks passed two 50,000-run
+differential campaigns, the existing HP1 contract and 5,000 legacy fuzz units.
+Formal HP1 remains planned pending the native HP0 ledger, real Profile A
+integration contracts and the fixed-lab performance gates.

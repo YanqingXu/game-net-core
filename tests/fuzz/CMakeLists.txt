@@ -17,3 +17,20 @@ target_compile_options(gamenet_fuzz_packet_framer PRIVATE
 target_link_options(gamenet_fuzz_packet_framer PRIVATE
     -fsanitize=fuzzer,address,undefined
 )
+
+if(TARGET gamenet_hp1_packet_framer_view)
+    add_executable(gamenet_fuzz_packet_framer_view
+        prestudy/fuzz_packet_framer_view.cpp
+    )
+    target_link_libraries(gamenet_fuzz_packet_framer_view PRIVATE
+        gamenet_hp1_packet_framer_view GameNet::core
+    )
+    target_compile_features(gamenet_fuzz_packet_framer_view PRIVATE cxx_std_23)
+    target_compile_options(gamenet_fuzz_packet_framer_view PRIVATE
+        -fsanitize=fuzzer-no-link,address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(gamenet_fuzz_packet_framer_view PRIVATE
+        -fsanitize=fuzzer,address,undefined
+    )
+endif()

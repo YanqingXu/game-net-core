@@ -674,6 +674,13 @@ For lifecycle-sensitive modules, tests should include:
   prefix with zero visitor side effects, sticky fault/reset, visitor exception,
   nested visit/reset rejection, exact `consumedBytes`, and randomized valid
   streams against legacy `PacketFramer::push()`
+- the optional HP1 differential fuzzer compares each call's status, payloads,
+  continuation, consumed frame bytes and remaining buffered-byte count against
+  the installed framer under identical bounded options and input segmentation.
+  It exercises arbitrary malformed bytes, generated valid streams, sticky
+  faults and reset recovery on one owner thread using a real Buffer. Both fuzz
+  and benchmark options must be enabled, and raw logs/corpus/crash artifacts
+  are retained by the bounded Linux ASan/UBSan workflow.
 - the HP1 benchmark is default-off, non-installed, non-exported, preserves the
   unchanged legacy callback-copy path, and reports raw checksums, payload/
   copied/retained byte accounting, iteration count, and elapsed time for both
