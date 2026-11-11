@@ -1,155 +1,94 @@
 ---
-status: deferred
-target: GameNet::protocol
-migration_source: mini_trantor
-promote_gate: post-phase-4-protocol
+status: active
+target: GameNet::rpc
+migration_source: native
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: native
+source_commit: none
+source_paths: none
 ---
 
-# Module Intent: RPC (Remote Procedure Call) Layer
+# Module Intent: Minimal Callback RPC (RPC-C1)
 
-## 1. Intent
-The RPC layer provides a minimal request-response protocol on top of the existing
-TcpServer / TcpClient infrastructure. It consists of four components:
+## Authorization and scope
 
-- **RpcCodec**: stateless codec that encodes/decodes length-prefixed RPC messages
-  with `[totalLen | requestId | msgType | serviceMethod | payload]` framing
-- **RpcChannel**: per-connection RPC state that maps in-flight requests to pending
-  continuations (callback or coroutine), dispatches responses, and handles timeouts
-- **RpcServer**: thin wrapper around TcpServer that registers service methods
-  (callback-style and coroutine-style), decodes incoming requests, invokes handlers,
-  and sends back responses. Coroutine handlers return `Task<std::string>` and throw
-  for errors; a `dispatchCoroHandler` wrapper bridges them to the callback-based
-  request dispatch path.
-- **RpcClient**: thin wrapper around TcpClient that provides `call()` (callback),
-  `co_await asyncCall()` (returns `RpcResult`), and `co_await coroCall()` (returns
-  payload directly, throws `RpcError` on error/timeout) interfaces
+The user-authorized 2026-11-11 RPC-C1 milestone in plan.md replaces the historical
+deferred callback/coroutine proposal with a native provisional GameNet::rpc.
+It does not promote either audited consumer wire, alter the stable Reactor,
+or satisfy HP0/HP7 performance gates. RpcCodec and one bidirectional RpcChannel
+compose existing TcpServer/TcpClient; applications wire message/down callbacks.
+The channel never replaces Core callbacks, owns a socket or starts a thread.
+Coroutines, discovery, retries, TLS, authentication and streaming stay deferred.
+Exactly-once means local completion, not exactly-once remote side effects.
 
-The RPC layer is a protocol adapter — it does not own or modify the Reactor core.
+## Wire and admission
 
----
+PacketFramer supplies a four-byte big-endian body length. The body is
+GNRP | version:u8=1 | kind:u8 | reserved:u16=0 | id:u64 | method:u32 |
+remainingTimeoutMs:u32 | payload. Integers are big-endian. Kinds are request=1,
+response=2, error=3. Request IDs are nonzero, strictly increasing per direction
+and never reused or wrapped. Request method and timeout are positive;
+response/error method and timeout are zero. Payload is opaque bytes, default
+64 KiB maximum. This is not the historical gateway/YanGame wire. Local
+steady_clock deadlines use relative wire timeouts, never foreign clocks.
 
-## 2. Responsibilities
-- define a minimal binary framing protocol for request/response messages
-- support request, response, and error message types
-- correlate request ↔ response via unique request IDs
-- support per-request timeout via TimerQueue integration
-- support callback-based RPC calls (`call(method, payload, callback)`)
-- support coroutine-based RPC calls (`co_await asyncCall(method, payload, timeout)`)
-- support exception-based coroutine calls (`co_await coroCall(method, payload, timeout)`)
-- support coroutine-style server handlers (`registerCoroMethod` with `Task<std::string>` return)
-- dispatch coroutine handlers via `detach()`ed wrapper coroutine
-- dispatch incoming requests to registered method handlers on the server side
-- handle malformed frames gracefully (close connection)
-- resume coroutines / invoke callbacks on the connection's owner loop thread
+Positive count and charged-wire-byte limits independently bound outgoing
+pending and incoming deferred replies. Framing has buffered-byte, frame-count
+and per-turn byte limits. Rejected call admission returns a typed reason and
+id=0, invokes no callback and retains no timer/byte slot. Accepted calls own
+one callback/deadline until one terminal result. trySend failure never falls
+back to an unbounded queue. Admission is transactional even if synchronous
+send failure re-enters the disconnect hook.
 
----
+## Owner, ownership and re-entry
 
-## 3. Non-Responsibilities
-- does not implement protobuf / flatbuffers serialization (payload is opaque bytes)
-- does not implement service discovery or load balancing
-- does not implement retry / circuit breaker / rate limiting
-- does not implement streaming RPC or bidirectional streaming
-- does not implement connection pooling (one RpcClient = one TcpClient)
-- does not own EventLoop or TcpConnection lifecycle
-- does not implement authentication or encryption (use TLS at transport level)
+1. One connection EventLoop owns mutation, handlers, callbacks, cancellation,
+   snapshots and destruction. Foreign call/cancel/reply/close return WrongThread.
+   Applications marshal owned values through bounded EventLoopExecutor posts
+   and check PostResult. No new cross-thread scheduling mechanism is added.
+2. Caller or connection context owns the channel; it weakly observes the
+   connection and borrows the outliving EventLoop. Timer and saved reply
+   closures are weak; accepted continuations temporarily lease the channel.
+3. onMessage copies into bounded PacketFramer and consumes the supplied Buffer
+   before handlers. Frames own their payload. No span survives a continuation.
+   Recursive onMessage is rejected without consuming the nested Buffer.
+4. Callbacks may call/cancel/reply/close and release caller references. Pending
+   removal, timer cancellation and byte release precede callback invocation.
+   Public dispatch holds a self lease. Callback exceptions are contained/counted.
+5. Applications call onDisconnect from the down callback and close before
+   quitting/destroying the loop. Owner-thread destruction also settles remaining
+   outgoing callbacks as Shutdown. A reply after channel destruction is Closed.
 
----
+## Terminal contract
 
-## 4. Core Invariants
-- RpcCodec is stateless: encode/decode are pure utility functions
-- RpcChannel is per-connection, accessed only on the connection's owner loop thread
-- each request gets a monotonically increasing uint64 request ID per connection
-- pending map (requestId → callback/continuation) is single-thread accessed only
-- timeout cancels the pending entry and invokes callback with error (never leaks)
-- response without matching pending request is silently discarded
-- frame exceeding max size (default 64KB) causes connection close
-- server handler receives (request payload, response callback) — must call response exactly once
-- coroutine handler return value is sent as response; thrown exception is sent as error
-- `dispatchCoroHandler` is a free function (not lambda) to avoid dangling captures
-- `coroCall()` throws `RpcError` on error/timeout; returns payload string on success
+Response, remote error, deadline, cancel, disconnect, explicit shutdown,
+protocol error and continuation rejection converge on one removal path. Only
+admitted outgoing entries invoke callbacks, exactly once. Late/duplicate replies
+cannot complete removed entries. Response processing checks the local deadline
+even if TimerQueue delivery is delayed. Local cancel cannot undo remote work.
 
----
+Inbound admission reserves count/bytes/deadline. First reply removes the slot
+before send; later replies return NotFound. Deadline, close, handler exception
+and overload have explicit settlement. Absent handlers return a bounded error;
+application handlers dispatch method IDs. Malformed wire closes channel and TCP.
+Buffered frames drain via one bounded continuation; scheduling rejection closes
+and settles all obligations. Explicit close seals admission before callbacks.
 
-## 5. Collaboration
-- **RpcServer** wraps **TcpServer** and sets message/connection callbacks
-- **RpcChannel** is created per-connection and stored via `TcpConnection::setContext`
-- on message arrival, RpcCodec incrementally decodes frames from Buffer
-- for request frames: RpcServer dispatches to registered handlers
-- for response frames: RpcChannel matches requestId and invokes pending callback
-- **RpcClient** wraps **TcpClient** and provides call/asyncCall API
-- timeout is managed via `EventLoop::runAfter()` → TimerQueue
+## Verification
 
----
+- tests/unit/rpc/test_rpc_codec.cpp: wire, binary/partial frames, malformed/limits.
+- tests/contract/rpc/test_rpc_channel.cpp: connected-socket terminal races, bounded pending,
+  re-entry, exceptions, deferred replies and shutdown on epoll and IOCP.
+- tests/integration/rpc/test_rpc_tcp.cpp: real TCP client/server request/response,
+  timeout/cancel/late reply, pending overload/recovery, pending disconnect and
+  cross-thread bounded owner submission.
+- tests/cmake/test_install_package_contract.py: installed GameNet::rpc linkage
+  through the provisional package consumer.
 
-## 6. Threading Rules
-- RpcCodec encode/decode are stateless utility functions — no thread affinity
-- RpcChannel (pending map, nextRequestId) is per-connection, owner-loop-thread only
-- RpcServer handler callbacks fire on the connection's owner loop thread
-- RpcClient `call()` can be invoked from any thread (marshaled to loop thread)
-- coroutine resumption always happens on the connection's owner loop thread
-- RpcServer/RpcClient configuration (register methods, set timeout) before start()
+## Review
 
----
-
-## 7. Ownership Rules
-- RpcServer owns TcpServer
-- RpcClient owns TcpClient
-- RpcChannel is owned by the connection (via `std::any` context storage)
-- RpcCodec is a stateless utility namespace — no ownership
-- pending callbacks are owned by RpcChannel; cleared on timeout or response
-- user callback borrows request payload (string_view) and response sender (function)
-
----
-
-## 8. Failure Semantics
-- malformed frame (too short, invalid msgType): close connection
-- frame exceeding max size (> 64KB): close connection
-- request timeout: invoke callback with error status, remove from pending map
-- connection closed while requests pending: invoke all pending callbacks with error
-- server handler throws exception: not caught by RpcServer (caller responsibility)
-- duplicate requestId in pending map: should not happen (monotonic counter)
-
----
-
-## 9. Extension Points
-- protobuf / flatbuffers payload serialization (future, orthogonal to framing)
-- streaming RPC (future, new message types)
-- service discovery integration (future, above RpcClient)
-- connection pooling (future, wraps multiple RpcClients)
-- bidirectional RPC (future, server can call client)
-- compression (future, transparent payload transformation)
-
----
-
-## 10. Test Contracts
-- RpcCodec encodes and decodes request/response/error frames correctly
-- RpcCodec handles partial frames (kIncomplete) across multiple buffer reads
-- RpcCodec rejects frames exceeding max size
-- RpcCodec rejects frames with invalid message type
-- RpcServer dispatches request to correct registered handler
-- RpcServer returns error response for unregistered method
-- RpcClient callback receives response matching request
-- RpcClient timeout invokes callback with error
-- RpcClient pending callbacks invoked with error on connection close
-- full RPC round-trip: client call → server handler → client callback
-- coroutine round-trip: `co_await asyncCall()` returns response
-- coroutine timeout: `co_await asyncCall()` throws on timeout
-- coroutine server handler: `registerCoroMethod` handler's return value sent as response
-- coroutine server handler error: thrown exception sent as error response
-- coroutine server handler with async: handler can `co_await` and still respond correctly
-- `coroCall()` returns payload directly on success
-- `coroCall()` throws `RpcError` on error or timeout
-- full coroutine pipeline: coroutine server handler + `coroCall()` client
-
----
-
-## 11. Review Checklist
-- Is RpcChannel ever accessed from a thread other than the connection owner?
-- Can pending map leak entries (timeout + response race)?
-- Does requestId wrap safely (uint64 — effectively never)?
-- Is response sent exactly once per request on the server side?
-- Does `dispatchCoroHandler` safely own all captured state in the coroutine frame?
-- Does `coroCall()` propagate the error message correctly in `RpcError`?
-- Are all pending callbacks invoked on connection close (no leaked continuations)?
-- Does the server handle back-to-back requests on the same connection?
-- Is max frame size enforced before allocating payload memory?
+Review wire/terminal contract, bounds, owner/weak lifetime and lifecycle before
+implementation details. Functional development evidence does not imply external
+adoption, performance promotion or release. The five core change-gate answers
+are in the owner/ownership/re-entry section and named verification paths above.

@@ -4,6 +4,14 @@
 game-net-core follows a reactor-style thread-affinity model.
 Mutable reactor state belongs to a specific EventLoop thread.
 
+### RPC-C1
+
+RpcChannel mutation, call/cancel/reply/close, message/disconnect hooks, snapshots
+and destruction belong to its connection EventLoop. Foreign mutations return
+WrongThread; applications marshal owned values through bounded executor posts.
+Completion and handler callbacks are owner-only, may re-enter call/cancel/close,
+and run after pending removal. No coroutine or inline foreign-thread fallback.
+
 ## 2. EventLoop
 - Each EventLoop has exactly one owner thread
 - loop() must run only on the owner thread

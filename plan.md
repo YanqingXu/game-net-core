@@ -1,4 +1,18 @@
-# game-net-core 高性能执行计划：HP0–HP8
+# game-net-core 执行计划：HP0–HP8 与 callback RPC
+
+## RPC-C1：最小 callback RPC（2026-11-11 用户授权）
+
+新增独立功能里程碑，允许在 HP0 fixed-lab 尚未关闭时实现 provisional
+`GameNet::rpc`。这是新功能授权，不是历史 M7 的共享协议推广，也不改变 HP0
+对快路径优化的性能推广门。先更新 active intent、owner/ownership/重入规则与合同，
+再实现和验证。首版为 RpcCodec + 每连接 RpcChannel，以现有 TcpServer/TcpClient
+组合；真实 TCP 示例与测试覆盖请求/响应、超时、取消、断连、pending 数量/字节上限、
+恰好一次本地完成、服务端延迟回复及关闭清算。所有运行时状态归连接 owner，跨线程
+通过现有 bounded executor；不增加 Reactor 线程或修改稳定 Core API。
+
+交付：独立 provisional 安装组件、用法文档、Windows IOCP/Linux epoll 及 sanitizer
+验证，验证完成后提交 PR。实现与 HP1 草稿独立，HP 性能切片不并行扩大。
+协程、TLS、HTTP/WebSocket、UDP/KCP、Lua、服务发现与自动重试继续 deferred。
 
 计划重制日期：2026-08-25
 
@@ -80,7 +94,8 @@ HP 切片的 `planned -> contract-ready -> implemented -> verified -> integrated
   现有 `trySend(std::string_view)` 保持 borrowed/兼容路径；正常高频回包通过 owner
   outbox 回到连接 owner 后发送。
 - 不增加公共 Runtime factory、公共 mailbox、公共 backend selector 或默认
-  io_uring；不扩展到 HTTP、TLS、UDP/KCP、RPC、Lua、AOI 等模块。
+  io_uring；HP 优化线不扩展到 HTTP、TLS、UDP/KCP、RPC、Lua、AOI 等模块。
+  独立 RPC-C1 的 callback 功能授权见本文件开头。
 
 ## 3. 执行里程碑
 

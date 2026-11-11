@@ -8,6 +8,17 @@ A module should either:
 - observe an object
 It must not blur these roles.
 
+### RPC-C1
+
+The caller/context owns RpcChannel, which weakly observes its connection and
+borrows the outliving EventLoop. Timer/reply closures are weak; dispatch takes
+a self lease. Pending entries own callbacks and charged count/bytes until a
+single terminal removal, before invoking user code. Input frames own their
+payload; no borrowed Buffer span survives dispatch. The application wires both
+message and down callbacks and closes channels before owner-loop teardown.
+Owner-thread destruction settles pending callbacks as Shutdown; callbacks are
+contained and cannot prevent remaining obligations from being settled.
+
 ## 2. EventLoop
 - EventLoop owns its Poller
 - EventLoop owns wakeup-related resources it creates

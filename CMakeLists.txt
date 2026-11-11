@@ -63,6 +63,7 @@ set(GAMENET_INSTALL_DOCDIR
 
 add_subdirectory(src/core)
 add_subdirectory(src/protocol)
+add_subdirectory(src/rpc)
 add_subdirectory(src/transport)
 add_subdirectory(src/game_session)
 add_subdirectory(src/game_logic)
@@ -94,6 +95,10 @@ install(DIRECTORY include/gamenet/protocol
 )
 
 install(DIRECTORY include/gamenet/transport
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
+)
+
+install(DIRECTORY include/gamenet/rpc
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet
 )
 

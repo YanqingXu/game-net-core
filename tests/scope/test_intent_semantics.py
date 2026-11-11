@@ -35,6 +35,7 @@ PHASE4_ARTIFACTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/rpc.intent.md": ("installed-library", "GameNet::rpc"),
     "intents/modules/io_uring_experimental_package.intent.md": (
         "installed-library",
         "GameNet::experimental_io_uring",
@@ -113,6 +114,7 @@ FROZEN_CORE_ACTIVE_INTENTS = {
 PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_core": set(),
     "gamenet_protocol": {"gamenet_core"},
+    "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
     "gamenet_transport": {"gamenet_core"},
     "gamenet_game_session": {"gamenet_core", "gamenet_transport"},
     "gamenet_game_logic": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
