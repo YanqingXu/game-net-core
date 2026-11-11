@@ -78,9 +78,10 @@ and settles all obligations. Explicit close seals admission before callbacks.
 ## Verification
 
 - tests/unit/rpc/test_rpc_codec.cpp: wire, binary/partial frames, malformed/limits.
-- tests/contract/rpc/test_rpc_channel.cpp: real TCP terminal races, bounded pending,
+- tests/contract/rpc/test_rpc_channel.cpp: connected-socket terminal races, bounded pending,
   re-entry, exceptions, deferred replies and shutdown on epoll and IOCP.
-- tests/integration/rpc/test_rpc_tcp.cpp: real client/server composition and
+- tests/integration/rpc/test_rpc_tcp.cpp: real TCP client/server request/response,
+  timeout/cancel/late reply, pending overload/recovery, pending disconnect and
   cross-thread bounded owner submission.
 - tests/cmake/test_install_package_contract.py: installed GameNet::rpc linkage
   through the provisional package consumer.

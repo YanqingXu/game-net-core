@@ -17,15 +17,21 @@ int main() {
     gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "rpc-server");
     std::shared_ptr<RpcChannel> clientRpc;
     unsigned completed = 0, lateReplies = 0;
+    bool disconnectStarted = false;
     const std::string binary("hello\0rpc", 9);
     server.setConnectionCallback([&](const auto& conn) {
         if (conn->connected()) {
-            conn->setContext(RpcChannel::create(conn, [&](const RpcMessage& message, auto reply) {
+            conn->setContext(RpcChannel::create(conn,
+                [&, weakConnection = std::weak_ptr<gamenet::net::TcpConnection>(conn)](
+                    const RpcMessage& message, auto reply) {
                 GAMENET_TEST_ASSERT(loop.isInLoopThread());
                 if (message.method == 1) {
                     GAMENET_TEST_ASSERT(reply({RpcStatus::Ok, message.payload}) == RpcOperation::Accepted);
                 } else if (message.method == 2) {
                     GAMENET_TEST_ASSERT(reply({RpcStatus::RemoteError, "unknown method"}) == RpcOperation::Accepted);
+                } else if (message.method == 4) {
+                    // Drop real TCP while the caller still owns a pending request.
+                    if (const auto connection = weakConnection.lock()) connection->forceClose();
                 } else {
                     loop.runAfter(120ms, [&, reply] {
                         GAMENET_TEST_ASSERT(reply({RpcStatus::Ok, "late"}) == RpcOperation::NotFound);
@@ -80,16 +86,24 @@ int main() {
     });
     client.setMessageCallback([&](const auto&, auto* input) { clientRpc->onMessage(*input); });
     const auto progress = loop.runEvery(2ms, [&] {
-        if (completed != 5 || lateReplies != 2) return;
+        if (completed == 5 && lateReplies == 2 && !disconnectStarted) {
+            disconnectStarted = true;
+            GAMENET_TEST_ASSERT(clientRpc->call(4, "disconnect", 2s, [&](RpcResult result) {
+                GAMENET_TEST_ASSERT(loop.isInLoopThread() && result.status == RpcStatus::Disconnected);
+                ++completed;
+            }).status == RpcOperation::Accepted);
+        }
+        if (completed != 6 || lateReplies != 2) return;
         const auto stats = clientRpc->snapshot();
-        GAMENET_TEST_ASSERT(stats.acceptedCalls == 5 && stats.completedCalls == 5 &&
+        GAMENET_TEST_ASSERT(stats.acceptedCalls == 6 && stats.completedCalls == 6 &&
             stats.pendingRequests == 0 && stats.pendingBytes == 0);
-        (void)clientRpc->close(); client.connection()->forceClose();
+        (void)clientRpc->close();
+        if (auto connection = client.connection()) connection->forceClose();
         client.stop(); server.stop(); loop.quit();
     });
     client.connect();
     loop.runAfter(5s, [] { GAMENET_TEST_FAIL("RPC TCP integration timed out"); });
     loop.loop();
     loop.cancel(progress);
-    GAMENET_TEST_ASSERT(completed == 5 && lateReplies == 2);
+    GAMENET_TEST_ASSERT(completed == 6 && lateReplies == 2 && disconnectStarted);
 }
