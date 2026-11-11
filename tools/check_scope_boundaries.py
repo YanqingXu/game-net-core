@@ -66,6 +66,7 @@ PRESTUDY_SOURCE_SLICES = {
 }
 PRESTUDY_TEST_SLICES = {
     "tests/contract/protocol/test_packet_framer_view.cpp": {"hp1"},
+    "tests/fuzz/prestudy/fuzz_packet_framer_view.cpp": {"hp1"},
     "tests/contract/runtime_model/test_spsc_mailbox.cpp": {"hp1", "hp2"},
     "tests/contract/event_loop/test_event_loop_mailbox_source.cpp": {"hp1", "hp2"},
     "tests/contract/io_engine/test_epoll_slot_dispatch.cpp": {"hp3"},

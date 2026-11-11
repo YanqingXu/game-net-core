@@ -1,0 +1,100 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: HP1 framing differential fuzz
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - CMakeLists.txt
+      - 'cmake/**'
+      - benchmarks/CMakeLists.txt
+      - 'benchmarks/prestudy/hp1/**'
+      - 'tests/fuzz/**'
+      - tests/contract/protocol/test_packet_framer_view.cpp
+      - 'src/protocol/**'
+      - 'include/gamenet/protocol/**'
+      - src/core/net/Buffer.cc
+      - include/gamenet/core/net/Buffer.h
+      - .github/workflows/hp1-framing-fuzz.yml
+  push:
+    branches: [main]
+    paths:
+      - CMakeLists.txt
+      - 'cmake/**'
+      - benchmarks/CMakeLists.txt
+      - 'benchmarks/prestudy/hp1/**'
+      - 'tests/fuzz/**'
+      - tests/contract/protocol/test_packet_framer_view.cpp
+      - 'src/protocol/**'
+      - 'include/gamenet/protocol/**'
+      - src/core/net/Buffer.cc
+      - include/gamenet/core/net/Buffer.h
+      - .github/workflows/hp1-framing-fuzz.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  differential-fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure isolated HP1 fuzz target
+        run: |
+          set -euo pipefail
+          mkdir -p out/hp1-fuzz-evidence
+          git rev-parse HEAD > out/hp1-fuzz-evidence/checkout-sha.txt
+          clang++ --version > out/hp1-fuzz-evidence/compiler.txt
+          python3 tests/fuzz/generate_packet_framer_corpus.py --hp1 --check
+          cmake -S . -B build-hp1-fuzz -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DGAMENET_BUILD_BENCHMARKS=ON \
+            -DGAMENET_BUILD_FUZZING=ON \
+            -DGAMENET_BUILD_TESTING=ON \
+            -DGAMENET_ENABLE_ASAN_UBSAN=ON \
+            2>&1 | tee out/hp1-fuzz-evidence/configure.log
+      - name: Build fuzz and existing ownership contract
+        run: |
+          set -euo pipefail
+          cmake --build build-hp1-fuzz --parallel 2 \
+            --target gamenet_fuzz_packet_framer_view gamenet_hp1_packet_framer_view_contract \
+            2>&1 | tee out/hp1-fuzz-evidence/build.log
+      - name: Run existing HP1 contract
+        run: >-
+          ctest --test-dir build-hp1-fuzz
+          -R '^contract\.protocol\.test_packet_framer_view$'
+          --no-tests=error --output-on-failure --timeout 60
+          --output-junit "$PWD/out/hp1-fuzz-evidence/contract-junit.xml"
+      - name: Run bounded differential fuzz
+        run: |
+          set -euo pipefail
+          mkdir -p out/hp1-fuzz-evidence/corpus out/hp1-fuzz-evidence/artifacts
+          cp tests/fuzz/corpus/hp1_packet_framer_view/* out/hp1-fuzz-evidence/corpus/
+          cp tests/fuzz/packet_framer.dict out/hp1-fuzz-evidence/packet_framer.dict
+          ./build-hp1-fuzz/tests/fuzz/gamenet_fuzz_packet_framer_view \
+            out/hp1-fuzz-evidence/corpus \
+            -dict=out/hp1-fuzz-evidence/packet_framer.dict \
+            -artifact_prefix=out/hp1-fuzz-evidence/artifacts/ \
+            -seed=424242 -runs=20000 -max_len=8192 -timeout=2 \
+            -rss_limit_mb=512 -print_final_stats=1 \
+            2>&1 | tee out/hp1-fuzz-evidence/fuzzer.log
+      - name: Retain development evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hp1-framing-fuzz-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/hp1-fuzz-evidence/
+          if-no-files-found: error

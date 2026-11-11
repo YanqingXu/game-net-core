@@ -47,6 +47,7 @@ def assert_clean(repo_root: Path, relative_path: str, content: str) -> None:
 def check_prestudy_boundaries(repo_root: Path) -> None:
     test_paths = {
         "tests/contract/protocol/test_packet_framer_view.cpp": {1},
+        "tests/fuzz/prestudy/fuzz_packet_framer_view.cpp": {1},
         "tests/contract/runtime_model/test_spsc_mailbox.cpp": {1, 2},
         "tests/contract/event_loop/test_event_loop_mailbox_source.cpp": {1, 2},
         "tests/contract/io_engine/test_epoll_slot_dispatch.cpp": {3},

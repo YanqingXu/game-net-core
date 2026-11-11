@@ -2,8 +2,8 @@
 
 计划重制日期：2026-08-25
 
-当前执行更新：2026-10-13；本机 Windows 与 WSL Ubuntu 24.04 执行以 DEFER 收束；
-PR #15 已合入，main CI 与预研手动验证完成，weekly 已启用，正式推广门不变。
+当前执行更新：2026-11-11；v0.3.1 已发布，HP1 借用视图解帧补充逐调用差分 fuzz 验证。
+HP0 本机 Windows 与 WSL Ubuntu 24.04 执行仍以 DEFER 收束；预研 weekly 持续运行。
 
 长期方向：`goal.md`
 
@@ -111,6 +111,11 @@ development evidence 已完成，本轮资源执行以 `DEFER` 收束，不能�
 move-only retain、差分合同和 Windows development benchmark；未完成 Linux/fuzz、真实
 Profile A inputBuffer、fixed-lab 和 5%/3% 推广门，因此 HP1 里程碑仍为 `planned`，默认
 路径与安装 API 不变。预研实现槽已释放。
+
+2026-11-11 验证补强：增加 HP1 候选与 legacy 解帧器的逐调用差分 libFuzzer 入口，
+覆盖任意分片、预算、非法输入和 reset 恢复。WSL Clang ASan/UBSan 本地两轮各
+50,000 次通过，原有 HP1 合同与 legacy fuzz 回归通过；独立 CI 任务保留有界执行证据。
+正式 HP1 继续等待 HP0、真实 Profile A 输入路径和固定实验室性能验证。
 
 - 更新 active PacketFramer、Buffer、Profile A intent/rules，明确 `PacketView`
   生命周期和 callback re-entry 限制。

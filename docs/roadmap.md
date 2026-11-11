@@ -21,8 +21,12 @@ See `migration_status.md` for the current checked state of these phases.
   The first bounded slice, HP1 borrowed-view framing, is now
   `KEEP-EXPERIMENTAL`: Windows differential/ASan contracts and development
   measurements justify retaining the isolated target, but Linux/fuzz, real
-  Profile A input-Buffer, HP0 fixed-lab and 5%/3% evidence remain absent. HP1
-  therefore remains planned. HP2 SPSC mailbox/source/outbox is likewise
+  Profile A input-Buffer, HP0 fixed-lab and 5%/3% evidence were absent at that
+  initial checkpoint. The 2026-11-11 follow-up adds optional differential
+  libFuzzer coverage and a bounded Linux ASan/UBSan workflow, with two local
+  WSL 50,000-run campaigns passing. HP1 remains planned pending its native
+  HP0 ledger, real Profile A contracts and performance gates.
+  HP2 SPSC mailbox/source/outbox is likewise
   `KEEP-EXPERIMENTAL`: Release/ASan and current Profile B contracts pass and
   structural queue allocation/lock/generic-post costs are zero, but the local
   burst comparison regressed queue age. HP2 remains planned, no production
