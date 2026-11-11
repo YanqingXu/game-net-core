@@ -1,0 +1,200 @@
+{
+  "schema": "gamenet.release_endurance_independent.v1",
+  "status": "success",
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "platform": "linux",
+  "backend": "epoll",
+  "environment": "WSL Ubuntu 24.04 on the same physical Windows host; not fixed-lab HP0 evidence",
+  "candidate_run_id": 42789359152,
+  "release_run_id": 42808773572,
+  "run_attempts": 1,
+  "artifacts": [
+    {
+      "id": 13759326080,
+      "name": "production-endurance-candidate-1h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42789359152-1",
+      "digest": "sha256:6df732e1f99787b307ff3902f2a893c39e5aa2b29cb38dca9e00a4eaa88f2311",
+      "size_in_bytes": 108562
+    },
+    {
+      "id": 13774485795,
+      "name": "production-endurance-release-3h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42808773572-1",
+      "digest": "sha256:7ec3d9b12b100bde219eb86eb0171f38dbcdd137af267bab5460e91977f76ad1",
+      "size_in_bytes": 312164
+    }
+  ],
+  "results": [
+    {
+      "mode": "candidate-1h",
+      "completed_cycles": 3074,
+      "timing": {
+        "child_elapsed_milliseconds": 3600001,
+        "supervisor_elapsed_seconds": 3600.0026245539993
+      },
+      "memory": {
+        "supported": true,
+        "samples": 3074,
+        "first_rss_bytes": 4931584,
+        "last_rss_bytes": 14475264,
+        "minimum_rss_bytes": 4931584,
+        "maximum_rss_bytes": 14475264,
+        "rss_growth_bytes": 9543680,
+        "max_rss_budget_bytes": 536870912,
+        "max_rss_growth_budget_bytes": 67108864
+      },
+      "result_sha256": "f1533f7f3256fd7684efa9333fd47a8670bc5dd1811400f4312ae4945e7281d5"
+    },
+    {
+      "mode": "release-3h",
+      "completed_cycles": 9207,
+      "timing": {
+        "child_elapsed_milliseconds": 10800002,
+        "supervisor_elapsed_seconds": 10800.017113868998
+      },
+      "memory": {
+        "supported": true,
+        "samples": 9207,
+        "first_rss_bytes": 4976640,
+        "last_rss_bytes": 14524416,
+        "minimum_rss_bytes": 4976640,
+        "maximum_rss_bytes": 14524416,
+        "rss_growth_bytes": 9547776,
+        "max_rss_budget_bytes": 536870912,
+        "max_rss_growth_budget_bytes": 67108864
+      },
+      "result_sha256": "dba83df40ec6544d2bbf64dfe6bff3f8fe4c881f1c81c93b0a0bb81c0b7ac814"
+    }
+  ],
+  "promotion_reproduced": true,
+  "commands": [
+    {
+      "label": "candidate-1h-independent",
+      "command": [
+        "C:\\Program Files\\Python314\\python.exe",
+        "G:\\github\\game-net-core\\tools\\verify_endurance_evidence.py",
+        "--evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\candidate-1h-evidence\\production-endurance-candidate-1h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42789359152-1\\run\\result.json",
+        "--mode",
+        "candidate-1h",
+        "--candidate-sha",
+        "9facdbaffe994c7227b0118e93cd642357e6f011",
+        "--platform",
+        "linux",
+        "--backend",
+        "epoll",
+        "--workflow-run-id",
+        "42789359152",
+        "--workflow-run-attempt",
+        "1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "label": "release-3h-independent",
+      "command": [
+        "C:\\Program Files\\Python314\\python.exe",
+        "G:\\github\\game-net-core\\tools\\verify_endurance_evidence.py",
+        "--evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\release-3h-evidence\\production-endurance-release-3h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42808773572-1\\run\\result.json",
+        "--mode",
+        "release-3h",
+        "--candidate-sha",
+        "9facdbaffe994c7227b0118e93cd642357e6f011",
+        "--platform",
+        "linux",
+        "--backend",
+        "epoll",
+        "--workflow-run-id",
+        "42808773572",
+        "--workflow-run-attempt",
+        "1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "label": "endurance-pair-independent",
+      "command": [
+        "C:\\Program Files\\Python314\\python.exe",
+        "G:\\github\\game-net-core\\tools\\verify_endurance_evidence_pair.py",
+        "--candidate-evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\candidate-1h-evidence\\production-endurance-candidate-1h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42789359152-1\\run\\result.json",
+        "--release-evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\release-3h-evidence\\production-endurance-release-3h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42808773572-1\\run\\result.json",
+        "--candidate-sha",
+        "9facdbaffe994c7227b0118e93cd642357e6f011",
+        "--platform",
+        "linux",
+        "--backend",
+        "epoll",
+        "--candidate-run-id",
+        "42789359152",
+        "--candidate-run-attempt",
+        "1",
+        "--release-run-id",
+        "42808773572",
+        "--release-run-attempt",
+        "1",
+        "--output",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\endurance-pair-independent.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "label": "candidate-promotion-independent",
+      "command": [
+        "C:\\Program Files\\Python314\\python.exe",
+        "G:\\github\\game-net-core\\tools\\verify_production_promotion_evidence.py",
+        "--stage",
+        "candidate",
+        "--capacity-root",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\capacity-10k",
+        "--endurance-evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\candidate-1h-evidence\\production-endurance-candidate-1h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42789359152-1\\run\\result.json",
+        "--candidate-sha",
+        "9facdbaffe994c7227b0118e93cd642357e6f011",
+        "--capacity-run-id",
+        "42786210934",
+        "--capacity-run-attempt",
+        "1",
+        "--promotion-run-id",
+        "42789359152",
+        "--promotion-run-attempt",
+        "1",
+        "--output",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\candidate-promotion-independent.json"
+      ],
+      "exit_code": 0
+    },
+    {
+      "label": "release-promotion-independent",
+      "command": [
+        "C:\\Program Files\\Python314\\python.exe",
+        "G:\\github\\game-net-core\\tools\\verify_production_promotion_evidence.py",
+        "--stage",
+        "release",
+        "--capacity-root",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\capacity-100k",
+        "--endurance-evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\release-3h-evidence\\production-endurance-release-3h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42808773572-1\\run\\result.json",
+        "--candidate-sha",
+        "9facdbaffe994c7227b0118e93cd642357e6f011",
+        "--capacity-run-id",
+        "42787863670",
+        "--capacity-run-attempt",
+        "1",
+        "--promotion-run-id",
+        "42808773572",
+        "--promotion-run-attempt",
+        "1",
+        "--output",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\release-promotion-independent.json",
+        "--candidate-endurance-evidence",
+        "G:\\github\\game-net-core\\out\\release-v0.3.1\\candidate-1h-evidence\\production-endurance-candidate-1h-linux-production-endurance-9facdbaffe994c7227b0118e93cd642357e6f011-42789359152-1\\run\\result.json",
+        "--candidate-endurance-run-id",
+        "42789359152",
+        "--candidate-endurance-run-attempt",
+        "1"
+      ],
+      "exit_code": 0
+    }
+  ]
+}

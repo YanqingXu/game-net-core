@@ -1,0 +1,86 @@
+{
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "endpoint_attempts": 10000,
+  "parameters": {
+    "connection_hard_limit_bytes": 262144,
+    "connection_high_water_bytes": 65536,
+    "connection_low_water_bytes": 32768,
+    "connections": 1000,
+    "iocp_accept_depth": 32,
+    "messages": 10,
+    "payload_bytes": 32768,
+    "pressure_settle_ms": 500,
+    "probe_batch_size": 10,
+    "probe_concurrency": 4,
+    "probe_connect_timeout_ms": 2000,
+    "probe_duration_ms": 5000,
+    "probe_payload_bytes": 32,
+    "probe_target_per_second": 100,
+    "reader_concurrency_limit": 16,
+    "recovery_pending_threshold_bytes": 0,
+    "recovery_stable_ms": 250,
+    "scenario": "mixed-pressure-recovery",
+    "server_send_buffer_bytes": 4096,
+    "threads": 4,
+    "timeout_ms": 120000
+  },
+  "platforms": [
+    {
+      "artifact_name": "capacity-gate-candidate-10k-linux-capacity-gate-9facdbaffe994c7227b0118e93cd642357e6f011-42786210934-1",
+      "backend": "epoll",
+      "executable_sha256": "a8095df24bbb8157cf4330c428429dfe6283a34e625aecff853e3957a7a60ad6",
+      "job": "linux-capacity-gate",
+      "manifest_sha256": "96472a67c5d20397537cd742c2e18d2966c4215b412de31a2b44cd3c865271ae",
+      "platform": "linux",
+      "samples": [
+        {
+          "path": "sample-1.json",
+          "repetition": 1,
+          "sha256": "74fe3bb59530bb6438ff5e725901d734e110bc42716ff2c339e9f1c6adbadf93"
+        },
+        {
+          "path": "sample-2.json",
+          "repetition": 2,
+          "sha256": "c6969a0c201ab19c6848f4f306e42db685ec82660edf15bec75598c2656b5f9b"
+        },
+        {
+          "path": "sample-3.json",
+          "repetition": 3,
+          "sha256": "7e162856aec4ea18953f01c23bfabe2b27b28d9dfdc1a9f6641f4688bd0ee79d"
+        }
+      ]
+    },
+    {
+      "artifact_name": "capacity-gate-candidate-10k-windows-capacity-gate-9facdbaffe994c7227b0118e93cd642357e6f011-42786210934-1",
+      "backend": "iocp",
+      "executable_sha256": "376a6498ae340fc9a66413039f82518803572af0a8c97266722d02091351ba90",
+      "job": "windows-capacity-gate",
+      "manifest_sha256": "32cf894380b4d4404dbf5ffbb5f9326e2f8d9a7b19f79588c1bc638b9ba1ffcd",
+      "platform": "windows",
+      "samples": [
+        {
+          "path": "sample-1.json",
+          "repetition": 1,
+          "sha256": "912da4f1a9cc4a8bfd022b44d7222e2e5fbe26c17cc1c0aa61b9daa68311b63e"
+        },
+        {
+          "path": "sample-2.json",
+          "repetition": 2,
+          "sha256": "438e29e8610fd78e70741ff7d83fed781cbb82094b11a43d8160955ad0175a47"
+        },
+        {
+          "path": "sample-3.json",
+          "repetition": 3,
+          "sha256": "03e901b10a6455f70a6064bb91e6a903538d631d479b74eb1d072fb4708a8505"
+        }
+      ]
+    }
+  ],
+  "probe_attempts": 500,
+  "profile": "candidate-10k",
+  "repetitions": 3,
+  "result": "pass",
+  "run_attempt": 1,
+  "run_id": "42786210934",
+  "schema": "gamenet.capacity_gate_pair.v1"
+}

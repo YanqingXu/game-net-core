@@ -1,0 +1,141 @@
+{
+  "schema": "gamenet.release_bundle_preflight.v1",
+  "status": "success",
+  "version": "0.3.1",
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "verified_at_utc": "2026-11-10T14:45:20.923787+00:00",
+  "publication_state": "not-published",
+  "post_upload_fresh_download_verification": "pending-publication",
+  "canonical_file_count": 12,
+  "reproducible": true,
+  "official_spdx_schema_sha256": "239208b7ac287b3cf5d9a9af23f9d69863971102a5e1587a27a398b43490b89b",
+  "canonical_files": [
+    {
+      "path": "LICENSE",
+      "bytes": 11558,
+      "sha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 42,
+      "sha256": "c2e44316afa66efe3c7db164d32c6eaa6b2cb4439f0b7cb628120890663ff4b6"
+    },
+    {
+      "path": "SHA256SUMS",
+      "bytes": 1050,
+      "sha256": "5b53d26cd6c2cdddf91c44958572ff77e5f9629904cc2b1f8efd8999b2ba429c"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 895,
+      "sha256": "3661c788e3df917a43fdd7d93c7296e6fcac4e5fe238a14835e6fe61a9e90834"
+    },
+    {
+      "path": "artifacts/game-net-core-v0.3.1-evidence.zip",
+      "bytes": 9915181,
+      "sha256": "87fddb494caf8fd6f7e19a702558247511435659cbaad3af04edb010125f981d"
+    },
+    {
+      "path": "artifacts/game-net-core-v0.3.1-linux-x86_64.tar.gz",
+      "bytes": 500500,
+      "sha256": "4d08911e57e0083efac04cda3a8f259558df3aef84e43302785c771ce416117f"
+    },
+    {
+      "path": "artifacts/game-net-core-v0.3.1-source.tar.gz",
+      "bytes": 1676848,
+      "sha256": "71036c2e19c6cf1b6b0a9a0219ebaa29a8dae4fde6c437fb4b2896431fbfe62b"
+    },
+    {
+      "path": "artifacts/game-net-core-v0.3.1-source.zip",
+      "bytes": 2162367,
+      "sha256": "0e8b62262a1e82d94c5950ba90ece08fb2d74459baa9a54bdaf4fbf49e01e394"
+    },
+    {
+      "path": "artifacts/game-net-core-v0.3.1-windows-x86_64.zip",
+      "bytes": 2172410,
+      "sha256": "8699863098b5ba89e73094304187d5772a52976d47a20045665f7784ba9e9a90"
+    },
+    {
+      "path": "evidence-index.json",
+      "bytes": 299903,
+      "sha256": "21242a0945563720a0e55380e7dcd7487d74f10c4f0df81e7410ec97b3193840"
+    },
+    {
+      "path": "package-build.json",
+      "bytes": 2291,
+      "sha256": "defad9dcf5a28bc767361c601061aa7bcc5717c29bb90b29ec4dc3a7666474d7"
+    },
+    {
+      "path": "sbom.spdx.json",
+      "bytes": 627863,
+      "sha256": "51ed6ac8f36eb298e9ab24fc1ce3dae665bd7ed1a572375a0e25a05679a8eb0c"
+    }
+  ],
+  "archive_consumers": [
+    {
+      "platform": "windows",
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0,
+      "junit": "windows-junit.xml",
+      "sha256": "070b4181ed9d7892a4486c947f398bb25dbec7aec462d67715afbf3be76a3ac7"
+    },
+    {
+      "platform": "linux",
+      "tests": 2,
+      "failures": 0,
+      "skipped": 0,
+      "junit": "linux-junit.xml",
+      "sha256": "d69522f3da68e8e7cbb714b7048c72acf8b6852a541e9b8a76b4de496cb7dbac"
+    }
+  ],
+  "tested_source_and_binary_assets_unchanged_in_final_bundle": true,
+  "promotion_manifest_sha256": "3554f1db97cdbd501dca77cb4bd2abe5e62ea517ee8f28ced0a8ed255dffea39",
+  "verification_logs": [
+    {
+      "path": "final-assemble.log",
+      "sha256": "bdabc82db7e28ad8df1b1b3b10dc9e42bd8a6f10d969480b8031684ed628537f"
+    },
+    {
+      "path": "final-verify.log",
+      "sha256": "6fbad7a3b565371fefbf1a28043297a21cb72996e9b926e3d3947a102712aaae"
+    },
+    {
+      "path": "reproduce-assemble.log",
+      "sha256": "90575b272948e0fc1721270edc102f72c9af773f983aea2470b0b28f1373d689"
+    },
+    {
+      "path": "reproduce-verify.log",
+      "sha256": "6fbad7a3b565371fefbf1a28043297a21cb72996e9b926e3d3947a102712aaae"
+    },
+    {
+      "path": "staging-assemble.log",
+      "sha256": "135d6e02a34cde4ff0c1f01f0887435bb394c9bb27ed8b5d8a5cd40ba5b77071"
+    },
+    {
+      "path": "staging-verify.log",
+      "sha256": "6fbad7a3b565371fefbf1a28043297a21cb72996e9b926e3d3947a102712aaae"
+    }
+  ],
+  "limits": [
+    "Measurements belong to the frozen candidate only; later documentation commits are not re-labeled.",
+    "WSL is not native fixed-lab HP0 evidence; HP0 remains DEFER.",
+    "Earlier benchmark tail failures and checkout network failure are retained."
+  ],
+  "ci_to_canonical_payload_comparisons": [
+    {
+      "platform": "windows",
+      "files": 68,
+      "identical_payloads": true,
+      "verified_ci_archive_sha256": "c950f6f998aa6dc23f1283057068c356f5e63d2bf5244e5a39832d0a60c7261f",
+      "canonical_archive_sha256": "8699863098b5ba89e73094304187d5772a52976d47a20045665f7784ba9e9a90"
+    },
+    {
+      "platform": "linux",
+      "files": 68,
+      "identical_payloads": true,
+      "verified_ci_archive_sha256": "02512d6e132ed8efac872737e56a6476b3cc5f971268d1f304b2d86c593642c8",
+      "canonical_archive_sha256": "4d08911e57e0083efac04cda3a8f259558df3aef84e43302785c771ce416117f"
+    }
+  ]
+}

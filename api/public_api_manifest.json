@@ -1,9 +1,9 @@
 {
   "schema": "gamenet.public_api_manifest.v2",
-  "package_version": "0.3.0",
+  "package_version": "0.3.1",
   "package_license": "Apache-2.0",
   "compatibility_line": "0.3",
-  "release_label": "v0.3.0-production-candidate",
+  "release_label": "v0.3.1-production-candidate",
   "historical_baseline": {
     "tag": "v0.2.0-phase4-preview",
     "commit": "7668d6b82a0d815ccd79f83c572bc0a36bcceea0",

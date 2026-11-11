@@ -33,7 +33,8 @@ def validate(repo_root: Path, manifest: dict[str, object]) -> list[str]:
         errors.append("component")
     if manifest.get("component_api_version") != "0.1.0":
         errors.append("component_api_version")
-    if manifest.get("package_version") != "0.3.0":
+    stable = json.loads((repo_root / "api/public_api_manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("package_version") != stable["package_version"]:
         errors.append("package_version")
     if manifest.get("release_train") != "v0.5.0-experimental-preview":
         errors.append("release_train")

@@ -1,0 +1,68 @@
+{
+  "schema": "gamenet.release_preflight.local.v1",
+  "date": "2026-11-10",
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "version": "0.3.1",
+  "status": "local-checks-passed",
+  "promotion_eligible": false,
+  "guards": {
+    "passed": 49,
+    "total": 49,
+    "initial_sandbox_failures_retried": 2
+  },
+  "windows_release": {
+    "passed": 137,
+    "total": 137,
+    "prestudy_contracts_included": 7
+  },
+  "graceful_shutdown_repeat": {
+    "passed": 50,
+    "total": 50
+  },
+  "extracted_consumer_tests": [
+    {
+      "name": "current-extracted",
+      "version": "0.3.1",
+      "tests": "2/2"
+    },
+    {
+      "name": "upgrade-v02",
+      "version": "0.2.0",
+      "tests": "1/1"
+    },
+    {
+      "name": "upgrade-v03",
+      "version": "0.3.1",
+      "tests": "1/1"
+    }
+  ],
+  "published_v030_consumer": {
+    "passed": 1,
+    "total": 1,
+    "source_archive_sha256": "dcaf1565e90d12860b08bccb6fd2a8b8ca0beab9a9a66d7d25dabc34b81435ad"
+  },
+  "api_v030_to_v031": {
+    "has_changes": false,
+    "same_compatibility_line": true,
+    "stable_surface_review_required": false,
+    "compatibility_decision_required": false,
+    "compatibility_decision_reasons": []
+  },
+  "official_spdx_schema": {
+    "url": "https://raw.githubusercontent.com/spdx/spdx-spec/v2.3/schemas/spdx-schema.json",
+    "sha256": "239208b7ac287b3cf5d9a9af23f9d69863971102a5e1587a27a398b43490b89b"
+  },
+  "assembly_contract_versions": [
+    "0.3.0",
+    "0.3.1"
+  ],
+  "local_archive": {
+    "path": "local-preflight-evidence.zip",
+    "bytes": 2188233,
+    "sha256": "c0bdc1b0ee348d4b30ea1a47da4ee69860d4216dc51df25168afbca5bf89886a"
+  },
+  "limits": [
+    "Development evidence; not a release-stage promotion manifest.",
+    "No dedicated-100k or uninterrupted candidate-1h/release-3h result is claimed."
+  ]
+}

@@ -2,7 +2,7 @@
   "schema": "gamenet.experimental_io_uring_api_manifest.v1",
   "component": "experimental_io_uring",
   "component_api_version": "0.1.0",
-  "package_version": "0.3.0",
+  "package_version": "0.3.1",
   "release_train": "v0.5.0-experimental-preview",
   "status": "implementation-preview-not-released",
   "platform": "Linux",

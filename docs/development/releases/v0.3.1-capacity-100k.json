@@ -1,0 +1,66 @@
+{
+  "candidate_sha": "9facdbaffe994c7227b0118e93cd642357e6f011",
+  "endpoint_attempts": 100000,
+  "parameters": {
+    "connection_hard_limit_bytes": 262144,
+    "connection_high_water_bytes": 65536,
+    "connection_low_water_bytes": 32768,
+    "connections": 10000,
+    "iocp_accept_depth": 32,
+    "messages": 10,
+    "payload_bytes": 32768,
+    "pressure_settle_ms": 500,
+    "probe_batch_size": 100,
+    "probe_concurrency": 16,
+    "probe_connect_timeout_ms": 2000,
+    "probe_duration_ms": 10000,
+    "probe_payload_bytes": 32,
+    "probe_target_per_second": 1000,
+    "reader_concurrency_limit": 64,
+    "recovery_pending_threshold_bytes": 0,
+    "recovery_stable_ms": 250,
+    "scenario": "mixed-pressure-recovery",
+    "server_send_buffer_bytes": 4096,
+    "threads": 8,
+    "timeout_ms": 300000
+  },
+  "platforms": [
+    {
+      "artifact_name": "capacity-gate-dedicated-100k-linux-capacity-gate-9facdbaffe994c7227b0118e93cd642357e6f011-42787863670-1",
+      "backend": "epoll",
+      "executable_sha256": "35fdccc7ca621e366319ced4a891f5714c9b0f1e8aec150d1b35c1f5bc534ca8",
+      "job": "linux-capacity-gate",
+      "manifest_sha256": "5f541dc552a65d9fb5f1db7209f78048d4a0cd1865f1f4c37f15c67f68d47ca2",
+      "platform": "linux",
+      "samples": [
+        {
+          "path": "sample-1.json",
+          "repetition": 1,
+          "sha256": "89fe3417efca8ebf6fe895ebe49766f1068b55cb0eee53cb52c2fd2469b4a79c"
+        }
+      ]
+    },
+    {
+      "artifact_name": "capacity-gate-dedicated-100k-windows-capacity-gate-9facdbaffe994c7227b0118e93cd642357e6f011-42787863670-1",
+      "backend": "iocp",
+      "executable_sha256": "6e8e738872fdd5f5cadaca4fdc400bb4056d275496308523fe6df9c1af47cf17",
+      "job": "windows-capacity-gate",
+      "manifest_sha256": "38a24a78c5f7159176b7df396980cb491e5e7f6ba1461f9eca050f26b60f7a4b",
+      "platform": "windows",
+      "samples": [
+        {
+          "path": "sample-1.json",
+          "repetition": 1,
+          "sha256": "f94fc312029a485938c26fe0347753c4dc88431f5c7fa94cb366e3bbe862ebc3"
+        }
+      ]
+    }
+  ],
+  "probe_attempts": 10000,
+  "profile": "dedicated-100k",
+  "repetitions": 1,
+  "result": "pass",
+  "run_attempt": 1,
+  "run_id": "42787863670",
+  "schema": "gamenet.capacity_gate_pair.v1"
+}

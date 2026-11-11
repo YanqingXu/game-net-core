@@ -27,7 +27,13 @@ foundations without changing the core dependency direction.
 The published integration/contract preview is
 [`v0.2.0-phase4-preview`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.2.0-phase4-preview);
 it does not declare production readiness or API/ABI stability.
-The active line installs as `GameNetCore 0.3.0`. M1 closed on 2026-08-22 with
+The active maintenance candidate installs as `GameNetCore 0.3.1` and includes
+the accepted-output graceful-shutdown fix. Its frozen candidate has completed
+pre-publication validation and canonical packaging;
+the latest published release remains `v0.3.0`. See the
+[v0.3.1 release preparation](docs/development/releases/v0.3.1.md) for scope and
+validation status. Published v0.3.0 predates this graceful-shutdown correction.
+M1 closed on 2026-08-22 with
 IOE-X10 implementation/evidence checkpoint
 `f5d39b800b4dd943531670aa09840c931c3dee4d`: a fixed 256-route listener
 comparison produced a narrowly scoped `PROMOTE` for later source-private
@@ -142,8 +148,12 @@ passed 7/7 jobs, and the
 [manual prestudy run](https://github.com/YanqingXu/game-net-core/actions/runs/38341836902)
 passed all five lanes and 35/35 contracts, with artifact digests and evidence
 independently verified. The weekly workflow is `active` with cron `23 3 * * 1`.
-The verified execution used `workflow_dispatch`; no scheduled execution is
-claimed. This deployment and software validation does not transfer the
+The initial verified execution used `workflow_dispatch`. As of 2026-11-10,
+four subsequent `schedule` runs succeeded on `a4d4af64`: October 19, October 26,
+November 2, and [November 9](https://github.com/YanqingXu/game-net-core/actions/runs/42556746551).
+These five-lane, seven-contract-per-lane prestudy runs verify development
+contracts; they do not complete HP0 or constitute release endurance evidence.
+This deployment and software validation does not transfer the
 `41ba8f4` benchmark measurements to the merge or later documentation commits.
 Formal HP0 remains a future promotion gate.
 

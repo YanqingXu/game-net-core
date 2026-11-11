@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(
-    GameNetCore 0.3.0 EXACT REQUIRED
+    GameNetCore 0.3.1 EXACT REQUIRED
     COMPONENTS experimental_io_uring
 )
 

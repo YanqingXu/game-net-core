@@ -166,7 +166,16 @@ def main() -> None:
             / "perf-r1-public-api-additive-diff.json"
         ).read_text(encoding="utf-8")
     )
-    assert archived_additive_difference == additive_difference
+    # Reproduce the archived review with its original candidate version.
+    archived_candidate = copy.deepcopy(manifest)
+    archived_candidate["package_version"] = "0.3.0"
+    archived_candidate["release_label"] = "v0.3.0-production-candidate"
+    assert archived_additive_difference == comparer.build_diff(
+        prior_reviewed_snapshot, archived_candidate,
+        baseline_path="api/baselines/v0.3.0-api-r1-reviewed.json",
+        candidate_path="api/public_api_manifest.json",
+        verify_historical_reference=False,
+    )
     baseline_text = baseline_path.read_text(encoding="utf-8")
     assert (
         verifier.snapshot_content_sha256(baseline_text)
@@ -253,7 +262,12 @@ def main() -> None:
             / "perf-r1-public-api-compatibility-diff.json"
         ).read_text(encoding="utf-8")
     )
-    assert archived_compatibility_difference == reviewed_difference
+    assert archived_compatibility_difference == comparer.build_diff(
+        reviewed_snapshot, archived_candidate,
+        baseline_path="api/baselines/v0.3.0-perf-r1-reviewed.json",
+        candidate_path="api/public_api_manifest.json",
+        verify_historical_reference=False,
+    )
     review_packet = (
         repo_root / "docs" / "reviews" / "api-r1-stable-core-review.md"
     ).read_text(encoding="utf-8")

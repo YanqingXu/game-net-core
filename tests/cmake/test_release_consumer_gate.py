@@ -22,8 +22,8 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def create_evidence_fixture(root: Path, commit: str) -> None:
-    package = root / "game-net-core-v0.3.0-linux-x86_64.tar.gz"
+def create_evidence_fixture(root: Path, commit: str, package_version: str) -> None:
+    package = root / f"game-net-core-v{package_version}-linux-x86_64.tar.gz"
     package.write_bytes(b"package")
     command_logs = []
     for index in range(15):
@@ -34,9 +34,9 @@ def create_evidence_fixture(root: Path, commit: str) -> None:
         )
     consumers = []
     for name, version, count in (
-        ("current-extracted", "0.3.0", 2),
+        ("current-extracted", package_version, 2),
         ("upgrade-v02", "0.2.0", 1),
-        ("upgrade-v03", "0.3.0", 1),
+        ("upgrade-v03", package_version, 1),
     ):
         inventory = root / f"{name}-inventory.json"
         inventory.write_text(
@@ -80,6 +80,7 @@ def create_evidence_fixture(root: Path, commit: str) -> None:
     manifest = {
         "schema": "gamenet.release_consumer_evidence.v1",
         "status": "success",
+        "package_version": package_version,
         "candidate_sha": commit,
         "source_tree_sha1": "b" * 40,
         "platform": "linux",
@@ -107,7 +108,7 @@ def create_evidence_fixture(root: Path, commit: str) -> None:
     )
 
 
-def main() -> None:
+def main(package_version: str) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     tool = repo_root / "tools" / "run_release_consumer_gate.py"
     verifier = repo_root / "tools" / "verify_release_consumer_evidence.py"
@@ -136,7 +137,7 @@ def main() -> None:
     for fragment in (
         "GAMENET_EXPECTED_VERSION is required",
         "find_package(GameNetCore ${GAMENET_EXPECTED_VERSION} EXACT REQUIRED)",
-        "GameNetCore 0.3.0 package license mismatch",
+        "GameNetCore ${GAMENET_EXPECTED_VERSION} package license mismatch",
         "GameNet::core",
     ):
         require(cmake_text, fragment, consumer_cmake)
@@ -199,11 +200,13 @@ def main() -> None:
         evidence = root / "evidence"
         evidence.mkdir()
         commit = "a" * 40
-        create_evidence_fixture(evidence, commit)
+        create_evidence_fixture(evidence, commit, package_version)
         verified = subprocess.run(
             [
                 sys.executable,
                 str(verifier),
+                "--expected-version",
+                package_version,
                 "--evidence-dir",
                 str(evidence),
                 "--expected-commit",
@@ -217,12 +220,22 @@ def main() -> None:
             check=False,
         )
         assert verified.returncode == 0, verified.stdout + verified.stderr
+        from verify_release_consumer_evidence import verify
+        wrong_version = "0.3.1" if package_version == "0.3.0" else "0.3.0"
+        try:
+            verify(evidence, commit, "linux", wrong_version)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError("consumer evidence must reject a different patch version")
         with (evidence / "upgrade-v03-junit.xml").open("ab") as stream:
             stream.write(b"tamper")
         rejected = subprocess.run(
             [
                 sys.executable,
                 str(verifier),
+                "--expected-version",
+                package_version,
                 "--evidence-dir",
                 str(evidence),
                 "--expected-commit",
@@ -249,4 +262,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    for version in ("0.3.0", "0.3.1"):
+        main(version)

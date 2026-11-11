@@ -1,0 +1,23 @@
+{
+  "schema": "gamenet.release_environment_cleanup.v1",
+  "status": "success",
+  "verified_at_utc": "2026-11-10T14:43:06.732442+00:00",
+  "runner_names": [
+    "gamenet-local-windows-v031",
+    "gamenet-wsl-ubuntu2404-v031"
+  ],
+  "github_registrations_remaining": 0,
+  "task_runner_processes_remaining": 0,
+  "task_helper_processes_remaining": 0,
+  "registration_files_remaining": 0,
+  "wsl_runner_env_file_removed": true,
+  "fresh_wsl_shell_proxy_variables_set": false,
+  "windows_ipv4_tcp_dynamic_ports": {
+    "start": 1024,
+    "count": 13977,
+    "store": "active",
+    "restored": true
+  },
+  "system_proxy_configuration_changed": false,
+  "other_runners_touched": false
+}

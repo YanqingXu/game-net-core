@@ -16,13 +16,17 @@ from run_release_consumer_gate import (
     V02_COMMIT,
     V02_TAG,
 )
+from verify_public_api_manifest import cmake_package_version
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify(evidence_dir: Path, expected_commit: str, expected_platform: str) -> None:
+def verify(
+    evidence_dir: Path, expected_commit: str, expected_platform: str,
+    expected_version: str = "0.3.0",
+) -> None:
     evidence_dir = evidence_dir.resolve()
     manifest = json.loads((evidence_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["schema"] == "gamenet.release_consumer_evidence.v1"
@@ -32,9 +36,12 @@ def verify(evidence_dir: Path, expected_commit: str, expected_platform: str) -> 
     assert manifest["platform"] == expected_platform
     assert manifest["backend"] == ("epoll" if expected_platform == "linux" else "iocp")
     assert manifest["configuration"] == "Release"
+    assert manifest.get("package_version", "0.3.0") == expected_version
     expected_kind = f"{expected_platform}-x86_64"
     package = manifest["current_package"]
     assert package["kind"] == expected_kind
+    suffix = ".tar.gz" if expected_platform == "linux" else ".zip"
+    assert package["name"] == f"game-net-core-v{expected_version}-{expected_kind}{suffix}"
     assert package["file_count"] > 0
     package_path = evidence_dir / package["name"]
     assert package_path.is_file()
@@ -49,9 +56,9 @@ def verify(evidence_dir: Path, expected_commit: str, expected_platform: str) -> 
     }
     consumers = manifest["consumers"]
     assert [(item["name"], item["version"], item["tests"], item["status"]) for item in consumers] == [
-        ("current-extracted", "0.3.0", "2/2", "success"),
+        ("current-extracted", expected_version, "2/2", "success"),
         ("upgrade-v02", "0.2.0", "1/1", "success"),
-        ("upgrade-v03", "0.3.0", "1/1", "success"),
+        ("upgrade-v03", expected_version, "1/1", "success"),
     ]
 
     expected_files = {"manifest.json", package["name"]}
@@ -99,8 +106,10 @@ def main() -> None:
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--expected-commit", required=True)
     parser.add_argument("--expected-platform", choices=("linux", "windows"), required=True)
+    parser.add_argument("--expected-version", help="Defaults to this checkout's CMake version.")
     args = parser.parse_args()
-    verify(args.evidence_dir, args.expected_commit, args.expected_platform)
+    version = args.expected_version or cmake_package_version(Path(__file__).resolve().parents[1])
+    verify(args.evidence_dir, args.expected_commit, args.expected_platform, version)
     print(
         f"validated {args.expected_platform} release-consumer evidence for "
         f"{args.expected_commit}"
