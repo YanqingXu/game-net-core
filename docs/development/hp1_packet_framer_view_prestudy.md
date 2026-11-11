@@ -136,3 +136,49 @@ borrowed payload through the existing bounded `trySend` API. This functionality
 is available in the opt-in HP1 build graph under the existing
 `KEEP-EXPERIMENTAL` decision. Formal HP1 still requires the HP0 fixed-lab ledger
 and performance/review gates.
+
+## Differential Fuzz Follow-up — 2026-11-11
+
+The opt-in `gamenet_fuzz_packet_framer_view` target compares legacy `push()`
+and the view prototype on each call. It varies payload limits, buffer limits,
+frame-count/byte budgets, arbitrary input, segmentation and reset boundaries.
+It checks status, payload order, continuation, exact consumed frame bytes,
+remaining buffered bytes and sticky fault state. Each callback borrows a real
+Buffer region, and retained payloads are checked after owner-side retrieval.
+Generated valid streams are decoded both whole and segmented against their
+original payloads. The deterministic corpus includes budget exhaustion,
+valid-before-oversized input, partial payloads, buffer overflow, a zero payload
+limit and the full 8 KiB input bound.
+
+The following local development checks passed under WSL Ubuntu 24.04 with
+Clang 18.1.3 and ASan/UBSan:
+
+- 50,000 differential fuzz executions with the legacy seed corpus;
+- 50,000 differential executions with the expanded HP1 corpus;
+- the existing HP1 ownership/re-entry/exception contract;
+- 5,000 legacy PacketFramer fuzz executions with benchmarks disabled;
+- the HP1 fuzz target was absent when benchmarks were disabled.
+
+Enable both optional build graphs to reproduce the differential check:
+
+```sh
+cmake -S . -B out/hp1-fuzz -G Ninja \
+  -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug \
+  -DGAMENET_BUILD_BENCHMARKS=ON -DGAMENET_BUILD_FUZZING=ON \
+  -DGAMENET_ENABLE_ASAN_UBSAN=ON
+cmake --build out/hp1-fuzz --target gamenet_fuzz_packet_framer_view
+python3 tests/fuzz/generate_packet_framer_corpus.py --hp1 --check
+mkdir -p out/hp1-fuzz/corpus out/hp1-fuzz/artifacts
+cp tests/fuzz/corpus/hp1_packet_framer_view/* out/hp1-fuzz/corpus/
+out/hp1-fuzz/tests/fuzz/gamenet_fuzz_packet_framer_view \
+  out/hp1-fuzz/corpus -dict=tests/fuzz/packet_framer.dict \
+  -artifact_prefix=out/hp1-fuzz/artifacts/ -seed=424242 \
+  -runs=50000 -max_len=8192 -timeout=2 -rss_limit_mb=512
+```
+
+The `HP1 framing differential fuzz` workflow runs the existing contract and
+20,000 bounded executions on Ubuntu 24.04, retaining compiler/source identity,
+logs, corpus and crash artifacts. These checks extend development correctness
+coverage. HP1 retains its `KEEP-EXPERIMENTAL` decision while formal integration
+still requires the HP0 ledger, real Profile A input-Buffer contracts and the
+existing fixed-lab performance gates.

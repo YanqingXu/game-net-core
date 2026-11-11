@@ -1,5 +1,24 @@
 # testing_rules.md
 
+## TLS-C1 optional real-OpenSSL contracts
+
+TLS-enabled unit/contract/TCP integration tests must exercise OpenSSL, not a
+fallback. Cover authenticated fragmented handshake, CA/name/expiry rejection,
+WANT retry, output/input limits, pause/resume recovery, handler re-entry and
+release, notification loss, handshake/close deadlines, close_notify drain and
+truncation. Run Windows IOCP/Linux epoll and sanitizers. Separately prove OFF
+finds no OpenSSL/exports no TLS, and ON installed component consumers link.
+
+## RPC-C1 callback terminal contracts
+
+RPC tests named by the active intent run on Windows IOCP and Linux epoll.
+Real TCP coverage includes timeout/cancel/late response, disconnect races,
+pending count/byte saturation and recovery, exactly-once completion, deferred
+reply duplication, malformed/partial frames, re-entry/exception containment,
+bounded continuation rejection and owner shutdown. Installed consumers link
+GameNet::rpc. Sanitizers complement development evidence, not release or
+fixed-lab performance evidence.
+
 ## 1. Testing Philosophy
 Tests are not only correctness checks.
 They are executable contracts.
@@ -661,6 +680,14 @@ For lifecycle-sensitive modules, tests should include:
   stop with a queued continuation, queue rejection, handler failure/overrun,
   protocol failure and reentrant connection/server close. Accepted continuations
   must retire and consumed plus explicitly discarded input must settle.
+
+- the optional HP1 differential fuzzer compares each call's status, payloads,
+  continuation, consumed frame bytes and remaining buffered-byte count against
+  the installed framer under identical bounded options and input segmentation.
+  It exercises arbitrary malformed bytes, generated valid streams, sticky
+  faults and reset recovery on one owner thread using a real Buffer. Both fuzz
+  and benchmark options must be enabled, and raw logs/corpus/crash artifacts
+  are retained by the bounded Linux ASan/UBSan workflow.
 - the HP1 benchmark is default-off, non-installed, non-exported, preserves the
   unchanged legacy callback-copy path, and reports raw checksums, payload/
   copied/retained byte accounting, iteration count, and elapsed time for both

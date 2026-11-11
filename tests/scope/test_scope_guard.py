@@ -48,6 +48,8 @@ def check_prestudy_boundaries(repo_root: Path) -> None:
     test_paths = {
         "tests/contract/protocol/test_packet_framer_view.cpp": {1},
         "tests/contract/protocol/test_packet_framer_view_receiver.cpp": {1},
+
+        "tests/fuzz/prestudy/fuzz_packet_framer_view.cpp": {1},
         "tests/contract/runtime_model/test_spsc_mailbox.cpp": {1, 2},
         "tests/contract/event_loop/test_event_loop_mailbox_source.cpp": {1, 2},
         "tests/contract/io_engine/test_epoll_slot_dispatch.cpp": {3},
@@ -220,6 +222,14 @@ def main() -> None:
         "layer references disallowed component",
     )
     check_prestudy_boundaries(repo_root)
+    assert_clean(repo_root, "src/rpc/Channel.cc",
+                 '#include "gamenet/protocol/PacketFramer.h"\n'
+                 'namespace gamenet::rpc { class RpcChannel {}; }\n')
+    assert_violation(repo_root, "src/core/Bad.cc",
+                     '#include "gamenet/rpc/RpcChannel.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/rpc/Bad.cc",
+                     '#include "gamenet/game_session/PlayerSession.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/rpc/Bad.cc", "class WebSocket {};\n", "deferred high-level module")
     check_status_description_boundary(repo_root)
     violations = load_scope_guard(repo_root).check_scope(repo_root)
     assert not violations, "\n".join(str(item) for item in violations)

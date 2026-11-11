@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(GameNetCore 0.3.1 EXACT REQUIRED)
+find_package(GameNetCore REQUIRED COMPONENTS rpc)
 
 if(NOT GameNetCore_LICENSE STREQUAL "Apache-2.0")
     message(FATAL_ERROR
@@ -40,7 +41,11 @@ target_link_libraries(gamenet_provisional_install_consumer
         GameNet::game_session
         GameNet::game_logic
         GameNet::broadcast
+        GameNet::rpc
 )
+
+target_sources(gamenet_provisional_install_consumer PRIVATE
+    ../rpc_install_consumer/main.cpp)
 
 enable_testing()
 add_test(NAME gamenet.install_consumer COMMAND gamenet_install_consumer)

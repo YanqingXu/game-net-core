@@ -38,7 +38,10 @@ private:
 
 }  // namespace
 
+int verifyRpcInstallConsumer();
+
 int main() {
+    if (verifyRpcInstallConsumer() != 0) return 1;
     gamenet::protocol::PacketFramer framer;
     auto frame = framer.encode("installed");
     gamenet::game_logic::GameCommandQueue queue;

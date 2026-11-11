@@ -1,9 +1,41 @@
-# game-net-core 高性能执行计划：HP0–HP8
+# game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
+
+## TLS-C1：可选 OpenSSL TLS（2026-11-11 用户授权）
+
+在 RPC-C1 已合入并完成 main CI 后，启动独立 provisional `GameNet::tls`。
+默认关闭 `GAMENET_ENABLE_TLS`，ON 时发现 OpenSSL 并单独安装/导出组件；OFF 的
+Core 包和消费者不需要 OpenSSL。采用有界 BIO pair 在现有 TCP/epoll/IOCP 之上
+组合 TLS，保持 SSL/BIO/回调归连接 owner；TLS-ready 与 TCP-up 分开。
+
+先激活 native TLS intent，补齐规则和合同，再实现证书链与 DNS/IP 校验、非阻塞
+握手、WANT_READ/WANT_WRITE、读暂停/恢复、有界明文/密文背压、关闭封口与
+close_notify 双向清算。TLS 读暂停只停止明文交付，持续密文超限显式关闭；不是新增
+Core socket 读开关。握手和优雅关闭均有超时，EOF 无 close_notify 不得标为成功。
+配置、所有权、回调重入、计时器拒绝与关闭结果必须可检验。
+
+交付 Windows IOCP/Linux epoll 的真实 OpenSSL 合同、真实 TCP 集成、sanitizer、
+独立安装消费者及默认 OFF 隔离验证，通过后提交 PR。此功能授权独立于 HP0 性能推广，
+不激活旧 ConnectionTransport、不接入协程/WebSocket/RPC 自动升级、不创建发行版。
+
+## RPC-C1：最小 callback RPC（2026-11-11 用户授权）
+
+新增独立功能里程碑，允许在 HP0 fixed-lab 尚未关闭时实现 provisional
+`GameNet::rpc`。这是新功能授权，不是历史 M7 的共享协议推广，也不改变 HP0
+对快路径优化的性能推广门。先更新 active intent、owner/ownership/重入规则与合同，
+再实现和验证。首版为 RpcCodec + 每连接 RpcChannel，以现有 TcpServer/TcpClient
+组合；真实 TCP 示例与测试覆盖请求/响应、超时、取消、断连、pending 数量/字节上限、
+恰好一次本地完成、服务端延迟回复及关闭清算。所有运行时状态归连接 owner，跨线程
+通过现有 bounded executor；不增加 Reactor 线程或修改稳定 Core API。
+
+交付：独立 provisional 安装组件、用法文档、Windows IOCP/Linux epoll 及 sanitizer
+验证，验证完成后提交 PR。实现与 HP1 草稿独立，HP 性能切片不并行扩大。
+RPC-C1 自身不扩展协程、HTTP/WebSocket、UDP/KCP、Lua、服务发现或自动重试。
+后续可选 TLS 的独立授权见 TLS-C1。
 
 计划重制日期：2026-08-25
 
-当前执行更新：2026-10-13；本机 Windows 与 WSL Ubuntu 24.04 执行以 DEFER 收束；
-PR #15 已合入，main CI 与预研手动验证完成，weekly 已启用，正式推广门不变。
+当前执行更新：2026-11-11；v0.3.1 已发布，HP1 补充差分 fuzz 和可选 TCP 借用接收器。
+HP0 本机 Windows 与 WSL Ubuntu 24.04 执行仍以 DEFER 收束；预研 weekly 持续运行。
 
 长期方向：`goal.md`
 
@@ -80,7 +112,8 @@ HP 切片的 `planned -> contract-ready -> implemented -> verified -> integrated
   现有 `trySend(std::string_view)` 保持 borrowed/兼容路径；正常高频回包通过 owner
   outbox 回到连接 owner 后发送。
 - 不增加公共 Runtime factory、公共 mailbox、公共 backend selector 或默认
-  io_uring；不扩展到 HTTP、TLS、UDP/KCP、RPC、Lua、AOI 等模块。
+  io_uring；HP 优化线不扩展到 HTTP、TLS、UDP/KCP、RPC、Lua、AOI 等模块。
+  独立 RPC-C1 的 callback 功能授权见本文件开头。
 
 ## 3. 执行里程碑
 
@@ -108,13 +141,18 @@ development evidence 已完成，本轮资源执行以 `DEFER` 收束，不能�
 ### HP1：零额外复制的 owner-local 解帧
 
 预研状态：`KEEP-EXPERIMENTAL`（2026-08-25）。隔离 target 已完成 borrowed view、
-move-only retain、差分合同和 Windows development benchmark；未完成 Linux/fuzz、真实
-Profile A inputBuffer、fixed-lab 和 5%/3% 推广门，因此 HP1 里程碑仍为 `planned`，默认
+move-only retain、差分合同和 Windows development benchmark；初始检查点尚缺 Linux/fuzz、真实
+Profile A inputBuffer、fixed-lab 和 5%/3% 推广门。下述补充扩展开发验证，HP1 里程碑仍为 `planned`，默认
 路径与安装 API 不变。预研实现槽已释放。
 
 2026-11-11 功能补充：在 HP1 可选目标中加入真实 TCP 借用解帧接收器和可运行的 echo
 入口。处理函数可请求停止当前批次，分片输入留在连接 Buffer，预算续跑经过有界 owner
 队列。真实回环合同覆盖重入关闭、续跑拒绝和输入字节清算；正式 HP1 仍遵循 HP0 推广门。
+
+2026-11-11 验证补强：增加 HP1 候选与 legacy 解帧器的逐调用差分 libFuzzer 入口，
+覆盖任意分片、预算、非法输入和 reset 恢复。WSL Clang ASan/UBSan 本地两轮各
+50,000 次通过，原有 HP1 合同与 legacy fuzz 回归通过；独立 CI 任务保留有界执行证据。
+正式 HP1 继续等待 HP0、真实 Profile A 输入路径和固定实验室性能验证。
 
 - 更新 active PacketFramer、Buffer、Profile A intent/rules，明确 `PacketView`
   生命周期和 callback re-entry 限制。

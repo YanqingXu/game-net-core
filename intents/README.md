@@ -17,7 +17,7 @@ Every `*.intent.md` document starts with this authoritative front matter:
 ```yaml
 ---
 status: active | deferred | legacy
-target: GameNet::core | GameNet::protocol | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | GameNet::experimental_io_uring | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_multi_io_queued_echo | gamenet_multi_io_fixed_tick_echo | gamenet_multi_io_sharded_hybrid_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | gamenet_hot_path_benchmark | gamenet_hp1_packet_framer_view_benchmark | gamenet_hp2_spsc_mailbox_benchmark | gamenet_hp3_epoll_slot_dispatch_benchmark | gamenet_hp4_output_segment_chain_benchmark | historical
+target: GameNet::core | GameNet::protocol | GameNet::rpc | GameNet::tls | GameNet::transport | GameNet::game_session | GameNet::game_logic | GameNet::broadcast | GameNet::game | GameNet::experimental | GameNet::experimental_io_uring | gamenet_echo_server | gamenet_single_loop_inline_echo | gamenet_multi_io_queued_echo | gamenet_multi_io_fixed_tick_echo | gamenet_multi_io_sharded_hybrid_echo | gamenet_core_benchmark | gamenet_game_server_pipeline_demo | gamenet_phase4_benchmark | gamenet_hot_path_benchmark | gamenet_hp1_packet_framer_view_benchmark | gamenet_hp2_spsc_mailbox_benchmark | gamenet_hp3_epoll_slot_dispatch_benchmark | gamenet_hp4_output_segment_chain_benchmark | historical
 migration_source: mini_trantor | native
 promote_gate: none | phase-4-protocol | phase-4-transport | phase-4-game-foundation | post-core-preview | post-phase-4-protocol | experimental-only | never
 ---
@@ -126,6 +126,8 @@ These intents apply to the current migrated core:
 - `intents/usecases/multi_io_dedicated_fixed_tick_profile.intent.md`
 - `intents/usecases/multi_io_sharded_hybrid_profile.intent.md`
 - `intents/modules/packet_framer.intent.md`
+- `intents/modules/rpc.intent.md`
+- `intents/modules/tls.intent.md`
 - `intents/modules/transport_endpoint.intent.md`
 - `intents/modules/player_session.intent.md`
 - `intents/modules/logic_loop.intent.md`
@@ -152,8 +154,6 @@ These design assets do not authorize expanding current scope:
 - `intents/modules/path_mtu_cache.intent.md`
 - `intents/modules/path_mtu_signal_authentication.intent.md`
 - `intents/modules/platform_path_mtu_signal.intent.md`
-- `intents/modules/rpc.intent.md`
-- `intents/modules/tls.intent.md`
 - `intents/modules/udp.intent.md`
 - `intents/modules/websocket.intent.md`
 - `intents/modules/when_all.intent.md`

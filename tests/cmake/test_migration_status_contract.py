@@ -653,8 +653,14 @@ def main() -> None:
     require(m9_readiness_text, "ConnectionTransport", m9_readiness)
     require(m9_readiness_text, "advances to M10", m9_readiness)
     for name, path in m9_intents.items():
-        require(m9_intent_texts[name], "status: deferred", path)
-        require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
+        if name == "tls":
+            require(m9_intent_texts[name], "status: active", path)
+            require(m9_intent_texts[name], "target: GameNet::tls", path)
+            require(plan_text, "TLS-C1", plan)
+            assert f"- `intents/modules/{name}.intent.md`" not in deferred_catalog
+        else:
+            require(m9_intent_texts[name], "status: deferred", path)
+            require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
         require(m9_readiness_text, f"`{name}`", m9_readiness)
     for text, source in (
         (status_text, migration_status),
@@ -789,9 +795,11 @@ def main() -> None:
         "tests/cmake/test_migration_status_contract.py",
         m7_readiness,
     )
-    require(rpc_intent_text, "status: deferred", rpc_intent)
+    require(rpc_intent_text, "status: active", rpc_intent)
+    require(rpc_intent_text, "target: GameNet::rpc", rpc_intent)
+    require(plan_text, "RPC-C1", plan)
     require(intents_index_text, "- `intents/modules/rpc.intent.md`", intents_index)
-    require(deferred_catalog, "- `intents/modules/rpc.intent.md`", intents_index)
+    assert "- `intents/modules/rpc.intent.md`" not in deferred_catalog
     installed_rpc_or_lua_headers = [
         path
         for path in (repo_root / "include" / "gamenet").rglob("*")
@@ -801,10 +809,9 @@ def main() -> None:
             or "lua" in path.relative_to(repo_root).as_posix().lower()
         )
     ]
-    assert not installed_rpc_or_lua_headers, (
-        "M7 closure must not install RPC/Lua headers: "
-        + ", ".join(str(path) for path in installed_rpc_or_lua_headers)
-    )
+    assert {path.relative_to(repo_root).as_posix() for path in installed_rpc_or_lua_headers} == {
+        "include/gamenet/rpc/RpcChannel.h", "include/gamenet/rpc/RpcCodec.h"
+    }, "RPC-C1 allows only the explicit provisional callback surface, no Lua"
     tracked_cmake_paths = [
         path
         for path in git(repo_root, "ls-files").splitlines()
@@ -813,8 +820,8 @@ def main() -> None:
     tracked_cmake_text = "\n".join(
         (repo_root / path).read_text(encoding="utf-8") for path in tracked_cmake_paths
     )
-    assert "GameNet::rpc" not in tracked_cmake_text
-    assert "gamenet_rpc" not in tracked_cmake_text
+    require((repo_root / "src/rpc/CMakeLists.txt").read_text(),
+            "add_library(GameNet::rpc ALIAS gamenet_rpc)", plan)
     installed_coroutine_or_awaiter_headers = [
         path
         for path in (repo_root / "include" / "gamenet").rglob("*")
@@ -839,13 +846,10 @@ def main() -> None:
             for term in ("tls", "websocket", "dns", "http")
         )
     ]
-    assert not installed_m9_headers, (
-        "M9 closure must not install TLS/WebSocket/DNS/HTTP headers: "
-        + ", ".join(str(path) for path in installed_m9_headers)
-    )
+    assert {path.relative_to(repo_root).as_posix() for path in installed_m9_headers} == {
+        "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h"
+    }, "TLS-C1 allows only the explicit optional native TLS surface"
     for target in (
-        "GameNet::tls",
-        "gamenet_tls",
         "GameNet::websocket",
         "gamenet_websocket",
         "GameNet::dns",
@@ -876,17 +880,17 @@ def main() -> None:
         assert target not in tracked_cmake_text
     require(
         roadmap_text,
-        "The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14",
+        "The current inventory is 133 CTest tests: 9 unit, 109 contract, and 15",
         roadmap,
     )
-    require(roadmap_text, "103 threading and 108 lifecycle labels", roadmap)
+    require(roadmap_text, "105 threading and 110 lifecycle labels", roadmap)
     require(
         status_text,
-        "inventory is 130 configured CTest tests: 8 unit tests, 108 contract tests",
+        "inventory is 133 configured CTest tests: 9 unit tests, 109 contract tests",
         migration_status,
     )
-    require(status_text, "103 threading and 108 lifecycle labels", migration_status)
-    require(plan_text, "# game-net-core 高性能执行计划：HP0–HP8", plan)
+    require(status_text, "105 threading and 110 lifecycle labels", migration_status)
+    require(plan_text, "# game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "性能设计输入：`high-performance.md`、`high-performance2.md`", plan)
     require(plan_text, hp0_governance_baseline, plan)
@@ -1336,7 +1340,7 @@ def main() -> None:
     require(status_text, "this was a tag-only preview, not a GitHub Release", migration_status)
     require(
         status_text,
-        "HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library",
+        "HTTP, UDP/KCP, coroutine, and a formal all-in-one pipeline library remain",
         migration_status,
     )
     assert "Result: 21/21 tests passed" not in status_text, (

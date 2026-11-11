@@ -250,17 +250,18 @@ int main() {
     }
 
     {
+        // Worker disconnect/exception callbacks may run during server teardown.
+        // Their observed state must outlive both server and worker-loop join.
+        std::atomic<int> messageCount{0};
+        std::atomic<int> disconnectedCount{0};
+        std::atomic<unsigned> observedSources{0};
+        std::atomic<bool> observerRanOnOwner{true};
         gamenet::net::EventLoop callbackLoop;
         gamenet::net::TcpServer callbackServer(
             &callbackLoop,
             gamenet::net::InetAddress(0, true),
             "callback-exception-server");
         callbackServer.setThreadNum(1);
-
-        std::atomic<int> messageCount{0};
-        std::atomic<int> disconnectedCount{0};
-        std::atomic<unsigned> observedSources{0};
-        std::atomic<bool> observerRanOnOwner{true};
 
         callbackServer.setCallbackExceptionHandler(
             [&](const gamenet::net::TcpConnection& connection,
