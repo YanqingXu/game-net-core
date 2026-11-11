@@ -1060,7 +1060,7 @@ def main() -> None:
     build_package = "cmake --build build-io-uring-experimental --parallel"
     require(linux_io_uring_consumer, build_package)
     for target in (
-        "gamenet_core", "gamenet_protocol", "gamenet_transport", "gamenet_game_session",
+        "gamenet_core", "gamenet_protocol", "gamenet_rpc", "gamenet_transport", "gamenet_game_session",
         "gamenet_game_logic", "gamenet_broadcast", "gamenet_experimental_io_uring",
     ):
         require(linux_io_uring_consumer, target)
