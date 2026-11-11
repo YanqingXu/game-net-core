@@ -120,7 +120,7 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
     "gamenet_tls": {"gamenet_core"},
-    "gamenet_rpc_tls": {"gamenet_rpc", "gamenet_tls"},
+    "gamenet_rpc_tls": {"gamenet_core", "gamenet_protocol", "gamenet_rpc", "gamenet_tls"},
     "gamenet_transport": {"gamenet_core"},
     "gamenet_game_session": {"gamenet_core", "gamenet_transport"},
     "gamenet_game_logic": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
