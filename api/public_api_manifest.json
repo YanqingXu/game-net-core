@@ -23,6 +23,8 @@
       "GameNet::game_logic",
       "GameNet::game_session",
       "GameNet::protocol",
+      "GameNet::rpc",
+      "GameNet::tls",
       "GameNet::transport"
     ],
     "stable_core": [
@@ -52,6 +54,10 @@
       "include/gamenet/game_session/PlayerSession.h",
       "include/gamenet/game_session/SessionManager.h",
       "include/gamenet/protocol/PacketFramer.h",
+      "include/gamenet/rpc/RpcChannel.h",
+      "include/gamenet/rpc/RpcCodec.h",
+      "include/gamenet/tls/TlsContext.h",
+      "include/gamenet/tls/TlsStream.h",
       "include/gamenet/transport/TcpTransportEndpoint.h",
       "include/gamenet/transport/TransportEndpoint.h"
     ],

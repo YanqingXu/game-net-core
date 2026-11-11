@@ -279,7 +279,7 @@ def main() -> None:
     require(root_text, "if(BUILD_SHARED_LIBS)", root_cmake)
     require(root_text, "game-net-core is static-only before 1.0", root_cmake)
     require(root_text, "if(GAMENET_ENABLE_TLS)", root_cmake)
-    require(root_text, "GAMENET_ENABLE_TLS=ON is not implemented", root_cmake)
+    require(root_text, "add_subdirectory(src/tls)", root_cmake)
     require(
         root_text,
         'if(GAMENET_ENABLE_EXPERIMENTAL AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")',
@@ -422,7 +422,7 @@ def main() -> None:
         "Linux is the Tier 1 reference platform",
         "Windows is Tier 2 after completing the IOCP",
         "macOS, BSD variants, and all other target systems fail",
-        "`BUILD_SHARED_LIBS=ON` and `GAMENET_ENABLE_TLS=ON`",
+        "`BUILD_SHARED_LIBS=ON`",
         "`GAMENET_ENABLE_EXPERIMENTAL=ON` is supported only on Linux",
         "No binary ABI compatibility is promised before version 1.0.",
     ):

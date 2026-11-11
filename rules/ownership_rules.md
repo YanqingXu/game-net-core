@@ -8,6 +8,29 @@ A module should either:
 - observe an object
 It must not blur these roles.
 
+### TLS-C1
+
+Caller/context owns TlsStream; it weakly observes TCP and borrows the outliving
+owner loop. Shared immutable TlsContext outlives SSL. SSL owns the internal BIO,
+stream owns the network BIO; both directions have fixed BIO capacity. Queued
+plaintext/cipher input has byte/count limits. Timer closures are weak; owner
+dispatch leases self across callbacks. Cleanup/cancellation precede the single
+terminal callback. Forward TCP-down and close/abort before loop teardown.
+At TCP EOF, a bounded accepted owner continuation may retain the stream while
+already received cipher records drain. TLS closed ends callback/session lifetime;
+raw TCP-down may precede it. Callback closures retain their session state.
+
+### RPC-C1
+
+The caller/context owns RpcChannel, which weakly observes its connection and
+borrows the outliving EventLoop. Timer/reply closures are weak; dispatch takes
+a self lease. Pending entries own callbacks and charged count/bytes until a
+single terminal removal, before invoking user code. Input frames own their
+payload; no borrowed Buffer span survives dispatch. The application wires both
+message and down callbacks and closes channels before owner-loop teardown.
+Owner-thread destruction settles pending callbacks as Shutdown; callbacks are
+contained and cannot prevent remaining obligations from being settled.
+
 ## 2. EventLoop
 - EventLoop owns its Poller
 - EventLoop owns wakeup-related resources it creates

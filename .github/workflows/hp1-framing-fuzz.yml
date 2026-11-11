@@ -48,6 +48,8 @@ jobs:
     env:
       CC: clang
       CXX: clang++
+      ASAN_OPTIONS: halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
       - uses: actions/checkout@v4
         with:

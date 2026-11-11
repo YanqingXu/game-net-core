@@ -24,6 +24,8 @@ ALLOWED_STATUSES = {"active", "deferred", "legacy"}
 ALLOWED_TARGETS = {
     "GameNet::core",
     "GameNet::protocol",
+    "GameNet::rpc",
+    "GameNet::tls",
     "GameNet::transport",
     "GameNet::game_session",
     "GameNet::game_logic",
@@ -86,6 +88,8 @@ PHASE4_ACTIVE_INTENTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/tls.intent.md": ("installed-library", "GameNet::tls"),
+    "intents/modules/rpc.intent.md": ("installed-library", "GameNet::rpc"),
     "intents/modules/io_uring_experimental_package.intent.md": (
         "installed-library",
         "GameNet::experimental_io_uring",

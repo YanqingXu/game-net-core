@@ -220,6 +220,14 @@ def main() -> None:
         "layer references disallowed component",
     )
     check_prestudy_boundaries(repo_root)
+    assert_clean(repo_root, "src/rpc/Channel.cc",
+                 '#include "gamenet/protocol/PacketFramer.h"\n'
+                 'namespace gamenet::rpc { class RpcChannel {}; }\n')
+    assert_violation(repo_root, "src/core/Bad.cc",
+                     '#include "gamenet/rpc/RpcChannel.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/rpc/Bad.cc",
+                     '#include "gamenet/game_session/PlayerSession.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/rpc/Bad.cc", "class WebSocket {};\n", "deferred high-level module")
     check_status_description_boundary(repo_root)
     violations = load_scope_guard(repo_root).check_scope(repo_root)
     assert not violations, "\n".join(str(item) for item in violations)

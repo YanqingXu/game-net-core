@@ -1,5 +1,25 @@
 # Roadmap
 
+## Optional OpenSSL TLS — TLS-C1 (2026-11-11)
+
+The separately authorized provisional `GameNet::tls` component is default OFF.
+ON enables real OpenSSL nonblocking TLS over existing owner-local TCP, with
+certificate/identity verification, bounded queues and close_notify settlement.
+See `docs/development/openssl_tls.md` and the active TLS intent for composition,
+callback lifetime and package isolation. Historical M9 decisions below remain
+history; TLS-C1 does not promote WebSocket/DNS/HTTP or the old ConnectionTransport.
+Default CI stays 133 tests; TLS-enabled has 136 (three optional TLS tests).
+
+## Callback RPC feature milestone — 2026-11-11
+
+RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
+of HP0 performance promotion. It provides bounded owner-local callback request/
+response, deadlines, cancellation, disconnect settlement and exactly-once local
+completion. See `intents/modules/rpc.intent.md`, `plan.md` and
+`docs/development/callback_rpc.md` for the current scope. Historical M7
+`NO-PROMOTION` decisions below remain consumer-comparison history; they do not
+block this separately authorized feature. Coroutines, WebSocket and UDP/KCP remain deferred; TLS has its own TLS-C1 authorization. Development work does not create a release.
+
 game-net-core is the component-split migration target for `mini_trantor`.
 The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
@@ -67,8 +87,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14
-  integration, with 103 threading and 108 lifecycle labels. The IOE-R2
+- The current inventory is 133 CTest tests: 9 unit, 109 contract, and 15
+  integration, with 105 threading and 110 lifecycle labels. The IOE-R2
   Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
   and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
   the PERF-R1 reviewed-surface diff remains strictly empty.
@@ -333,8 +353,8 @@ the exact release commit. Annotated tag `v0.2.0-phase4-preview` and the
 are published with canonical archives and `SHA256SUMS`. This closes the Phase 4
 Preview publication plan, not production readiness or API/ABI stability. PR #4
 had zero submitted GitHub reviews, which remains a process limitation.
-Experimental HTTP, RPC, UDP/KCP, TLS, and coroutine work remains deferred behind
-separate intent promotion.
+At that Preview checkpoint HTTP, RPC, UDP/KCP, TLS and coroutines were deferred.
+RPC-C1 and TLS-C1 above record their later separate authorizations.
 
 ## Phase 5: Production Hardening
 

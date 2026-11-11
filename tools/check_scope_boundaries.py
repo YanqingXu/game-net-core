@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ACTIVE_COMPONENTS = {"core", "protocol", "transport", "game_session", "game_logic", "broadcast"}
+ACTIVE_COMPONENTS = {"core", "protocol", "rpc", "tls", "transport", "game_session", "game_logic", "broadcast"}
 DEFERRED_COMPONENTS = {"protocol", "transport", "game", "experimental"}
 DEFERRED_SRC_DIRS = {"protocol", "transport", "experimental", "broadcast", "game_logic", "game_session"}
 SCAN_ENTRIES = ("include", "src", "tests", "examples", "benchmarks", "cmake", ".github", "CMakeLists.txt")
@@ -117,7 +117,7 @@ TEXT_PATTERNS = (
 
 COMPONENT_REFERENCE = re.compile(
     r"\b(?:gamenet::|gamenet_|GameNet::|gamenet/)"
-    r"(protocol|transport|game_session|game_logic|broadcast|game|experimental)\b"
+    r"(protocol|rpc|tls|transport|game_session|game_logic|broadcast|game|experimental)\b"
 )
 PRESTUDY_NAMESPACE = re.compile(r"::(hp[1-6])\b")
 PRESTUDY_TARGET = re.compile(r"\bgamenet_hp\d+_\w+\b")
@@ -127,6 +127,8 @@ PRESTUDY_INCLUDE = re.compile(r"(?:^|/)(hp\d+)/")
 LAYER_ALLOWED_COMPONENTS = {
     "core": set(),
     "protocol": {"protocol"},
+    "rpc": {"rpc", "protocol"},
+    "tls": {"tls"},
     "transport": {"transport"},
     "game_session": {"game_session", "transport"},
     "game_logic": {"game_logic", "game_session", "transport"},
@@ -267,6 +269,19 @@ def check_text(root: Path, path: Path) -> list[Violation]:
                 )
         for kind, pattern in TEXT_PATTERNS:
             for match in pattern.finditer(line):
+                if kind == "deferred high-level module" and match.group(0).startswith("Tls"):
+                    if rel.startswith(("src/tls/", "include/gamenet/tls/", "tests/unit/tls/",
+                                       "tests/contract/tls/", "tests/integration/tls/", "tests/cmake/tls_install_consumer/")) or rel in {
+                            "tests/support/TlsFixture.h", "tests/support/TlsCertificates.h",
+                            "tests/api/test_public_api_manifest.py", "tests/cmake/test_migration_status_contract.py"}:
+                        continue
+                if kind == "deferred high-level module" and match.group(0).startswith("Rpc"):
+                    if rel.startswith(("src/rpc/", "include/gamenet/rpc/", "tests/unit/rpc/",
+                                       "tests/contract/rpc/", "tests/integration/rpc/",
+                                       "tests/cmake/rpc_install_consumer/")) or rel in {
+                            "tests/api/test_public_api_manifest.py",
+                            "tests/cmake/test_migration_status_contract.py"}:
+                        continue
                 if kind == "deferred high-level module" and match.group(0) == "WebSocket":
                     if any(
                         token.start <= (line_number, match.start())
