@@ -33,12 +33,6 @@ if(BUILD_SHARED_LIBS)
     )
 endif()
 
-if(GAMENET_ENABLE_TLS)
-    message(FATAL_ERROR
-        "GAMENET_ENABLE_TLS=ON is not implemented; TLS remains deferred."
-    )
-endif()
-
 if(GAMENET_ENABLE_EXPERIMENTAL AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR
         "GAMENET_ENABLE_EXPERIMENTAL requires Linux for the IOE-X1-X15 io_uring target."
@@ -65,6 +59,9 @@ add_subdirectory(src/core)
 add_subdirectory(src/protocol)
 add_subdirectory(src/rpc)
 add_subdirectory(src/transport)
+if(GAMENET_ENABLE_TLS)
+    add_subdirectory(src/tls)
+endif()
 add_subdirectory(src/game_session)
 add_subdirectory(src/game_logic)
 add_subdirectory(src/broadcast)

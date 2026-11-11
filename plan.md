@@ -1,4 +1,21 @@
-# game-net-core 执行计划：HP0–HP8 与 callback RPC
+# game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
+
+## TLS-C1：可选 OpenSSL TLS（2026-11-11 用户授权）
+
+在 RPC-C1 已合入并完成 main CI 后，启动独立 provisional `GameNet::tls`。
+默认关闭 `GAMENET_ENABLE_TLS`，ON 时发现 OpenSSL 并单独安装/导出组件；OFF 的
+Core 包和消费者不需要 OpenSSL。采用有界 BIO pair 在现有 TCP/epoll/IOCP 之上
+组合 TLS，保持 SSL/BIO/回调归连接 owner；TLS-ready 与 TCP-up 分开。
+
+先激活 native TLS intent，补齐规则和合同，再实现证书链与 DNS/IP 校验、非阻塞
+握手、WANT_READ/WANT_WRITE、读暂停/恢复、有界明文/密文背压、关闭封口与
+close_notify 双向清算。TLS 读暂停只停止明文交付，持续密文超限显式关闭；不是新增
+Core socket 读开关。握手和优雅关闭均有超时，EOF 无 close_notify 不得标为成功。
+配置、所有权、回调重入、计时器拒绝与关闭结果必须可检验。
+
+交付 Windows IOCP/Linux epoll 的真实 OpenSSL 合同、真实 TCP 集成、sanitizer、
+独立安装消费者及默认 OFF 隔离验证，通过后提交 PR。此功能授权独立于 HP0 性能推广，
+不激活旧 ConnectionTransport、不接入协程/WebSocket/RPC 自动升级、不创建发行版。
 
 ## RPC-C1：最小 callback RPC（2026-11-11 用户授权）
 
@@ -12,7 +29,8 @@
 
 交付：独立 provisional 安装组件、用法文档、Windows IOCP/Linux epoll 及 sanitizer
 验证，验证完成后提交 PR。实现与 HP1 草稿独立，HP 性能切片不并行扩大。
-协程、TLS、HTTP/WebSocket、UDP/KCP、Lua、服务发现与自动重试继续 deferred。
+RPC-C1 自身不扩展协程、HTTP/WebSocket、UDP/KCP、Lua、服务发现或自动重试。
+后续可选 TLS 的独立授权见 TLS-C1。
 
 计划重制日期：2026-08-25
 

@@ -75,6 +75,7 @@ jobs:
 
       - name: Check repository guards
         run: |
+          python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
@@ -356,6 +357,7 @@ jobs:
           fi
       - name: Check repository guards
         run: |
+          python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
@@ -590,6 +592,7 @@ jobs:
 
       - name: Check repository guards
         run: |
+          python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
@@ -755,6 +758,7 @@ jobs:
 
       - name: Check repository guards
         run: |
+          python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
           python3 tests/scope/test_intent_metadata.py
@@ -980,6 +984,7 @@ jobs:
       - name: Check repository guards
         shell: pwsh
         run: |
+          python tests/ci/test_tls_workflow.py
           python tests/scope/test_scope_guard.py
           python tests/scope/test_intent_consistency.py
           python tests/scope/test_intent_metadata.py
@@ -1213,6 +1218,7 @@ jobs:
       - name: Check repository guards
         shell: pwsh
         run: |
+          python tests/ci/test_tls_workflow.py
           python tests/scope/test_scope_guard.py
           python tests/scope/test_intent_consistency.py
           python tests/scope/test_intent_metadata.py

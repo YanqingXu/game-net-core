@@ -1,175 +1,118 @@
 ---
-status: deferred
-target: GameNet::transport
-migration_source: mini_trantor
-promote_gate: post-core-preview
+status: active
+target: GameNet::tls
+migration_source: native
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: native
+source_commit: none
+source_paths: none
 ---
 
-# Module Intent: TLS/SSL Integration
+# TLS-C1: Optional OpenSSL stream over TCP
 
-## 1. Intent
-TLS integration adds a secure transport layer on top of existing TCP connections.
-It wraps OpenSSL's `SSL_CTX` and `SSL` objects with reactor-friendly, non-blocking
-handshake and I/O, preserving thread-affinity and lifecycle discipline.
+## Authorization and scope
 
-TLS is an optional feature: connections without TLS continue to work unchanged.
-At build time, `MINI_ENABLE_TLS=OFF` removes the OpenSSL dependency; in that
-configuration `TlsContext` factories fail explicitly and plain TCP transport
-remains the supported baseline.
+The 2026-11-11 user-authorized TLS-C1 feature milestone in plan.md replaces the
+historical deferred TLS-in-TcpConnection proposal. GameNet::tls is provisional,
+default OFF (GAMENET_ENABLE_TLS), separately exported and dependency-discovered
+only when requested. OFF requires no OpenSSL and installs no TLS surface.
+This native component does not promote M9 consumer-private TLS or HP0/HP7.
+It supports OpenSSL 3, TLS 1.2/1.3 and one TlsStream per existing TCP connection.
+It does not activate the deferred ConnectionTransport design, add STARTTLS,
+coroutines, WebSocket, automatic RPC/TLS routing, credential reload or mTLS.
 
----
+## Architecture
 
-## 2. Components
+An immutable shared TlsContext owns SSL_CTX. TlsStream owns SSL and a bounded
+BIO pair; the existing TcpConnection carries ciphertext on epoll/IOCP. TLS
+never reads/writes the socket directly and never modifies Core callback slots.
+Applications configure TCP callbacks before start, create/start TLS on TCP-up,
+and forward message, write-complete and TCP-down to the stream. TCP-up is not
+TLS-ready. Only the TLS ready callback permits application plaintext.
 
-### TlsContext
-- Wraps `SSL_CTX*` with RAII
-- Factory methods for server (cert + key) and client contexts
-- Configuration: CA path, verify mode, protocol version
-- Shared across connections (SSL_CTX is reference-counted)
-- Thread-safe for read-only access after construction
+## Invariants and ownership (five module gates)
 
-### TcpConnection TLS mode
-- Optional `SSL*` per connection, enabled via `startTls()`
-- TLS state machine: None → Handshaking → Established → ShuttingDown
-- Non-blocking handshake integrated with Channel events
-- SSL_read / SSL_write replace raw fd I/O when active
-- SSL_shutdown integrates with existing close path
-- Coroutine awaitables work transparently over TLS
+1. The connection EventLoop owns stream state, all SSL/BIO operations, callbacks,
+   snapshots, close and destruction. Context factories configure SSL_CTX before
+   publication; later context use is read-only. Foreign mutations return
+   WrongThread before taking ownership. Cross-thread work marshals owned values
+   through the existing bounded owner executor and checks admission.
+2. Caller/context owns TlsStream. It weakly observes TcpConnection and borrows
+   its outliving EventLoop. It keeps its shared TlsContext until SSL is freed.
+   Timer closures are weak; public dispatch leases self across reentrant user
+   callbacks. At TCP EOF a bounded accepted owner continuation leases already
+   received cipher input until TLS settlement, even after context release.
+   TLS terminal (not raw TCP-down) ends application callback lifetime: callbacks
+   retain their application/session state. SSL owns its internal BIO; the stream
+   owns the network BIO.
+3. Ready/data/terminal callbacks run on the owner, may send, pause/resume, shut
+   down, abort or release caller references. No nested SSL dispatch occurs.
+   Terminal state/budget/timer cleanup precedes the single terminal callback.
+   Callback exceptions are contained and fail the stream; callback payload is
+   borrowed only for that invocation. Recursive onMessage rejects nested input.
+4. Cipher input is copied/consumed before user dispatch. BIO capacities,
+   encrypted-input queue, pending plaintext bytes/count and SSL work per turn
+   are bounded. WANT_READ/WANT_WRITE are retry states, not terminal errors.
+   Failed writes retry the same bytes/length before advancing their queue.
+   TCP send rejection leaves BIO bytes intact; one bounded timer retries, even
+   if TCP's optional write notification was dropped. No busy spin/unbounded post.
+5. Specific verification files are named below. Applications close/abort streams
+   before owner shutdown, and always forward TCP-down. No timer keeps the owner
+   alive. Owner destruction cancels timers, releases buffers and reports Aborted
+   if terminal settlement was still outstanding.
 
----
+TCP EOF first drains previously accepted cipher records under the normal work
+budget, then classifies close_notify/truncation. Rejected EOF continuation is
+SchedulingRejected, never a silent clean close. Destruction does not force-close
+TCP reentrantly through a context deleter: abandonment reports Aborted and seals
+TCP output by shutdown; use explicit abort for immediate forced teardown.
 
-## 3. Responsibilities
-- provide RAII SSL_CTX management with safe configuration API
-- perform non-blocking TLS handshake on owner EventLoop thread
-- transparently route read/write through SSL when TLS is active
-- integrate TLS shutdown with connection close semantics
-- support SNI (Server Name Indication) for client connections
-- preserve all existing non-TLS behavior when TLS is not enabled
-- preserve all existing non-TLS behavior when mini-trantor is built without OpenSSL
+## Authentication and failure
 
----
+Client contexts always verify the chain using explicit CA PEM or default trust
+paths. Each client stream requires a nonempty expected DNS/IP identity; SAN and
+full-wildcard rules apply and DNS sends SNI. There is no insecure-skip-verify API.
+Server contexts load a certificate chain/private key and reject mismatch.
+Minimum TLS 1.2, no compression, no renegotiation, no early application data.
+Handshake and shutdown have finite positive deadlines. Invalid certificate,
+name, expiry, handshake/protocol errors, input overflow, timer rejection,
+callback exception and TCP EOF without close_notify have explicit terminal
+results. Errors never become a successful handshake or silent clean EOF.
 
-## 4. Non-Responsibilities
-- does not implement certificate revocation checking
-- does not implement mTLS (mutual TLS) advanced policies
-- does not implement session resumption / tickets in v3
-- does not manage OpenSSL global state beyond one-time init
-- does not replace or bypass EventLoop scheduling
+## Backpressure and close
 
----
+trySend only admits in Open, with count/byte caps, copying before Accepted.
+Rejected admission changes no ownership. Accepted plaintext remains queued until
+SSL consumes it, or is counted discarded on terminal failure. Ciphertext goes
+through existing multi-level TCP output admission; bounded BIO bytes survive
+Overloaded and resume on write-complete/timed retry.
 
-## 5. Core Invariants
-- TLS state machine transitions happen only on owner loop thread
-- SSL object is per-connection, created from shared SSL_CTX
-- handshake does not block EventLoop thread (non-blocking SSL_do_handshake)
-- connectionCallback fires only after TLS handshake completes (when TLS is enabled)
-- SSL_read/SSL_write handle WANT_READ/WANT_WRITE by adjusting Channel interest
-- SSL_free is called before connection destruction completes
-- no OpenSSL global state leakage across EventLoop threads
+pauseRead stops application plaintext delivery; resumeRead processes buffered
+records. It is TLS-level backpressure, not a new Core socket-read switch.
+Ciphertext continues to be bounded; sustained traffic beyond the configured
+input cap closes with InputLimit rather than allocating indefinitely.
 
----
+shutdown seals plaintext admission immediately, drains accepted plaintext,
+sends close_notify, receives the peer close_notify, and submits TCP shutdown
+only after TLS output was admitted. TCP-down is Graceful only after both TLS
+alerts and zero TLS pending output; unexpected EOF is Truncated. A stalled
+peer or paused reader is bounded by shutdown timeout (resume to complete a
+paused close). Abort/timeout/fatal error use normal TCP force-close cleanup.
+Close during handshake is Aborted. Repeated close/down never duplicates terminal
+callbacks. TLS-ready and terminal events remain separate from Core's TCP events.
 
-## 6. Threading Rules
-- TlsContext construction and configuration happen on any thread before use
-- TlsContext is read-only after construction; safe to share across threads
-- startTls() must be called on the owner loop thread
-- TLS handshake events are processed on the owner loop thread
-- SSL_read / SSL_write happen on the owner loop thread only
-- SSL_shutdown happens on the owner loop thread
+## Verification
 
----
+- tests/unit/tls/test_tls_context.cpp: real certificates, trust/key validation.
+- tests/contract/tls/test_tls_stream.cpp: fragmented handshake, verification
+  failures, WANT progress, queue/input caps, pause/resume, re-entry, deadlines,
+  dropped write notifications, close_notify, truncation and terminal settlement.
+- tests/integration/tls/test_tls_tcp.cpp: real TCP/TLS echo, backpressure and
+  graceful shutdown on Windows IOCP/Linux epoll, plus OpenSSL interoperability.
+- tests/ci/test_tls_workflow.py: default-OFF package isolation, ON-only component
+  and registered cross-platform TLS evidence lanes.
 
-## 7. Ownership Rules
-- TlsContext is shared via shared_ptr (one per server/client, shared across connections)
-- TcpConnection holds shared_ptr<TlsContext> to keep context alive
-- TcpConnection owns its SSL* object (freed in destructor or connectDestroyed)
-- SSL_CTX is owned by TlsContext; all SSL objects derived from it must not outlive it
-
----
-
-## 8. Failure Semantics
-- TlsContext creation failure (bad cert/key path) throws exception
-- if `MINI_ENABLE_TLS=OFF`, TlsContext creation throws an explicit unsupported error
-- TLS handshake failure produces handleError → handleClose path
-- SSL_read errors (non-WANT_READ/WANT_WRITE) trigger error → close path
-- SSL_write errors trigger error → close path
-- certificate verification failure is surfaced through OpenSSL's verify callback
-- SSL_shutdown failure does not prevent connection cleanup
-
----
-
-## 9. State Machine
-
-```
-                   startTls()
-  kTlsNone ──────────────────── kTlsHandshaking
-                                      │
-                          SSL_do_handshake() == 1
-                                      │
-                                      ▼
-                              kTlsEstablished
-                                      │
-                            shutdown / close
-                                      │
-                                      ▼
-                              kTlsShuttingDown
-                                      │
-                                      ▼
-                              connection closed
-```
-
----
-
-## 10. TcpServer Integration
-- `TcpServer::enableSsl(shared_ptr<TlsContext>)` configures server-side TLS
-- On new connection: TcpConnection::startTls(ctx, isServer=true) before connectEstablished()
-- connectionCallback fires after TLS handshake succeeds
-
----
-
-## 11. TcpClient Integration
-- `TcpClient::enableSsl(shared_ptr<TlsContext>, hostname)` configures client-side TLS
-- On new connection: TcpConnection::startTls(ctx, isServer=false, hostname) before connectEstablished()
-- SNI hostname is set via SSL_set_tlsext_host_name
-- connectionCallback fires after TLS handshake succeeds
-
----
-
-## 12. Test Contracts
-- TlsContext loads valid certificate and key successfully
-- TlsContext rejects invalid certificate path
-- TLS handshake completes on owner loop thread (server + client)
-- TLS read/write deliver correct data through SSL layer
-- TLS shutdown integrates with connection close path
-- TLS handshake failure produces error → close callback
-- certificate verification failure is detectable
-- non-TLS connections are unaffected by TLS infrastructure
-- `MINI_ENABLE_TLS=OFF` build keeps plain ConnectionTransport read/write working
-- coroutine awaitables work transparently over TLS connections
-
----
-
-## 13. Review Checklist
-- Is SSL object lifecycle tied to TcpConnection destruction?
-- Does TLS handshake stay non-blocking?
-- Are WANT_READ/WANT_WRITE handled correctly in all paths?
-- Does connectionCallback fire only after handshake completes?
-- Is the non-TLS path completely unchanged?
-- Can SSL_CTX outlive all SSL objects derived from it?
-- Is SNI set correctly for client connections?
-
----
-
-## 14. Core Module Change Gate Answers
-1. **Which loop/thread owns this module?** TlsContext is thread-agnostic after construction.
-   SSL objects within TcpConnection are owned by the connection's EventLoop thread.
-2. **Who owns it and who releases it?** TlsContext: shared_ptr ownership by TcpServer/TcpClient/TcpConnection.
-   SSL: TcpConnection creates and frees it.
-3. **Which callbacks may re-enter?** TLS handshake completion may trigger connectionCallback.
-   SSL_read/SSL_write may require opposite event (WANT_WRITE during read).
-4. **Which operations are allowed cross-thread?** TlsContext configuration before use.
-   All SSL operations are owner-loop-thread only.
-5. **Which test file verifies this change?** unit/tls/test_tls_context.cpp,
-   contract/tls/test_tls_handshake.cpp, integration/tls/test_tls_echo.cpp
-   For Windows `MINI_ENABLE_TLS=OFF` plain transport coverage is verified by
-   `ctest --preset windows-vs2026-x64`.
+The TLS workflow runs the exact optional inventory and installed consumers.
+Default Core CI remains the 133-test baseline. TLS-enabled adds three tests;
+no sanitizer or real-OpenSSL scenario may silently fall back/skip as evidence.

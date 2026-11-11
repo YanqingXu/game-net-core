@@ -1,5 +1,14 @@
 # testing_rules.md
 
+## TLS-C1 optional real-OpenSSL contracts
+
+TLS-enabled unit/contract/TCP integration tests must exercise OpenSSL, not a
+fallback. Cover authenticated fragmented handshake, CA/name/expiry rejection,
+WANT retry, output/input limits, pause/resume recovery, handler re-entry and
+release, notification loss, handshake/close deadlines, close_notify drain and
+truncation. Run Windows IOCP/Linux epoll and sanitizers. Separately prove OFF
+finds no OpenSSL/exports no TLS, and ON installed component consumers link.
+
 ## RPC-C1 callback terminal contracts
 
 RPC tests named by the active intent run on Windows IOCP and Linux epoll.

@@ -1,5 +1,11 @@
 # Third-Party Notices
 
+The optional `GameNet::tls` component links to an externally supplied OpenSSL 3
+provider (Apache-2.0). Its default-OFF build has no OpenSSL dependency. This
+repository does not bundle OpenSSL binaries, private keys or trust stores.
+Provider source, license and notices: https://openssl-library.org/source/ and
+https://github.com/openssl/openssl/blob/openssl-3.0/LICENSE.txt.
+
 The game-net-core source and binary distributions do not bundle third-party
 library source or binary dependencies.
 

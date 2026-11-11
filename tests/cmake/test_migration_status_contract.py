@@ -653,8 +653,14 @@ def main() -> None:
     require(m9_readiness_text, "ConnectionTransport", m9_readiness)
     require(m9_readiness_text, "advances to M10", m9_readiness)
     for name, path in m9_intents.items():
-        require(m9_intent_texts[name], "status: deferred", path)
-        require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
+        if name == "tls":
+            require(m9_intent_texts[name], "status: active", path)
+            require(m9_intent_texts[name], "target: GameNet::tls", path)
+            require(plan_text, "TLS-C1", plan)
+            assert f"- `intents/modules/{name}.intent.md`" not in deferred_catalog
+        else:
+            require(m9_intent_texts[name], "status: deferred", path)
+            require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
         require(m9_readiness_text, f"`{name}`", m9_readiness)
     for text, source in (
         (status_text, migration_status),
@@ -840,13 +846,10 @@ def main() -> None:
             for term in ("tls", "websocket", "dns", "http")
         )
     ]
-    assert not installed_m9_headers, (
-        "M9 closure must not install TLS/WebSocket/DNS/HTTP headers: "
-        + ", ".join(str(path) for path in installed_m9_headers)
-    )
+    assert {path.relative_to(repo_root).as_posix() for path in installed_m9_headers} == {
+        "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h"
+    }, "TLS-C1 allows only the explicit optional native TLS surface"
     for target in (
-        "GameNet::tls",
-        "gamenet_tls",
         "GameNet::websocket",
         "gamenet_websocket",
         "GameNet::dns",
@@ -887,7 +890,7 @@ def main() -> None:
         migration_status,
     )
     require(status_text, "105 threading and 110 lifecycle labels", migration_status)
-    require(plan_text, "# game-net-core 执行计划：HP0–HP8 与 callback RPC", plan)
+    require(plan_text, "# game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
     require(plan_text, "性能设计输入：`high-performance.md`、`high-performance2.md`", plan)
     require(plan_text, hp0_governance_baseline, plan)
@@ -1337,7 +1340,7 @@ def main() -> None:
     require(status_text, "this was a tag-only preview, not a GitHub Release", migration_status)
     require(
         status_text,
-        "HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library",
+        "HTTP, UDP/KCP, coroutine, and a formal all-in-one pipeline library remain",
         migration_status,
     )
     assert "Result: 21/21 tests passed" not in status_text, (
