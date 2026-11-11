@@ -1,5 +1,15 @@
 # game-net-core
 
+## Optional OpenSSL TLS — TLS-C1 (2026-11-11)
+
+The separately authorized provisional `GameNet::tls` component is default OFF.
+ON enables real OpenSSL nonblocking TLS over existing owner-local TCP, with
+certificate/identity verification, bounded queues and close_notify settlement.
+See `docs/development/openssl_tls.md` and the active TLS intent for composition,
+callback lifetime and package isolation. Historical M9 decisions below remain
+history; TLS-C1 does not promote WebSocket/DNS/HTTP or the old ConnectionTransport.
+Default CI stays 133 tests; TLS-enabled has 136 (three optional TLS tests).
+
 ## Callback RPC feature milestone — 2026-11-11
 
 RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
@@ -8,8 +18,7 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines, TLS, WebSocket and UDP/KCP
-remain deferred. Development work does not create a release.
+block this separately authorized feature. Coroutines, WebSocket and UDP/KCP remain deferred; TLS has its own TLS-C1 authorization. Development work does not create a release.
 
 game-net-core is a modern C++23 networking foundation for game servers.
 
@@ -247,7 +256,7 @@ Planned / Deferred Modules:
 
 - game packet headers and serialization codecs
 - UDP/KCP experimental transport
-- coroutine, TLS, DNS, HTTP, WebSocket, and RPC adapters
+- coroutine, DNS, HTTP, and WebSocket adapters
 
 ## Non-goals
 
@@ -271,7 +280,7 @@ The current CMake target-system allow-list is Linux and Windows:
 
 All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
 rejected, and no binary ABI compatibility is promised before 1.0.
-`GAMENET_ENABLE_TLS` remains an `OFF`-only compatibility option. The default-off
+`GAMENET_ENABLE_TLS` is default OFF; ON builds the optional OpenSSL `GameNet::tls` component. The default-off
 `GAMENET_ENABLE_EXPERIMENTAL=ON` is accepted only on Linux and builds the
 Linux-only IOE-X1–X15 io_uring Engine/Pump/TCP/Hub/listener, semantic Adapter,
 single-/multi-owner Server, active Client, cross-backend semantic contracts,

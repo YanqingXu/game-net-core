@@ -3,6 +3,19 @@
 The CI gate keeps the migration focused on the frozen Reactor/TCP foundation
 plus the explicitly active Phase 4 foundations.
 
+## Optional OpenSSL TLS
+
+`.github/workflows/tls.yml` independently enables `GAMENET_ENABLE_TLS=ON` on
+Linux Release, ASan/UBSan and TSan, plus Windows Release and ASan. Release runs
+all 136 tests; sanitizer lanes execute exactly the three real-OpenSSL TLS tests.
+The driver rejects missing, duplicate, disabled, skipped or failed cases and
+retains commit/run-bound logs, inventory and JUnit. Both Release lanes verify
+ON and OFF installed packages: requesting TLS discovers OpenSSL, while a
+Core-only consumer never does. Default Core CI remains 133 tests.
+
+See [TLS composition and local verification](openssl_tls.md). TLS is provisional;
+these functional gates do not create a release or establish production capacity.
+
 ## Isolated Experimental Prestudy Contracts
 
 `.github/workflows/prestudy-contracts.yml` runs manually or weekly on Monday
@@ -87,7 +100,7 @@ The `ci` workflow validates:
 - CMake configure with C++23 and testing enabled.
 - Build-governance guard for the Linux/Windows target-system allow-list,
   explicit static installed targets, rejected shared-library builds, and
-  configure-time failure for unimplemented TLS and unsupported Windows
+  optional real-OpenSSL TLS and configure-time failure for unsupported Windows
   experimental options, plus the separate default-off Linux IOE-X1–X15
   Engine/Pump/TCP contract and installation gate.
 - Public API manifest v2 verification for classified exported targets and
@@ -170,13 +183,14 @@ is exactly 143 tests with 11 experimental entries; the target is installed only
 into a separate opt-in package tree and never into the default package. Still
 disabled are:
 
-- TLS
+- TLS (default OFF; the separate TLS workflow enables its own component)
 - experimental transport other than the isolated io_uring Engine/Pump/TCP
   path
-- HTTP, WebSocket, RPC, UDP, KCP, PMTU/FEC, metrics, coroutine, and a formal
+- HTTP, WebSocket, UDP, KCP, PMTU/FEC, metrics, coroutine, and a formal
   all-in-one game pipeline library
 
-Those deferred intents remain design assets until separately promoted. Active
+RPC-C1 and TLS-C1 have separate feature authorizations. Other deferred intents
+remain design assets until separately promoted. Active
 Phase 4 targets are protocol, transport, game_session, game_logic, and broadcast;
 the pipeline remains non-installed example support.
 

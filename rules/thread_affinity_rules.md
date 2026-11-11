@@ -4,6 +4,16 @@
 game-net-core follows a reactor-style thread-affinity model.
 Mutable reactor state belongs to a specific EventLoop thread.
 
+### TLS-C1
+
+SSL/BIO and TlsStream state belong to the connection EventLoop. Context is
+immutable after factory publication. All TLS callbacks and destruction are
+owner-only, may re-enter send/pause/resume/shutdown/abort, and never recursively
+enter SSL. Foreign operations reject before taking a strong owner-object lease.
+Applications marshal owned values through bounded executor admission.
+TCP-down drains accepted TLS input on the owner under the same work budget;
+continuation rejection settles SchedulingRejected without an inline fallback.
+
 ### RPC-C1
 
 RpcChannel mutation, call/cancel/reply/close, message/disconnect hooks, snapshots

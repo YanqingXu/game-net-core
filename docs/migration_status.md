@@ -1,5 +1,15 @@
 # Migration Status
 
+## Optional OpenSSL TLS — TLS-C1 (2026-11-11)
+
+The separately authorized provisional `GameNet::tls` component is default OFF.
+ON enables real OpenSSL nonblocking TLS over existing owner-local TCP, with
+certificate/identity verification, bounded queues and close_notify settlement.
+See `docs/development/openssl_tls.md` and the active TLS intent for composition,
+callback lifetime and package isolation. Historical M9 decisions below remain
+history; TLS-C1 does not promote WebSocket/DNS/HTTP or the old ConnectionTransport.
+Default CI stays 133 tests; TLS-enabled has 136 (three optional TLS tests).
+
 ## Callback RPC feature milestone — 2026-11-11
 
 RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
@@ -8,8 +18,7 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines, TLS, WebSocket and UDP/KCP
-remain deferred. Development work does not create a release.
+block this separately authorized feature. Coroutines, WebSocket and UDP/KCP remain deferred; TLS has its own TLS-C1 authorization. Development work does not create a release.
 
 The current inventory is 133 configured CTest tests: 9 unit tests, 109 contract tests, and
 15 integration tests, with 105 threading and 110 lifecycle labels.
@@ -482,7 +491,8 @@ regression decision or promotion threshold.
 The Reactor / TCP foundation remains frozen at `v0.1.0-core-preview`. Phase 4
 protocol, transport, session, logic-loop, pipeline-example, and broadcast
 foundations are now implemented as one-way upper layers. Experimental
-UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters remain deferred.
+UDP/KCP/TLS/coroutine and HTTP/WebSocket/RPC adapters were deferred at that
+checkpoint; RPC-C1 and TLS-C1 above record their later authorizations.
 
 The historical implementation checkpoint is `669ebb0`. M3-R1 is
 closed at independently reviewed checkpoint `95a6ab5`; M3-R2 is committed at
@@ -655,7 +665,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 75 | 45 | 19 | 11 | 214 |
+| 75 | 46 | 18 | 11 | 218 |
 
 ## Historical Production-Hardening Evidence
 
@@ -1448,8 +1458,9 @@ tag:
   main CI `29168786199`, and publish annotated tag `v0.2.0-phase4-preview`,
   checksums, and the formal GitHub Preview Release. Independent submitted review
   remained absent and is recorded as a process limitation.
-- [ ] HTTP, RPC, UDP/KCP, TLS, coroutine, and a formal all-in-one pipeline library
-  remain deferred until separately promoted.
+- [ ] HTTP, UDP/KCP, coroutine, and a formal all-in-one pipeline library remain
+  deferred until separately promoted. RPC-C1 and TLS-C1 have separate current
+  authorizations above.
 
 Before promoting a later Preview or stable release, keep the Linux and Windows
 CI gates green and record any missing soak, race-oriented, or platform-specific

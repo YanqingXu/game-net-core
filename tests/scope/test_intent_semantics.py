@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import argparse
+import os
 import re
 import subprocess
 import sys
@@ -35,6 +37,7 @@ PHASE4_ARTIFACTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/tls.intent.md": ("installed-library", "GameNet::tls"),
     "intents/modules/rpc.intent.md": ("installed-library", "GameNet::rpc"),
     "intents/modules/io_uring_experimental_package.intent.md": (
         "installed-library",
@@ -115,6 +118,7 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_core": set(),
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
+    "gamenet_tls": {"gamenet_core"},
     "gamenet_transport": {"gamenet_core"},
     "gamenet_game_session": {"gamenet_core", "gamenet_transport"},
     "gamenet_game_logic": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
@@ -136,6 +140,11 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
     "tests/contract/io_engine/test_io_uring_tcp_multi_owner_server.cpp",
     "tests/contract/io_engine/test_io_uring_tcp_client.cpp",
     "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
+}
+
+TLS_VERIFICATION_PATHS = {
+    "tests/unit/tls/test_tls_context.cpp", "tests/contract/tls/test_tls_stream.cpp",
+    "tests/integration/tls/test_tls_tcp.cpp",
 }
 
 ARTIFACT_KINDS = {"installed-library", "example", "benchmark"}
@@ -684,6 +693,7 @@ def validate_verification(
     intent_name: str,
     require_path: bool,
     experimental_inventory: ConfiguredInventory | None = None,
+    tls_inventory: ConfiguredInventory | None = None,
 ) -> None:
     paths = verification_paths(body)
     if require_path:
@@ -703,6 +713,13 @@ def validate_verification(
                 f"intent fuzz file is not registered with a fuzz target: {test_path}",
             )
         elif test_path.endswith(".cpp"):
+            if test_path in TLS_VERIFICATION_PATHS:
+                # OFF-only guards must not discover OpenSSL. The TLS workflow
+                # runs this validator with --with-tls and checks exact execution.
+                if tls_inventory is not None:
+                    require(test_path in tls_inventory.tests_by_source,
+                            f"TLS verification missing from configured inventory: {test_path}")
+                continue
             if (
                 test_path in EXPERIMENTAL_VERIFICATION_PATHS
                 and experimental_inventory is None
@@ -740,6 +757,7 @@ def validate_intent(
     require_provenance: bool = True,
     require_verification_path: bool = True,
     experimental_inventory: ConfiguredInventory | None = None,
+    tls_inventory: ConfiguredInventory | None = None,
 ) -> None:
     metadata, body = parse_front_matter(path)
     try:
@@ -766,6 +784,11 @@ def validate_intent(
             experimental_target_without_local_inventory = True
         else:
             artifact_inventory = experimental_inventory
+    if metadata.get("target") == "GameNet::tls":
+        if tls_inventory is None:
+            experimental_target_without_local_inventory = True
+        else:
+            artifact_inventory = tls_inventory
 
     if frozen_core:
         validate_frozen_core_artifact(metadata, inventory, intent_name)
@@ -782,6 +805,7 @@ def validate_intent(
         intent_name,
         require_verification_path,
         experimental_inventory,
+        tls_inventory,
     )
 
 
@@ -1099,6 +1123,9 @@ def run_prestudy_isolation_fixtures(temp_root: Path) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--with-tls", action="store_true")
+    arguments = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[2]
     fuzz_cmake = (repo_root / "tests" / "fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
     ci_scripts = workflow_python_scripts(repo_root)
@@ -1155,6 +1182,13 @@ def main() -> None:
             )
 
         validate_dependency_direction(inventory)
+        tls_inventory = None
+        if arguments.with_tls:
+            tls_options = {"CMAKE_BUILD_TYPE": "Debug", "GAMENET_BUILD_TESTING": "ON", "GAMENET_ENABLE_TLS": "ON"}
+            if os.environ.get("OPENSSL_ROOT_DIR"):
+                tls_options["OPENSSL_ROOT_DIR"] = os.environ["OPENSSL_ROOT_DIR"]
+            tls_inventory = configure_inventory(repo_root, temp_root / "configured-tls", tls_options)
+            validate_dependency_direction(tls_inventory)
         if experimental_inventory is not None:
             validate_dependency_direction(experimental_inventory)
             validate_prestudy_isolation(experimental_inventory, benchmarks_enabled=False)
@@ -1172,6 +1206,7 @@ def main() -> None:
                 require_provenance=is_phase4,
                 require_verification_path=is_phase4,
                 experimental_inventory=experimental_inventory,
+                tls_inventory=tls_inventory,
             )
 
         run_negative_fixtures(temp_root)

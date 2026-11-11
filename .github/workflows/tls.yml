@@ -1,0 +1,87 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+name: Optional OpenSSL TLS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/tls.yml', 'intents/modules/tls.intent.md', 'rules/**']
+  pull_request:
+    branches: [main]
+    paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/tls.yml', 'intents/modules/tls.intent.md', 'rules/**']
+permissions:
+  contents: read
+concurrency:
+  group: tls-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tls:
+    name: TLS (${{ matrix.lane }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - lane: linux-release
+            os: ubuntu-24.04
+            profile: release
+          - lane: linux-asan-ubsan
+            os: ubuntu-24.04
+            profile: asan
+          - lane: linux-tsan
+            os: ubuntu-24.04
+            profile: tsan
+          - lane: windows-release
+            os: windows-latest
+            profile: release
+          - lane: windows-asan
+            os: windows-latest
+            profile: asan
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Locate Windows OpenSSL
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = @('C:\Program Files\OpenSSL', 'C:\Program Files\OpenSSL-Win64') |
+            Where-Object { Test-Path -LiteralPath "$_\include\openssl\ssl.h" } | Select-Object -First 1
+          if (-not $root) { throw 'Real OpenSSL development files are required' }
+          "OPENSSL_ROOT_DIR=$root" >> $env:GITHUB_ENV
+          "$root\bin" >> $env:GITHUB_PATH
+          & "$root\bin\openssl.exe" version -a
+      - name: Configure TSan address space
+        if: matrix.profile == 'tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Verify TLS workflow and active intent
+        run: |
+          python tests/ci/test_tls_workflow.py
+          python tests/scope/test_intent_semantics.py --with-tls
+      - name: Build and verify real OpenSSL TLS and packages
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "${OPENSSL_ROOT_DIR:-}" ]]; then args+=(--openssl-root "$OPENSSL_ROOT_DIR"); fi
+          python tests/ci/run_tls_contracts.py --profile '${{ matrix.profile }}' --build-dir build-tls --output out/tls-evidence "${args[@]}"
+      - name: Retain TLS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tls-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/tls-evidence/
+          if-no-files-found: error
+          retention-days: 14
