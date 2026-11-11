@@ -1,5 +1,15 @@
 # testing_rules.md
 
+## RPC-C1 callback terminal contracts
+
+RPC tests named by the active intent run on Windows IOCP and Linux epoll.
+Real TCP coverage includes timeout/cancel/late response, disconnect races,
+pending count/byte saturation and recovery, exactly-once completion, deferred
+reply duplication, malformed/partial frames, re-entry/exception containment,
+bounded continuation rejection and owner shutdown. Installed consumers link
+GameNet::rpc. Sanitizers complement development evidence, not release or
+fixed-lab performance evidence.
+
 ## 1. Testing Philosophy
 Tests are not only correctness checks.
 They are executable contracts.

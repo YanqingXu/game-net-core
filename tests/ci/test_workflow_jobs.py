@@ -17,8 +17,8 @@ from pathlib import Path
 
 SOURCE_REPOSITORY = "YanqingXu/mini_trantor"
 SOURCE_COMMIT = "3eba368475a68f677aae920d4f299b155db23d57"
-EXPECTED_CTEST_TOTAL = 130
-EXPECTED_THREADING_TOTAL = 103
+EXPECTED_CTEST_TOTAL = 133
+EXPECTED_THREADING_TOTAL = 105
 EXPECTED_CONSUMER_TOTAL = 2
 EXPECTED_EXPERIMENTAL_IO_URING_CONSUMER_TOTAL = 1
 ARTIFACT_NAME = (
@@ -872,7 +872,7 @@ def main() -> None:
     require(self_hosted_job, '"tests/ci/test_workflow_jobs.py"')
     require(self_hosted_job, "& py -3 $guard")
     require(self_hosted_job, '-G "Visual Studio 18 2026"')
-    require(self_hosted_job, "--expected-total 130")
+    require(self_hosted_job, "--expected-total 133")
     require(self_hosted_job, "--timeout 30")
     require(self_hosted_job, "- name: Install and verify package consumer")
     require(self_hosted_job, "--expected-total 2")
@@ -1036,7 +1036,7 @@ def main() -> None:
         "Build and test experimental IOE-X1–X15 io_uring",
     )
     require(linux_io_uring, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
-    require(linux_io_uring, "--expected-total 140")
+    require(linux_io_uring, "--expected-total 143")
     require(linux_io_uring, "--expect-label experimental=11")
     require(linux_io_uring, "--target gamenet_io_uring_contracts")
     require(
@@ -1092,7 +1092,7 @@ def main() -> None:
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_ASAN_UBSAN=ON")
     require(linux_io_uring_asan, "-DGAMENET_ENABLE_EXPERIMENTAL=ON")
     require(linux_io_uring_asan, "detect_leaks=1:halt_on_error=1")
-    require(linux_io_uring_asan, "--expected-total 140")
+    require(linux_io_uring_asan, "--expected-total 143")
     require(linux_io_uring_asan, "--expect-label experimental=11")
     require(linux_io_uring_asan, "tcp_connection_hub")
     require(linux_io_uring_asan, "tcp_connection_hub_capacity")
@@ -1275,8 +1275,8 @@ def main() -> None:
     require(ci_docs, "tools/verify_ci_evidence_set.py")
     require(ci_docs, "gamenet.ci_evidence.v1")
     require(ci_docs, "gamenet.ci_evidence_set.v1")
-    require(ci_docs, "exactly 130")
-    require(ci_docs, "threading=103")
+    require(ci_docs, "exactly 133")
+    require(ci_docs, "threading=105")
     require(ci_docs, "exactly 2")
     require(ci_docs, "--output-junit")
     require(ci_docs, "--output-log")

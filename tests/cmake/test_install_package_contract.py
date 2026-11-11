@@ -39,7 +39,7 @@ def main() -> None:
     require(root_text, "write_basic_package_version_file(", root_cmake)
     require(root_text, "COMPATIBILITY SameMinorVersion", root_cmake)
     require(root_text, "install(DIRECTORY include/gamenet/core", root_cmake)
-    for component in ("protocol", "transport", "game_session", "game_logic", "broadcast"):
+    for component in ("protocol", "rpc", "transport", "game_session", "game_logic", "broadcast"):
         require(root_text, f"install(DIRECTORY include/gamenet/{component}", root_cmake)
     require(root_text, "DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gamenet", root_cmake)
     assert "install(DIRECTORY include/gamenet\n" not in root_text, (
@@ -84,7 +84,7 @@ def main() -> None:
     )
     assert core_link is not None
     require(core_link.group(1), "GameNet::core", consumer_cmake)
-    for target in ("protocol", "transport", "game_session", "game_logic", "broadcast"):
+    for target in ("protocol", "rpc", "transport", "game_session", "game_logic", "broadcast"):
         assert f"GameNet::{target}" not in core_link.group(1), (
             "core-only install consumer must not inherit provisional usage requirements"
         )
@@ -93,7 +93,7 @@ def main() -> None:
         "target_link_libraries(gamenet_provisional_install_consumer",
         consumer_cmake,
     )
-    for target in ("protocol", "transport", "game_session", "game_logic", "broadcast"):
+    for target in ("protocol", "rpc", "transport", "game_session", "game_logic", "broadcast"):
         require(consumer_cmake_text, f"GameNet::{target}", consumer_cmake)
     require(consumer_cmake_text, "enable_testing()", consumer_cmake)
     require(
@@ -125,6 +125,9 @@ def main() -> None:
         f"missing provisional install consumer source fixture: {provisional_main}"
     )
     provisional_main_text = provisional_main.read_text(encoding="utf-8")
+    require(consumer_cmake_text, "../rpc_install_consumer/main.cpp", consumer_cmake)
+    require(consumer_cmake_text, "find_package(GameNetCore REQUIRED COMPONENTS rpc)", consumer_cmake)
+    require(provisional_main_text, "verifyRpcInstallConsumer()", provisional_main)
     require(provisional_main_text, "#include <gamenet/protocol/PacketFramer.h>", provisional_main)
     require(provisional_main_text, "#include <gamenet/transport/TcpTransportEndpoint.h>", provisional_main)
     require(provisional_main_text, "gamenet::transport::TcpTransportEndpoint", provisional_main)

@@ -55,6 +55,10 @@ function(add_gamenet_component_test layer module component source)
     gamenet_configure_test_runtime("${test_id}")
 endfunction()
 
+add_gamenet_component_test(unit rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/unit/rpc/test_rpc_codec.cpp)
+add_gamenet_component_test(contract rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/contract/rpc/test_rpc_channel.cpp threading lifecycle)
+add_gamenet_component_test(integration rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/integration/rpc/test_rpc_tcp.cpp threading lifecycle)
+
 add_gamenet_test(unit channel ${CMAKE_CURRENT_SOURCE_DIR}/unit/channel/test_channel.cpp)
 add_gamenet_test(unit base ${CMAKE_CURRENT_SOURCE_DIR}/unit/base/test_logger.cpp)
 add_gamenet_test(unit buffer ${CMAKE_CURRENT_SOURCE_DIR}/unit/buffer/test_buffer.cpp)

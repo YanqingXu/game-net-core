@@ -1,5 +1,16 @@
 # Roadmap
 
+## Callback RPC feature milestone — 2026-11-11
+
+RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
+of HP0 performance promotion. It provides bounded owner-local callback request/
+response, deadlines, cancellation, disconnect settlement and exactly-once local
+completion. See `intents/modules/rpc.intent.md`, `plan.md` and
+`docs/development/callback_rpc.md` for the current scope. Historical M7
+`NO-PROMOTION` decisions below remain consumer-comparison history; they do not
+block this separately authorized feature. Coroutines, TLS, WebSocket and UDP/KCP
+remain deferred. Development work does not create a release.
+
 game-net-core is the component-split migration target for `mini_trantor`.
 The roadmap keeps that migration staged so the networking core becomes stable
 before protocol, transport, game-foundation, or experimental modules are added.
@@ -63,8 +74,8 @@ See `migration_status.md` for the current checked state of these phases.
   It is no longer a development freeze point.
 - M3-R1/P1-01 is closed at independently reviewed checkpoint `95a6ab5`; M3-R2
   and its EventLoopThreadPool negative contracts are committed at `12adb00`.
-- The current inventory is 130 CTest tests: 8 unit, 108 contract, and 14
-  integration, with 103 threading and 108 lifecycle labels. The IOE-R2
+- The current inventory is 133 CTest tests: 9 unit, 109 contract, and 15
+  integration, with 105 threading and 110 lifecycle labels. The IOE-R2
   Readiness Engine and IOE-C1 operation-model contracts pass on Windows/IOCP
   and Linux/epoll; the committed operation-model checkpoint is `f4074400` and
   the PERF-R1 reviewed-surface diff remains strictly empty.

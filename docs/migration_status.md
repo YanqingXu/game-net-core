@@ -1,5 +1,19 @@
 # Migration Status
 
+## Callback RPC feature milestone — 2026-11-11
+
+RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
+of HP0 performance promotion. It provides bounded owner-local callback request/
+response, deadlines, cancellation, disconnect settlement and exactly-once local
+completion. See `intents/modules/rpc.intent.md`, `plan.md` and
+`docs/development/callback_rpc.md` for the current scope. Historical M7
+`NO-PROMOTION` decisions below remain consumer-comparison history; they do not
+block this separately authorized feature. Coroutines, TLS, WebSocket and UDP/KCP
+remain deferred. Development work does not create a release.
+
+The current inventory is 133 configured CTest tests: 9 unit tests, 109 contract tests, and
+15 integration tests, with 105 threading and 110 lifecycle labels.
+
 Historical audit field preserved by contract — Last checked: 2026-07-11
 
 Phase 4 Preview publication checked: 2026-07-12
@@ -641,7 +655,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 75 | 44 | 20 | 11 | 210 |
+| 75 | 45 | 19 | 11 | 214 |
 
 ## Historical Production-Hardening Evidence
 

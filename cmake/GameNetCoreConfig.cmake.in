@@ -17,6 +17,8 @@ find_dependency(Threads)
 
 include("${CMAKE_CURRENT_LIST_DIR}/GameNetCoreTargets.cmake")
 
+set(GameNetCore_rpc_FOUND TRUE)
+
 set(GameNetCore_EXPERIMENTAL_IO_URING_API_VERSION "0.1.0")
 set(GameNetCore_experimental_io_uring_FOUND FALSE)
 if(TARGET GameNet::experimental_io_uring)

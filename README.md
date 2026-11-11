@@ -1,5 +1,16 @@
 # game-net-core
 
+## Callback RPC feature milestone — 2026-11-11
+
+RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
+of HP0 performance promotion. It provides bounded owner-local callback request/
+response, deadlines, cancellation, disconnect settlement and exactly-once local
+completion. See `intents/modules/rpc.intent.md`, `plan.md` and
+`docs/development/callback_rpc.md` for the current scope. Historical M7
+`NO-PROMOTION` decisions below remain consumer-comparison history; they do not
+block this separately authorized feature. Coroutines, TLS, WebSocket and UDP/KCP
+remain deferred. Development work does not create a release.
+
 game-net-core is a modern C++23 networking foundation for game servers.
 
 It is built around a single-owner EventLoop scheduler/event pump with native
