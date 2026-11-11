@@ -1,7 +1,7 @@
 # 总体判断
 
 RPC-C1（2026-11-11）新增 provisional callback RPC：当前默认测试基线为 133
-（9 unit、109 contract、15 integration），Linux experimental 基线为 139。
+（9 unit、109 contract、15 integration），Linux experimental 基线为 143。
 这是配置库存；以下冻结提交的历史测试结果继续只属于各自提交。
 
 2026-10-13 状态复核以 `bf3dab5c3f969c4bfce192dc62b2ccc1c60b3125` 为源码起点。
