@@ -20,7 +20,9 @@ only when requested. OFF requires no OpenSSL and installs no TLS surface.
 This native component does not promote M9 consumer-private TLS or HP0/HP7.
 It supports OpenSSL 3, TLS 1.2/1.3 and one TlsStream per existing TCP connection.
 It does not activate the deferred ConnectionTransport design, add STARTTLS,
-coroutines, WebSocket, automatic RPC/TLS routing, credential reload or mTLS.
+coroutines, WebSocket, automatic raw-TCP upgrades, credential reload or mTLS.
+RPC-C2 separately authorizes explicit GameNet::rpc_tls composition; plain TLS
+and Core/RPC-only package discovery remain independent of that adapter.
 
 ## Architecture
 
@@ -57,6 +59,9 @@ TLS-ready. Only the TLS ready callback permits application plaintext.
    Failed writes retry the same bytes/length before advancing their queue.
    TCP send rejection leaves BIO bytes intact; one bounded timer retries, even
    if TCP's optional write notification was dropped. No busy spin/unbounded post.
+   trySend does not deliver application plaintext inline; owned buffered input
+   resumes on the bounded retry/input/writable path. Terminal callbacks may
+   still re-enter send admission. This prevents nested RPC input during reply.
 5. Specific verification files are named below. Applications close/abort streams
    before owner shutdown, and always forward TCP-down. No timer keeps the owner
    alive. Owner destruction cancels timers, releases buffers and reports Aborted

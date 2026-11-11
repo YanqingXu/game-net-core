@@ -22,6 +22,14 @@ WrongThread; applications marshal owned values through bounded executor posts.
 Completion and handler callbacks are owner-only, may re-enter call/cancel/close,
 and run after pending removal. No coroutine or inline foreign-thread fallback.
 
+### RPC-C2
+
+RpcTransport observations, send and abort, plus RpcTlsSession/bridge mutation,
+snapshots and destruction are connection-owner operations. TLS-ready is the RPC
+admission boundary. RPC/TLS callbacks may re-enter owner operations; pending
+removal precedes completion and session settlement never recursively drains RPC.
+One bounded owner post retires received RPC continuations before session closed.
+
 ## 2. EventLoop
 - Each EventLoop has exactly one owner thread
 - loop() must run only on the owner thread

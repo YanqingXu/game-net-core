@@ -23,6 +23,7 @@ struct TlsFixture {
     std::string clientData, serverData;
     std::function<void()> ready;
     std::function<void(std::string_view)> onClientData, onServerData;
+    std::function<bool(net::Buffer&)> clientCipherFilter;
     std::size_t fragment{};
     bool forwardWritable{true}, readyCalled{};
 
@@ -54,7 +55,10 @@ struct TlsFixture {
                 .data = [&](auto bytes) { serverData.append(bytes); if (onServerData) onServerData(bytes); },
                 .closed = [&](auto error) { serverClosed.push_back(error); }
             }, {}, serverOptions);
-        clientConnection->setMessageCallback([&](const auto&, auto* bytes) { deliver(client, *bytes); });
+        clientConnection->setMessageCallback([&](const auto&, auto* bytes) {
+            if (clientCipherFilter && clientCipherFilter(*bytes)) return;
+            deliver(client, *bytes);
+        });
         serverConnection->setMessageCallback([&](const auto&, auto* bytes) { deliver(server, *bytes); });
         clientConnection->setConnectionCallback([&](const auto& c) { if (!c->connected() && client) client->onDisconnect(); });
         serverConnection->setConnectionCallback([&](const auto& c) { if (!c->connected() && server) server->onDisconnect(); });

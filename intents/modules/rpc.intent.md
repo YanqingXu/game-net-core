@@ -19,7 +19,8 @@ It does not promote either audited consumer wire, alter the stable Reactor,
 or satisfy HP0/HP7 performance gates. RpcCodec and one bidirectional RpcChannel
 compose existing TcpServer/TcpClient; applications wire message/down callbacks.
 The channel never replaces Core callbacks, owns a socket or starts a thread.
-Coroutines, discovery, retries, TLS, authentication and streaming stay deferred.
+RPC-C2 separately authorizes the optional TLS transport composition described in
+rpc_tls.intent.md. Coroutines, discovery, retries, authentication and streaming stay deferred.
 Exactly-once means local completion, not exactly-once remote side effects.
 
 ## Wire and admission
@@ -59,6 +60,21 @@ send failure re-enters the disconnect hook.
 5. Applications call onDisconnect from the down callback and close before
    quitting/destroying the loop. Owner-thread destruction also settles remaining
    outgoing callbacks as Shutdown. A reply after channel destruction is Closed.
+
+## RPC-C2 transport seam
+
+RpcTransport supplies only an outliving owner loop, owner-only NotReady/Ready/
+Closed observation, bounded copied-byte send admission and abort. RpcChannel
+owns that transport; bundled TCP and TLS implementations weakly observe their
+connection/stream. create(TcpConnection) keeps its existing behavior and uses
+the same narrow seam as createWithTransport. RPC never discovers OpenSSL.
+
+NotReady rejects call before reserving an ID, timer, callback or pending bytes.
+Send rejection rolls back provisional admission even when a synchronous
+transport failure re-enters onDisconnect. Accepted transport bytes are not a
+remote execution acknowledgement. Snapshot dispatch/continuation observations
+permit a TLS composition to retire already-received RPC frames before closing;
+the existing TCP onDisconnect remains immediate and source-compatible.
 
 ## Terminal contract
 

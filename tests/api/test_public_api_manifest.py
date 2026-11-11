@@ -123,11 +123,14 @@ def main() -> None:
     assert reviewed_difference["changes"]["headers"]["added"] == [
         {"name": "include/gamenet/rpc/RpcChannel.h", "category": "provisional"},
         {"name": "include/gamenet/rpc/RpcCodec.h", "category": "provisional"},
+        {"name": "include/gamenet/rpc/RpcTransport.h", "category": "provisional"},
+        {"name": "include/gamenet/rpc_tls/RpcTlsSession.h", "category": "provisional"},
         {"name": "include/gamenet/tls/TlsContext.h", "category": "provisional"},
         {"name": "include/gamenet/tls/TlsStream.h", "category": "provisional"},
     ]
     assert reviewed_difference["changes"]["targets"]["added"] == [
         {"name": "GameNet::rpc", "category": "provisional"},
+        {"name": "GameNet::rpc_tls", "category": "provisional"},
         {"name": "GameNet::tls", "category": "provisional"},
     ]
     assert reviewed_difference["summary"]["compatibility_decision_required"] is False
@@ -182,7 +185,9 @@ def main() -> None:
     archived_candidate["release_label"] = "v0.3.0-production-candidate"
     archived_candidate["targets"]["provisional"].remove("GameNet::rpc")
     archived_candidate["targets"]["provisional"].remove("GameNet::tls")
+    archived_candidate["targets"]["provisional"].remove("GameNet::rpc_tls")
     for header in ("include/gamenet/rpc/RpcChannel.h", "include/gamenet/rpc/RpcCodec.h",
+                   "include/gamenet/rpc/RpcTransport.h", "include/gamenet/rpc_tls/RpcTlsSession.h",
                    "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h"):
         archived_candidate["headers"]["provisional"].remove(header)
     assert archived_additive_difference == comparer.build_diff(

@@ -206,7 +206,7 @@ struct TlsStream::Impl {
         notifyFlags();
         progressed |= previous != SSL_get_shutdown(ssl.get());
     }
-    void drive() {
+    void drive(bool applicationRead = true) {
         if (ended() || stats.phase == TlsPhase::Created || driving || (tcpShutdown && !transportDown)) return;
         driving = true;
         try {
@@ -228,13 +228,13 @@ struct TlsStream::Impl {
                         catch (...) { ++stats.callbackExceptions; finish(TlsError::CallbackException, true); }
                     } else (void)sslRetry(error);
                 } else if (readWantWrite) {
-                    if (stats.readPaused) break;
+                    if (stats.readPaused || !applicationRead) break;
                     read(progressed);
                 } else if (!writes.empty()) {
                     if (transportDown) { finish(TlsError::Truncated, false); break; }
                     write(progressed); // same front bytes/length on every WANT retry
                 } else {
-                    if (!stats.readPaused && !shutdownWantWrite) read(progressed);
+                    if (applicationRead && !stats.readPaused && !shutdownWantWrite) read(progressed);
                     if (!ended() && stats.phase == TlsPhase::Draining && writes.empty()) {
                         stats.phase = TlsPhase::Closing; progressed = true;
                     }
@@ -276,7 +276,8 @@ struct TlsStream::Impl {
                     }
                 } else finish(TlsError::Truncated, false);
             } else if (!ended() && !tcpShutdown && (steps == options.maxStepsPerDrive || shutdownWantWrite ||
-                    (readWantWrite && !stats.readPaused))) retry();
+                    (readWantWrite && !stats.readPaused) || (!applicationRead &&
+                        (cipherInput.readableBytes() || BIO_ctrl_pending(SSL_get_rbio(ssl.get())) || SSL_pending(ssl.get()))))) retry();
         } catch (...) { finish(TlsError::ProtocolError, true); }
         driving = false;
     }
@@ -325,7 +326,10 @@ TlsOperation TlsStream::trySend(std::string_view bytes) {
         s.options.maxPendingPlaintextBytes - s.stats.pendingPlaintextBytes) return TlsOperation::Overloaded;
     try { s.writes.emplace_back(bytes); } catch (...) { return TlsOperation::Overloaded; }
     s.stats.pendingPlaintextBytes += bytes.size(); s.stats.acceptedPlaintextBytes += bytes.size();
-    s.drive(); return TlsOperation::Accepted;
+    // Sending may report terminal failure, but must not deliver received
+    // plaintext inside an outer RPC send/reply dispatch. Existing bounded retry
+    // handles owned input left behind; normal input/writable/timer drives read.
+    s.drive(false); return TlsOperation::Accepted;
 }
 TlsOperation TlsStream::pauseRead() {
     if (!impl_->owner()) return TlsOperation::WrongThread;

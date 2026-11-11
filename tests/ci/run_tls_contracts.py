@@ -12,20 +12,21 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
-CONTRACTS = {"unit.tls.test_tls_context", "contract.tls.test_tls_stream", "integration.tls.test_tls_tcp"}
+CONTRACTS = {"unit.tls.test_tls_context", "contract.tls.test_tls_stream", "integration.tls.test_tls_tcp",
+             "contract.rpc_tls.test_rpc_tls_session", "integration.rpc_tls.test_rpc_tls_tcp"}
 
 def verify_inventory(document: dict) -> set[str]:
     tests = document.get("tests", [])
     names = [t["name"] for t in tests]
-    if len(names) != 136 or len(set(names)) != 136:
-        raise ValueError("TLS-enabled inventory must contain exactly 136 unique tests")
+    if len(names) != 138 or len(set(names)) != 138:
+        raise ValueError("TLS-enabled inventory must contain exactly 138 unique tests")
     selected = set()
     for test in tests:
         props = {p["name"]: p["value"] for p in test.get("properties", [])}
         if "tls" in props.get("LABELS", []):
             if props.get("DISABLED", False): raise ValueError("TLS contract is disabled")
             selected.add(test["name"])
-    if selected != CONTRACTS: raise ValueError("TLS selection must be exactly three real-OpenSSL tests")
+    if selected != CONTRACTS: raise ValueError("TLS selection must be exactly five real-OpenSSL tests")
     return set(names)
 
 def verify_results(root: ET.Element, expected: set[str]) -> None:
@@ -71,17 +72,19 @@ def run(args: argparse.Namespace) -> None:
         if not tls: command.append("-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON")
         if args.openssl_root: command.append("-DOPENSSL_ROOT_DIR=" + str(args.openssl_root.resolve()))
         return command
-    def consumer(name: str, prefix: Path, tls: bool, succeeds: bool = True) -> None:
+    def consumer(name: str, prefix: Path, component: str | None, succeeds: bool = True) -> None:
         directory = build / name
         command = ["cmake", "-S", str(repo / "tests/cmake/tls_install_consumer"), "-B", str(directory),
                    "-DCMAKE_BUILD_TYPE=" + configuration, "-DCMAKE_PREFIX_PATH=" + str(prefix),
-                   "-DEXPECT_TLS=" + ("ON" if tls else "OFF")]
+                   "-DEXPECT_TLS=" + ("ON" if component == "tls" else "OFF"),
+                   "-DEXPECT_RPC_TLS=" + ("ON" if component == "rpc_tls" else "OFF"),
+                   "-DEXPECT_RPC=" + ("ON" if component == "rpc" else "OFF")]
         command += ["-A", "x64"] if os.name == "nt" else ["-G", "Ninja"]
         if args.openssl_root: command.append("-DOPENSSL_ROOT_DIR=" + str(args.openssl_root.resolve()))
-        if not tls: command.append("-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON")
+        if component not in {"tls", "rpc_tls"}: command.append("-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON")
         text = execute(name + "-configure", command, succeeds=succeeds)
         if not succeeds:
-            if "Required component tls is unavailable" not in text: raise ValueError("OFF package failed for the wrong reason")
+            if f"Required component {component} is unavailable" not in text: raise ValueError("OFF package failed for the wrong reason")
             return
         execute(name + "-build", ["cmake", "--build", str(directory), "--config", configuration, "--parallel", "2"])
         execute(name + "-test", ["ctest", "--test-dir", str(directory), "-C", configuration, "--output-on-failure", "--no-tests=error"])
@@ -98,7 +101,7 @@ def run(args: argparse.Namespace) -> None:
             if match: env["PATH"] = str(Path(match[1]).parent) + os.pathsep + env["PATH"]; break
         inventory_text = execute("inventory", ["ctest", "--test-dir", str(build), "-C", configuration, "--show-only=json-v1"])
         names = verify_inventory(json.loads(inventory_text))
-        targets = ["gnt_" + n.split(".")[0] + "_tls_" + hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
+        targets = ["gnt_" + n.split(".")[0] + "_" + n.split(".")[1] + "_" + hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
         api = json.loads((repo / "api/public_api_manifest.json").read_text(encoding="utf-8"))
         installed = ["gamenet_" + name.split("::")[1] for group in api["targets"].values() for name in group]
         command = ["cmake", "--build", str(build), "--config", configuration, "--parallel", str(args.jobs)]
@@ -114,18 +117,21 @@ def run(args: argparse.Namespace) -> None:
         manifest["executed_tests"] = len(expected)
         prefix = build / "prefix"
         execute("install", ["cmake", "--install", str(build), "--config", configuration, "--prefix", str(prefix)])
-        consumer("tls-consumer", prefix, True); consumer("core-only-consumer", prefix, False)
+        consumer("tls-consumer", prefix, "tls"); consumer("rpc-tls-consumer", prefix, "rpc_tls")
+        consumer("core-only-consumer", prefix, None); consumer("rpc-only-consumer", prefix, "rpc")
         off = build / "off"
         execute("off-configure", configure(off, False))
         if args.profile == "release":
             execute("off-build", ["cmake", "--build", str(off), "--config", configuration, "--parallel", str(args.jobs),
-                                  "--target", *[x for x in installed if x != "gamenet_tls"]])
+                                  "--target", *[x for x in installed if x not in {"gamenet_tls", "gamenet_rpc_tls"}]])
             off_prefix = off / "prefix"
             execute("off-install", ["cmake", "--install", str(off), "--config", configuration, "--prefix", str(off_prefix)])
-            if (off_prefix / "include/gamenet/tls").exists() or list(off_prefix.rglob("GameNetTlsTargets.cmake")):
+            if any((off_prefix / path).exists() for path in ("include/gamenet/tls", "include/gamenet/rpc_tls")) or any(
+                    list(off_prefix.rglob(name)) for name in ("GameNetTlsTargets.cmake", "GameNetRpcTlsTargets.cmake")):
                 raise ValueError("OFF package leaked TLS headers/export")
-            consumer("off-core-consumer", off_prefix, False)
-            consumer("off-tls-rejection", off_prefix, True, False)
+            consumer("off-core-consumer", off_prefix, None); consumer("off-rpc-consumer", off_prefix, "rpc")
+            consumer("off-tls-rejection", off_prefix, "tls", False)
+            consumer("off-rpc-tls-rejection", off_prefix, "rpc_tls", False)
             manifest["off_installed_isolation"] = "passed"
         manifest["status"] = "passed"
     finally:

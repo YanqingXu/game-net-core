@@ -23,12 +23,14 @@ def main() -> None:
     assert 'continue-on-error: true' not in workflow
     cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8')
     assert 'option(GAMENET_ENABLE_TLS "Build TLS support" OFF)' in cmake
-    assert re.search(r'if\(GAMENET_ENABLE_TLS\)\s+add_subdirectory\(src/tls\)\s+endif\(\)', cmake)
+    assert re.search(r'if\(GAMENET_ENABLE_TLS\)\s+add_subdirectory\(src/tls\)\s+add_subdirectory\(src/rpc_tls\)\s+endif\(\)', cmake)
     target = (root / 'src/tls/CMakeLists.txt').read_text(encoding='utf-8')
     for fragment in ['find_package(OpenSSL 3.0 REQUIRED COMPONENTS SSL)', 'GameNetTlsTargets', 'GameNet::tls']:
         assert fragment in target
     config = (root / 'cmake/GameNetCoreConfig.cmake.in').read_text(encoding='utf-8')
-    assert re.search(r'if\("tls" IN_LIST GameNetCore_FIND_COMPONENTS AND @GAMENET_ENABLE_TLS@\)\s+find_dependency\(OpenSSL', config)
+    assert '"tls" IN_LIST GameNetCore_FIND_COMPONENTS OR "rpc_tls" IN_LIST GameNetCore_FIND_COMPONENTS' in config
+    assert 'GameNetRpcTlsTargets.cmake' in config
+    assert re.search(r'if\("rpc_tls" IN_LIST GameNetCore_FIND_COMPONENTS AND @GAMENET_ENABLE_TLS@\)', config)
     tests = (root / 'tests/CMakeLists.txt').read_text(encoding='utf-8')
     block = re.search(r'if\(GAMENET_ENABLE_TLS\)(.*?)endif\(\)', tests, re.S).group(1)
     for name in CONTRACTS:

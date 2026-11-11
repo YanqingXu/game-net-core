@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/tls.yml', 'intents/modules/tls.intent.md', 'rules/**']
+    paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/tls.yml', 'intents/modules/tls.intent.md', 'intents/modules/rpc.intent.md', 'intents/modules/rpc_tls.intent.md', 'rules/**']
   pull_request:
     branches: [main]
-    paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/tls.yml', 'intents/modules/tls.intent.md', 'rules/**']
+    paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/tls.yml', 'intents/modules/tls.intent.md', 'intents/modules/rpc.intent.md', 'intents/modules/rpc_tls.intent.md', 'rules/**']
 permissions:
   contents: read
 concurrency:

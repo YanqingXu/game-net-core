@@ -157,6 +157,45 @@ void shutdownAdmissionAndContextRelease(gamenet::test::TlsCertificates& cert) {
         GAMENET_TEST_ASSERT(terminal == 1 && down == 1);
     }
 }
+void sendingDoesNotReenterInput(gamenet::test::TlsCertificates& cert) {
+    TlsOptions clientOptions; clientOptions.maxStepsPerDrive = 2;
+    gamenet::test::TlsFixture f(cert, clientOptions);
+    gamenet::net::Buffer captured;
+    bool capture = false, inSend = false, tested = false;
+    f.onClientData = [&](auto bytes) {
+        GAMENET_TEST_ASSERT(!inSend);
+        if (bytes == "first") GAMENET_TEST_ASSERT(f.client->trySend("ack") == TlsOperation::Accepted);
+    };
+    f.clientCipherFilter = [&](auto& input) {
+        if (!capture) return false;
+        captured.append(std::string_view(input.peek(), input.readableBytes())); input.retrieveAll();
+        std::size_t offset = 0, records = 0;
+        while (offset + 5 <= captured.readableBytes()) {
+            const auto* record = reinterpret_cast<const unsigned char*>(captured.peek() + offset);
+            const auto length = static_cast<std::size_t>(record[3]) * 256 + record[4];
+            if (length + 5 > captured.readableBytes() - offset) break;
+            offset += length + 5; ++records;
+        }
+        if (records < 2) return true;
+        capture = false;
+        // Coalesce two complete records regardless of TCP packetization.
+        // Read(first)+write(ack) exhausts the two-step drive, leaving second
+        // authenticated input for the next owner turn.
+        (void)f.client->onMessage(captured);
+        GAMENET_TEST_ASSERT(f.clientData == "first");
+        inSend = true;
+        GAMENET_TEST_ASSERT(f.client->trySend("probe") == TlsOperation::Accepted);
+        inSend = false;
+        GAMENET_TEST_ASSERT(f.clientData == "first"); tested = true;
+        return true;
+    };
+    f.ready = [&] {
+        capture = true;
+        GAMENET_TEST_ASSERT(f.server->trySend("first") == TlsOperation::Accepted);
+        GAMENET_TEST_ASSERT(f.server->trySend("second") == TlsOperation::Accepted);
+    };
+    f.runUntil([&] { return tested && f.clientData == "firstsecond" && f.serverData == "ackprobe"; });
+}
 }  // namespace
 int main() {
     gamenet::test::TlsCertificates cert;
@@ -166,4 +205,5 @@ int main() {
     run("deadlines/truncation", deadlinesAndTruncation); run("input/output limits", inputAndOutputLimits);
     run("callback/owner", callbackAndOwnerRules);
     run("sealed owner/context release", shutdownAdmissionAndContextRelease);
+    run("send never re-enters plaintext input", sendingDoesNotReenterInput);
 }

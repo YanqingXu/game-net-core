@@ -63,6 +63,8 @@ if(GAMENET_ENABLE_TLS)
     add_gamenet_component_test(unit tls GameNet::tls ${CMAKE_CURRENT_SOURCE_DIR}/unit/tls/test_tls_context.cpp)
     add_gamenet_component_test(contract tls GameNet::tls ${CMAKE_CURRENT_SOURCE_DIR}/contract/tls/test_tls_stream.cpp threading lifecycle)
     add_gamenet_component_test(integration tls GameNet::tls ${CMAKE_CURRENT_SOURCE_DIR}/integration/tls/test_tls_tcp.cpp threading lifecycle)
+    add_gamenet_component_test(contract rpc_tls GameNet::rpc_tls ${CMAKE_CURRENT_SOURCE_DIR}/contract/rpc_tls/test_rpc_tls_session.cpp tls threading lifecycle)
+    add_gamenet_component_test(integration rpc_tls GameNet::rpc_tls ${CMAKE_CURRENT_SOURCE_DIR}/integration/rpc_tls/test_rpc_tls_tcp.cpp tls threading lifecycle)
 endif()
 
 add_gamenet_test(unit channel ${CMAKE_CURRENT_SOURCE_DIR}/unit/channel/test_channel.cpp)

@@ -1,5 +1,16 @@
 # testing_rules.md
 
+## RPC-C2 optional RPC/TLS composition
+
+Preserve default TCP regression and run real OpenSSL session/TCP contracts on
+Windows/Linux and sanitizers. Enforce no pre-handshake pending/callback ownership,
+certificate/name/expiry and timeout rejection, request timeout/cancel/late reply,
+pending and TLS/TCP output saturation/recovery, abrupt down, re-entry, context
+release and exactly-once settlement. An independent OpenSSL peer batches RPC
+frames then closes to prove fairness continuations retire before session closed.
+Validate separate installed rpc_tls discovery and Core/RPC-only isolation in ON
+and OFF packages. No skipped or fallback TLS scenario counts as passing evidence.
+
 ## TLS-C1 optional real-OpenSSL contracts
 
 TLS-enabled unit/contract/TCP integration tests must exercise OpenSSL, not a

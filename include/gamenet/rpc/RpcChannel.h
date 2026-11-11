@@ -13,13 +13,14 @@
 
 namespace gamenet::net { class Buffer; }
 namespace gamenet::rpc {
+class RpcTransport;
 
 enum class RpcStatus {
     Ok, RemoteError, Timeout, Cancelled, Disconnected, Shutdown,
     ProtocolError, SchedulingRejected,
 };
 enum class RpcOperation { Accepted, Closed, WrongThread, InvalidArgument,
-    PendingLimit, SendRejected, OwnerUnavailable, IdExhausted, NotFound };
+    PendingLimit, SendRejected, OwnerUnavailable, IdExhausted, NotFound, NotReady };
 struct RpcResult { RpcStatus status{RpcStatus::Ok}; std::string payload; };
 struct RpcCallResult {
     RpcOperation status{RpcOperation::Closed};
@@ -41,6 +42,8 @@ struct RpcSnapshot {
     std::uint64_t acceptedCalls{}, completedCalls{}, ignoredResponses{};
     std::uint64_t callbackExceptions{}, handlerExceptions{}, inboundRejected{};
     std::uint64_t continuationRejections{}, reentrantMessages{};
+    std::uint64_t transportExceptions{};
+    bool dispatching{}, continuationQueued{};
 };
 
 class RpcChannel : public std::enable_shared_from_this<RpcChannel> {
@@ -52,6 +55,8 @@ public:
     using Handler = std::function<void(const RpcMessage&, Reply)>;
     static std::shared_ptr<RpcChannel> create(
         const net::TcpConnectionPtr& connection, Handler handler = {}, RpcOptions options = {});
+    static std::shared_ptr<RpcChannel> createWithTransport(
+        std::shared_ptr<RpcTransport> transport, Handler handler = {}, RpcOptions options = {});
     ~RpcChannel();  // owner-only; settles remaining callbacks as Shutdown
     RpcChannel(const RpcChannel&) = delete;
     RpcChannel& operator=(const RpcChannel&) = delete;
