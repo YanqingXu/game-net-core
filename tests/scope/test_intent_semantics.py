@@ -351,6 +351,11 @@ def configure_inventory(
     build_root: Path,
     definitions: dict[str, str] | None = None,
 ) -> ConfiguredInventory:
+    # Windows Python can return a RUNNER~1 short TEMP path. CMake trace-source
+    # filtering is spelling-sensitive: use the same resolved source spelling
+    # for -S and every --trace-source, including generated negative fixtures.
+    source_root = source_root.resolve()
+    build_root = build_root.resolve()
     command = [
         "cmake",
         "-S",
