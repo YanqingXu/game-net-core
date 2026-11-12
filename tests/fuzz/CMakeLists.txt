@@ -12,6 +12,11 @@ if(TARGET gamenet_websocket)
     target_link_libraries(gamenet_fuzz_websocket PRIVATE GameNet::websocket)
     target_compile_options(gamenet_fuzz_websocket PRIVATE -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
     target_link_options(gamenet_fuzz_websocket PRIVATE -fsanitize=fuzzer,address,undefined)
+    add_executable(gamenet_fuzz_websocket_session websocket/fuzz_websocket_session.cpp)
+    target_include_directories(gamenet_fuzz_websocket_session PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(gamenet_fuzz_websocket_session PRIVATE GameNet::websocket)
+    target_compile_options(gamenet_fuzz_websocket_session PRIVATE -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
+    target_link_options(gamenet_fuzz_websocket_session PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
 
 # Instrument production code too: entry-point-only coverage misses RPC branches.

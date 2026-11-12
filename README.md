@@ -1,5 +1,12 @@
 # game-net-core
 
+## WS session/state validation — WS-C3 (2026-11-12)
+
+Bounded owner-session action fuzz and eight-generation real WS/WSS pressure
+regressions validate admission/recovery, reentry/release, callback isolation and
+exact terminal/budget cleanup. Existing API, optional flags and OpenSSL-free
+plain WS discovery remain available. See [WS validation](docs/development/websocket.md).
+
 ## Optional WSS composition — WS-C2 (2026-11-12)
 
 Both `GAMENET_ENABLE_WEBSOCKET=ON` and `GAMENET_ENABLE_TLS=ON` enable provisional

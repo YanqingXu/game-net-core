@@ -1,5 +1,18 @@
 # Optional WSS server composition (WS-C2)
 
+## WS-C3 real pressure and generation isolation
+
+The registered WSS TCP integration runs the same eight-generation pressure
+driver as plain WS, using actual authenticated OpenSSL streams on both ends.
+Finite test-held ciphertext is resumed before terminal EOF. Small BIO/TCP and
+plaintext admission limits force real send refusal, followed by complete payload
+and probe recovery. Four generations exchange WS Close and TLS close_notify;
+four force disconnect with accepted output. Per-send/turn TLS and WS byte ledgers
+and caps remain checked; final plaintext/cipher/BIO, WS input/fragment/control
+and TCP output are zero. Old closed WSS handles cannot target a live replacement,
+and all deliberately retained generation leases are released before completion.
+This does not simulate TLS in the state fuzzer or promote short stress to endurance.
+
 Enable both `GAMENET_ENABLE_WEBSOCKET=ON` and `GAMENET_ENABLE_TLS=ON`, then
 request `find_package(GameNetCore REQUIRED COMPONENTS websocket_tls)` and link
 `GameNet::websocket_tls`. This provisional component composes the existing

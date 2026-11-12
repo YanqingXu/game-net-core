@@ -41,6 +41,32 @@ than treating an encrypted TCP EOF as successful WS/TLS close.
 
 ## Wire and bounds
 
+WS-C3 (2026-11-12) adds non-installed session-state fuzz and real WS/WSS pressure
+regression without new public API or dependencies. A shared bounded sequence
+runner uses the real owner loop and a test transport controlling only readiness,
+send admission and terminal reentry. Every input creates fresh state, has finite
+actions/bytes/receipts, uses long deadlines and resets all generation state.
+Existing real-time deadline tests remain authoritative; fuzz does not sleep.
+Fixed seeds run in the registered session contract; arbitrary byte actions use
+tests/fuzz/websocket/fuzz_websocket_session.cpp with exact bounded evidence in
+`tests/ci/run_websocket_session_fuzz.py` and `tests/ci/test_websocket_session_fuzz.py`.
+
+The independent ledger checks rejected-no-copy, accepted transport bytes equal
+drained + discarded + pending, control byte conservation and all configured caps
+after every action. Callback counts/identity are generation-specific; ready and
+closed occur at most once and no message/pong follows terminal. It covers split
+Upgrade/frames, fragments/control, input/output overflow, close/down/abort,
+abandonment, queue refusal, nested input, callback exceptions/release and terminal
+reentry from transport send. Terminal zeros input/fragment/control, cancels timers
+and accepted continuations become harmless; weak generations expire after drain.
+
+tests/integration/websocket/test_websocket_tcp.cpp additionally executes repeated
+real TCP pressure/recovery/probe generations. Each forces actual bounded send
+refusal before reading resumes, verifies every recovered payload, alternates
+graceful close with pending-output disconnect, checks zero TCP/WS residues and
+replays closed prior-generation handles/callbacks while the replacement is live.
+Saved old callbacks cannot mutate the new generation's counters or application.
+
 RFC 6455 opening handshake uses strict HTTP/1.1 GET with an origin-form target,
 one Host/key/version, Upgrade/Connection token lists and canonical base64 for a
 16-byte nonce. Header bytes/field count are bounded. Reject bare LF, obs-fold,

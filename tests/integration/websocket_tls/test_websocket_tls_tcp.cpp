@@ -9,6 +9,7 @@
 #include "support/TestAssert.h"
 #include "support/WebSocketWire.h"
 #include "support/TlsCertificates.h"
+#include "support/WebSocketReconnectStress.h"
 #include <any>
 #include <vector>
 using namespace gamenet::websocket;
@@ -61,4 +62,33 @@ int main(int argc,char** argv){
         loop.runAfter(5s,[]{GAMENET_TEST_FAIL("WS real TCP reconnect timed out");});client.connect();loop.loop();
         GAMENET_TEST_ASSERT(ready==1 && messages==1 && closed==1 && down && weak.expired());
     }
+    auto serverFactory=[&](const auto& c,WebSocketCallbacks cb){
+        auto out=std::make_shared<gamenet::test::WsStressServer>();WebSocketTlsOptions options;
+        options.tls.bioCapacity=1024;options.tls.maxCipherSendChunkBytes=1024;
+        options.tls.maxPendingPlaintextBytes=16384;options.tls.maxPendingWrites=4;
+        auto s=WebSocketTlsSession::create(c,gamenet::tls::TlsContext::server(cert.certificate.string(),cert.key.string()),{
+            .handshake=std::move(cb.handshake),.ready=std::move(cb.ready),.message=std::move(cb.message),.pong=std::move(cb.pong),
+            .closed=[closed=std::move(cb.closed)](auto result){closed(result.graceful()?WebSocketError::Graceful:
+                result.websocket==WebSocketError::Graceful?WebSocketError::Truncated:result.websocket);}
+        },options);out->lifetime=s;
+        out->start=[s]{(void)s->start();};out->down=[s]{s->onDisconnect();};out->writable=[s]{s->onWritable();};out->feed=[s](auto& b){(void)s->onMessage(b);};
+        out->send=[s](auto type,auto b){return s->send(type,b);};out->close=[s]{return s->close();};out->abort=[s]{return s->abort();};
+        out->snapshot=[s]{return s->snapshot().websocket;};out->bounded=[s]{const auto t=s->snapshot().tls;
+            GAMENET_TEST_ASSERT(t.pendingPlaintextBytes<=16384 && t.pendingWrites<=4 && t.bufferedCipherInputBytes<=256*1024 && t.bufferedCipherOutputBytes<=1024 &&
+                t.acceptedPlaintextBytes==t.encryptedPlaintextBytes+t.discardedPlaintextBytes+t.pendingPlaintextBytes);};out->settled=[s]{const auto t=s->snapshot().tls;
+            GAMENET_TEST_ASSERT(!t.pendingPlaintextBytes && !t.pendingWrites && !t.bufferedCipherInputBytes && !t.bufferedCipherOutputBytes &&
+                t.acceptedPlaintextBytes==t.encryptedPlaintextBytes+t.discardedPlaintextBytes);};return out;
+    };
+    auto clientFactory=[&](const auto& c,std::function<void()> ready,std::function<void(std::string_view)> data,std::function<void(bool)> closed){
+        auto out=std::make_shared<gamenet::test::WsStressClient>();gamenet::tls::TlsOptions options;options.bioCapacity=1024;options.maxCipherSendChunkBytes=1024;
+        auto s=gamenet::tls::TlsStream::create(c,gamenet::tls::TlsContext::client(cert.ca.string()),{
+            .ready=std::move(ready),.data=std::move(data),.closed=[closed=std::move(closed)](auto error){closed(error==gamenet::tls::TlsError::Graceful);}
+        },"localhost",options);out->lifetime=s;out->start=[s]{(void)s->start();};out->down=[s]{s->onDisconnect();};out->writable=[s]{s->onWritable();};
+        out->shutdown=[s]{(void)s->shutdown();};out->feed=[s](auto& b){(void)s->onMessage(b);};out->send=[s](auto b){return s->trySend(b)==gamenet::tls::TlsOperation::Accepted;};
+        out->bounded=[s]{const auto t=s->snapshot();GAMENET_TEST_ASSERT(t.pendingPlaintextBytes<=1024*1024 && t.pendingWrites<=256 && t.bufferedCipherInputBytes<=256*1024 && t.bufferedCipherOutputBytes<=1024 &&
+            t.acceptedPlaintextBytes==t.encryptedPlaintextBytes+t.discardedPlaintextBytes+t.pendingPlaintextBytes);};
+        out->settled=[s]{const auto t=s->snapshot();GAMENET_TEST_ASSERT(!t.pendingPlaintextBytes && !t.pendingWrites && !t.bufferedCipherInputBytes && !t.bufferedCipherOutputBytes &&
+            t.acceptedPlaintextBytes==t.encryptedPlaintextBytes+t.discardedPlaintextBytes);};return out;
+    };
+    gamenet::test::runWebSocketReconnectStress(serverFactory,clientFactory,"WSS");
 }

@@ -1,5 +1,16 @@
 # Continuous Integration
 
+## WS-C3 state fuzz and pressure regression
+
+Existing WS/WSS contracts now execute fixed state sequences and real eight-
+generation refusal/recovery/reconnect stress on Windows/Linux and sanitizers.
+The six-lane WS workflow retains both protocol fuzz and session action fuzz,
+20,000 units each at seed 424242. Session evidence has a separate readback step
+and schema `gamenet.websocket_session_fuzz.v1`, including original/evolved inputs,
+exact command/count/bounds, source/run identity, binary and artifact hashes.
+No inventory inflation: default133, WS136, TLS138 and dual-ON143 remain unchanged;
+existing independent ws/wss interoperability and RPC/HP1 fuzz remain required.
+
 ## Optional WSS composition
 
 `.github/workflows/websocket-tls.yml` enables both optional flags. Windows/Linux

@@ -76,11 +76,16 @@ jobs:
       - name: Verify optional intent and exact evidence guards
         run: |
           python tests/ci/test_websocket_workflow.py
+          python tests/ci/test_websocket_session_fuzz.py
           python tests/scope/test_intent_semantics.py --with-websocket
       - name: Build and verify WS contracts, packages and peers
         shell: bash
         run: |
           python tests/ci/run_websocket_contracts.py --profile '${{ matrix.profile }}' --build-dir build-websocket --output out/websocket-evidence
+      - name: Independently read back state fuzz evidence
+        if: matrix.profile == 'fuzz'
+        run: |
+          python tests/ci/run_websocket_session_fuzz.py --verify-output out/websocket-evidence/session
       - name: Retain WS evidence
         if: always()
         uses: actions/upload-artifact@v4

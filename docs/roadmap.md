@@ -1,5 +1,18 @@
 # Roadmap
 
+## WS/WSS session validation — WS-C3 (2026-11-12)
+
+The user-authorized validation milestone reuses existing installed APIs and
+registered tests. A real owner loop runs bounded byte-coded actions with an
+independent callback/transport/control ledger. Fixed seeds and a separate
+instrumented session fuzz target cover operation interleaving, terminal reentry,
+reference release, refusal and zero cleanup. Real WS/WSS generations force
+backpressure, recover all admitted data plus a probe, alternate clean/abrupt close
+and replay closed old handles while the next connection is live. Independent
+peers, Windows/Linux and sanitizers remain required. Protocol and session fuzz
+each retain exactly 20,000 units and reproducible corpus/identity/hash evidence.
+No public API, Core runtime path, dependency promotion or release is added.
+
 ## Optional WSS server composition — WS-C2 (2026-11-12)
 
 Separate user authorization enables GameNet::websocket_tls when both optional
