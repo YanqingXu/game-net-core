@@ -27,7 +27,8 @@
       "GameNet::rpc_tls",
       "GameNet::tls",
       "GameNet::transport",
-      "GameNet::websocket"
+      "GameNet::websocket",
+      "GameNet::websocket_tls"
     ],
     "stable_core": [
       "GameNet::core"
@@ -65,7 +66,9 @@
       "include/gamenet/transport/TcpTransportEndpoint.h",
       "include/gamenet/transport/TransportEndpoint.h",
       "include/gamenet/websocket/WebSocketCodec.h",
-      "include/gamenet/websocket/WebSocketSession.h"
+      "include/gamenet/websocket/WebSocketSession.h",
+      "include/gamenet/websocket/WebSocketTransport.h",
+      "include/gamenet/websocket_tls/WebSocketTlsSession.h"
     ],
     "stable_core": [
       "include/gamenet/core/DispatchResult.h",

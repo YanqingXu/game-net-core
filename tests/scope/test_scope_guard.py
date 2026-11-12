@@ -147,6 +147,9 @@ def check_status_description_boundary(repo_root: Path) -> None:
 
 
 def main() -> None:
+    root=Path(__file__).resolve().parents[2]
+    for layer in ("core", "websocket", "tls"):
+        assert_violation(root,f"src/{layer}/BadWss.cc",'#include "gamenet/websocket_tls/WebSocketTlsSession.h"\n',"disallowed component")
     # WS-C1 is an upper layer; activating it must not permit Core reverse edges.
     for path, text in (
         ("src/core/net/Probe.cc", '#include "gamenet/websocket/WebSocketSession.h"\n'),

@@ -1,5 +1,13 @@
 # game-net-core
 
+## Optional WSS composition — WS-C2 (2026-11-12)
+
+Both `GAMENET_ENABLE_WEBSOCKET=ON` and `GAMENET_ENABLE_TLS=ON` enable provisional
+`GameNet::websocket_tls`. Explicit TLS-before-Upgrade admission, bounded output
+recovery and WS Close / TLS close_notify settlement preserve existing ws usage
+and OpenSSL-free Core/WS-only package discovery. See
+[WSS composition and validation](docs/development/websocket_tls.md).
+
 ## Optional bounded WebSocket — WS-C1 (2026-11-12)
 
 `GAMENET_ENABLE_WEBSOCKET=ON` builds provisional `GameNet::websocket` and a

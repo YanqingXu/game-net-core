@@ -37,6 +37,7 @@ PHASE4_ARTIFACTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/websocket_tls.intent.md": ("installed-library", "GameNet::websocket_tls"),
     "intents/modules/websocket.intent.md": ("installed-library", "GameNet::websocket"),
     "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
     "intents/modules/tls.intent.md": ("installed-library", "GameNet::tls"),
@@ -121,6 +122,7 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
     "gamenet_websocket": {"gamenet_core"},
+    "gamenet_websocket_tls": {"gamenet_core", "gamenet_websocket", "gamenet_tls"},
     "gamenet_tls": {"gamenet_core"},
     "gamenet_rpc_tls": {"gamenet_core", "gamenet_protocol", "gamenet_rpc", "gamenet_tls"},
     "gamenet_transport": {"gamenet_core"},
@@ -149,6 +151,7 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
 WEBSOCKET_VERIFICATION_PATHS = {"tests/unit/websocket/test_websocket_codec.cpp", "tests/contract/websocket/test_websocket_session.cpp", "tests/integration/websocket/test_websocket_tcp.cpp"}
 
 TLS_VERIFICATION_PATHS = {
+    "tests/contract/websocket_tls/test_websocket_tls_session.cpp", "tests/integration/websocket_tls/test_websocket_tls_tcp.cpp",
     "tests/contract/rpc_tls/test_rpc_tls_session.cpp", "tests/integration/rpc_tls/test_rpc_tls_tcp.cpp",
     "tests/unit/tls/test_tls_context.cpp", "tests/contract/tls/test_tls_stream.cpp",
     "tests/integration/tls/test_tls_tcp.cpp",
@@ -731,6 +734,8 @@ def validate_verification(
                     require(test_path in websocket_inventory.tests_by_source, f"WS verification missing: {test_path}")
                 continue
             if test_path in TLS_VERIFICATION_PATHS:
+                if "/websocket_tls/" in test_path and (tls_inventory is None or websocket_inventory is None):
+                    continue
                 # OFF-only guards must not discover OpenSSL. The TLS workflow
                 # runs this validator with --with-tls and checks exact execution.
                 if tls_inventory is not None:
@@ -802,6 +807,11 @@ def validate_intent(
             experimental_target_without_local_inventory = True
         else:
             artifact_inventory = experimental_inventory
+    if metadata.get("target") == "GameNet::websocket_tls":
+        if tls_inventory is None or websocket_inventory is None:
+            experimental_target_without_local_inventory = True
+        else:
+            artifact_inventory = tls_inventory
     if metadata.get("target") in {"GameNet::tls", "GameNet::rpc_tls"}:
         if tls_inventory is None:
             experimental_target_without_local_inventory = True
@@ -1211,6 +1221,7 @@ def main() -> None:
         tls_inventory = None
         if arguments.with_tls:
             tls_options = {"CMAKE_BUILD_TYPE": "Debug", "GAMENET_BUILD_TESTING": "ON", "GAMENET_ENABLE_TLS": "ON"}
+            if arguments.with_websocket: tls_options["GAMENET_ENABLE_WEBSOCKET"] = "ON"
             if os.environ.get("OPENSSL_ROOT_DIR"):
                 tls_options["OPENSSL_ROOT_DIR"] = os.environ["OPENSSL_ROOT_DIR"]
             tls_inventory = configure_inventory(repo_root, temp_root / "configured-tls", tls_options)

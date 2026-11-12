@@ -142,7 +142,7 @@ def main() -> None:
         else:
             inventory=verify_inventory(json.loads(execute('inventory',['ctest','--test-dir',str(build),'-C',configuration,'--show-only=json-v1'])))
             api=json.loads((repo/'api/public_api_manifest.json').read_text(encoding='utf-8'))
-            installed=['gamenet_'+n.split('::')[1] for group in api['targets'].values() for n in group if n not in {'GameNet::tls','GameNet::rpc_tls'}]
+            installed=['gamenet_'+n.split('::')[1] for group in api['targets'].values() for n in group if n not in {'GameNet::tls','GameNet::rpc_tls','GameNet::websocket_tls'}]
             targets=['gnt_'+n.split('.')[0]+'_websocket_'+hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
             command=['cmake','--build',str(build),'--config',configuration,'--parallel','2']
             if args.profile!='release':command+=['--target',*installed,*targets,'gamenet_websocket_echo_server']

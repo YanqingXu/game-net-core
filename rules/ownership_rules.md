@@ -10,6 +10,12 @@ It must not blur these roles.
 
 ### WS-C1
 
+WS-C2: WS owns a narrow transport which weakly observes TCP/TLS. The WSS wrapper
+owns TLS and its bridge; TLS callbacks own bridge; bridge owns WS. No cycle.
+Accepted TLS/WS EOF continuations survive context release using owned state.
+Combined closed follows both terminal cleanups and reconciled zero ledgers;
+active wrapper abandonment must not reentrantly force-close TCP from a deleter.
+
 Caller/context owns WebSocketSession; the session weakly observes TCP and borrows
 its outliving loop. Weak timers own no session; accepted continuations lease only
 session and bounded owned input. Dispatch leases self across callback release.

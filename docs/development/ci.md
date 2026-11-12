@@ -1,5 +1,16 @@
 # Continuous Integration
 
+## Optional WSS composition
+
+`.github/workflows/websocket-tls.yml` enables both optional flags. Windows/Linux
+Release run 143 tests and dual-ON/WS-only/TLS-only/both-OFF installation gates.
+Linux ASan/UBSan, Linux TSan and Windows ASan execute exactly ten composition
+tests. Every lane runs pinned WSS interoperability, strict CA/name/expiry refusal,
+eight truncated TLS detections and an independent complete WS/close_notify close.
+Exact inventories/JUnit, peer records, clean source/run identity and evidence-file
+hashes are retained. Default133, WS-only136 and TLS-only138 inventories remain
+unchanged. Existing WS/RPC/HP1 fuzz run independently. See [WSS usage](websocket_tls.md).
+
 ## Optional bounded WebSocket
 
 `.github/workflows/websocket.yml` enables the independent default-OFF component.

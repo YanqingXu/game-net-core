@@ -130,6 +130,7 @@ These intents apply to the current migrated core:
 - `intents/modules/rpc_tls.intent.md`
 - `intents/modules/tls.intent.md`
 - `intents/modules/websocket.intent.md`
+- `intents/modules/websocket_tls.intent.md`
 - `intents/modules/transport_endpoint.intent.md`
 - `intents/modules/player_session.intent.md`
 - `intents/modules/logic_loop.intent.md`
