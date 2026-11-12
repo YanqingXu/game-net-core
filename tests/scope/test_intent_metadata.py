@@ -25,6 +25,7 @@ ALLOWED_TARGETS = {
     "GameNet::core",
     "GameNet::protocol",
     "GameNet::rpc",
+    "GameNet::websocket",
     "GameNet::rpc_tls",
     "GameNet::tls",
     "GameNet::transport",

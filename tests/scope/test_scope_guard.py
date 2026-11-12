@@ -147,6 +147,12 @@ def check_status_description_boundary(repo_root: Path) -> None:
 
 
 def main() -> None:
+    # WS-C1 is an upper layer; activating it must not permit Core reverse edges.
+    for path, text in (
+        ("src/core/net/Probe.cc", '#include "gamenet/websocket/WebSocketSession.h"\n'),
+        ("src/core/CMakeLists.txt", 'target_link_libraries(gamenet_core PRIVATE GameNet::websocket)\n'),
+    ):
+        assert_violation(Path(__file__).resolve().parents[2], path, text, "layer references disallowed component")
     repo_root = Path(__file__).resolve().parents[2]
 
     assert_clean(

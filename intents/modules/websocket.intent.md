@@ -1,129 +1,107 @@
 ---
-status: deferred
-target: GameNet::protocol
-migration_source: mini_trantor
-promote_gate: post-phase-4-protocol
+status: active
+target: GameNet::websocket
+migration_source: native
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: native
+source_commit: none
+source_paths: none
 ---
 
-# Module Intent: WebSocket Support
+# WS-C1: Bounded WebSocket server protocol
 
-## 1. Intent
-The WebSocket layer provides RFC 6455 compliant WebSocket communication on top
-of the existing HTTP/1.1 infrastructure. It leverages the HTTP upgrade handshake
-mechanism and then switches to WebSocket frame-based communication.
+## Authorization and scope
 
-Components:
+The 2026-11-12 user-authorized WS-C1 milestone replaces the historical deferred
+HTTP/TcpServer-enableSsl proposal. Native provisional GameNet::websocket is
+default OFF behind GAMENET_ENABLE_WEBSOCKET, separately exported and discovered
+only for COMPONENTS websocket. It depends on Core, not HTTP, RPC or OpenSSL.
+OFF installs no WebSocket headers/export; Core-only consumers stay independent.
+WebSocketCodec and WebSocketSession compose existing TcpServer; a runnable echo
+server is the minimum server. General HTTP, client API, extensions/compression,
+subprotocol negotiation and WSS stay outside WS-C1. No HP0/release gate changes.
 
-- **WebSocketCodec**: frame encoder/decoder (RFC 6455 §5) — handles opcode, masking,
-  payload length (7-bit/16-bit/64-bit), fragmentation is NOT supported in v1
-- **WebSocketConnection**: per-connection state machine wrapping TcpConnection —
-  manages upgraded connection lifecycle, provides send/onMessage API
-- **WebSocketServer**: extends HttpServer to detect Upgrade requests, perform
-  handshake, and hand off to WebSocket message callbacks
+## Wire and bounds
 
-The WebSocket layer is a protocol adapter built on top of the HTTP layer —
-it does not own or modify the Reactor core.
+RFC 6455 opening handshake uses strict HTTP/1.1 GET with an origin-form target,
+one Host/key/version, Upgrade/Connection token lists and canonical base64 for a
+16-byte nonce. Header bytes/field count are bounded. Reject bare LF, obs-fold,
+whitespace before colon, CTLs, duplicate singleton headers, Transfer-Encoding,
+Expect and nonzero/duplicate Content-Length. Version mismatch returns 426;
+malformed/policy/oversized requests return bounded 400/403/431 with no body.
+Only a successful 101 TCP admission permits ready/application frames. The
+optional owner handshake policy sees owned target/host/origin; no Origin
+authentication claim is made. Unrequested extensions/subprotocols are declined.
 
----
+Server receives masked frames, emits unmasked canonical frames, rejects RSV,
+unknown opcode, nonminimal/overflowing lengths, invalid control FIN/length and
+invalid continuation ordering. Fragmented text/binary messages are reassembled
+under a separate message limit. Ping/Pong/Close may interleave fragments. Text
+and close reasons require strict UTF-8 (no overlong/surrogate/out-of-range code
+points); close payload/code rules are checked. Errors map to 1002/1007/1009.
+Complete valid events preceding a malformed frame may be delivered in wire order.
+Codec faults are sticky until reset. Empty input may drain a bounded continuation.
 
-## 2. Responsibilities
-- detect HTTP Upgrade: websocket requests
-- compute and validate Sec-WebSocket-Accept handshake
-- decode incoming WebSocket frames (text/binary/ping/pong/close)
-- encode outgoing WebSocket frames (server-to-client, unmasked)
-- unmask client-to-server frames (RFC 6455 §5.3)
-- handle close handshake (opcode 0x8)
-- handle ping/pong automatically (opcode 0x9 → 0xA response)
-- deliver text/binary messages to user callbacks
-- support per-connection upgraded state that persists across reads
+Each input call copies/consumes only bounded bytes before callbacks. Codec input,
+fragment assembly, header and control-output count/bytes have explicit limits.
+Application send copies only through existing TCP admission and has no retry
+queue. Rejection owns no bytes. Mandatory upgrade/pong/close output uses a finite
+control queue and one weak retry timer. A close replaces pending pongs; dropped
+controls are explicitly accounted. Enqueued control bytes equal admitted plus
+discarded plus pending. Control saturation fails explicitly, never allocates a fallback queue.
 
----
+## Five module gates
 
-## 3. Non-Responsibilities
-- does not implement WebSocket extensions (permessage-deflate)
-- does not implement fragmented messages (v1 requires FIN=1)
-- does not implement WebSocket client (only server-side)
-- does not implement subprotocol negotiation
-- does not own EventLoop or TcpConnection lifecycle
-- does not implement TLS-level wss:// (use TcpServer's enableSsl separately)
+1. One connection EventLoop owns session mutation, snapshots, timers, codec and
+   destruction. Foreign start/send/close/abort reject WrongThread before taking a
+   self lease. Applications marshal owned values via the existing bounded owner
+   executor. Stateless handshake/encoding and separately owned codecs need no loop.
+2. Caller/TCP context owns the session; it weakly observes TCP and borrows its
+   outliving loop. Timer closures are weak. Public dispatch and one accepted
+   continuation lease session/owned input across callback release. No strong cycle.
+3. Handshake policy, ready, message, pong and terminal callbacks are owner-only;
+   they may send, close, abort and release caller references. Recursive input is
+   rejected without consuming nested input. Callback exceptions are contained.
+   Cleanup and Closed state precede exactly one terminal callback.
+4. TCP-down seals sends immediately. Already received complete frames retire under
+   the normal budget/one continuation before terminal settlement, even after TCP
+   context release. Scheduling rejection is terminal; no inline unbounded drain.
+   Partial EOF is truncated. Close/abort precedes owner shutdown.
+5. Specific verification files below cover public bounds, lifecycle and failure
+   behavior on Windows IOCP/Linux epoll, sanitizers, independent peers and fuzz.
 
----
+## Close and failure
 
-## 4. Core Invariants
-- WebSocket state is per-connection, stored via TcpConnection::setContext
-- a connection is either in HTTP mode or WebSocket mode, never both simultaneously
-- server frames are never masked; client frames must be masked (reject unmasked)
-- close frame triggers close handshake: send close frame back, then shutdown
-- ping always gets an automatic pong response with same payload
-- frame payload exceeding 64KB results in connection close (v1 safety limit)
-- after upgrade, HTTP parsing is no longer invoked on that connection
+Created -> Handshaking -> Upgrading -> Open -> Closing -> Closed is explicit;
+HTTP rejection uses Rejecting. Handshake and close have finite positive deadlines.
+Local close seals application admission, drains an accepted close frame and waits
+for peer Close; both admitted/sent and received Close trigger TCP shutdown. Actual
+TCP-down is graceful only after both Close frames and no pending controls.
+Protocol failure may send its close then shut down TCP without parsing more bad
+input. Preserve the original failure reason if close times out. Missing peer Close
+is Truncated; abort, timer/post rejection and transport failure are explicit.
+Repeated close/down/abort cannot duplicate terminal callbacks. Terminal settlement
+clears header/codec/fragment/control storage and timers and reconciles all control
+bytes. Destruction settles Aborted without reentrant TCP force-close from context
+deleters. Caller explicitly aborts when immediate forced teardown is needed.
 
----
+## Verification
 
-## 5. Collaboration
-- **WebSocketServer** wraps **HttpServer** or **TcpServer** with an upgrade hook
-- on HTTP request with `Upgrade: websocket`, perform handshake and switch context
-- after upgrade, the message callback delivers raw WebSocket frames
-- user interacts via `WebSocketCallback` / `WebSocketMessageCallback`
-- existing TcpServer threading model is preserved (one-loop-per-thread)
+- tests/unit/websocket/test_websocket_codec.cpp: RFC handshake vector, strict HTTP,
+  masking/lengths, arbitrary segmentation, fragments/control interleaving, UTF-8,
+  close codes, limits, reset and bounded continuations.
+- tests/contract/websocket/test_websocket_session.cpp: real connected TCP sockets,
+  handshake/close deadlines, owner/re-entry/release, bounded output recovery,
+  protocol/transport failures, EOF continuation and zero control/input residue.
+- tests/integration/websocket/test_websocket_tcp.cpp: real loopback TcpServer and
+  independent masked peer, fragmented upgrade/message, ping, close and reconnect.
+- tests/fuzz/websocket/fuzz_websocket.cpp: bounded malformed handshake/frame bytes,
+  segmentation equivalence and canonical server-frame encoding oracle.
+- tests/ci/run_websocket_contracts.py: exact configured/executed inventories,
+  real external websockets 15.0.1 interoperability, installed ON/OFF consumers,
+  sanitizer and bounded fuzz evidence with exact source/run identity.
+- tests/ci/test_websocket_workflow.py: missing/skipped/count/seed evidence rejection
+  and default-OFF package/workflow boundaries.
 
----
-
-## 6. Threading Rules
-- WebSocketCodec encode/decode are stateless utilities — no thread affinity
-- WebSocketConnection state is per-connection, accessed only on owner loop thread
-- WebSocket callbacks fire on the connection's owner loop thread
-- WebSocketServer configuration must happen before start()
-
----
-
-## 7. Ownership Rules
-- WebSocketServer owns the underlying TcpServer
-- WebSocketConnection state is stored in TcpConnection context (std::any)
-- WebSocketCodec is a stateless utility namespace — no ownership
-- user callbacks borrow the connection (shared_ptr) and message (string_view)
-
----
-
-## 8. Failure Semantics
-- invalid upgrade request (missing headers): respond 400, close
-- invalid Sec-WebSocket-Key: respond 400, close
-- unmasked client frame: close connection with 1002 (Protocol Error)
-- oversized frame (> 64KB payload): close connection with 1009 (Too Large)
-- unknown opcode: close connection with 1002 (Protocol Error)
-- malformed frame header: close connection
-
----
-
-## 9. Extension Points
-- WebSocket client (future, using TcpClient)
-- fragmented message reassembly (future)
-- permessage-deflate extension (future)
-- subprotocol negotiation (future)
-- wss:// via TcpServer::enableSsl() (already supported at transport level)
-
----
-
-## 10. Test Contracts
-- frame encoding produces correct bytes for text/binary/ping/pong/close
-- frame decoding parses 7-bit/16-bit/64-bit payload lengths correctly
-- unmasking produces correct payload from masked frame
-- HTTP upgrade request is detected and handshake response is correct
-- Sec-WebSocket-Accept computation is RFC 6455 compliant
-- after upgrade, text messages are delivered to WebSocket callback
-- ping receives automatic pong with same payload
-- close frame triggers close handshake and connection shutdown
-- invalid upgrade request gets 400 response
-- unmasked client frame causes protocol error close
-- oversized frame causes close with 1009
-
----
-
-## 11. Review Checklist
-- Is WebSocket state ever accessed from a thread other than the connection owner?
-- Can state leak between HTTP mode and WebSocket mode?
-- Does the handshake compute Sec-WebSocket-Accept correctly (SHA-1 + Base64)?
-- Are masked frames correctly unmasked using the 4-byte mask key?
-- Does the server never mask outgoing frames?
-- Are control frames (ping/pong/close) handled before delivering to user callback?
-- Does close handshake follow RFC 6455 §7 (send close frame back)?
+Functional development evidence does not establish production adoption/capacity.

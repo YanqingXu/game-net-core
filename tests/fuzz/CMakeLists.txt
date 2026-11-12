@@ -5,6 +5,15 @@ if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "GAMENET_BUILD_FUZZING requires Clang/libFuzzer")
 endif()
 
+if(TARGET gamenet_websocket)
+    target_compile_options(gamenet_websocket PRIVATE -fsanitize=fuzzer-no-link)
+    add_executable(gamenet_fuzz_websocket websocket/fuzz_websocket.cpp)
+    target_include_directories(gamenet_fuzz_websocket PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(gamenet_fuzz_websocket PRIVATE GameNet::websocket)
+    target_compile_options(gamenet_fuzz_websocket PRIVATE -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
+    target_link_options(gamenet_fuzz_websocket PRIVATE -fsanitize=fuzzer,address,undefined)
+endif()
+
 # Instrument production code too: entry-point-only coverage misses RPC branches.
 # Fuzz builds are opt-in development builds, never package evidence.
 foreach(component gamenet_core gamenet_protocol gamenet_rpc)

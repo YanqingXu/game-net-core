@@ -1,5 +1,15 @@
 # Roadmap
 
+## Bounded WebSocket server — WS-C1 (2026-11-12)
+
+WS-C1 authorizes native provisional GameNet::websocket, default OFF and separately
+exported without HTTP/OpenSSL dependencies. Strict bounded Upgrade, masked frame
+parsing, fragmentation/control interleaving, UTF-8, finite send/control admission,
+deadlines and exactly-one close settlement compose existing TCP. A runnable echo
+server, independent websockets interoperability and a bounded protocol fuzzer
+validate Windows/Linux and sanitizers. See `docs/development/websocket.md`.
+Historical M9 findings remain evidence history; WSS and general HTTP stay deferred.
+
 ## RPC protocol/state validation — RPC-C3 (2026-11-12)
 
 RPC-C3 adds independent codec-oracle and bounded channel-sequence fuzz targets,
@@ -38,7 +48,8 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines, WebSocket and UDP/KCP remain deferred; TLS has its own TLS-C1 authorization. Development work does not create a release.
+block this separately authorized feature. Coroutines and UDP/KCP remain deferred;
+TLS and WebSocket have separate authorizations. Development work does not create a release.
 
 game-net-core is the component-split migration target for `mini_trantor`.
 The roadmap keeps that migration staged so the networking core becomes stable

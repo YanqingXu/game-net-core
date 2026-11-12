@@ -8,6 +8,15 @@ A module should either:
 - observe an object
 It must not blur these roles.
 
+### WS-C1
+
+Caller/context owns WebSocketSession; the session weakly observes TCP and borrows
+its outliving loop. Weak timers own no session; accepted continuations lease only
+session and bounded owned input. Dispatch leases self across callback release.
+Input/fragment/control buffers have separate finite limits. Cleanup precedes one
+closed callback, including EOF after raw context release. Explicit abort precedes
+owner teardown; context destruction must not force-close TCP reentrantly.
+
 ### TLS-C1
 
 Caller/context owns TlsStream; it weakly observes TCP and borrows the outliving

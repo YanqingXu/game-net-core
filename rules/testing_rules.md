@@ -1,5 +1,15 @@
 # testing_rules.md
 
+## WS-C1 bounded server protocol
+
+Enforce strict HTTP Upgrade and canonical key/length/masking, fragment/control
+interleaving, UTF-8 and close codes with deterministic segmentation tests and
+bounded fuzz. Real sockets must exercise control-output refusal/recovery, EOF
+budget continuations, queue/timer rejection, callback re-entry/release and exactly
+one terminal with zero input/fragment/control residue. Execute Windows/Linux,
+sanitizers and an independent external WebSocket client. Validate optional ON/OFF
+installed isolation; no skipped/fallback case counts as evidence.
+
 ## RPC-C3 fuzz and stateful regression
 
 Codec fuzz checks an independent wire oracle and canonical round trips. Channel

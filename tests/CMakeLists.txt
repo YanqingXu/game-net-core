@@ -56,6 +56,12 @@ function(add_gamenet_component_test layer module component source)
 endfunction()
 
 add_gamenet_component_test(unit rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/unit/rpc/test_rpc_codec.cpp)
+
+if(GAMENET_ENABLE_WEBSOCKET)
+    add_gamenet_component_test(unit websocket GameNet::websocket ${CMAKE_CURRENT_SOURCE_DIR}/unit/websocket/test_websocket_codec.cpp)
+    add_gamenet_component_test(contract websocket GameNet::websocket ${CMAKE_CURRENT_SOURCE_DIR}/contract/websocket/test_websocket_session.cpp threading lifecycle)
+    add_gamenet_component_test(integration websocket GameNet::websocket ${CMAKE_CURRENT_SOURCE_DIR}/integration/websocket/test_websocket_tcp.cpp threading lifecycle)
+endif()
 add_gamenet_component_test(contract rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/contract/rpc/test_rpc_channel.cpp threading lifecycle)
 add_gamenet_component_test(integration rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/integration/rpc/test_rpc_tcp.cpp threading lifecycle)
 

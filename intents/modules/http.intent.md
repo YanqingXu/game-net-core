@@ -7,6 +7,9 @@ promote_gate: post-phase-4-protocol
 
 # Module Intent: HTTP/1.1 Protocol Layer
 
+WS-C1 separately authorizes a bounded WebSocket-only Upgrade parser. It does not
+activate this deferred general HTTP server/client/body/routing proposal.
+
 ## 1. Intent
 The HTTP layer provides HTTP/1.1 request parsing and response generation on top
 of the existing TcpServer infrastructure. It consists of four components:

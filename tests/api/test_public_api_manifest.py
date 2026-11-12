@@ -127,11 +127,14 @@ def main() -> None:
         {"name": "include/gamenet/rpc_tls/RpcTlsSession.h", "category": "provisional"},
         {"name": "include/gamenet/tls/TlsContext.h", "category": "provisional"},
         {"name": "include/gamenet/tls/TlsStream.h", "category": "provisional"},
+        {"name": "include/gamenet/websocket/WebSocketCodec.h", "category": "provisional"},
+        {"name": "include/gamenet/websocket/WebSocketSession.h", "category": "provisional"},
     ]
     assert reviewed_difference["changes"]["targets"]["added"] == [
         {"name": "GameNet::rpc", "category": "provisional"},
         {"name": "GameNet::rpc_tls", "category": "provisional"},
         {"name": "GameNet::tls", "category": "provisional"},
+        {"name": "GameNet::websocket", "category": "provisional"},
     ]
     assert reviewed_difference["summary"]["compatibility_decision_required"] is False
     changed_candidate = copy.deepcopy(manifest)
@@ -183,6 +186,9 @@ def main() -> None:
     archived_candidate = copy.deepcopy(manifest)
     archived_candidate["package_version"] = "0.3.0"
     archived_candidate["release_label"] = "v0.3.0-production-candidate"
+    archived_candidate["targets"]["provisional"].remove("GameNet::websocket")
+    for header in ("include/gamenet/websocket/WebSocketCodec.h", "include/gamenet/websocket/WebSocketSession.h"):
+        archived_candidate["headers"]["provisional"].remove(header)
     archived_candidate["targets"]["provisional"].remove("GameNet::rpc")
     archived_candidate["targets"]["provisional"].remove("GameNet::tls")
     archived_candidate["targets"]["provisional"].remove("GameNet::rpc_tls")
