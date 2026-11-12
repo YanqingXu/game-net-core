@@ -1,5 +1,19 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## UDP-C1：有界 UDP 传输与最小服务端（2026-11-12 用户授权）
+
+先重写 UDP active intent 和线程/所有权/测试规则，再实现默认关闭的独立
+GameNet::udp 与 echo server。原 Core 公开 API 和 TCP/TLS/WS 依赖边界不变。
+owner 管理 fd/Channel/operation；跨线程 send/stop 用有界数量/字节接纳和生命周期
+通知，拒绝零保留。已接纳输出恰好一次 Sent/Cancelled/Error；停止封口并等待 IOCP
+terminal completion 后清算至零，只报告一次 stopped。
+覆盖 IPv4/IPv6、零长度、截断恢复、收发预算、队列饱和、重入/异常/释放、停止/quit/
+取消、突发拒绝恢复、公平性和多代反复启停。Windows 使用 WSARecvFrom/WSASendTo
+与 IOCP；Linux 使用 recvmsg/sendto/epoll。独立 Python UDP peer 双族互操作。
+完成 Windows/Linux、三组 sanitizer、ON/OFF 安装使用方及现有 CI/fuzz 回归后提交
+PR；不自动合并或发布。KCP、PMTU/raw ICMP 后续独立授权。
+
+
 ## WS-C3：会话状态序列 fuzz 与 WS/WSS 压力回归（2026-11-12 用户授权）
 
 保持既有 API、wire、默认开关和 OpenSSL 依赖边界。先扩展 WS/WSS intent 与规则，

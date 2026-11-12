@@ -1,5 +1,9 @@
 # ownership_rules.md
 
+## UDP-C1
+
+UDP wrapper owns state; active state has an explicit lease until stopped. Lifecycle callbacks are weak. Queued/in-flight packets retain count/byte reservations until exactly one completion. OVERLAPPED/address/WSABUF/payload survives cancellation until dequeue. Current removed Channels retire after dispatch; callbacks may release wrapper. Stopped follows zero native/queue/budget residue and callback clearing.
+
 ## 1. Core Principle
 Ownership must be explicit.
 A module should either:

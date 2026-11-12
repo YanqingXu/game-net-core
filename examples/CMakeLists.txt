@@ -110,3 +110,8 @@ set_target_properties(
     gamenet_multi_io_sharded_hybrid_echo
     PROPERTIES OUTPUT_NAME multi_io_sharded_hybrid_echo
 )
+
+if(GAMENET_ENABLE_UDP)
+    add_executable(gamenet_udp_echo_server udp_echo/main.cpp)
+    target_link_libraries(gamenet_udp_echo_server PRIVATE GameNet::udp)
+endif()

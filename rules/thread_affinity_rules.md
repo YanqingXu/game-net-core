@@ -1,5 +1,9 @@
 # thread_affinity_rules.md
 
+## UDP-C1
+
+UDP socket/Channel/operation/callbacks and snapshot belong to one owner. Only bounded sendTo/stop admission is cross-thread; no foreign callbacks. IOCP terminal consumers retire on owner even after observer revocation. A weak quit participant cancels I/O and drains before loop shutdown.
+
 ## 1. Core Principle
 game-net-core follows a reactor-style thread-affinity model.
 Mutable reactor state belongs to a specific EventLoop thread.

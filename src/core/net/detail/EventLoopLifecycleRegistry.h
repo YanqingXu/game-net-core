@@ -8,6 +8,7 @@
 // cannot attach arbitrary callbacks to the internal lifecycle lane.
 
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/core/net/Channel.h"
 
 #include <utility>
 
@@ -41,6 +42,14 @@ public:
         EventLoop& loop,
         const EventLoopLifecycleSource& source) {
         loop.detachLifecycleNode(source);
+    }
+
+    // Non-installed owner-adapter access; does not expose a public selector.
+    static Poller& backend(EventLoop& loop) noexcept { return *loop.poller_; }
+    static void retireRemovedChannel(
+        EventLoop& loop,
+        std::unique_ptr<Channel> channel) noexcept {
+        loop.retireCurrentChannel(std::move(channel));
     }
 
     static std::size_t normalPendingFunctorCapacity(

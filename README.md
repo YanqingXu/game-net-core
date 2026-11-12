@@ -1,5 +1,13 @@
 # game-net-core
 
+## UDP-C1：可选有界 UDP（2026-11-12）
+
+`GAMENET_ENABLE_UDP=ON` 提供独立 provisional `GameNet::udp`，默认关闭且只依赖 Core。
+IPv4/IPv6 数据报、零长度、显式截断、数量/字节预算、跨线程接纳与 IOCP 取消清算
+配有最小 echo server、独立 Python UDP 互操作及突发/公平性/反复启停合同。
+用法与验证见 [UDP 文档](docs/development/udp.md)。现有 v0.3.1 发行包不包含此开发组件。
+
+
 ## WS session/state validation — WS-C3 (2026-11-12)
 
 Bounded owner-session action fuzz and eight-generation real WS/WSS pressure

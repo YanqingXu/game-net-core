@@ -1,5 +1,9 @@
 # testing_rules.md
 
+## UDP-C1
+
+tests/unit/udp/test_udp_options.cpp, tests/contract/udp/test_udp_socket.cpp and tests/integration/udp/test_udp_stress.cpp enforce dual-family empty/truncated packets, count/byte/turn limits, cross-thread saturation, reentry/release, one completion per accepted send, quit/native cancellation and zero cleanup. Independent UDP peers and ON/OFF consumers execute Windows/Linux and sanitizers. Bursts actually refuse/recover; timers/second socket progress; fresh generations expire without stale callbacks.
+
 ## WS-C3 state sequences and real pressure
 
 tests/contract/websocket/test_websocket_session.cpp executes the shared bounded

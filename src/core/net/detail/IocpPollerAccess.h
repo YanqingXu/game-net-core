@@ -9,6 +9,8 @@
 
 #include "IoEngine.h"
 #include "CompletionPort.h"
+#include "IocpOperationState.h"
+#include <stdexcept>
 
 #ifdef _WIN32
 #include "gamenet/core/net/poller/IocpPoller.h"
@@ -23,6 +25,30 @@ public:
     IocpPollerAccess() = delete;
 
 #ifdef _WIN32
+    // Reserve operation storage before a datagram native call. Commit below
+    // consumes this prepared entry only after the kernel accepted submission.
+    static void prepareDatagramSubmission(
+        IocpPoller& poller,
+        IocpOperation& op,
+        std::shared_ptr<void> lifetime) {
+        if (!prepareIocpOperationSubmission(op))
+            throw std::logic_error("pending UDP operation reuse");
+        try {
+            if (!poller.retainedOperations_.emplace(&op, std::move(lifetime))
+                     .second)
+                throw std::logic_error("UDP operation already retained");
+        } catch (...) {
+            (void)rejectIocpOperationSubmission(op);
+            throw;
+        }
+    }
+    static void rejectDatagramSubmission(
+        IocpPoller& poller,
+        IocpOperation& op) noexcept {
+        (void)rejectIocpOperationSubmission(op);
+        poller.retainedOperations_.erase(&op);
+    }
+
     static IoCompletionProgress completionProgress(
         const IocpPoller& poller) noexcept {
         return {

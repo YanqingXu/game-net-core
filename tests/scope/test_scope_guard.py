@@ -230,6 +230,10 @@ def main() -> None:
         "add_library(gamenet_protocol protocol/PacketFramer.cc)\n",
         "layer references disallowed component",
     )
+    assert_clean(repo_root, "src/udp/Socket.cc", '#include "gamenet/core/net/EventLoop.h"\nnamespace gamenet::udp { class UdpSocket {}; }\n')
+    assert_violation(repo_root, "src/core/BadUdp.cc", '#include "gamenet/udp/UdpSocket.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/core/CMakeLists.txt", 'target_link_libraries(gamenet_core PRIVATE GameNet::udp)\n', "disallowed component")
+    assert_violation(repo_root, "src/udp/BadTls.cc", '#include "gamenet/tls/TlsStream.h"\n', "disallowed component")
     check_prestudy_boundaries(repo_root)
     assert_clean(repo_root, "src/rpc/Channel.cc",
                  '#include "gamenet/protocol/PacketFramer.h"\n'

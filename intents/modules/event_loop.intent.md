@@ -504,3 +504,10 @@ cold layout remain skipped until HP0 identifies their costs as real hotspots.
 - Are pending functors executed in a predictable place?
 - Does this complicate future timer/coroutine integration?
 - Is destruction/shutdown path still safe?
+
+## UDP-C1 source-private composition
+
+Optional UDP reuses Read/Write IOCP identities, operation leases and tracked
+cancellation through a non-installed owner access seam. A weak quit participant
+and current-Channel retirement preserve existing lifecycle rules. Zero/truncated
+datagram policy stays in UDP; no public Core API/TCP behavior changes.

@@ -37,6 +37,7 @@ PHASE4_ARTIFACTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/udp.intent.md": ("installed-library", "GameNet::udp"),
     "intents/modules/websocket_tls.intent.md": ("installed-library", "GameNet::websocket_tls"),
     "intents/modules/websocket.intent.md": ("installed-library", "GameNet::websocket"),
     "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
@@ -119,6 +120,7 @@ FROZEN_CORE_ACTIVE_INTENTS = {
 
 PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_core": set(),
+    "gamenet_udp": {"gamenet_core"},
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
     "gamenet_websocket": {"gamenet_core"},
@@ -147,6 +149,8 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
     "tests/contract/io_engine/test_io_uring_tcp_client.cpp",
     "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
 }
+
+UDP_VERIFICATION_PATHS = {"tests/unit/udp/test_udp_options.cpp", "tests/contract/udp/test_udp_socket.cpp", "tests/integration/udp/test_udp_stress.cpp"}
 
 WEBSOCKET_VERIFICATION_PATHS = {"tests/unit/websocket/test_websocket_codec.cpp", "tests/contract/websocket/test_websocket_session.cpp", "tests/integration/websocket/test_websocket_tcp.cpp"}
 
@@ -710,6 +714,7 @@ def validate_verification(
     experimental_inventory: ConfiguredInventory | None = None,
     tls_inventory: ConfiguredInventory | None = None,
     websocket_inventory: ConfiguredInventory | None = None,
+    udp_inventory: ConfiguredInventory | None = None,
 ) -> None:
     paths = verification_paths(body)
     if require_path:
@@ -729,6 +734,10 @@ def validate_verification(
                 f"intent fuzz file is not registered with a fuzz target: {test_path}",
             )
         elif test_path.endswith(".cpp"):
+            if test_path in UDP_VERIFICATION_PATHS:
+                if udp_inventory is not None:
+                    require(test_path in udp_inventory.tests_by_source, f"UDP verification missing: {test_path}")
+                continue
             if test_path in WEBSOCKET_VERIFICATION_PATHS:
                 if websocket_inventory is not None:
                     require(test_path in websocket_inventory.tests_by_source, f"WS verification missing: {test_path}")
@@ -781,6 +790,7 @@ def validate_intent(
     experimental_inventory: ConfiguredInventory | None = None,
     tls_inventory: ConfiguredInventory | None = None,
     websocket_inventory: ConfiguredInventory | None = None,
+    udp_inventory: ConfiguredInventory | None = None,
 ) -> None:
     metadata, body = parse_front_matter(path)
     try:
@@ -824,6 +834,12 @@ def validate_intent(
         else:
             artifact_inventory = websocket_inventory
 
+    if metadata.get("target") == "GameNet::udp":
+        if udp_inventory is None:
+            experimental_target_without_local_inventory = True
+        else:
+            artifact_inventory = udp_inventory
+
     if frozen_core:
         validate_frozen_core_artifact(metadata, inventory, intent_name)
     elif not experimental_target_without_local_inventory:
@@ -841,6 +857,7 @@ def validate_intent(
         experimental_inventory,
         tls_inventory,
         websocket_inventory,
+        udp_inventory,
     )
 
 
@@ -1161,6 +1178,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--with-tls", action="store_true")
     parser.add_argument("--with-websocket", action="store_true")
+    parser.add_argument("--with-udp", action="store_true")
     arguments = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[2]
     fuzz_cmake = (repo_root / "tests" / "fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -1226,6 +1244,10 @@ def main() -> None:
                 tls_options["OPENSSL_ROOT_DIR"] = os.environ["OPENSSL_ROOT_DIR"]
             tls_inventory = configure_inventory(repo_root, temp_root / "configured-tls", tls_options)
             validate_dependency_direction(tls_inventory)
+        udp_inventory = None
+        if arguments.with_udp:
+            udp_inventory = configure_inventory(repo_root,temp_root / "configured-udp", {"CMAKE_BUILD_TYPE":"Debug", "GAMENET_BUILD_TESTING":"ON", "GAMENET_ENABLE_UDP":"ON", "GAMENET_ENABLE_TLS":"OFF", "CMAKE_DISABLE_FIND_PACKAGE_OpenSSL":"ON"})
+            validate_dependency_direction(udp_inventory)
         websocket_inventory = None
         if arguments.with_websocket:
             websocket_inventory = configure_inventory(repo_root, temp_root / "configured-websocket", {"CMAKE_BUILD_TYPE":"Debug", "GAMENET_BUILD_TESTING":"ON", "GAMENET_ENABLE_WEBSOCKET":"ON", "GAMENET_ENABLE_TLS":"OFF"})
@@ -1249,6 +1271,7 @@ def main() -> None:
                 experimental_inventory=experimental_inventory,
                 tls_inventory=tls_inventory,
                 websocket_inventory=websocket_inventory,
+                udp_inventory=udp_inventory,
             )
 
         run_negative_fixtures(temp_root)
