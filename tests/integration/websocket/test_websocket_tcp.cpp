@@ -8,6 +8,7 @@
 #include "gamenet/core/net/TcpServer.h"
 #include "support/TestAssert.h"
 #include "support/WebSocketWire.h"
+#include "support/WebSocketReconnectStress.h"
 #include <any>
 #include <vector>
 using namespace gamenet::websocket;
@@ -53,4 +54,5 @@ int main(){
         loop.runAfter(5s,[]{GAMENET_TEST_FAIL("WS real TCP reconnect timed out");});client.connect();loop.loop();
         GAMENET_TEST_ASSERT(ready==1 && messages==1 && closed==1 && down && weak.expired());
     }
+    gamenet::test::runWebSocketReconnectStress(gamenet::test::plainWsStressServer,gamenet::test::plainWsStressClient,"WS");
 }

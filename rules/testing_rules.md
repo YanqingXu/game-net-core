@@ -1,5 +1,19 @@
 # testing_rules.md
 
+## WS-C3 state sequences and real pressure
+
+tests/contract/websocket/test_websocket_session.cpp executes the shared bounded
+state runner with fixed action seeds; tests/fuzz/websocket/fuzz_websocket_session.cpp
+mutates the same runner. Per-action independent byte/callback/generation ledgers
+enforce caps, refusal rollback, reentry/release, one terminal and zero cleanup.
+Real pressure in tests/integration/websocket/test_websocket_tcp.cpp and
+tests/integration/websocket_tls/test_websocket_tls_tcp.cpp must force actual
+refusal, recover all admitted data and a probe, alternate clean/abrupt closes,
+replay stale callbacks while a new connection is live and retire all weak handles.
+Execute Windows/Linux, ASan/UBSan/TSan and independent peers. Fuzz retains exact
+source/run, seed, units and crash inputs; neither mock network performance nor a
+successful process without the exact execution count is passing evidence.
+
 ## WS-C2 optional WSS composition
 
 tests/contract/websocket_tls/test_websocket_tls_session.cpp and

@@ -1,5 +1,44 @@
 # Bounded WebSocket server (WS-C1)
 
+## WS-C3 state and pressure validation
+
+The existing session contract runs explicit transition seeds and 32 fixed
+512-byte sequences through a shared non-installed runner. Each input uses fresh
+session generations on a real EventLoop, at most 128 actions, one/four-frame
+parser budgets, finite transport/control/input limits and hour-long deadlines.
+The driver explicitly wakes its initial owner post before entering the loop;
+subsequent actions and parser continuations interleave through bounded admission.
+No sleep or short wall-clock timeout selects fuzz outcomes. Existing deadline
+contracts continue to verify real timeout behavior.
+
+Actions exercise partial Upgrade, fragmented/control/malformed input, readiness,
+application refusal/recovery, close/down/abort/abandon, queue saturation,
+synchronous terminal send reentry, nested input, callback exceptions/release and
+generation replacement. Independent receipts validate canonical unmasked server
+frames and accepted = drained + discarded + pending transport bytes. Every
+action checks callback identity, no message after terminal, control conservation,
+caps and zero terminal input/fragment/control. Final owner drain makes accepted
+obsolete work harmless and all retired weak sessions expire.
+
+The real TCP integration additionally executes eight pressure generations with
+a masked independent wire peer. Every generation must actually reject a burst
+under finite TCP output admission, resume bounded test-held input, recover every
+accepted payload and complete a fresh probe. Clean WS Close and pending-output
+disconnect alternate. A clean TCP EOF without the WS Close is truncated.
+Closed old session handles/feed/down/writable callbacks are replayed while the
+replacement is live; no new-generation counter or callback may change. Deliberate
+stale leases are then released and all old session/connection weak handles retire.
+This finite correctness test does not assert production endurance or capacity.
+
+The existing six-lane optional workflow now runs two instrumented fuzz targets:
+protocol bytes and session actions, each exactly 20,000 units at seed 424242.
+State evidence retains 40 original transition/fixed seeds, evolved corpus,
+command, binary hash, empty crash evidence, source/run identity and file hashes.
+A separate readback step rejects missing/changed inputs, command/count/seed drift,
+dirty hosted checkout and sanitizer diagnostics. Nested state manifests are also
+included in the parent artifact hash list. Default 133, WS-only 136, TLS-only
+138 and combined 143 registered test counts remain unchanged.
+
 `GameNet::websocket` is a provisional, default-off component. Enable
 `GAMENET_ENABLE_WEBSOCKET=ON`, install, then request it explicitly:
 

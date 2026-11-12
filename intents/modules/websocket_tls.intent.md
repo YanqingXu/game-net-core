@@ -74,6 +74,19 @@ Explicit abort is allowed to force-close. Close/abort before owner destruction.
 
 ## Verification
 
+WS-C3 extends tests/integration/websocket_tls/test_websocket_tls_tcp.cpp with
+the same real loopback pressure/reconnect driver used by plain WS. It composes
+real authenticated TlsStream on the independent wire client and the WSS server;
+no test transport substitutes for TLS. Read holding has an explicit byte cap.
+Each generation rejects output, resumes reading and verifies all accepted frames
+plus a fresh probe. Normal WS Close + close_notify and abrupt pending disconnect
+alternate. Combined terminal count is one; WS input/fragment/control, TLS pending
+plain/cipher/BIO and TCP output clear and both ledgers reconcile. Closed old
+handles/callbacks execute against old state while a new generation is live;
+they cannot target the replacement. All weak session/connection references must
+expire after the intentionally retained stale handle is released and owner work
+retires. Independent ws/wss peers and all existing fuzz remain regression gates.
+
 - tests/contract/websocket/test_websocket_session.cpp: TCP compatibility and
   transport readiness, reentrant terminal send and refusal rollback.
 - tests/contract/websocket_tls/test_websocket_tls_session.cpp: real TLS and strict

@@ -6,6 +6,12 @@ Mutable reactor state belongs to a specific EventLoop thread.
 
 ### WS-C1
 
+WS-C3 sequence tests keep session, callbacks, transport receipts and action ledger
+on a real owner EventLoop. The test transport controls admission only. Queued
+actions/continuations run through bounded owner admission; no foreign inline
+fallback, timer sleeps or mock TLS success is evidence. Real WS/WSS stress keeps
+old callbacks bound to their original generation and owner.
+
 WS-C2: WebSocketTransport and WebSocketTlsSession share the connection owner.
 TLS-ready starts Upgrade; only admitted 101 starts application callbacks. TLS
 terminal, after bounded cipher EOF drain, triggers WS EOF retirement. No raw TCP

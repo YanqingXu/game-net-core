@@ -10,6 +10,12 @@ It must not blur these roles.
 
 ### WS-C1
 
+WS-C3 test generations own finite ledgers and copied wire. Test transports weakly
+observe sessions; no harness callback cycle may retain a generation. One stale
+closed handle may be intentionally retained across replacement to test isolation,
+then released; all weak session/connection observations must expire after drain.
+Accepted transport data is independently accounted as pending/drained/discarded.
+
 WS-C2: WS owns a narrow transport which weakly observes TCP/TLS. The WSS wrapper
 owns TLS and its bridge; TLS callbacks own bridge; bridge owns WS. No cycle.
 Accepted TLS/WS EOF continuations survive context release using owned state.

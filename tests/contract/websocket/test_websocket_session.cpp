@@ -8,6 +8,7 @@
 #include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
 #include "support/WebSocketWire.h"
+#include "support/WebSocketStateSequence.h"
 #include <thread>
 
 using namespace gamenet::websocket;
@@ -161,4 +162,4 @@ void transportSeam(){
     GAMENET_TEST_ASSERT(other->abandon()==WebSocketOperation::Accepted && transport->abandoned==1 && closed==2);
 }
 } // namespace
-int main(){basicAndReentry();deadlinesAndMalformed();backpressure();eofAndScheduling();foreignAndRelease();transportSeam();}
+int main(){basicAndReentry();deadlinesAndMalformed();backpressure();eofAndScheduling();foreignAndRelease();transportSeam();verifyWebSocketStateSeeds();}

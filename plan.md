@@ -1,5 +1,27 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## WS-C3：会话状态序列 fuzz 与 WS/WSS 压力回归（2026-11-12 用户授权）
+
+保持既有 API、wire、默认开关和 OpenSSL 依赖边界。先扩展 WS/WSS intent 与规则，
+在现有三项 WS 和两项 WSS 合同中执行固定状态语料及真实压力回归，不增加安装 API。
+新增非安装 gamenet_fuzz_websocket_session，复用真实 owner EventLoop 上的有界动作
+执行器；测试 transport 只控制 readiness/admission/终结，不替代真实 TLS 验证。
+
+动作覆盖 start/Upgrade/分段输入、帧/分片/控制帧交错、send 拒绝/恢复、close/down/
+abort/abandon、调度拒绝、同步终结回入、回调递归输入/异常/释放与换代。独立输出和
+回调账本逐步核对未接纳零保留、control/transport 字节守恒、上限、终结至多一次、
+关闭后无消息回调；终局清算到零并排空 accepted continuation，旧代弱引用最终释放。
+deadline 保持长且不由 fuzz 壁钟驱动；真实超时继续由已有合同验证。
+
+真实 TcpServer/TcpClient 的 WS/WSS 压力回归每代必须实际触发发送拒绝，恢复读取后
+验证已接纳数据和新 probe 成功。交替执行完整分层关闭与带已接纳输出的突发断连，
+清算 WS/TLS/TCP 残留；新代上重放旧代已关闭 handle/callback，不能影响新连接，
+所有终结计数、数据身份、预算和弱引用收敛后再结束。WSS 使用真实认证 TLS。
+
+Windows IOCP/Linux epoll、三组 sanitizer、独立 ws/wss 互操作、协议与状态两个有界
+WS fuzz 以及 RPC/HP1 回归通过后提交 PR；保留原始语料、命令、日志、种子、次数、
+哈希和精确提交。短压力只作正确性证据，不替代 HP0/容量/耐久门；不自动合并或发布。
+
 ## WS-C2：可选 TLS（WSS）传输适配（2026-11-12 用户授权）
 
 先扩展 native WebSocket intent 和所有权/线程/测试规则，再引入窄的 owner-local

@@ -130,7 +130,7 @@ def main() -> None:
             match=re.search(r'set\(CMAKE_CXX_COMPILER "([^"]+)"\)',path.read_text(encoding='utf-8'))
             if match:env['PATH']=str(Path(match[1]).parent)+os.pathsep+env.get('PATH','');break
         if args.profile=='fuzz':
-            execute('build',['cmake','--build',str(build),'--parallel','2','--target','gamenet_fuzz_websocket'])
+            execute('build',['cmake','--build',str(build),'--parallel','2','--target','gamenet_fuzz_websocket','gamenet_fuzz_websocket_session'])
             corpus=out/'corpus';corpus.mkdir(exist_ok=True)
             # Separate protocol seeds: arbitrary bytes plus canonical Upgrade/masked frame.
             seeds={'upgrade':b'GET /echo HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WS-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WS-Version: 13\r\n\r\n',
@@ -139,6 +139,9 @@ def main() -> None:
             binary=build/'tests/fuzz/gamenet_fuzz_websocket'
             log=execute('fuzzer',[str(binary),str(corpus),'-runs=20000','-seed=424242','-max_len=2048','-timeout=5','-rss_limit_mb=512','-print_final_stats=1','-artifact_prefix='+str(out)+'/'])
             verify_fuzz(log);manifest['executed_units']=20000
+            execute('session-fuzz',[sys.executable,str(repo/'tests/ci/run_websocket_session_fuzz.py'),'--build-dir',str(build),'--output',str(out/'session')])
+            manifest['session_fuzz']=json.loads((out/'session/manifest.json').read_text(encoding='utf-8'))
+            if manifest['session_fuzz']['status']!='passed' or manifest['session_fuzz']['executed_units']!=20000:raise ValueError('missing session fuzz evidence')
         else:
             inventory=verify_inventory(json.loads(execute('inventory',['ctest','--test-dir',str(build),'-C',configuration,'--show-only=json-v1'])))
             api=json.loads((repo/'api/public_api_manifest.json').read_text(encoding='utf-8'))
@@ -163,6 +166,6 @@ def main() -> None:
                 consumer('off-core-consumer',off_prefix,False);consumer('off-ws-rejection',off_prefix,True,False);manifest['off_isolation']='passed'
         manifest['status']='passed'
     finally:
-        manifest['files']={p.relative_to(out).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and p.name!='manifest.json'}
+        manifest['files']={p.relative_to(out).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and p!=out/'manifest.json'}
         (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
 if __name__=='__main__':main()
