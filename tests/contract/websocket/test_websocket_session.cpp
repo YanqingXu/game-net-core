@@ -61,7 +61,9 @@ void basicAndReentry(){
     f.handler=[&](auto type,auto bytes){GAMENET_TEST_ASSERT(type==WebSocketOpcode::Text && bytes=="hello");
         GAMENET_TEST_ASSERT(f.session->send(type,bytes)==WebSocketOperation::Accepted);};
     GAMENET_TEST_ASSERT(f.session->send(WebSocketOpcode::Text,"early")==WebSocketOperation::NotReady);
-    f.open();f.feed(websocketClientFrame(1,"hel",false)+websocketClientFrame(9,"p")+websocketClientFrame(0,"lo"));
+    GAMENET_TEST_ASSERT(f.session->start()==WebSocketOperation::Accepted);
+    // Upgrade and initial frames may share the same TCP Buffer.
+    f.feed(websocketUpgrade+websocketClientFrame(1,"hel",false)+websocketClientFrame(9,"p")+websocketClientFrame(0,"lo"));
     GAMENET_TEST_ASSERT(f.ready==1 && f.messages==1 && f.session->snapshot().reentrantMessages==1);
     f.feed(websocketClientFrame(8,std::string("\x03\xe8",2)));
     bool peerClosed=false;
@@ -76,8 +78,12 @@ void deadlinesAndMalformed(){
         GAMENET_TEST_ASSERT(!f.ready && f.error==WebSocketError::HandshakeTimeout);f.settled();}
     {WebSocketOptions o;o.closeTimeout=10ms;Fixture f(o);f.open();(void)f.session->close();f.run([&]{f.drain();return f.closed==1;});
         GAMENET_TEST_ASSERT(f.error==WebSocketError::CloseTimeout && f.session->snapshot().closeTimedOut);f.settled();}
-    {Fixture f;f.open();f.feed(websocketClientFrame(1,"bad",true,false));f.connection->forceClose();
-        f.run([&]{return f.closed==1;});GAMENET_TEST_ASSERT(f.error==WebSocketError::ProtocolError);f.settled();}
+    for(const auto& [wire,expected]:std::vector<std::pair<std::string,WebSocketError>>{
+        {websocketClientFrame(1,"bad",true,false),WebSocketError::ProtocolError},
+        {websocketClientFrame(1,"\xc0\x80"),WebSocketError::InvalidUtf8},
+        {websocketClientFrame(2,std::string(17,'x')),WebSocketError::MessageTooLarge}}){
+        WebSocketOptions o;o.codec.maxFrameBytes=16;Fixture f(o);f.open();f.feed(wire);f.connection->forceClose();
+        f.run([&]{return f.closed==1;});GAMENET_TEST_ASSERT(f.error==expected);f.settled();}
     {Fixture f;(void)f.session->start();f.feed("GET / HTTP/1.1\r\nHost: x\r\n\r\n");f.connection->forceClose();
         f.run([&]{return f.closed==1;});GAMENET_TEST_ASSERT(!f.ready && f.error==WebSocketError::HandshakeRejected);f.settled();}
     {Fixture f;f.policy=[](const auto&){return false;};f.open();f.connection->forceClose();
