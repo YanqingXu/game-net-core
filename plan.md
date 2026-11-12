@@ -1,5 +1,26 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## WS-C2：可选 TLS（WSS）传输适配（2026-11-12 用户授权）
+
+先扩展 native WebSocket intent 和所有权/线程/测试规则，再引入窄的 owner-local
+WebSocketTransport。保留 WebSocketSession::create(TcpConnection) 和现有 ws 用法；
+GameNet::websocket 只依赖 Core。独立 provisional GameNet::websocket_tls 仅在
+GAMENET_ENABLE_WEBSOCKET 与 GAMENET_ENABLE_TLS 同时开启时构建、单独导出发现。
+Core/WS-only 消费者在双 ON 安装中仍不加载 OpenSSL，任一 OFF 均无 WSS 表面。
+
+WebSocketTlsSession 组合真实 TlsStream 和服务端 WebSocketSession。TLS-ready 之后
+才开始有限 HTTP Upgrade，101 明文输出接纳后才允许应用 ready；所有 WS wire 都经过
+TLS，无明文回退。每层预算保留，发送拒绝不追加应用队列。WS Close 后才提交 TLS
+shutdown，close_notify 后再委托 TCP 关闭；分别保留 WS/TLS 错误，任一层失败不能
+报告整体 Graceful。TLS EOF 先排空已接收密文，WS 再有界排空已解密完整帧，最后一次
+closed 清算。上下文释放、重入、超时、断连、调度拒绝和 abandonment 均无所有权环。
+
+交付真实证书 CA/名称/过期拒绝、TLS/Upgrade/Close/close_notify 超时、双层背压恢复、
+控制输出、分层关闭、零输入/分片/控制/明文/密文残留和恰好一次终结合同及最小 WSS
+互操作测试服务端（非安装）。Windows IOCP/Linux epoll、ASan/UBSan/TSan、独立 websockets WSS 互操作、
+默认/单 ON/双 ON 安装消费者和现有 WS/RPC/HP1 fuzz 回归验证后提交 PR；不自动合并、
+发布或修改既有 tag/资产。不扩展通用 HTTP、WS 客户端、mTLS、压缩或子协议。
+
 ## WS-C1：有界 WebSocket 协议层与最小服务端（2026-11-12 用户授权）
 
 重写 native active WebSocket intent，先确定 owner、所有权、回调重入、输入/输出预算和

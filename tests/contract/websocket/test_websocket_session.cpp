@@ -132,5 +132,33 @@ void foreignAndRelease(){
         f.run([&]{return f.closed==1;});GAMENET_TEST_ASSERT(f.error==WebSocketError::CallbackException);f.settled();}
     {Fixture f;f.open();f.session.reset();GAMENET_TEST_ASSERT(f.closed==1 && f.error==WebSocketError::Aborted);}
 }
+void transportSeam(){
+    struct Transport final : WebSocketTransport {
+        gamenet::net::EventLoop* loop;
+        WebSocketTransportState phase{WebSocketTransportState::NotReady};
+        std::function<bool(std::string_view)> sender;
+        unsigned abandoned{};
+        explicit Transport(gamenet::net::EventLoop* owner):loop(owner){}
+        gamenet::net::EventLoop* ownerLoop() const noexcept override{return loop;}
+        WebSocketTransportState state() const noexcept override{return phase;}
+        bool trySend(std::string_view wire) override{return sender?sender(wire):true;}
+        bool shutdown() override{return true;}
+        void abort() override{}
+        void abandon() override{++abandoned;}
+        bool cleanClose() const noexcept override{return false;}
+    };
+    gamenet::net::EventLoop loop;auto transport=std::make_shared<Transport>(&loop);unsigned ready=0,closed=0;
+    auto session=WebSocketSession::createWithTransport(transport,{.ready=[&]{++ready;},.closed=[&](auto){++closed;}});
+    GAMENET_TEST_ASSERT(session->start()==WebSocketOperation::NotReady && session->snapshot().phase==WebSocketPhase::Created);
+    gamenet::net::Buffer input;input.append(websocketUpgrade);
+    GAMENET_TEST_ASSERT(session->onMessage(input)==WebSocketOperation::NotReady && input.readableBytes()==websocketUpgrade.size());
+    transport->phase=WebSocketTransportState::Ready;
+    GAMENET_TEST_ASSERT(session->start()==WebSocketOperation::Accepted);
+    transport->sender=[&](auto){transport->phase=WebSocketTransportState::Closed;session->onDisconnect();return true;};
+    (void)session->onMessage(input); // terminal callback clears controls before trySend returns
+    GAMENET_TEST_ASSERT(!ready && closed==1 && session->snapshot().phase==WebSocketPhase::Closed && !session->snapshot().pendingControlBytes);
+    auto other=WebSocketSession::createWithTransport(transport,{.closed=[&](auto){++closed;}});
+    GAMENET_TEST_ASSERT(other->abandon()==WebSocketOperation::Accepted && transport->abandoned==1 && closed==2);
+}
 } // namespace
-int main(){basicAndReentry();deadlinesAndMalformed();backpressure();eofAndScheduling();foreignAndRelease();}
+int main(){basicAndReentry();deadlinesAndMalformed();backpressure();eofAndScheduling();foreignAndRelease();transportSeam();}

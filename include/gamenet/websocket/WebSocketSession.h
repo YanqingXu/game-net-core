@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 #include "gamenet/websocket/WebSocketCodec.h"
+#include "gamenet/websocket/WebSocketTransport.h"
 #include "gamenet/core/net/Callbacks.h"
 #include "gamenet/core/net/EventLoopExecutor.h"
 #include <chrono>
@@ -40,6 +41,8 @@ class WebSocketSession : public std::enable_shared_from_this<WebSocketSession> {
 public:
     static std::shared_ptr<WebSocketSession> create(const net::TcpConnectionPtr& connection,
         WebSocketCallbacks callbacks = {}, WebSocketOptions options = {});
+    static std::shared_ptr<WebSocketSession> createWithTransport(std::shared_ptr<WebSocketTransport> transport,
+        WebSocketCallbacks callbacks = {}, WebSocketOptions options = {});
     ~WebSocketSession(); // owner-only; terminal cleanup without reentrant TCP force-close
     WebSocketSession(const WebSocketSession&) = delete;
     WebSocketSession& operator=(const WebSocketSession&) = delete;
@@ -47,6 +50,7 @@ public:
     WebSocketOperation send(WebSocketOpcode type, std::string_view payload); // Text/Binary/Ping only
     WebSocketOperation close(std::uint16_t code = 1000, std::string_view reason = {});
     WebSocketOperation abort();
+    WebSocketOperation abandon(); // owner-only non-reentrant terminal cleanup
     WebSocketOperation onMessage(net::Buffer& input);
     void onWritable();
     void onDisconnect();

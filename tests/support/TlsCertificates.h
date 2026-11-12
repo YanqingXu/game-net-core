@@ -39,6 +39,10 @@ struct TlsCertificates {
             authority ? "critical,CA:TRUE" : "critical,CA:FALSE");
         extension(cert.get(), issuer ? issuer : cert.get(), NID_key_usage,
             authority ? "critical,keyCertSign,cRLSign" : "critical,digitalSignature");
+        // Python 3.13+ enables strict X.509 validation by default. Keep the
+        // independent peer's verification strict; issue complete identifiers.
+        extension(cert.get(), issuer ? issuer : cert.get(), NID_subject_key_identifier, "hash");
+        extension(cert.get(), issuer ? issuer : cert.get(), NID_authority_key_identifier, "keyid:always");
         if (!authority) {
             extension(cert.get(), issuer, NID_ext_key_usage, "serverAuth");
             extension(cert.get(), issuer, NID_subject_alt_name, "DNS:localhost,IP:127.0.0.1");

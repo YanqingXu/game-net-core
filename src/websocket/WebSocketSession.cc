@@ -10,10 +10,32 @@
 
 namespace gamenet::websocket {
 using namespace std::chrono_literals;
+namespace {
+class TcpTransport final : public WebSocketTransport {
+public:
+    explicit TcpTransport(const net::TcpConnectionPtr& c): connection_(c),loop_(c->getLoop()) {}
+    net::EventLoop* ownerLoop() const noexcept override {return loop_;}
+    WebSocketTransportState state() const noexcept override {
+        const auto c=connection_.lock();return c && c->connected()?WebSocketTransportState::Ready:WebSocketTransportState::Closed;
+    }
+    bool trySend(std::string_view wire) override {const auto c=connection_.lock();return c && c->trySend(wire)==net::TcpSendResult::Accepted;}
+    bool shutdown() override {const auto c=connection_.lock();return c && c->tryShutdown()==net::PostResult::Accepted;}
+    void abort() override {if(const auto c=connection_.lock())c->forceClose();}
+    void abandon() override {if(const auto c=connection_.lock())c->shutdown();}
+    bool cleanClose() const noexcept override {
+        if(const auto c=connection_.lock()) {const auto info=c->closeInfo();
+            return info && info->nativeError==0 && (info->reason==net::TcpConnectionCloseReason::PeerEof || info->reason==net::TcpConnectionCloseReason::GracefulShutdown);}
+        return false;
+    }
+private:
+    std::weak_ptr<net::TcpConnection> connection_;
+    net::EventLoop* loop_;
+};
+}
 struct WebSocketSession::Impl {
     enum class ControlKind { Upgrade, Reject, Pong, Close };
     struct Control { ControlKind kind; std::string wire; };
-    std::weak_ptr<net::TcpConnection> connection;
+    std::shared_ptr<WebSocketTransport> transport;
     std::weak_ptr<WebSocketSession> self;
     net::EventLoop* loop;
     WebSocketCallbacks callbacks;
@@ -25,8 +47,8 @@ struct WebSocketSession::Impl {
     net::TimerId deadline, retry;
     bool driving{}, shutdownStarted{}, protocolFailure{}, transportClean{};
 
-    Impl(const net::TcpConnectionPtr& c,WebSocketCallbacks cb,WebSocketOptions opts)
-        :connection(c),loop(c->getLoop()),callbacks(std::move(cb)),options(opts),codec(opts.codec) {
+    Impl(std::shared_ptr<WebSocketTransport> t,WebSocketCallbacks cb,WebSocketOptions opts)
+        :transport(std::move(t)),loop(transport->ownerLoop()),callbacks(std::move(cb)),options(opts),codec(opts.codec) {
         if (opts.maxHeaderBytes<128 || opts.maxHeaderBytes>opts.codec.maxBufferedBytes || !opts.maxHeaderFields ||
             !opts.maxControlFrames || opts.maxControlBytes<256 || opts.handshakeTimeout<=0ms || opts.closeTimeout<=0ms || opts.retryDelay<=0ms)
             throw std::invalid_argument("invalid WebSocket session bounds");
@@ -40,8 +62,8 @@ struct WebSocketSession::Impl {
         if (ended()) return;
         stats.phase=WebSocketPhase::Closed;stats.terminal=error;
         (void)loop->tryCancel(deadline);(void)loop->tryCancel(retry);deadline={};retry={};
-        discardControls();input.clear();codec.reset();
-        if (force) if (auto c=connection.lock()) c->forceClose();
+        discardControls();input.clear();codec.reset();stats.continuationQueued=false;
+        if (force) transport->abort();
         try {if (callbacks.closed) callbacks.closed(error);} catch (...) {++stats.callbackExceptions;}
     }
     void armDeadline(std::chrono::milliseconds timeout,WebSocketError error) {
@@ -79,9 +101,8 @@ struct WebSocketSession::Impl {
     void shutdownTcp() {
         if (shutdownStarted || ended() || stats.transportDown) return;
         shutdownStarted=true;
-        if (auto c=connection.lock()) {
-            if (c->tryShutdown()==net::PostResult::Accepted) return;
-        }
+        if (transport->shutdown()) return;
+        if (ended()) return;
         finish(WebSocketError::SchedulingRejected,true);
     }
     void beginClose(std::string payload,WebSocketError error=WebSocketError::None,bool failure=false) {
@@ -108,10 +129,13 @@ struct WebSocketSession::Impl {
     }
     void flush() {
         while (!ended() && !stats.transportDown && !controls.empty()) {
-            const auto c=connection.lock();
-            if (!c || !c->connected()) {stats.transportDown=true;break;}
-            if (c->trySend(controls.front().wire)!=net::TcpSendResult::Accepted) {++stats.controlRetries;break;}
             const auto kind=controls.front().kind;const auto bytes=controls.front().wire.size();
+            // Admission may seal before the transport has retired received input.
+            // Only its terminal hook establishes EOF for this parser.
+            if (transport->state()!=WebSocketTransportState::Ready) break;
+            const bool accepted=transport->trySend(controls.front().wire);
+            if (ended() || stats.transportDown) break;
+            if (!accepted) {++stats.controlRetries;break;}
             controls.pop_front();stats.pendingControlBytes-=bytes;stats.admittedControlBytes+=bytes;
             if (kind==ControlKind::Upgrade) {
                 stats.phase=WebSocketPhase::Open;(void)loop->tryCancel(deadline);deadline={};
@@ -150,12 +174,18 @@ std::shared_ptr<WebSocketSession> WebSocketSession::create(const net::TcpConnect
     WebSocketCallbacks callbacks,WebSocketOptions options) {
     if (!connection) throw std::invalid_argument("WebSocket requires TCP");
     connection->getLoop()->assertInLoopThread();
-    auto session=std::shared_ptr<WebSocketSession>(new WebSocketSession(std::make_unique<Impl>(connection,std::move(callbacks),options)));
+    return createWithTransport(std::make_shared<TcpTransport>(connection),std::move(callbacks),options);
+}
+std::shared_ptr<WebSocketSession> WebSocketSession::createWithTransport(std::shared_ptr<WebSocketTransport> transport,
+    WebSocketCallbacks callbacks,WebSocketOptions options) {
+    if(!transport || !transport->ownerLoop()) throw std::invalid_argument("WebSocket requires owner transport");
+    transport->ownerLoop()->assertInLoopThread();
+    auto session=std::shared_ptr<WebSocketSession>(new WebSocketSession(std::make_unique<Impl>(std::move(transport),std::move(callbacks),options)));
     session->impl_->self=session;return session;
 }
 WebSocketSession::~WebSocketSession() {
     impl_->loop->assertInLoopThread();
-    if (!impl_->ended()) {impl_->finish(WebSocketError::Aborted,false);if (auto c=impl_->connection.lock()) c->shutdown();}
+    if (!impl_->ended()) {impl_->finish(WebSocketError::Aborted,false);impl_->transport->abandon();}
 }
 net::EventLoopExecutor WebSocketSession::ownerExecutor() const noexcept {return impl_->loop->executor();}
 WebSocketSnapshot WebSocketSession::snapshot() const {
@@ -168,6 +198,7 @@ WebSocketOperation WebSocketSession::start() {
     const auto lease=shared_from_this();if (s.ended()) return WebSocketOperation::Closed;
     if (s.stats.phase!=WebSocketPhase::Created) return WebSocketOperation::Accepted;
     if (s.loop->phase()!=net::EventLoopPhase::Running) return WebSocketOperation::OwnerUnavailable;
+    if (s.transport->state()!=WebSocketTransportState::Ready) return s.transport->state()==WebSocketTransportState::NotReady?WebSocketOperation::NotReady:WebSocketOperation::Closed;
     s.stats.phase=WebSocketPhase::Handshaking;s.armDeadline(s.options.handshakeTimeout,WebSocketError::HandshakeTimeout);
     return s.ended()?WebSocketOperation::OwnerUnavailable:WebSocketOperation::Accepted;
 }
@@ -179,8 +210,9 @@ WebSocketOperation WebSocketSession::send(WebSocketOpcode type,std::string_view 
     if (type!=WebSocketOpcode::Text && type!=WebSocketOpcode::Binary && type!=WebSocketOpcode::Ping) return WebSocketOperation::InvalidArgument;
     const auto wire=WebSocketCodec::encodeServer(type,payload,s.options.codec.maxFrameBytes);
     if (!wire) return WebSocketOperation::InvalidArgument;
-    if (s.controls.empty()) if (auto c=s.connection.lock())
-        if (c->trySend(*wire)==net::TcpSendResult::Accepted) {++s.stats.acceptedSends;return WebSocketOperation::Accepted;}
+    if (s.transport->state()!=WebSocketTransportState::Ready) return WebSocketOperation::Closed;
+    if (s.controls.empty() && s.transport->trySend(*wire)) {++s.stats.acceptedSends;return WebSocketOperation::Accepted;}
+    if (s.ended() || s.stats.transportDown) return WebSocketOperation::Closed;
     ++s.stats.rejectedSends;return WebSocketOperation::Overloaded;
 }
 WebSocketOperation WebSocketSession::close(std::uint16_t code,std::string_view reason) {
@@ -196,6 +228,12 @@ WebSocketOperation WebSocketSession::close(std::uint16_t code,std::string_view r
 WebSocketOperation WebSocketSession::abort() {
     if (!impl_->loop->isInLoopThread()) return WebSocketOperation::WrongThread;
     const auto lease=shared_from_this();impl_->finish(WebSocketError::Aborted,true);return WebSocketOperation::Accepted;
+}
+WebSocketOperation WebSocketSession::abandon() {
+    if (!impl_->loop->isInLoopThread()) return WebSocketOperation::WrongThread;
+    const auto lease=shared_from_this();
+    if(impl_->ended()) return WebSocketOperation::Closed;
+    impl_->finish(WebSocketError::Aborted,false);impl_->transport->abandon();return WebSocketOperation::Accepted;
 }
 WebSocketOperation WebSocketSession::onMessage(net::Buffer& input) {
     auto& s=*impl_;if (!s.loop->isInLoopThread()) return WebSocketOperation::WrongThread;
@@ -213,11 +251,7 @@ WebSocketOperation WebSocketSession::onMessage(net::Buffer& input) {
 void WebSocketSession::onWritable() {impl_->loop->assertInLoopThread();const auto lease=shared_from_this();drive();}
 void WebSocketSession::onDisconnect() {
     impl_->loop->assertInLoopThread();const auto lease=shared_from_this();
-    if (const auto c=impl_->connection.lock()) {
-        const auto info=c->closeInfo();
-        impl_->transportClean=info && info->nativeError==0 &&
-            (info->reason==net::TcpConnectionCloseReason::PeerEof || info->reason==net::TcpConnectionCloseReason::GracefulShutdown);
-    }
+    impl_->transportClean=impl_->transport->cleanClose();
     impl_->stats.transportDown=true;(void)impl_->loop->tryCancel(impl_->retry);impl_->retry={};drive();
 }
 void WebSocketSession::drive() {

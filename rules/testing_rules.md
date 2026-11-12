@@ -1,5 +1,17 @@
 # testing_rules.md
 
+## WS-C2 optional WSS composition
+
+tests/contract/websocket_tls/test_websocket_tls_session.cpp and
+tests/integration/websocket_tls/test_websocket_tls_tcp.cpp enforce TLS-before-
+Upgrade, trusted-client CA/name/expiry refusal, TLS/Upgrade/Close/TLS-shutdown
+deadlines, WS/TLS/TCP backpressure and recovery, layered Close/close_notify,
+abrupt/truncated EOF, reentry/release, exactly one terminal and zero residue.
+Independent pinned WSS clients run on Windows/Linux and all three sanitizer
+profiles. Installed dual-ON, WS-only, TLS-only and OFF packages must retain
+OpenSSL-free Core/WS discovery and reject unavailable WSS for the right reason.
+Existing ws contracts and WS/RPC/HP1 fuzz remain required regression evidence.
+
 ## WS-C1 bounded server protocol
 
 Enforce strict HTTP Upgrade and canonical key/length/masking, fragment/control

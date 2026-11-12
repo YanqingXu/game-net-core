@@ -1,5 +1,15 @@
 # Roadmap
 
+## Optional WSS server composition — WS-C2 (2026-11-12)
+
+Separate user authorization enables GameNet::websocket_tls when both optional
+flags are ON. Existing ws/OpenSSL-free discovery remains available. TLS-ready
+starts Upgrade; admitted 101 enables application work. Finite layered budgets,
+close ordering and EOF leases enforce one terminal after zero-residue settlement.
+Windows/Linux, sanitizers, independent strict WSS peers and ON/single-OFF package
+consumers are required; existing protocol/state fuzz remain regression gates.
+See `docs/development/websocket_tls.md`. No release or HP0 promotion is implied.
+
 ## Bounded WebSocket server — WS-C1 (2026-11-12)
 
 WS-C1 authorizes native provisional GameNet::websocket, default OFF and separately
@@ -8,7 +18,8 @@ parsing, fragmentation/control interleaving, UTF-8, finite send/control admissio
 deadlines and exactly-one close settlement compose existing TCP. A runnable echo
 server, independent websockets interoperability and a bounded protocol fuzzer
 validate Windows/Linux and sanitizers. See `docs/development/websocket.md`.
-Historical M9 findings remain evidence history; WSS and general HTTP stay deferred.
+Historical M9 findings remain evidence history; WSS has its separate WS-C2
+authorization above and general HTTP stays deferred.
 
 ## RPC protocol/state validation — RPC-C3 (2026-11-12)
 

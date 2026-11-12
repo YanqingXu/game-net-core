@@ -20,7 +20,24 @@ only for COMPONENTS websocket. It depends on Core, not HTTP, RPC or OpenSSL.
 OFF installs no WebSocket headers/export; Core-only consumers stay independent.
 WebSocketCodec and WebSocketSession compose existing TcpServer; a runnable echo
 server is the minimum server. General HTTP, client API, extensions/compression,
-subprotocol negotiation and WSS stay outside WS-C1. No HP0/release gate changes.
+subprotocol negotiation stay outside WS-C1. WS-C2 separately authorizes optional
+WSS composition; no HP0/release gate changes.
+
+## WS-C2 transport seam
+
+WebSocketSession owns a narrow WebSocketTransport, whose bundled TCP adapter
+weakly observes TCP and borrows its outliving owner. Existing create(TCP) and
+ws usage stay available. createWithTransport supports owned-copy admission,
+readiness, graceful shutdown, explicit abort and non-reentrant abandonment.
+All observations except ownerLoop are owner-only. The interface owns no socket,
+thread or fallback queue and imports no TLS/OpenSSL. Not-ready start does not
+arm an Upgrade deadline, take input or call user policy/ready. Transport send
+and graceful shutdown must not deliver receive inline; they may report terminal
+failure synchronously.
+After send returns, control flushing must revalidate state before accessing
+the queue because a terminal callback may already have cleared it.
+onDisconnect obtains the transport's structured clean-close result, rather
+than treating an encrypted TCP EOF as successful WS/TLS close.
 
 ## Wire and bounds
 

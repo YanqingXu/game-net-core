@@ -23,6 +23,8 @@ It does not activate the deferred ConnectionTransport design, add STARTTLS,
 coroutines, WebSocket, automatic raw-TCP upgrades, credential reload or mTLS.
 RPC-C2 separately authorizes explicit GameNet::rpc_tls composition; plain TLS
 and Core/RPC-only package discovery remain independent of that adapter.
+WS-C2 separately authorizes explicit GameNet::websocket_tls server composition;
+it preserves TLS's existing callback/EOF/close and optional dependency contracts.
 
 ## Architecture
 

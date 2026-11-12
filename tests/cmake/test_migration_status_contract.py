@@ -849,7 +849,7 @@ def main() -> None:
     ]
     assert {path.relative_to(repo_root).as_posix() for path in installed_m9_headers} == {
         "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h",
-        "include/gamenet/rpc_tls/RpcTlsSession.h", "include/gamenet/websocket/WebSocketCodec.h", "include/gamenet/websocket/WebSocketSession.h"
+        "include/gamenet/rpc_tls/RpcTlsSession.h", "include/gamenet/websocket/WebSocketCodec.h", "include/gamenet/websocket/WebSocketSession.h", "include/gamenet/websocket/WebSocketTransport.h", "include/gamenet/websocket_tls/WebSocketTlsSession.h"
     }, "TLS-C1/RPC-C2/WS-C1 allow only the explicit optional surfaces"
     for target in (
         "GameNet::dns",

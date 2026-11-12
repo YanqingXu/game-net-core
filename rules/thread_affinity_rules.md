@@ -6,6 +6,12 @@ Mutable reactor state belongs to a specific EventLoop thread.
 
 ### WS-C1
 
+WS-C2: WebSocketTransport and WebSocketTlsSession share the connection owner.
+TLS-ready starts Upgrade; only admitted 101 starts application callbacks. TLS
+terminal, after bounded cipher EOF drain, triggers WS EOF retirement. No raw TCP
+down shortcut or recursive plaintext dispatch. Cross-thread use remains bounded
+ownerExecutor posting. Callbacks may release caller/context references.
+
 WebSocketSession codec/control/timer state, callbacks, snapshots and destruction
 belong to its connection owner. Foreign mutations reject before taking a self
 lease; use bounded ownerExecutor posts with owned bytes. Handshake/ready/message/
