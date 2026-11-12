@@ -129,6 +129,7 @@ These intents apply to the current migrated core:
 - `intents/modules/rpc.intent.md`
 - `intents/modules/rpc_tls.intent.md`
 - `intents/modules/tls.intent.md`
+- `intents/modules/websocket.intent.md`
 - `intents/modules/transport_endpoint.intent.md`
 - `intents/modules/player_session.intent.md`
 - `intents/modules/logic_loop.intent.md`
@@ -156,7 +157,6 @@ These design assets do not authorize expanding current scope:
 - `intents/modules/path_mtu_signal_authentication.intent.md`
 - `intents/modules/platform_path_mtu_signal.intent.md`
 - `intents/modules/udp.intent.md`
-- `intents/modules/websocket.intent.md`
 - `intents/modules/when_all.intent.md`
 - `intents/modules/when_any.intent.md`
 

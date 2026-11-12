@@ -1,0 +1,18 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+cmake_minimum_required(VERSION 3.20)
+project(WebSocketConsumer LANGUAGES CXX)
+enable_testing()
+if(REQUEST_WEBSOCKET)
+    find_package(GameNetCore REQUIRED COMPONENTS websocket)
+    add_executable(consumer main.cpp)
+    target_link_libraries(consumer PRIVATE GameNet::websocket)
+else()
+    find_package(GameNetCore REQUIRED)
+    if(TARGET GameNet::websocket OR TARGET GameNet::tls OR TARGET GameNet::rpc_tls)
+        message(FATAL_ERROR "Core-only discovery leaked an optional component")
+    endif()
+    add_executable(consumer core.cpp)
+    target_link_libraries(consumer PRIVATE GameNet::core)
+endif()
+add_test(NAME installed-consumer COMMAND consumer)

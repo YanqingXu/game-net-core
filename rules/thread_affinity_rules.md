@@ -4,6 +4,14 @@
 game-net-core follows a reactor-style thread-affinity model.
 Mutable reactor state belongs to a specific EventLoop thread.
 
+### WS-C1
+
+WebSocketSession codec/control/timer state, callbacks, snapshots and destruction
+belong to its connection owner. Foreign mutations reject before taking a self
+lease; use bounded ownerExecutor posts with owned bytes. Handshake/ready/message/
+pong/closed may re-enter send/close/abort/release. Recursive input leaves nested
+Buffer untouched. One bounded continuation retires owned received frames at EOF.
+
 ### TLS-C1
 
 SSL/BIO and TlsStream state belong to the connection EventLoop. Context is

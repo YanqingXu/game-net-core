@@ -1,5 +1,14 @@
 # game-net-core
 
+## Optional bounded WebSocket — WS-C1 (2026-11-12)
+
+`GAMENET_ENABLE_WEBSOCKET=ON` builds provisional `GameNet::websocket` and a
+minimal loopback echo server. Strict HTTP Upgrade, masking, fragmented messages,
+UTF-8, Ping/Pong, bounded output recovery and close settlement compose existing
+TCP. Core-only discovery stays independent; no OpenSSL is required. See
+[WebSocket usage and validation](docs/development/websocket.md). Published
+v0.3.1 packages predate this development component.
+
 ## Optional RPC over TLS — RPC-C2 (2026-11-11)
 
 `GameNet::rpc_tls` explicitly composes authenticated TLS with callback RPC.
@@ -27,7 +36,8 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines, WebSocket and UDP/KCP remain deferred; TLS has its own TLS-C1 authorization. Development work does not create a release.
+block this separately authorized feature. Coroutines and UDP/KCP remain deferred;
+TLS and WebSocket have their own TLS-C1/WS-C1 authorizations. Development work does not create a release.
 
 game-net-core is a modern C++23 networking foundation for game servers.
 
@@ -265,7 +275,7 @@ Planned / Deferred Modules:
 
 - game packet headers and serialization codecs
 - UDP/KCP experimental transport
-- coroutine, DNS, HTTP, and WebSocket adapters
+- coroutine, DNS, general HTTP, and WSS adapters
 
 ## Non-goals
 

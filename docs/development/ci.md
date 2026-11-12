@@ -1,5 +1,17 @@
 # Continuous Integration
 
+## Optional bounded WebSocket
+
+`.github/workflows/websocket.yml` enables the independent default-OFF component.
+Windows/Linux Release execute 136 tests and installed ON/OFF isolation; Linux
+ASan/UBSan, Linux TSan and Windows ASan execute exactly three WebSocket tests.
+Each non-fuzz lane also runs pinned websockets 15.0.1 interoperability through
+eight reconnects, fragmented text/binary, Ping/Pong, Close and policy rejection.
+A sixth Linux lane executes exactly 20,000 seeded protocol fuzz units. The driver
+rejects missing/disabled/skipped cases, seed/count drift and diagnostics and
+retains clean source/run identity and file hashes. Default CI stays 133; TLS-only
+stays 138. See [WebSocket contracts and usage](websocket.md).
+
 The CI gate keeps the migration focused on the frozen Reactor/TCP foundation
 plus the explicitly active Phase 4 foundations.
 

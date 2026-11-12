@@ -19,6 +19,15 @@ include("${CMAKE_CURRENT_LIST_DIR}/GameNetCoreTargets.cmake")
 
 set(GameNetCore_rpc_FOUND TRUE)
 
+set(GameNetCore_websocket_FOUND FALSE)
+if("websocket" IN_LIST GameNetCore_FIND_COMPONENTS AND @GAMENET_ENABLE_WEBSOCKET@)
+    include("${CMAKE_CURRENT_LIST_DIR}/GameNetWebSocketTargets.cmake")
+    set(GameNetCore_websocket_FOUND TRUE)
+endif()
+if(GameNetCore_FIND_REQUIRED_websocket AND NOT GameNetCore_websocket_FOUND)
+    set(GameNetCore_NOT_FOUND_MESSAGE "Required component websocket is unavailable; install a package built with GAMENET_ENABLE_WEBSOCKET=ON.")
+endif()
+
 # TLS is a separate export: Core-only consumers never need OpenSSL, including
 # when this package was built with TLS enabled.
 set(GameNetCore_tls_FOUND FALSE)

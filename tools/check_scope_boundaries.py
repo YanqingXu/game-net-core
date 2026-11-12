@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ACTIVE_COMPONENTS = {"core", "protocol", "rpc", "rpc_tls", "tls", "transport", "game_session", "game_logic", "broadcast"}
+ACTIVE_COMPONENTS = {"core", "protocol", "websocket", "rpc", "rpc_tls", "tls", "transport", "game_session", "game_logic", "broadcast"}
 DEFERRED_COMPONENTS = {"protocol", "transport", "game", "experimental"}
 DEFERRED_SRC_DIRS = {"protocol", "transport", "experimental", "broadcast", "game_logic", "game_session"}
 SCAN_ENTRIES = ("include", "src", "tests", "examples", "benchmarks", "cmake", ".github", "CMakeLists.txt")
@@ -119,7 +119,7 @@ TEXT_PATTERNS = (
 
 COMPONENT_REFERENCE = re.compile(
     r"\b(?:gamenet::|gamenet_|GameNet::|gamenet/)"
-    r"(protocol|rpc|rpc_tls|tls|transport|game_session|game_logic|broadcast|game|experimental)\b"
+    r"(protocol|websocket|rpc|rpc_tls|tls|transport|game_session|game_logic|broadcast|game|experimental)\b"
 )
 PRESTUDY_NAMESPACE = re.compile(r"::(hp[1-6])\b")
 PRESTUDY_TARGET = re.compile(r"\bgamenet_hp\d+_\w+\b")
@@ -129,6 +129,7 @@ PRESTUDY_INCLUDE = re.compile(r"(?:^|/)(hp\d+)/")
 LAYER_ALLOWED_COMPONENTS = {
     "core": set(),
     "protocol": {"protocol"},
+    "websocket": {"websocket"},
     "rpc": {"rpc", "protocol"},
     "rpc_tls": {"rpc_tls", "rpc", "tls", "protocol"},
     "tls": {"tls"},
@@ -272,6 +273,9 @@ def check_text(root: Path, path: Path) -> list[Violation]:
                 )
         for kind, pattern in TEXT_PATTERNS:
             for match in pattern.finditer(line):
+                if kind == "deferred high-level module" and match.group(0).startswith("WebSocket"):
+                    if rel.startswith(("src/websocket/", "include/gamenet/websocket/", "tests/unit/websocket/", "tests/contract/websocket/", "tests/integration/websocket/", "tests/fuzz/websocket/", "tests/cmake/websocket_install_consumer/", "examples/websocket_echo/")) or rel in {"tests/support/WebSocketWire.h", "tests/support/WebSocketCodecOracle.h"}:
+                        continue
                 if kind == "deferred high-level module" and match.group(0).startswith("Tls"):
                     if rel.startswith(("src/rpc_tls/", "include/gamenet/rpc_tls/", "tests/contract/rpc_tls/", "tests/integration/rpc_tls/", "src/tls/", "include/gamenet/tls/", "tests/unit/tls/",
                                        "tests/contract/tls/", "tests/integration/tls/", "tests/cmake/tls_install_consumer/")) or rel in {

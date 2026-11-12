@@ -1,6 +1,11 @@
 # Copyright 2026 Yanqing Xu
 # SPDX-License-Identifier: Apache-2.0
 
+if(GAMENET_ENABLE_WEBSOCKET)
+    add_executable(gamenet_websocket_echo_server websocket_echo/main.cpp)
+    target_link_libraries(gamenet_websocket_echo_server PRIVATE GameNet::websocket)
+endif()
+
 add_executable(gamenet_echo_server
     echo_server/main.cpp
 )

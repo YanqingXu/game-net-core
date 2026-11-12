@@ -653,10 +653,10 @@ def main() -> None:
     require(m9_readiness_text, "ConnectionTransport", m9_readiness)
     require(m9_readiness_text, "advances to M10", m9_readiness)
     for name, path in m9_intents.items():
-        if name == "tls":
+        if name in {"tls", "websocket"}:
             require(m9_intent_texts[name], "status: active", path)
-            require(m9_intent_texts[name], "target: GameNet::tls", path)
-            require(plan_text, "TLS-C1", plan)
+            require(m9_intent_texts[name], "target: GameNet::" + name, path)
+            require(plan_text, "TLS-C1" if name == "tls" else "WS-C1", plan)
             assert f"- `intents/modules/{name}.intent.md`" not in deferred_catalog
         else:
             require(m9_intent_texts[name], "status: deferred", path)
@@ -849,11 +849,9 @@ def main() -> None:
     ]
     assert {path.relative_to(repo_root).as_posix() for path in installed_m9_headers} == {
         "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h",
-        "include/gamenet/rpc_tls/RpcTlsSession.h"
-    }, "TLS-C1/RPC-C2 allow only the explicit optional TLS surfaces"
+        "include/gamenet/rpc_tls/RpcTlsSession.h", "include/gamenet/websocket/WebSocketCodec.h", "include/gamenet/websocket/WebSocketSession.h"
+    }, "TLS-C1/RPC-C2/WS-C1 allow only the explicit optional surfaces"
     for target in (
-        "GameNet::websocket",
-        "gamenet_websocket",
         "GameNet::dns",
         "gamenet_dns",
         "GameNet::http",

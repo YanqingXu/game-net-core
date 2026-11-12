@@ -1,5 +1,20 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## WS-C1：有界 WebSocket 协议层与最小服务端（2026-11-12 用户授权）
+
+重写 native active WebSocket intent，先确定 owner、所有权、回调重入、输入/输出预算和
+终结合同，再实现独立 provisional GameNet::websocket，默认关闭且不依赖 OpenSSL。
+使用有限 HTTP/1.1 Upgrade 解析和现有 TcpServer 组合 session/echo server；通用 HTTP
+及 WSS 后续独立推进，stable Core、RPC wire、HP0 与已发布资产不变。
+
+覆盖严格握手/头上限/超时、掩码与规范长度、分片重组及控制帧穿插、严格 UTF-8、
+Ping/Pong、关闭码与 close 握手。应用发送沿用 TCP 有界接纳；必需控制输出用有限队列
+及单一重试，饱和显式失败。关闭封口、已收帧有界续跑、断连、重入/释放与调度拒绝都
+必须清算到零残留，并恰好一次终结。拒绝 HTTP 请求不得升级到应用回调。
+
+Windows IOCP/Linux epoll、ASan/UBSan/TSan、独立 websockets 互操作、有界协议 fuzz、
+默认 OFF/安装消费者隔离全部验证后提交 PR。本阶段不自动合并或发布。
+
 ## RPC-C3：协议 fuzz 与会话状态验证（2026-11-12 用户授权）
 
 保持 RPC wire、公开 API、TCP 用法和可选 TLS/OFF 依赖边界。先扩展 intent 与验证合同，
