@@ -1,5 +1,25 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## RPC-C3：协议 fuzz 与会话状态验证（2026-11-12 用户授权）
+
+保持 RPC wire、公开 API、TCP 用法和可选 TLS/OFF 依赖边界。先扩展 intent 与验证合同，
+再增加非安装的 RpcCodec 和 RpcChannel libFuzzer 目标。Codec 使用独立字段合法性
+判据与 canonical round-trip；状态序列使用独立调用账本，覆盖接纳/拒绝、重复/迟到响应、
+取消、畸形/分片输入、deferred reply、重入、关闭/断连与有界 continuation 清算。
+逐步核对已接纳调用恰好一次本地终结、拒绝零回调、计数/字节上限和最终零 pending/inbound。
+
+所有状态归真实 EventLoop owner，测试 transport 只控制 admission，不模拟网络收益。
+复用现有注册合同运行固定种子/动作语料；fuzz 使用同一有界执行器并保留原始输入、
+执行次数、日志和精确提交。长 deadline 保持 fuzz 可重复；真实超时仍由已有合同执行。
+
+TCP/TLS 集成增加连续重连压力回归：每代独立 channel/session，发送突发必须实际触发
+拒绝，恢复读取后完成已接纳请求并成功探测；取消和带 pending 断连交替发生，旧 reply
+不可到达新连接，每代零计数/字节残留且弱引用最终释放。TLS 必须真实握手后接纳。
+短压力回归只作为开发正确性证据，不替代 HP0、100k 容量或 1h/3h endurance 门。
+
+Windows IOCP/Linux epoll、ASan/UBSan/TSan、真实 OpenSSL ON/OFF 消费者以及两个有界
+RPC fuzz 目标全部验证后提交 PR；不自动合并、发布或修改 v0.3.1 tag/资产。
+
 ## RPC-C2：可选 TLS 传输适配与集成验证（2026-11-11 用户授权）
 
 新增窄的 owner-local `RpcTransport` 边界；保留 `RpcChannel::create(TcpConnection)`

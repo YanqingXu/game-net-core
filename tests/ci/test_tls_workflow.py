@@ -5,7 +5,7 @@ import copy
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
-from run_tls_contracts import CONTRACTS, verify_inventory, verify_results
+from run_tls_contracts import CONTRACTS, RPC_C3, verify_inventory, verify_results
 
 def rejects(callback, value) -> None:
     try: callback(value)
@@ -46,6 +46,11 @@ def main() -> None:
     suite = ET.Element('testsuite')
     for name in sorted(CONTRACTS): ET.SubElement(suite, 'testcase', {'name': name, 'status': 'run'})
     verify_results(suite, CONTRACTS)
+    rpc_suite = ET.Element('testsuite')
+    for name in sorted(RPC_C3): ET.SubElement(rpc_suite, 'testcase', {'name': name, 'status': 'run'})
+    verify_results(rpc_suite, RPC_C3)
+    invalid = copy.deepcopy(rpc_suite); invalid.remove(invalid[0])
+    rejects(lambda x: verify_results(x, RPC_C3), invalid)
     for kind in ['failure', 'error', 'skipped']:
         invalid = copy.deepcopy(suite); ET.SubElement(invalid[0], kind)
         rejects(lambda x: verify_results(x, CONTRACTS), invalid)

@@ -93,6 +93,27 @@ and settles all obligations. Explicit close seals admission before callbacks.
 
 ## Verification
 
+RPC-C3 (2026-11-12) adds validation without changing wire/admission contracts.
+`tests/support/RpcStateSequence.h` owns a bounded independent per-call ledger on
+one real EventLoop. After each action, admitted minus completed must equal
+pending count and charged bytes; rejected calls never invoke callbacks. It
+mixes transport refusal/readiness, synchronous disconnect, response/error and
+duplicates, fragmented/malformed input, deferred replies, callback re-entry,
+close and channel replacement. Final close plus accepted continuation retirement
+requires zero outgoing/inbound count/bytes and expired weak channel/reply handles.
+Long deadlines isolate byte-driven fuzz from wall-clock scheduling; existing
+real deadline contracts remain mandatory. No test-only runtime clock/API is added.
+
+- tests/fuzz/rpc/fuzz_rpc_codec.cpp: independent wire validity oracle, arbitrary
+  malformed bytes/limits and canonical decode/encode round trips.
+- tests/fuzz/rpc/fuzz_rpc_channel.cpp: bounded byte-driven state sequence using
+  the same harness as the ordinary contract; no real peer or sleeping per input.
+- tests/support/RpcReconnectStress.h: real TCP burst rejection, read recovery,
+  successful probe, alternating cancellation/pending disconnect and repeated
+  generations, independent callback accounting and zero-residue teardown.
+- tests/ci/run_rpc_fuzz.py: exact-run bounded fuzz, replayable corpus, sanitizer
+  diagnostics and clean checkout/run identity retained as development evidence.
+
 - tests/unit/rpc/test_rpc_codec.cpp: wire, binary/partial frames, malformed/limits.
 - tests/contract/rpc/test_rpc_channel.cpp: connected-socket terminal races, bounded pending,
   re-entry, exceptions, deferred replies and shutdown on epoll and IOCP.

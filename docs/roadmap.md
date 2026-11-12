@@ -1,5 +1,16 @@
 # Roadmap
 
+## RPC protocol/state validation — RPC-C3 (2026-11-12)
+
+RPC-C3 adds independent codec-oracle and bounded channel-sequence fuzz targets,
+fixed-seed state contracts, and eight-generation real TCP/RPC-TLS pressure
+recovery/reconnect regressions. Per-call ledgers enforce rejected-zero-callback,
+exactly-once admitted completion and exact zero pending/inbound count/bytes.
+Old-generation weak replies cannot reach a replacement session. Dedicated bounded
+ASan/UBSan fuzz retains source/run identity, seeds, counts, hashes and repro inputs;
+the optional TLS sanitizer lanes also execute all three ordinary RPC tests.
+Wire, installed API, default-OFF isolation, HP0 gates and releases are unchanged.
+
 ## RPC over TLS — RPC-C2 (2026-11-11)
 
 The separately authorized provisional `GameNet::rpc_tls` composes existing RPC

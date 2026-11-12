@@ -1,0 +1,51 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+name: RPC protocol and state fuzz
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/core/**', 'include/gamenet/core/**', 'src/rpc/**', 'include/gamenet/rpc/**', 'src/protocol/**', 'include/gamenet/protocol/**', 'tests/fuzz/**', 'tests/support/Rpc*', 'tests/ci/*rpc*fuzz*', 'CMakeLists.txt', 'cmake/**', '.github/workflows/rpc-fuzz.yml']
+  pull_request:
+    branches: [main]
+    paths: ['src/core/**', 'include/gamenet/core/**', 'src/rpc/**', 'include/gamenet/rpc/**', 'src/protocol/**', 'include/gamenet/protocol/**', 'tests/fuzz/**', 'tests/support/Rpc*', 'tests/ci/*rpc*fuzz*', 'CMakeLists.txt', 'cmake/**', '.github/workflows/rpc-fuzz.yml']
+permissions:
+  contents: read
+concurrency:
+  group: rpc-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  rpc-fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure and build instrumented RPC fuzz targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/rpc-fuzz
+          python3 tests/ci/test_rpc_fuzz_workflow.py
+          cmake -S . -B build-rpc-fuzz -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON \
+            -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF \
+            2>&1 | tee out/rpc-fuzz/configure.log
+          cmake --build build-rpc-fuzz --parallel 2 \
+            --target gamenet_fuzz_rpc_codec gamenet_fuzz_rpc_channel \
+            2>&1 | tee out/rpc-fuzz/build.log
+      - name: Run bounded codec and channel fuzz
+        run: |
+          python3 tests/ci/run_rpc_fuzz.py --build-dir build-rpc-fuzz --output out/rpc-fuzz --runs 20000 --seed 424242
+      - name: Retain RPC fuzz evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpc-fuzz-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/rpc-fuzz/
+          if-no-files-found: error
+          retention-days: 14

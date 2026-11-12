@@ -9,6 +9,7 @@
 #include "support/SocketPair.h"
 #include "support/TcpConnectionHarness.h"
 #include "support/TestAssert.h"
+#include "support/RpcStateSequence.h"
 #include <atomic>
 #include <stdexcept>
 #include <thread>
@@ -343,6 +344,7 @@ void foreignReplyRacesOwnerRelease() {
 }
 }  // namespace
 int main() {
+    gamenet::test::verifyRpcStateSeeds();
     transportAdmission();
     limitsAndReentry(); byteLimitAndSendRejection(); sendRejection();
     deadlinesAndLateResponses(); disconnectAndDestructor(); shutdownAndWeakReply();

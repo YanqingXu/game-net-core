@@ -7,12 +7,14 @@
 #include "gamenet/core/net/TcpConnection.h"
 #include "gamenet/core/net/TcpServer.h"
 #include "support/TestAssert.h"
+#include "support/RpcReconnectStress.h"
 #include <any>
 #include <thread>
 
 using namespace std::chrono_literals;
 using namespace gamenet::rpc;
-int main() {
+namespace {
+void existingRpcTcp() {
     gamenet::net::EventLoop loop;
     gamenet::net::TcpServer server(&loop, gamenet::net::InetAddress(0, true), "rpc-server");
     std::shared_ptr<RpcChannel> clientRpc;
@@ -106,4 +108,9 @@ int main() {
     loop.loop();
     loop.cancel(progress);
     GAMENET_TEST_ASSERT(completed == 6 && lateReplies == 2 && disconnectStarted);
+}
+} // namespace
+int main() {
+    existingRpcTcp();
+    gamenet::test::runRpcReconnectStress(gamenet::test::plainRpcStressSession, "RPC-C3 TCP");
 }

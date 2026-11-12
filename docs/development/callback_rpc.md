@@ -1,5 +1,30 @@
 # Callback RPC (RPC-C1)
 
+RPC-C3 extends the existing tests with an independent codec acceptance oracle,
+bounded owner-local operation sequences and an eight-generation TCP stress case.
+The sequence ledger checks every call after each operation: admission versus
+rejection, one local completion, exact pending bytes/count and final zero inbound
+and outgoing residue. Fixed seeds run in the ordinary RPC contract; opt-in
+libFuzzer targets explore additional codec bytes and state sequences.
+
+```sh
+CC=clang CXX=clang++ cmake -S . -B build-rpc-fuzz -G Ninja \
+  -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON \
+  -DGAMENET_ENABLE_ASAN_UBSAN=ON
+cmake --build build-rpc-fuzz --target gamenet_fuzz_rpc_codec gamenet_fuzz_rpc_channel
+python3 tests/ci/run_rpc_fuzz.py --build-dir build-rpc-fuzz \
+  --output out/rpc-fuzz --runs 20000 --seed 424242
+```
+
+Fuzz state execution uses a real owner EventLoop and synthetic bounded transport,
+with long deadlines and no sleeps. Existing contracts validate real timeout
+delivery separately. Integration pressure uses real sockets, forces send refusal,
+resumes held input, requires an echo probe, alternates cancellation and pending
+disconnect, and waits for weak lifetimes and budgets to converge before reconnect.
+The optional RPC/TLS integration runs the same stress with real authenticated TLS.
+These finite checks provide development correctness evidence, not endurance or
+fixed-lab capacity/performance evidence.
+
 RPC-C2 adds the focused RpcTransport seam and optional separately installed
 [RPC/TLS session](callback_rpc_tls.md). Existing TCP composition below is preserved.
 
