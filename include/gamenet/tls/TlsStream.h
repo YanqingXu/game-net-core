@@ -55,6 +55,8 @@ public:
     TlsStream& operator=(const TlsStream&) = delete;
     // Owner-only. Foreign mutations reject before changing state.
     TlsOperation start();
+    // Copies before Accepted. No application data callback is delivered inline;
+    // a terminal callback may still re-enter the admission call.
     TlsOperation trySend(std::string_view plaintext);
     TlsOperation pauseRead();
     TlsOperation resumeRead();

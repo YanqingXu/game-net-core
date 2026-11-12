@@ -7,7 +7,7 @@ plus the explicitly active Phase 4 foundations.
 
 `.github/workflows/tls.yml` independently enables `GAMENET_ENABLE_TLS=ON` on
 Linux Release, ASan/UBSan and TSan, plus Windows Release and ASan. Release runs
-all 136 tests; sanitizer lanes execute exactly the three real-OpenSSL TLS tests.
+all 138 tests; sanitizer lanes execute exactly the five real-OpenSSL TLS/RPC-TLS tests.
 The driver rejects missing, duplicate, disabled, skipped or failed cases and
 retains commit/run-bound logs, inventory and JUnit. Both Release lanes verify
 ON and OFF installed packages: requesting TLS discovers OpenSSL, while a

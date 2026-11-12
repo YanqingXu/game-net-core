@@ -1,5 +1,8 @@
 # Callback RPC (RPC-C1)
 
+RPC-C2 adds the focused RpcTransport seam and optional separately installed
+[RPC/TLS session](callback_rpc_tls.md). Existing TCP composition below is preserved.
+
 `GameNet::rpc` is a provisional installed C++23 component. Link it with
 `find_package(GameNetCore REQUIRED COMPONENTS rpc)` and
 `target_link_libraries(app PRIVATE GameNet::rpc)`. The RPC component depends on

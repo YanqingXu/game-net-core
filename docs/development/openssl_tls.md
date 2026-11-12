@@ -47,9 +47,9 @@ TLS 1.2 is the minimum, with compression/renegotiation/tickets disabled.
 
 TCP-up does not mean TLS-ready. Send application bytes only through
 TlsStream::trySend after ready; raw TcpConnection sends carry ciphertext here.
-This component does not transparently reroute the existing callback RpcChannel,
-add STARTTLS, or provide mTLS/credential reload. RPC-over-TLS needs a separately
-governed protocol/transport adapter.
+Use the separately requested [GameNet::rpc_tls adapter](callback_rpc_tls.md) for
+callback RPC over TLS. Plain GameNet::tls does not reroute an existing raw TCP
+channel. STARTTLS, mTLS and credential reload remain separate future work.
 
 ## Bounds, owner and callbacks
 
@@ -115,8 +115,8 @@ The protocol handling follows OpenSSL's [bounded BIO pair](https://docs.openssl.
 
 ## Verification
 
-Default CI remains 133 tests. TLS-enabled Release has 136; the optional workflow
-also executes exactly three real-OpenSSL tests under Linux ASan/UBSan, Linux
+Default CI remains 133 tests. TLS-enabled Release has 138; the optional workflow
+also executes exactly five real-OpenSSL TLS/RPC-TLS tests under Linux ASan/UBSan, Linux
 TSan and Windows ASan. No fallback or skipped TLS test counts as evidence.
 Fixtures generate an ephemeral CA and SAN certificates, including expired and
 untrusted cases. Tests cover binary echo, fragmented handshakes/WANT retries,

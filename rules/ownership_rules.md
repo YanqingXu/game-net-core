@@ -31,6 +31,16 @@ message and down callbacks and closes channels before owner-loop teardown.
 Owner-thread destruction settles pending callbacks as Shutdown; callbacks are
 contained and cannot prevent remaining obligations from being settled.
 
+### RPC-C2
+
+RpcChannel owns its narrow RpcTransport; bundled transports weakly observe TCP
+or TLS and borrow the outliving owner. RpcTlsSession owns TLS and its callback
+bridge; TLS callbacks own the bridge, bridge owns RPC, and its transport weakly
+observes TLS.
+No strong cycle exists. Accepted EOF/settlement continuations retain owned data
+and bridge lifetime after TCP context release. Session closed ends callback-state
+lifetime after pending/inbound/timer cleanup and buffered RPC dispatch retirement.
+
 ## 2. EventLoop
 - EventLoop owns its Poller
 - EventLoop owns wakeup-related resources it creates

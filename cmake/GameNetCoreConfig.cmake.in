@@ -22,10 +22,20 @@ set(GameNetCore_rpc_FOUND TRUE)
 # TLS is a separate export: Core-only consumers never need OpenSSL, including
 # when this package was built with TLS enabled.
 set(GameNetCore_tls_FOUND FALSE)
-if("tls" IN_LIST GameNetCore_FIND_COMPONENTS AND @GAMENET_ENABLE_TLS@)
+if(("tls" IN_LIST GameNetCore_FIND_COMPONENTS OR "rpc_tls" IN_LIST GameNetCore_FIND_COMPONENTS)
+   AND @GAMENET_ENABLE_TLS@)
     find_dependency(OpenSSL 3.0 COMPONENTS SSL)
     include("${CMAKE_CURRENT_LIST_DIR}/GameNetTlsTargets.cmake")
     set(GameNetCore_tls_FOUND TRUE)
+endif()
+set(GameNetCore_rpc_tls_FOUND FALSE)
+if("rpc_tls" IN_LIST GameNetCore_FIND_COMPONENTS AND @GAMENET_ENABLE_TLS@)
+    include("${CMAKE_CURRENT_LIST_DIR}/GameNetRpcTlsTargets.cmake")
+    set(GameNetCore_rpc_tls_FOUND TRUE)
+endif()
+if(GameNetCore_FIND_REQUIRED_rpc_tls AND NOT GameNetCore_rpc_tls_FOUND)
+    set(GameNetCore_NOT_FOUND_MESSAGE
+        "Required component rpc_tls is unavailable; install a package built with GAMENET_ENABLE_TLS=ON.")
 endif()
 if(GameNetCore_FIND_REQUIRED_tls AND NOT GameNetCore_tls_FOUND)
     set(GameNetCore_NOT_FOUND_MESSAGE

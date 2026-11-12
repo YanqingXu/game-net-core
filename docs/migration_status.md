@@ -1,5 +1,14 @@
 # Migration Status
 
+## RPC over TLS — RPC-C2 (2026-11-11)
+
+The separately authorized provisional `GameNet::rpc_tls` composes existing RPC
+and TLS on one owner, preserving TCP usage and OpenSSL-free Core/RPC discovery.
+Handshake-ready gates requests; bounded send/pending admission and terminal
+settlement cover certificate rejection, timeout, cancel, EOF and close. See
+`docs/development/callback_rpc_tls.md`. Default CI remains 133 tests; TLS-enabled
+has 138 with five optional real-OpenSSL tests.
+
 ## Optional OpenSSL TLS — TLS-C1 (2026-11-11)
 
 The separately authorized provisional `GameNet::tls` component is default OFF.
@@ -8,7 +17,7 @@ certificate/identity verification, bounded queues and close_notify settlement.
 See `docs/development/openssl_tls.md` and the active TLS intent for composition,
 callback lifetime and package isolation. Historical M9 decisions below remain
 history; TLS-C1 does not promote WebSocket/DNS/HTTP or the old ConnectionTransport.
-Default CI stays 133 tests; TLS-enabled has 136 (three optional TLS tests).
+Default CI stays 133 tests; TLS-enabled has 138 (three TLS and two RPC/TLS tests).
 
 ## Callback RPC feature milestone — 2026-11-11
 
@@ -665,7 +674,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 75 | 46 | 18 | 11 | 220 |
+| 76 | 47 | 18 | 11 | 224 |
 
 ## Historical Production-Hardening Evidence
 

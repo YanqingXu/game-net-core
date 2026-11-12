@@ -1,6 +1,7 @@
 // Copyright 2026 Yanqing Xu
 // SPDX-License-Identifier: Apache-2.0
 #include "gamenet/rpc/RpcChannel.h"
+#include "gamenet/rpc/RpcTransport.h"
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/TcpConnection.h"
@@ -15,6 +16,25 @@
 namespace gamenet::rpc {
 namespace {
 using Clock = std::chrono::steady_clock;
+// The compatibility factory still weakly observes TCP and uses Core admission.
+class TcpTransport final : public RpcTransport {
+public:
+    explicit TcpTransport(const net::TcpConnectionPtr& connection)
+        : connection_(connection), loop_(connection->getLoop()) {}
+    net::EventLoop* ownerLoop() const noexcept override { return loop_; }
+    RpcTransportState state() const noexcept override {
+        const auto connection = connection_.lock();
+        return connection && connection->connected() ? RpcTransportState::Ready : RpcTransportState::Closed;
+    }
+    bool trySend(std::string_view wire) override {
+        const auto connection = connection_.lock();
+        return connection && connection->trySend(wire) == net::TcpSendResult::Accepted;
+    }
+    void abort() override { if (auto connection = connection_.lock()) connection->forceClose(); }
+private:
+    std::weak_ptr<net::TcpConnection> connection_;
+    net::EventLoop* loop_;
+};
 constexpr auto overhead = RpcCodec::kHeaderBytes + protocol::PacketFramer::kLengthBytes;
 protocol::PacketFramerOptions framing(const RpcOptions& options) {
     if (options.maxPayloadBytes > (std::numeric_limits<std::uint32_t>::max)() - overhead ||
@@ -44,7 +64,7 @@ struct RpcChannel::Impl {
         bool admitted{false};
     };
     struct Inbound { net::TimerId timer; Clock::time_point deadline; std::size_t bytes; };
-    std::weak_ptr<net::TcpConnection> connection;
+    std::shared_ptr<RpcTransport> transport;
     net::EventLoop* loop;
     net::EventLoopExecutor executor;
     RpcOptions options;
@@ -58,8 +78,8 @@ struct RpcChannel::Impl {
     std::uint64_t lastIssued{}, lastReceived{};
     bool dispatching{false}, continuationQueued{false};
 
-    Impl(const net::TcpConnectionPtr& conn, Handler cb, RpcOptions opts)
-        : connection(conn), loop(conn->getLoop()), executor(loop->executor()),
+    Impl(std::shared_ptr<RpcTransport> pipe, Handler cb, RpcOptions opts)
+        : transport(std::move(pipe)), loop(transport->ownerLoop()), executor(loop->executor()),
           options(opts), handler(std::move(cb)), framer(framing(opts)) {}
     bool owner() const noexcept { return loop->isInLoopThread(); }
     bool open() const noexcept { return phase == Phase::Open; }
@@ -95,15 +115,16 @@ struct RpcChannel::Impl {
     }
     void fail(RpcStatus reason) {
         closeAll(reason);
-        if (auto conn = connection.lock()) conn->forceClose();
+        try { transport->abort(); } catch (...) { ++stats.transportExceptions; }
     }
     bool send(RpcMessage message) {
-        const auto conn = connection.lock();
-        if (!open() || !conn || !conn->connected()) return false;
+        if (!open() || transport->state() != RpcTransportState::Ready) return false;
         const auto body = RpcCodec::encode(message, options.maxPayloadBytes);
         if (!body) return false;
         const auto wire = framer.encode(*body);
-        return wire && conn->trySend(*wire) == net::TcpSendResult::Accepted;
+        if (!wire) return false;
+        try { return transport->trySend(*wire); }
+        catch (...) { ++stats.transportExceptions; return false; }
     }
     void error(std::uint64_t id, std::string_view text) {
         // Even a zero-payload configuration can send a bounded terminal error.
@@ -128,6 +149,10 @@ struct RpcChannel::Impl {
         }
         if (message.requestId <= lastReceived) { fail(RpcStatus::ProtocolError); return; }
         lastReceived = message.requestId;
+        // A TLS terminal can precede buffered RPC continuation retirement.
+        // Responses may still settle existing calls; sealed transports must
+        // not start new business handlers or attempt an error write.
+        if (transport->state() != RpcTransportState::Ready) { ++stats.inboundRejected; return; }
         const auto weight = message.payload.size() + overhead;
         if (inbound.size() >= options.maxInboundRequests ||
             weight > options.maxInboundBytes - stats.inboundBytes) {
@@ -205,8 +230,14 @@ std::shared_ptr<RpcChannel> RpcChannel::create(
     const net::TcpConnectionPtr& connection, Handler handler, RpcOptions options) {
     if (!connection) throw std::invalid_argument("RPC requires a connection");
     connection->getLoop()->assertInLoopThread();
+    return createWithTransport(std::make_shared<TcpTransport>(connection), std::move(handler), options);
+}
+std::shared_ptr<RpcChannel> RpcChannel::createWithTransport(
+    std::shared_ptr<RpcTransport> transport, Handler handler, RpcOptions options) {
+    if (!transport || !transport->ownerLoop()) throw std::invalid_argument("RPC requires an owner transport");
+    transport->ownerLoop()->assertInLoopThread();
     auto result = std::shared_ptr<RpcChannel>(new RpcChannel(
-        std::make_unique<Impl>(connection, std::move(handler), options)));
+        std::make_unique<Impl>(std::move(transport), std::move(handler), options)));
     result->impl_->channel = result;
     return result;
 }
@@ -221,6 +252,8 @@ RpcSnapshot RpcChannel::snapshot() const {
     result.closed = !impl_->open();
     result.pendingRequests = impl_->pending.size();
     result.inboundRequests = impl_->inbound.size();
+    result.dispatching = impl_->dispatching;
+    result.continuationQueued = impl_->continuationQueued;
     return result;
 }
 RpcCallResult RpcChannel::call(std::uint32_t method, std::string_view payload,
@@ -228,8 +261,10 @@ RpcCallResult RpcChannel::call(std::uint32_t method, std::string_view payload,
     auto& s = *impl_;
     if (!s.owner()) return {RpcOperation::WrongThread, 0};
     const auto self = shared_from_this();
-    const auto conn = s.connection.lock();
-    if (!s.open() || !conn || !conn->connected()) return {RpcOperation::Closed, 0};
+    if (!s.open()) return {RpcOperation::Closed, 0};
+    const auto transportState = s.transport->state();
+    if (transportState == RpcTransportState::NotReady) return {RpcOperation::NotReady, 0};
+    if (transportState != RpcTransportState::Ready) return {RpcOperation::Closed, 0};
     if (method == 0 || !completion || payload.size() > s.options.maxPayloadBytes ||
         timeout.count() <= 0 || timeout > s.options.maxRequestTimeout)
         return {RpcOperation::InvalidArgument, 0};
@@ -255,7 +290,7 @@ RpcCallResult RpcChannel::call(std::uint32_t method, std::string_view payload,
         const bool sent = s.send({RpcMessageKind::Request, id, method,
             static_cast<std::uint32_t>(timeout.count()), std::string(payload)});
         const auto it = s.pending.find(id);
-        if (!sent || !s.open() || !conn->connected() || it == s.pending.end()) {
+        if (!sent || !s.open() || s.transport->state() != RpcTransportState::Ready || it == s.pending.end()) {
             s.finish(id, {RpcStatus::Disconnected, {}}); // not admitted: no callback
             return {RpcOperation::SendRejected, 0};
         }

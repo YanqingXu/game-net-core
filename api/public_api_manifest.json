@@ -24,6 +24,7 @@
       "GameNet::game_session",
       "GameNet::protocol",
       "GameNet::rpc",
+      "GameNet::rpc_tls",
       "GameNet::tls",
       "GameNet::transport"
     ],
@@ -56,6 +57,8 @@
       "include/gamenet/protocol/PacketFramer.h",
       "include/gamenet/rpc/RpcChannel.h",
       "include/gamenet/rpc/RpcCodec.h",
+      "include/gamenet/rpc/RpcTransport.h",
+      "include/gamenet/rpc_tls/RpcTlsSession.h",
       "include/gamenet/tls/TlsContext.h",
       "include/gamenet/tls/TlsStream.h",
       "include/gamenet/transport/TcpTransportEndpoint.h",

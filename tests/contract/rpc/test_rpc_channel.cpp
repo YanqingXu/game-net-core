@@ -1,6 +1,7 @@
 // Copyright 2026 Yanqing Xu
 // SPDX-License-Identifier: Apache-2.0
 #include "gamenet/rpc/RpcChannel.h"
+#include "gamenet/rpc/RpcTransport.h"
 #include "gamenet/core/net/Buffer.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/TcpConnection.h"
@@ -17,6 +18,60 @@ using namespace std::chrono_literals;
 using namespace gamenet::rpc;
 using gamenet::net::Buffer;
 namespace {
+void transportAdmission() {
+    struct Transport final : RpcTransport {
+        gamenet::net::EventLoop* loop;
+        RpcTransportState phase{RpcTransportState::NotReady};
+        bool accepts{true};
+        std::function<void()> duringSend;
+        explicit Transport(gamenet::net::EventLoop& owner) : loop(&owner) {}
+        gamenet::net::EventLoop* ownerLoop() const noexcept override { return loop; }
+        RpcTransportState state() const noexcept override { return phase; }
+        bool trySend(std::string_view) override { if (duringSend) duringSend(); return accepts; }
+        void abort() override { phase = RpcTransportState::Closed; }
+    };
+    gamenet::net::EventLoop loop;
+    auto transport = std::make_shared<Transport>(loop);
+    auto channel = RpcChannel::createWithTransport(transport);
+    unsigned completed = 0;
+    const auto rejected = channel->call(1, "before ready", 1s, [&](auto) { ++completed; });
+    GAMENET_TEST_ASSERT(rejected.status == RpcOperation::NotReady && rejected.requestId == 0);
+    GAMENET_TEST_ASSERT(channel->snapshot().pendingRequests == 0 && channel->snapshot().pendingBytes == 0);
+    transport->phase = RpcTransportState::Ready;
+    const auto first = channel->call(1, "ready", 1s, [&](auto r) {
+        GAMENET_TEST_ASSERT(r.status == RpcStatus::Cancelled); ++completed;
+    });
+    GAMENET_TEST_ASSERT(first.status == RpcOperation::Accepted && first.requestId == 1);
+    (void)channel->cancel(first.requestId);
+    transport->accepts = false;
+    const auto refused = channel->call(1, "full", 1s, [&](auto) { ++completed; });
+    GAMENET_TEST_ASSERT(refused.status == RpcOperation::SendRejected && refused.requestId == 0 && completed == 1);
+    transport->duringSend = [weak = std::weak_ptr(channel)] { if (auto c = weak.lock()) c->onDisconnect(); };
+    const auto down = channel->call(1, "down during admission", 1s, [&](auto) { ++completed; });
+    const auto s = channel->snapshot();
+    GAMENET_TEST_ASSERT(down.status == RpcOperation::SendRejected && down.requestId == 0 && completed == 1);
+    GAMENET_TEST_ASSERT(s.closed && s.pendingRequests == 0 && s.pendingBytes == 0 &&
+        s.acceptedCalls == 1 && s.completedCalls == 1);
+    channel.reset();
+    transport->duringSend = {}; transport->accepts = true; transport->phase = RpcTransportState::Ready;
+    unsigned handlers = 0, drained = 0;
+    channel = RpcChannel::createWithTransport(transport, [&](const auto&, auto) { ++handlers; });
+    const auto pending = channel->call(1, "received before EOF", 1s, [&](auto result) {
+        GAMENET_TEST_ASSERT(result.status == RpcStatus::Ok); ++drained;
+    });
+    GAMENET_TEST_ASSERT(pending.status == RpcOperation::Accepted);
+    transport->phase = RpcTransportState::Closed;
+    auto wire = [](RpcMessage message) {
+        gamenet::protocol::PacketFramer framer;
+        return *framer.encode(*RpcCodec::encode(message));
+    };
+    const auto received = wire({RpcMessageKind::Request, 1, 1, 1000, "sealed"}) +
+        wire({RpcMessageKind::Response, pending.requestId, 0, 0, "ok"});
+    Buffer input; input.append(std::string_view(received)); channel->onMessage(input);
+    GAMENET_TEST_ASSERT(handlers == 0 && drained == 1 && channel->snapshot().inboundRejected == 1 &&
+        channel->snapshot().pendingRequests == 0);
+    channel->onDisconnect(); channel.reset(); loop.quit(); loop.loop();
+}
 struct Fixture {
     gamenet::net::EventLoop loop;
     gamenet::test::ConnectedSocketPair sockets;
@@ -288,6 +343,7 @@ void foreignReplyRacesOwnerRelease() {
 }
 }  // namespace
 int main() {
+    transportAdmission();
     limitsAndReentry(); byteLimitAndSendRejection(); sendRejection();
     deadlinesAndLateResponses(); disconnectAndDestructor(); shutdownAndWeakReply();
     inboundAndPartialFrames(); malformedAndBoundedContinuation(); protocolAndThreadRules();

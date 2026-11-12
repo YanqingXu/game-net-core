@@ -810,8 +810,9 @@ def main() -> None:
         )
     ]
     assert {path.relative_to(repo_root).as_posix() for path in installed_rpc_or_lua_headers} == {
-        "include/gamenet/rpc/RpcChannel.h", "include/gamenet/rpc/RpcCodec.h"
-    }, "RPC-C1 allows only the explicit provisional callback surface, no Lua"
+        "include/gamenet/rpc/RpcChannel.h", "include/gamenet/rpc/RpcCodec.h",
+        "include/gamenet/rpc/RpcTransport.h", "include/gamenet/rpc_tls/RpcTlsSession.h"
+    }, "RPC-C1/C2 allow only the explicit callback and optional TLS surfaces, no Lua"
     tracked_cmake_paths = [
         path
         for path in git(repo_root, "ls-files").splitlines()
@@ -847,8 +848,9 @@ def main() -> None:
         )
     ]
     assert {path.relative_to(repo_root).as_posix() for path in installed_m9_headers} == {
-        "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h"
-    }, "TLS-C1 allows only the explicit optional native TLS surface"
+        "include/gamenet/tls/TlsContext.h", "include/gamenet/tls/TlsStream.h",
+        "include/gamenet/rpc_tls/RpcTlsSession.h"
+    }, "TLS-C1/RPC-C2 allow only the explicit optional TLS surfaces"
     for target in (
         "GameNet::websocket",
         "gamenet_websocket",

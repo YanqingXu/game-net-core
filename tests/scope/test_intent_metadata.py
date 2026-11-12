@@ -25,6 +25,7 @@ ALLOWED_TARGETS = {
     "GameNet::core",
     "GameNet::protocol",
     "GameNet::rpc",
+    "GameNet::rpc_tls",
     "GameNet::tls",
     "GameNet::transport",
     "GameNet::game_session",
@@ -88,6 +89,7 @@ PHASE4_ACTIVE_INTENTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
     "intents/modules/tls.intent.md": ("installed-library", "GameNet::tls"),
     "intents/modules/rpc.intent.md": ("installed-library", "GameNet::rpc"),
     "intents/modules/io_uring_experimental_package.intent.md": (

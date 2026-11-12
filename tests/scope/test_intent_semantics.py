@@ -37,6 +37,7 @@ PHASE4_ARTIFACTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
     "intents/modules/tls.intent.md": ("installed-library", "GameNet::tls"),
     "intents/modules/rpc.intent.md": ("installed-library", "GameNet::rpc"),
     "intents/modules/io_uring_experimental_package.intent.md": (
@@ -119,6 +120,7 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
     "gamenet_tls": {"gamenet_core"},
+    "gamenet_rpc_tls": {"gamenet_core", "gamenet_protocol", "gamenet_rpc", "gamenet_tls"},
     "gamenet_transport": {"gamenet_core"},
     "gamenet_game_session": {"gamenet_core", "gamenet_transport"},
     "gamenet_game_logic": {"gamenet_core", "gamenet_transport", "gamenet_game_session"},
@@ -143,6 +145,7 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
 }
 
 TLS_VERIFICATION_PATHS = {
+    "tests/contract/rpc_tls/test_rpc_tls_session.cpp", "tests/integration/rpc_tls/test_rpc_tls_tcp.cpp",
     "tests/unit/tls/test_tls_context.cpp", "tests/contract/tls/test_tls_stream.cpp",
     "tests/integration/tls/test_tls_tcp.cpp",
 }
@@ -789,7 +792,7 @@ def validate_intent(
             experimental_target_without_local_inventory = True
         else:
             artifact_inventory = experimental_inventory
-    if metadata.get("target") == "GameNet::tls":
+    if metadata.get("target") in {"GameNet::tls", "GameNet::rpc_tls"}:
         if tls_inventory is None:
             experimental_target_without_local_inventory = True
         else:

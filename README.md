@@ -1,5 +1,14 @@
 # game-net-core
 
+## Optional RPC over TLS — RPC-C2 (2026-11-11)
+
+`GameNet::rpc_tls` explicitly composes authenticated TLS with callback RPC.
+It is built only with `GAMENET_ENABLE_TLS=ON` and requested separately as
+`COMPONENTS rpc_tls`; existing TCP RPC and Core/RPC-only dependency isolation
+remain available. RPC requests are admitted only after TLS-ready, with bounded
+send/pending budgets and exactly-once local terminal settlement. See
+[RPC/TLS composition](docs/development/callback_rpc_tls.md).
+
 ## Optional OpenSSL TLS — TLS-C1 (2026-11-11)
 
 The separately authorized provisional `GameNet::tls` component is default OFF.
@@ -8,7 +17,7 @@ certificate/identity verification, bounded queues and close_notify settlement.
 See `docs/development/openssl_tls.md` and the active TLS intent for composition,
 callback lifetime and package isolation. Historical M9 decisions below remain
 history; TLS-C1 does not promote WebSocket/DNS/HTTP or the old ConnectionTransport.
-Default CI stays 133 tests; TLS-enabled has 136 (three optional TLS tests).
+Default CI stays 133 tests; TLS-enabled has 138 (three TLS and two RPC/TLS tests).
 
 ## Callback RPC feature milestone — 2026-11-11
 

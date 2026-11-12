@@ -1,5 +1,28 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## RPC-C2：可选 TLS 传输适配与集成验证（2026-11-11 用户授权）
+
+新增窄的 owner-local `RpcTransport` 边界；保留 `RpcChannel::create(TcpConnection)`
+和原 TCP 回调接法。RPC 不依赖 OpenSSL。默认关闭的 TLS 构建可提供独立 provisional
+`GameNet::rpc_tls` / `RpcTlsSession`，仅显式请求该组件才加载 TLS/OpenSSL 依赖。
+不激活旧 ConnectionTransport 设计，不改变 stable Core API、RPC wire 或 HP0 推广门。
+
+先更新 intent、线程/所有权/终结合同，再实现与测试。TLS 会话归连接 EventLoop，
+握手前 call 返回 NotReady、id=0，不保留 callback/timer/pending 槽；证书拒绝和握手
+超时保留 TLS 原因。已接纳请求沿用超时、取消、pending 上限和恰好一次本地完成。
+所有 RPC wire 必须进入 TlsStream，发送拒绝不建立额外队列；接受后失败和断连必须清算。
+
+TLS 终结后先封口新请求，再通过同一有界 owner executor 排空已接收 RPC 帧的续跑，
+最后清算剩余 pending 并报告会话 closed。延后清算只保留已拥有的数据与生命周期租约，
+调度拒绝显式终结。TLS 回调 bridge 持有 channel、弱观察 TLS，无所有权环；TCP-down
+清空 context 时已接收 TLS/RPC 数据仍能完成有界清算。显式 shutdown/abort 先关闭 RPC，
+再驱动 TLS；owner 退出前关闭会话。回调可重入并释放调用方引用，清理先于唯一 closed。
+
+交付：兼容 TCP 回归、真实 OpenSSL 合同、真实 TCP 和独立 OpenSSL peer 集成，覆盖
+握手成功后接纳、CA/名称/过期拒绝、握手/请求超时、取消、背压、断连、关闭、回调重入
+和零 pending 清算。Windows IOCP/Linux epoll 以及 ASan/UBSan/TSan 验证、ON/OFF 安装
+消费者隔离全部通过后提交 PR。该功能不引入重试、mTLS、凭据热更新或发行版。
+
 ## TLS-C1：可选 OpenSSL TLS（2026-11-11 用户授权）
 
 在 RPC-C1 已合入并完成 main CI 后，启动独立 provisional `GameNet::tls`。
