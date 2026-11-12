@@ -79,6 +79,14 @@ all accepted work. Closed callback exceptions are contained.
 
 ## Verification
 
+RPC-C3 (2026-11-12) reuses the real TCP stress harness in
+tests/support/RpcReconnectStress.h from the RPC/TLS integration. Every generation
+authenticates before calls, forces bounded send rejection and resumes held input,
+then proves healthy RPC progress. Cancellation/abrupt disconnect with outstanding
+work alternate; independent completion ledgers, session terminal count, zero RPC
+and TLS plaintext residue and expired prior-generation weak handles must converge
+before reconnect. This is finite correctness stress, not production endurance.
+
 - tests/contract/rpc/test_rpc_channel.cpp: TCP compatibility and transport seam,
   NotReady, send rollback/re-entry, bounded pending and local terminal semantics.
 - tests/contract/rpc_tls/test_rpc_tls_session.cpp: real OpenSSL handshake gate,

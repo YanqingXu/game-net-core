@@ -10,6 +10,7 @@
 #include "gamenet/protocol/PacketFramer.h"
 #include "support/TlsCertificates.h"
 #include "support/TestAssert.h"
+#include "support/RpcReconnectStress.h"
 #include <openssl/ssl.h>
 #include <any>
 #include <atomic>
@@ -169,4 +170,30 @@ int main() {
     gamenet::test::TlsCertificates cert;
     std::fprintf(stderr, "RPC-C2 integration: session echo\n"); sessionEcho(cert);
     std::fprintf(stderr, "RPC-C2 integration: independent batched EOF\n"); independentBatchedPeer(cert);
+    const auto clientContext = TlsContext::client(cert.ca.string());
+    const auto serverContext = TlsContext::server(cert.certificate.string(), cert.key.string());
+    gamenet::test::runRpcReconnectStress([&](const gamenet::net::TcpConnectionPtr& connection,
+        RpcChannel::Handler handler, std::function<void()> ready, std::function<void()> closed, bool client) {
+        auto result = std::make_shared<gamenet::test::RpcStressSession>();
+        RpcTlsOptions options; options.peerName = client ? "localhost" : "";
+        options.tls.bioCapacity = 1024; options.tls.maxStepsPerDrive = 16;
+        if (client) { options.tls.maxPendingWrites = 2; options.tls.maxPendingPlaintextBytes = 16384; }
+        auto current = RpcTlsSession::create(connection, client ? clientContext : serverContext, {
+            .ready = std::move(ready),
+            .closed = [closed = std::move(closed)](auto reason) {
+                GAMENET_TEST_ASSERT(reason != TlsError::Graceful); closed();
+            }
+        }, std::move(handler), options);
+        result->channel = current->channel(); result->lifetime = current;
+        result->start = [current] { (void)current->start(); };
+        result->down = [current] { current->onDisconnect(); };
+        result->writable = [current] { current->onWritable(); };
+        result->feed = [current](auto& input) { (void)current->onMessage(input); };
+        result->settled = [current] {
+            const auto s = current->snapshot().tls;
+            GAMENET_TEST_ASSERT(!s.pendingPlaintextBytes && !s.pendingWrites &&
+                s.acceptedPlaintextBytes == s.encryptedPlaintextBytes + s.discardedPlaintextBytes);
+        };
+        return result;
+    }, "RPC-C3 TLS");
 }

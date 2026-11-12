@@ -1,5 +1,19 @@
 # testing_rules.md
 
+## RPC-C3 fuzz and stateful regression
+
+Codec fuzz checks an independent wire oracle and canonical round trips. Channel
+fuzz and fixed-seed contracts share a bounded owner-local sequence runner with
+an independent call ledger: no rejected callback, one terminal per admission,
+exact pending bytes/count after each action and zero inbound/outgoing residue
+after close and continuation retirement. Do not use short wall-clock deadlines
+or sleeping as fuzz input semantics. Preserve failing bytes and actual execution
+counts; a successful process exit without the exact run count is insufficient.
+Real TCP and OpenSSL RPC/TLS stress must demonstrate send rejection followed by
+read recovery/probe success across fresh connection generations, alternate cancel
+and pending disconnect, and prove no callback/weak lifetime leaks. Run on Windows
+IOCP/Linux epoll and sanitizers. Finite stress cannot satisfy endurance/HP0 gates.
+
 ## RPC-C2 optional RPC/TLS composition
 
 Preserve default TCP regression and run real OpenSSL session/TCP contracts on

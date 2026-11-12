@@ -109,6 +109,12 @@ callbacks. TLS-ready and terminal events remain separate from Core's TCP events.
 
 ## Verification
 
+RPC-C3 additionally exercises repeated authenticated RPC/TLS generations through
+tests/integration/rpc_tls/test_rpc_tls_tcp.cpp and the bounded common harness
+tests/support/RpcReconnectStress.h. Held ciphertext is finite test-owned input;
+release must recover accepted calls and a fresh probe. Session/TCP down and
+accepted continuations retire before the next generation or owner destruction.
+
 - tests/unit/tls/test_tls_context.cpp: real certificates, trust/key validation.
 - tests/contract/tls/test_tls_stream.cpp: fragmented handshake, verification
   failures, WANT progress, queue/input caps, pause/resume, re-entry, deadlines,
@@ -119,5 +125,5 @@ callbacks. TLS-ready and terminal events remain separate from Core's TCP events.
   and registered cross-platform TLS evidence lanes.
 
 The TLS workflow runs the exact optional inventory and installed consumers.
-Default Core CI remains the 133-test baseline. TLS-enabled adds three tests;
+Default Core CI remains the 133-test baseline. TLS-enabled adds five tests;
 no sanitizer or real-OpenSSL scenario may silently fall back/skip as evidence.

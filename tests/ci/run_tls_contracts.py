@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 
 CONTRACTS = {"unit.tls.test_tls_context", "contract.tls.test_tls_stream", "integration.tls.test_tls_tcp",
              "contract.rpc_tls.test_rpc_tls_session", "integration.rpc_tls.test_rpc_tls_tcp"}
+RPC_C3 = {"unit.rpc.test_rpc_codec", "contract.rpc.test_rpc_channel", "integration.rpc.test_rpc_tcp"}
 
 def verify_inventory(document: dict) -> set[str]:
     tests = document.get("tests", [])
@@ -102,6 +103,7 @@ def run(args: argparse.Namespace) -> None:
         inventory_text = execute("inventory", ["ctest", "--test-dir", str(build), "-C", configuration, "--show-only=json-v1"])
         names = verify_inventory(json.loads(inventory_text))
         targets = ["gnt_" + n.split(".")[0] + "_" + n.split(".")[1] + "_" + hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
+        targets += ["gnt_" + n.split(".")[0] + "_" + n.split(".")[1] + "_" + hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(RPC_C3)]
         api = json.loads((repo / "api/public_api_manifest.json").read_text(encoding="utf-8"))
         installed = ["gamenet_" + name.split("::")[1] for group in api["targets"].values() for name in group]
         command = ["cmake", "--build", str(build), "--config", configuration, "--parallel", str(args.jobs)]
@@ -115,6 +117,13 @@ def run(args: argparse.Namespace) -> None:
         expected = names if args.profile == "release" else CONTRACTS
         verify_results(ET.parse(junit).getroot(), expected)
         manifest["executed_tests"] = len(expected)
+        if args.profile != "release":
+            rpc_junit = output / "rpc-c3-junit.xml"
+            execute("rpc-c3-ctest", ["ctest", "--test-dir", str(build), "-C", configuration,
+                    "-R", r"^(unit|contract|integration)\.rpc\.", "--output-on-failure", "--timeout", "60",
+                    "--no-tests=error", "--output-junit", str(rpc_junit)])
+            verify_results(ET.parse(rpc_junit).getroot(), RPC_C3)
+        manifest["rpc_c3_executed_tests"] = len(RPC_C3)
         prefix = build / "prefix"
         execute("install", ["cmake", "--install", str(build), "--config", configuration, "--prefix", str(prefix)])
         consumer("tls-consumer", prefix, "tls"); consumer("rpc-tls-consumer", prefix, "rpc_tls")

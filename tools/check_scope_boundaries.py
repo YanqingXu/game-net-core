@@ -280,9 +280,11 @@ def check_text(root: Path, path: Path) -> list[Violation]:
                         continue
                 if kind == "deferred high-level module" and match.group(0).startswith("Rpc"):
                     if rel.startswith(("src/rpc_tls/", "include/gamenet/rpc_tls/", "tests/contract/rpc_tls/", "tests/integration/rpc_tls/", "src/rpc/", "include/gamenet/rpc/", "tests/unit/rpc/",
-                                       "tests/contract/rpc/", "tests/integration/rpc/",
+                                       "tests/contract/rpc/", "tests/integration/rpc/", "tests/fuzz/rpc/",
                                        "tests/cmake/rpc_install_consumer/")) or rel in {
-                            "tests/support/RpcTlsFixture.h", "tests/cmake/tls_install_consumer/rpc_tls.cpp",
+                            "tests/support/RpcTlsFixture.h", "tests/support/RpcCodecOracle.h",
+                            "tests/support/RpcStateSequence.h", "tests/support/RpcReconnectStress.h",
+                            "tests/cmake/tls_install_consumer/rpc_tls.cpp",
                             "tests/cmake/tls_install_consumer/rpc.cpp",
                             "tests/api/test_public_api_manifest.py",
                             "tests/cmake/test_migration_status_contract.py"}:

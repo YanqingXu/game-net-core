@@ -8,6 +8,8 @@ plus the explicitly active Phase 4 foundations.
 `.github/workflows/tls.yml` independently enables `GAMENET_ENABLE_TLS=ON` on
 Linux Release, ASan/UBSan and TSan, plus Windows Release and ASan. Release runs
 all 138 tests; sanitizer lanes execute exactly the five real-OpenSSL TLS/RPC-TLS tests.
+RPC-C3 also executes the three ordinary RPC tests in every sanitizer lane, with
+a separate exact JUnit inventory (codec oracle, channel sequences, TCP stress).
 The driver rejects missing, duplicate, disabled, skipped or failed cases and
 retains commit/run-bound logs, inventory and JUnit. Both Release lanes verify
 ON and OFF installed packages: requesting TLS discovers OpenSSL, while a
@@ -15,6 +17,18 @@ Core-only consumer never does. Default Core CI remains 133 tests.
 
 See [TLS composition and local verification](openssl_tls.md). TLS is provisional;
 these functional gates do not create a release or establish production capacity.
+
+## RPC protocol and state fuzz
+
+`.github/workflows/rpc-fuzz.yml` runs two default-off, non-installed Clang
+libFuzzer targets under ASan/UBSan. Codec fuzz compares an independent wire
+predicate and canonical round trips; channel fuzz uses bounded operation sequences
+with a per-call admission/completion/byte ledger on a real owner EventLoop.
+Each target must execute exactly 20,000 units at seed 424242; the driver rejects
+count/seed drift and diagnostics and retains commands, corpus/repro inputs, binary
+and evidence hashes, clean checkout identity and run/attempt. Fixed state seeds
+and eight-generation real TCP/RPC-TLS recovery/reconnect stress also execute in
+the existing registered contracts. These are finite development regressions.
 
 ## Isolated Experimental Prestudy Contracts
 

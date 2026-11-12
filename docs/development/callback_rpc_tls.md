@@ -113,5 +113,11 @@ Ordinary TCP/RPC CI remains 133 tests. TLS-enabled Release runs 138 tests; the
 optional workflow selects exactly five real-OpenSSL TLS/RPC-TLS tests under
 Linux ASan/UBSan, Linux TSan and Windows ASan. Installed consumers separately
 verify TLS, RPC/TLS, Core-only and RPC-only discovery, plus OFF rejection.
+RPC-C3 additionally executes the three ordinary RPC tests under each sanitizer;
+the full Release inventory already includes them. RPC/TLS integration includes
+eight fresh authenticated connection generations with send saturation, held-input
+recovery, healthy probes, cancellation/late responses and pending disconnect.
+Every generation settles once with zero RPC/TLS obligations and expires its weak
+lifetimes before replacement. Prior-generation reply handles remain Closed.
 No skipped/fallback test counts as evidence. Functional development validation
 does not establish production capacity or satisfy HP0 promotion gates.
