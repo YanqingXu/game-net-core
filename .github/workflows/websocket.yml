@@ -60,6 +60,12 @@ jobs:
       - name: Configure TSan address space
         if: matrix.profile == 'tsan'
         run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Select Clang for libFuzzer
+        if: matrix.profile == 'fuzz'
+        shell: bash
+        run: |
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
       - name: Install pinned independent interoperability client
         if: matrix.profile != 'fuzz'
         shell: bash

@@ -22,7 +22,7 @@ def main():
     for bad in ['',valid.replace('20000','19999'),valid.replace('424242','1'),valid+'ERROR: AddressSanitizer',valid+valid]:rejects(verify_fuzz,bad)
     root=Path(__file__).resolve().parents[2]
     workflow=(root/'.github/workflows/websocket.yml').read_text(encoding='utf-8')
-    for fragment in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','linux-fuzz','websockets==15.0.1','--with-websocket','run_websocket_contracts.py','if: always()','if-no-files-found: error']:
+    for fragment in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','linux-fuzz','CC=clang','CXX=clang++','websockets==15.0.1','--with-websocket','run_websocket_contracts.py','if: always()','if-no-files-found: error']:
         assert fragment in workflow,fragment
     assert 'continue-on-error' not in workflow
     assert 'option(GAMENET_ENABLE_WEBSOCKET "Build bounded WS server support" OFF)' in (root/'CMakeLists.txt').read_text(encoding='utf-8')
