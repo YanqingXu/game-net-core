@@ -1,5 +1,18 @@
 # thread_affinity_rules.md
 
+## UDP-C2
+
+UdpTransportEndpoint is a separate composition component; UDP peer code has no
+transport dependency. The adapter delegates on the same owner, installs no
+callbacks and creates no scheduling/queue policy.
+
+Peer slots/index/generations/queues, round-robin scheduling, idle timer and
+callbacks belong to the UDP socket owner. send/open/close/snapshot reject foreign
+mutation. requestClose/stop seal synchronized admission and notify a pre-attached
+lifecycle node; ordinary data uses one coalesced bounded normal post. No foreign
+callbacks or data fallback on lifecycle priority. Callback commitment shares the
+close seal; reentrant callbacks may release handles/wrapper or replace peers.
+
 ## UDP-C1
 
 UDP socket/Channel/operation/callbacks and snapshot belong to one owner. Only bounded sendTo/stop admission is cross-thread; no foreign callbacks. IOCP terminal consumers retire on owner even after observer revocation. A weak quit participant cancels I/O and drains before loop shutdown.

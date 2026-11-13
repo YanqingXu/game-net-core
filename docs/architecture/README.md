@@ -3,6 +3,10 @@
 Architecture decisions refine the active intents into implementation-ready
 boundaries. They do not override the intents or the repository rules.
 
+- [UDP peer/session lifecycle](../development/udp_peer.md) explains UDP-C2 owner,
+  weak handles, identity generations, bounded round-robin output and native
+  settlement, with a data-flow diagram and direct test map.
+
 - [I/O Engine and Runtime Model ADR](io_engine_runtime_model_adr.md) records the
   ARCH-G1 owner, lifetime, semantic, compatibility, and test-map decisions.
 - [ARCH-G1 baseline](../development/io_engine_baseline.md) records the

@@ -235,6 +235,11 @@ def main() -> None:
     assert_violation(repo_root, "src/core/CMakeLists.txt", 'target_link_libraries(gamenet_core PRIVATE GameNet::udp)\n', "disallowed component")
     assert_violation(repo_root, "src/udp/BadTls.cc", '#include "gamenet/tls/TlsStream.h"\n', "disallowed component")
     check_prestudy_boundaries(repo_root)
+    assert_clean(repo_root, "src/udp_transport/Adapter.cc", '#include "gamenet/udp/UdpPeer.h"\n#include "gamenet/transport/TransportEndpoint.h"\n')
+    assert_violation(repo_root, "include/gamenet/udp/BadEndpoint.h", '#include "gamenet/transport/TransportEndpoint.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/udp/BadAdapter.cc", '#include "gamenet/udp_transport/UdpTransportEndpoint.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/transport/BadUdp.cc", '#include "gamenet/udp/UdpPeer.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/udp_transport/BadTls.cc", '#include "gamenet/tls/TlsStream.h"\n', "disallowed component")
     assert_clean(repo_root, "src/rpc/Channel.cc",
                  '#include "gamenet/protocol/PacketFramer.h"\n'
                  'namespace gamenet::rpc { class RpcChannel {}; }\n')

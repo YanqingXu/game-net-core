@@ -60,6 +60,7 @@ jobs:
       - name: Verify UDP intent and exact evidence guards
         run: |
           python tests/ci/test_udp_workflow.py
+          python tests/ci/test_udp_peer_fuzz.py
           python tests/scope/test_intent_semantics.py --with-udp
       - name: Build and verify UDP contracts, peers and packages
         shell: bash
@@ -71,5 +72,29 @@ jobs:
         with:
           name: udp-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: out/udp-evidence/
+          if-no-files-found: error
+          retention-days: 14
+  peer-fuzz:
+    name: UDP peer state fuzz
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure bounded instrumented peer fuzzer
+        run: cmake -S . -B build-udp-fuzz -G Ninja -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug -DGAMENET_ENABLE_UDP=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_WEBSOCKET=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DGAMENET_BUILD_FUZZING=ON -DGAMENET_BUILD_TESTING=OFF -DGAMENET_ENABLE_ASAN_UBSAN=ON
+      - name: Build peer fuzzer
+        run: cmake --build build-udp-fuzz --parallel 2 --target gamenet_fuzz_udp_peer
+      - name: Execute and independently verify bounded state sequences
+        run: |
+          python3 tests/ci/run_udp_peer_fuzz.py --build-dir build-udp-fuzz --output out/udp-peer-fuzz
+          python3 tests/ci/run_udp_peer_fuzz.py --verify-output out/udp-peer-fuzz
+      - name: Retain raw peer state fuzz evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-peer-fuzz-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/udp-peer-fuzz/
           if-no-files-found: error
           retention-days: 14

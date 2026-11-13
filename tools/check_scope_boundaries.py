@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ACTIVE_COMPONENTS = {"udp", "core", "protocol", "websocket", "websocket_tls", "rpc", "rpc_tls", "tls", "transport", "game_session", "game_logic", "broadcast"}
+ACTIVE_COMPONENTS = {"udp_transport", "udp", "core", "protocol", "websocket", "websocket_tls", "rpc", "rpc_tls", "tls", "transport", "game_session", "game_logic", "broadcast"}
 DEFERRED_COMPONENTS = {"protocol", "transport", "game", "experimental"}
 DEFERRED_SRC_DIRS = {"protocol", "transport", "experimental", "broadcast", "game_logic", "game_session"}
 SCAN_ENTRIES = ("include", "src", "tests", "examples", "benchmarks", "cmake", ".github", "CMakeLists.txt")
@@ -119,7 +119,7 @@ TEXT_PATTERNS = (
 
 COMPONENT_REFERENCE = re.compile(
     r"\b(?:gamenet::|gamenet_|GameNet::|gamenet/)"
-    r"(udp|protocol|websocket_tls|websocket|rpc|rpc_tls|tls|transport|game_session|game_logic|broadcast|game|experimental)\b"
+    r"(udp_transport|udp|protocol|websocket_tls|websocket|rpc|rpc_tls|tls|transport|game_session|game_logic|broadcast|game|experimental)\b"
 )
 PRESTUDY_NAMESPACE = re.compile(r"::(hp[1-6])\b")
 PRESTUDY_TARGET = re.compile(r"\bgamenet_hp\d+_\w+\b")
@@ -129,6 +129,7 @@ PRESTUDY_INCLUDE = re.compile(r"(?:^|/)(hp\d+)/")
 LAYER_ALLOWED_COMPONENTS = {
     "core": set(),
     "udp": {"udp"},
+    "udp_transport": {"udp_transport", "udp", "transport"},
     "protocol": {"protocol"},
     "websocket": {"websocket"},
     "websocket_tls": {"websocket_tls", "websocket", "tls"},

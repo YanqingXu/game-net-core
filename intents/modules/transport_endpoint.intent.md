@@ -94,7 +94,12 @@ endpoint and cannot establish public API semantics.
 - Source baseline: `mini_trantor@3eba368475a68f677aae920d4f299b155db23d57`.
 - Kept invariants: narrow endpoint identity/send/close boundary, endpoint owner
   context, and no player/business ownership.
-- Deferred from the source design: UDP adaptation and broader transport-manager
-  policy remain outside this active TCP adapter.
+- UDP-C2 separately authorizes UdpTransportEndpoint in GameNet::udp_transport to implement this interface
+  without changing it. The UDP endpoint weakly observes its owner, preserves typed
+  owner/closed/overload results and cross-thread lifecycle close, and closes only
+  local peer admission. It promises neither reliable delivery nor a peer handshake.
+  Its direct contract is tests/contract/udp/test_udp_peer.cpp. Core/transport does
+  not depend on UDP; disabled packages export no UDP surface.
+- Deferred from the source design: broader transport-manager policy.
 - Dropped behavior: none; raw owner-loop scheduling is replaced by the
   EventLoop-owned executor admission contract during Phase 4 hardening.

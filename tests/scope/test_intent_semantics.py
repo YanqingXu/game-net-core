@@ -38,6 +38,7 @@ PHASE4_ARTIFACTS = {
 
 CONCRETE_ACTIVE_ARTIFACTS = {
     "intents/modules/udp.intent.md": ("installed-library", "GameNet::udp"),
+    "intents/modules/udp_transport.intent.md": ("installed-library", "GameNet::udp_transport"),
     "intents/modules/websocket_tls.intent.md": ("installed-library", "GameNet::websocket_tls"),
     "intents/modules/websocket.intent.md": ("installed-library", "GameNet::websocket"),
     "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
@@ -121,6 +122,7 @@ FROZEN_CORE_ACTIVE_INTENTS = {
 PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_core": set(),
     "gamenet_udp": {"gamenet_core"},
+    "gamenet_udp_transport": {"gamenet_core", "gamenet_udp", "gamenet_transport"},
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
     "gamenet_websocket": {"gamenet_core"},
@@ -150,7 +152,7 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
     "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
 }
 
-UDP_VERIFICATION_PATHS = {"tests/unit/udp/test_udp_options.cpp", "tests/contract/udp/test_udp_socket.cpp", "tests/integration/udp/test_udp_stress.cpp"}
+UDP_VERIFICATION_PATHS = {"tests/unit/udp/test_udp_options.cpp", "tests/contract/udp/test_udp_socket.cpp", "tests/integration/udp/test_udp_stress.cpp", "tests/contract/udp/test_udp_peer.cpp", "tests/integration/udp/test_udp_peer_stress.cpp"}
 
 WEBSOCKET_VERIFICATION_PATHS = {"tests/unit/websocket/test_websocket_codec.cpp", "tests/contract/websocket/test_websocket_session.cpp", "tests/integration/websocket/test_websocket_tcp.cpp"}
 
@@ -834,7 +836,7 @@ def validate_intent(
         else:
             artifact_inventory = websocket_inventory
 
-    if metadata.get("target") == "GameNet::udp":
+    if metadata.get("target") in {"GameNet::udp", "GameNet::udp_transport"}:
         if udp_inventory is None:
             experimental_target_without_local_inventory = True
         else:

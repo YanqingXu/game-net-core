@@ -1,5 +1,19 @@
 # testing_rules.md
 
+## UDP-C2
+
+tests/contract/udp/test_udp_peer.cpp covers explicit admission, unique identity,
+generation reuse, stale handle/receipt isolation, per-peer/global packet+byte
+bounds, idle expiry, ordinary-post failure, saturated foreign lifecycle close,
+reentry/throw/release, exactly-once output/peer terminal and zero residue.
+tests/integration/udp/test_udp_peer_stress.cpp proves real refusal/recovery,
+round-robin progress and repeated generations on Windows IOCP/Linux epoll.
+tests/support/UdpPeerSequence.h and tests/fuzz/udp/fuzz_udp_peer.cpp compare
+production state against independent per-admission callback and byte ledgers;
+fixed sequences and 20,000 bounded fuzz units retain seed/corpus/log/hash proof.
+Independent Python peers cover both families and explicit source registration.
+Run Windows/Linux, ASan/UBSan/TSan, ON/OFF package isolation and existing regressions.
+
 ## UDP-C1
 
 tests/unit/udp/test_udp_options.cpp, tests/contract/udp/test_udp_socket.cpp and tests/integration/udp/test_udp_stress.cpp enforce dual-family empty/truncated packets, count/byte/turn limits, cross-thread saturation, reentry/release, one completion per accepted send, quit/native cancellation and zero cleanup. Independent UDP peers and ON/OFF consumers execute Windows/Linux and sanitizers. Bursts actually refuse/recover; timers/second socket progress; fresh generations expire without stale callbacks.

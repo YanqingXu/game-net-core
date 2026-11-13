@@ -112,6 +112,8 @@ set_target_properties(
 )
 
 if(GAMENET_ENABLE_UDP)
+    add_executable(gamenet_udp_peer_echo_server udp_peer_echo/main.cpp)
+    target_link_libraries(gamenet_udp_peer_echo_server PRIVATE GameNet::udp)
     add_executable(gamenet_udp_echo_server udp_echo/main.cpp)
     target_link_libraries(gamenet_udp_echo_server PRIVATE GameNet::udp)
 endif()

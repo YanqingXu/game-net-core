@@ -1,5 +1,16 @@
 # Roadmap
 
+## UDP-C2 explicit bounded peers (2026-11-13)
+
+Separate authorization adds UdpPeerServer and generation-bearing UdpPeer in the
+default-OFF UDP component. A separate default-OFF GameNet::udp_transport adapts
+TransportEndpoint; UDP remains Core-only at include/link levels. Explicit address admission, peer/global
+packet and byte caps, round-robin output, bounded idle/cancellation work, saturated
+foreign lifecycle close and old-identity settlement are verified by real native
+pressure, fixed/state fuzz and independent dual-family peers. See
+docs/development/udp_peer.md. Local generations do not authenticate network data.
+KCP/PMTU and releases remain separately scoped.
+
 ## WSS close interoperability hardening (2026-11-13)
 
 The authorized follow-up captures the intermittent Windows peer failure and
