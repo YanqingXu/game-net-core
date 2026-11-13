@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Exact optional WSS contracts, independent peers and installed isolation."""
 from __future__ import annotations
-import argparse,hashlib,json,os,queue,re,socket,ssl,subprocess,threading
+import argparse,asyncio,hashlib,json,os,queue,re,socket,ssl,subprocess,threading
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from run_websocket_contracts import CONTRACTS as WS,verify_results
 from run_tls_contracts import CONTRACTS as TLS
-from wss_interop_diagnostics import ClientTrace
+from wss_interop_diagnostics import ClientTrace,verify_peer_diagnostics
+from wss_async_peer import exchange
+from wss_timeout_repro import reproduce
 WSS={'contract.websocket_tls.test_websocket_tls_session','integration.websocket_tls.test_websocket_tls_tcp'}
 CONTRACTS=WS|TLS|WSS
 
@@ -24,12 +26,16 @@ def verify_inventory(document):
     return set(names)
 
 def verify_interop(data):
-    if data!={'implementation':'websockets','version':'15.0.1','generations':8,'messages':16,'pings':8,'policy_rejections':1,'certificate_rejections':3,'graceful_closes':1,'truncated_closes':8,'status':'passed'}:
+    if data!={'implementation':'websockets','client_api':'asyncio','version':'15.0.1','generations':8,'messages':16,'pings':8,'policy_rejections':1,'certificate_rejections':3,'graceful_closes':9,'truncated_closes':1,'status':'passed'}:
         raise ValueError('incomplete independent WSS evidence')
+
+def verify_interop_rounds(rounds):
+    if not isinstance(rounds,list) or len(rounds)!=3:raise ValueError('three independent WSS rounds required')
+    for result in rounds:verify_interop(result)
 
 def interoperate(binary,certs,out,env):
     import websockets
-    from websockets.sync.client import connect
+    from websockets.asyncio.client import connect
     from websockets.exceptions import InvalidStatus
     from websockets.client import ClientProtocol
     from websockets.uri import parse_uri
@@ -37,6 +43,14 @@ def interoperate(binary,certs,out,env):
     if websockets.__version__!='15.0.1':raise ValueError('pinned websockets 15.0.1 required')
     context=ssl.create_default_context(cafile=str(certs/'ca.pem'))
     wrong=ssl.create_default_context(cafile=str(certs/'other-ca.pem'))
+    trace=ClientTrace(out/'interop-client.jsonl')
+    async def reject_peer(port,trust,hostname):
+        try:
+            async with connect(f'wss://127.0.0.1:{port}/echo',ssl=trust,server_hostname=hostname,proxy=None,compression=None,open_timeout=3):pass
+        except ssl.SSLCertVerificationError as error:
+            trace.write('certificate-rejected',hostname=hostname,exception=repr(error),verify_code=error.verify_code)
+            return
+        raise ValueError('certificate rejection was bypassed')
     def server(label,certificate,exercise):
         process=subprocess.Popen([str(binary),str(certs/certificate),str(certs/'key.pem'),'0','8'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,env=env,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
         lines=queue.Queue()
@@ -64,10 +78,7 @@ def interoperate(binary,certs,out,env):
                 except subprocess.TimeoutExpired:process.kill();process.wait(timeout=5)
             thread.join(timeout=3)
     def rejected(port,trust,hostname='localhost'):
-        try:
-            with connect(f'wss://127.0.0.1:{port}/echo',ssl=trust,server_hostname=hostname,proxy=None,compression=None,open_timeout=3):pass
-        except ssl.SSLCertVerificationError:return
-        raise ValueError('certificate rejection was bypassed')
+        asyncio.run(reject_peer(port,trust,hostname))
     def closed(lines,expected=None):
         while True:
             line=lines.get(timeout=5)
@@ -75,21 +86,12 @@ def interoperate(binary,certs,out,env):
                 if expected and line!=expected:raise ValueError('unexpected layered close: '+line)
                 return line
     def healthy(port,lines):
-        trace=ClientTrace(out/'interop-client.jsonl')
         for generation in range(8):
-            trace.records.clear()
-            with connect(f'wss://127.0.0.1:{port}/echo',ssl=context,server_hostname='localhost',proxy=None,compression=None,open_timeout=3,close_timeout=3,max_size=1024*1024,logger=trace.logger) as ws:
-                trace.capture(generation,'connected',ws)
-                text='secure \u20ac \U0001f600 '+str(generation);ws.send([text[:3],text[3:]])
-                if ws.recv(timeout=3)!=text:raise ValueError('WSS text mismatch')
-                payload=b'binary\0'+bytes(range(256))*273;ws.send([payload[:123],payload[123:]])
-                if ws.recv(timeout=3)!=payload or not ws.ping(b'wss-ping').wait(3):raise ValueError('WSS binary/Pong mismatch')
-                ws.close(1000,'done')
-                details=trace.capture(generation,'closed',ws)
-                if ws.close_code!=1000:raise ValueError('WSS close incomplete: '+json.dumps(details))
-            closed(lines,'CLOSED 13 8 0') # pinned sync client closes TCP without close_notify
+            asyncio.run(exchange(f'wss://127.0.0.1:{port}/echo',context,generation,trace))
+            closed(lines,'CLOSED 1 1 1')
         # Independent stdlib TLS peer explicitly completes both shutdown layers.
-        with socket.create_connection(('127.0.0.1',port),timeout=3) as raw:
+        for graceful in [True,False]:
+          with socket.create_connection(('127.0.0.1',port),timeout=3) as raw:
             with context.wrap_socket(raw,server_hostname='localhost') as peer:
                 protocol=ClientProtocol(parse_uri(f'wss://localhost:{port}/echo'))
                 peer.sendall(protocol.connect().serialize())
@@ -107,19 +109,25 @@ def interoperate(binary,certs,out,env):
                     if not chunk:raise ValueError('EOF during independent Close')
                     response+=chunk
                 if response!=b'\x88\x02\x03\xe8':raise ValueError('independent Close echo mismatch')
-                plain=peer.unwrap();plain.shutdown(socket.SHUT_WR);plain.close()
-        closed(lines,'CLOSED 1 1 1')
+                if graceful:
+                    plain=peer.unwrap();plain.shutdown(socket.SHUT_WR);plain.close()
+                else:peer.shutdown(socket.SHUT_WR) # intentionally omit close_notify
+          closed(lines,'CLOSED 1 1 1' if graceful else 'CLOSED 13 8 0')
         rejected(port,wrong);closed(lines)
         rejected(port,context,'wrong.example');closed(lines)
-        try:
-            with connect(f'wss://127.0.0.1:{port}/denied',ssl=context,proxy=None,compression=None,open_timeout=3):pass
-        except InvalidStatus as error:
-            if error.response.status_code!=403:raise
-        else:raise ValueError('WSS policy rejection bypassed')
+        async def denied():
+            try:
+                async with connect(f'wss://127.0.0.1:{port}/denied',ssl=context,server_hostname='localhost',proxy=None,compression=None,open_timeout=3):pass
+            except InvalidStatus as error:
+                if error.response.status_code!=403:raise
+                trace.write('policy-rejected',status=error.response.status_code)
+            else:raise ValueError('WSS policy rejection bypassed')
+        asyncio.run(denied())
     text=server('interop','server.pem',healthy)
-    if len(re.findall(r'^CLOSED 1 1 1$',text,re.M))!=1:raise ValueError('independent WS/TLS close_notify missing')
+    if len(re.findall(r'^CLOSED 1 1 1$',text,re.M))!=9:raise ValueError('independent WS/TLS close_notify missing')
     server('expired','expired.pem',lambda port,lines:rejected(port,context))
-    result={'implementation':'websockets','version':websockets.__version__,'generations':8,'messages':16,'pings':8,'policy_rejections':1,'certificate_rejections':3,'graceful_closes':1,'truncated_closes':8,'status':'passed'}
+    verify_peer_diagnostics(out)
+    result={'implementation':'websockets','client_api':'asyncio','version':websockets.__version__,'generations':8,'messages':16,'pings':8,'policy_rejections':1,'certificate_rejections':3,'graceful_closes':9,'truncated_closes':1,'status':'passed'}
     verify_interop(result);return result
 
 def main():
@@ -131,7 +139,7 @@ def main():
     config='Release' if args.profile=='release' else 'Debug';env=os.environ.copy()
     if args.profile=='asan':env.update(ASAN_OPTIONS='halt_on_error=1',UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1')
     if args.profile=='tsan':env['TSAN_OPTIONS']='halt_on_error=1'
-    manifest={'schema':'gamenet.websocket_tls_contracts.v1','status':'failed','profile':args.profile,'workflow_sha':env.get('GITHUB_SHA'),'run_id':env.get('GITHUB_RUN_ID'),'run_attempt':env.get('GITHUB_RUN_ATTEMPT')}
+    manifest={'schema':'gamenet.websocket_tls_contracts.v2','status':'failed','profile':args.profile,'workflow_sha':env.get('GITHUB_SHA'),'run_id':env.get('GITHUB_RUN_ID'),'run_attempt':env.get('GITHUB_RUN_ATTEMPT')}
     def execute(name,command,succeeds=True):
         print('Running '+name,flush=True);(out/(name+'-command.json')).write_text(json.dumps(command,indent=2)+'\n',encoding='utf-8')
         with (out/(name+'.log')).open('wb') as log:r=subprocess.run(command,cwd=repo,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=1800)
@@ -177,8 +185,14 @@ def main():
         execute('ctest',command);expected=inventory if args.profile=='release' else CONTRACTS
         verify_results(ET.parse(out/'ctest-junit.xml').getroot(),expected);manifest['executed_tests']=len(expected)
         certs=build/'interop-certificates';execute('certificates',[str(integration),str(certs)])
+        manifest['timeout_race_proof']=reproduce(certs,out/'timeout-race-proof.json')
         binary=build/'tests'/('' if os.name!='nt' else config)/('gamenet_websocket_tls_echo_server'+('.exe' if os.name=='nt' else ''))
-        manifest['interop']=interoperate(binary,certs,out,env)
+        rounds=[]
+        for round_id in range(3):
+            location=out/('round-'+str(round_id));location.mkdir(exist_ok=True)
+            rounds.append(interoperate(binary,certs,location,env))
+        verify_interop_rounds(rounds);manifest['interop_rounds']=rounds
+        manifest['interop']=rounds[0]
         prefix=build/'prefix';execute('install',['cmake','--install',str(build),'--config',config,'--prefix',str(prefix)])
         for component in ['core','websocket','websocket_tls']:consumer(component+'-consumer',prefix,component)
         if args.profile=='release':

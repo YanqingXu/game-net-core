@@ -15,6 +15,13 @@ Core/WS/OpenSSL 依赖边界和严格 Close(1000)/close_notify 断言。Windows 
 完成 Windows/Linux Release、Windows ASan、Linux ASan/UBSan/TSan、多轮独立 WSS
 互操作、默认依赖隔离及现有 WS/RPC/HP1 fuzz 回归后提交 PR；不自动合并或发布。
 
+根因检查点：诊断提交 `00f8cee` 的托管 ASan 第 100 代捕获客户端 1006 与即时读取
+TimeoutError，服务端 WS Close 已接纳/加密。真实 TLS 记录头屏障在 Windows/Linux
+确定性重现 CPython 阻塞读缓存负 timeout、另一线程切换为正 timeout 后被误判超时。
+独立 peer 改为 pinned websockets asyncio 单 owner；仍严格检查 Close(1000, done)，
+每路线三轮、每轮八代完整关闭，加 stdlib 完整关闭和显式省略 close_notify 的截断反例。
+库 API、生产实现和依赖方向保持不变。根因与合同见 docs/development/wss_close_interop.md。
+
 ## UDP-C1：有界 UDP 传输与最小服务端（2026-11-12 用户授权）
 
 先重写 UDP active intent 和线程/所有权/测试规则，再实现默认关闭的独立

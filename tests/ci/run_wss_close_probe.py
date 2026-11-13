@@ -1,10 +1,10 @@
 # Copyright 2026 Yanqing Xu
 # SPDX-License-Identifier: Apache-2.0
 """Bounded diagnostic probe; full WSS contracts remain the qualification gate."""
-import argparse, hashlib, json, os, queue, re, ssl, subprocess, sys, threading
+import argparse, asyncio, hashlib, json, os, queue, re, ssl, subprocess, sys, threading
 from pathlib import Path
-from websockets.sync.client import connect
 from wss_interop_diagnostics import ClientTrace
+from wss_async_peer import exchange
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
               'commit_sha':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
               'workflow_sha':env.get('GITHUB_SHA'),'run_id':env.get('GITHUB_RUN_ID'),
               'run_attempt':env.get('GITHUB_RUN_ATTEMPT'),
-              'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest()}
+              'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'client_api':'asyncio'}
     process=subprocess.Popen([str(binary),str(certs/'server.pem'),str(certs/'key.pem'),'0','180'],
         stdout=subprocess.PIPE,stderr=subprocess.STDOUT,env=env)
     def reader():
@@ -46,21 +46,11 @@ def main():
         if not line.startswith('PORT '):raise ValueError('missing server port')
         port=int(line.split()[1]);context=ssl.create_default_context(cafile=str(certs/'ca.pem'))
         for generation in range(args.generations):
-            trace.records.clear()
-            with connect(f'wss://127.0.0.1:{port}/echo',ssl=context,server_hostname='localhost',
-                         proxy=None,compression=None,open_timeout=3,close_timeout=3,logger=trace.logger) as ws:
-                trace.capture(generation,'connected',ws)
-                text='secure € 😀 '+str(generation);ws.send([text[:3],text[3:]])
-                if ws.recv(timeout=3)!=text:raise ValueError('text mismatch')
-                payload=b'binary\0'+bytes(range(256))*273;ws.send([payload[:123],payload[123:]])
-                if ws.recv(timeout=3)!=payload:raise ValueError('binary mismatch')
-                if not ws.ping(b'wss-ping').wait(3):raise ValueError('Pong missing')
-                ws.close(1000,'done');trace.capture(generation,'closed',ws)
-                if ws.close_code!=1000:raise ValueError('WSS close incomplete')
+            asyncio.run(exchange(f'wss://127.0.0.1:{port}/echo',context,generation,trace))
             while True:
                 line=lines.get(timeout=5)
                 if line.startswith('CLOSED '):
-                    if line!='CLOSED 13 8 0':raise ValueError('unexpected layered close: '+line)
+                    if line!='CLOSED 1 1 1':raise ValueError('unexpected layered close: '+line)
                     break
             manifest['generations']+=1
         manifest['status']='passed'

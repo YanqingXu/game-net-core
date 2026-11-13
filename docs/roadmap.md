@@ -1,5 +1,15 @@
 # Roadmap
 
+## WSS close interoperability hardening (2026-11-13)
+
+The authorized follow-up captures the intermittent Windows peer failure and
+reproduces its cross-thread SSLSocket timeout transition at a real TLS record
+barrier. The pinned independent client uses one asyncio owner while retaining
+strict Close/close_notify assertions. Three rounds, correlated bounded layered
+diagnostics, explicit raw-FIN negatives and six native close interleavings
+extend existing contracts without installed API or dependency changes. See
+docs/development/wss_close_interop.md. This adds no release or HP0 promotion.
+
 ## Optional bounded UDP — UDP-C1 (2026-11-12)
 
 Separate user authorization enables default-OFF provisional GameNet::udp on
