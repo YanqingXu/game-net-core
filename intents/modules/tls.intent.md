@@ -89,6 +89,13 @@ results. Errors never become a successful handshake or silent clean EOF.
 
 ## Backpressure and close
 
+WSS close hardening (2026-11-13) additionally verifies queued plaintext,
+encrypted output and close_notify ordering under controlled peer EOF/alert
+interleavings. All SSL/BIO work and terminal cleanup stay on the connection
+owner; dispatch leases remain valid across reentrant close/release. Existing
+API and dependency discovery are unchanged. Non-installed independent peers
+record layered state; diagnostics cannot replace strict closure assertions.
+
 trySend only admits in Open, with count/byte caps, copying before Accepted.
 Rejected admission changes no ownership. Accepted plaintext remains queued until
 SSL consumes it, or is counted discarded on terminal failure. Ciphertext goes

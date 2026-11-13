@@ -3,6 +3,11 @@
 name: Optional WSS composition
 on:
   workflow_dispatch:
+    inputs:
+      close_diagnostics:
+        description: Run bounded close diagnostics instead of qualification
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths: ['src/**', 'include/**', 'tests/**', 'cmake/**', 'tools/**', 'CMakeLists.txt', '.github/workflows/websocket-tls.yml', 'intents/modules/tls.intent.md', 'intents/modules/rpc.intent.md', 'intents/modules/rpc_tls.intent.md', 'intents/modules/websocket.intent.md', 'intents/modules/websocket_tls.intent.md', 'rules/**']
@@ -15,7 +20,11 @@ concurrency:
   group: websocket-tls-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  close-diagnostics:
+    if: github.event_name == 'workflow_dispatch' && inputs.close_diagnostics
+    uses: ./.github/workflows/wss-close-diagnostics.yml
   websocket-tls:
+    if: github.event_name != 'workflow_dispatch' || !inputs.close_diagnostics
     name: WSS (${{ matrix.lane }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35

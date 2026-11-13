@@ -7,6 +7,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from run_websocket_contracts import CONTRACTS as WS,verify_results
 from run_tls_contracts import CONTRACTS as TLS
+from wss_interop_diagnostics import ClientTrace
 WSS={'contract.websocket_tls.test_websocket_tls_session','integration.websocket_tls.test_websocket_tls_tcp'}
 CONTRACTS=WS|TLS|WSS
 
@@ -74,14 +75,18 @@ def interoperate(binary,certs,out,env):
                 if expected and line!=expected:raise ValueError('unexpected layered close: '+line)
                 return line
     def healthy(port,lines):
+        trace=ClientTrace(out/'interop-client.jsonl')
         for generation in range(8):
-            with connect(f'wss://127.0.0.1:{port}/echo',ssl=context,server_hostname='localhost',proxy=None,compression=None,open_timeout=3,close_timeout=3,max_size=1024*1024) as ws:
+            trace.records.clear()
+            with connect(f'wss://127.0.0.1:{port}/echo',ssl=context,server_hostname='localhost',proxy=None,compression=None,open_timeout=3,close_timeout=3,max_size=1024*1024,logger=trace.logger) as ws:
+                trace.capture(generation,'connected',ws)
                 text='secure \u20ac \U0001f600 '+str(generation);ws.send([text[:3],text[3:]])
                 if ws.recv(timeout=3)!=text:raise ValueError('WSS text mismatch')
                 payload=b'binary\0'+bytes(range(256))*273;ws.send([payload[:123],payload[123:]])
                 if ws.recv(timeout=3)!=payload or not ws.ping(b'wss-ping').wait(3):raise ValueError('WSS binary/Pong mismatch')
                 ws.close(1000,'done')
-                if ws.close_code!=1000:raise ValueError('WSS close incomplete')
+                details=trace.capture(generation,'closed',ws)
+                if ws.close_code!=1000:raise ValueError('WSS close incomplete: '+json.dumps(details))
             closed(lines,'CLOSED 13 8 0') # pinned sync client closes TCP without close_notify
         # Independent stdlib TLS peer explicitly completes both shutdown layers.
         with socket.create_connection(('127.0.0.1',port),timeout=3) as raw:
