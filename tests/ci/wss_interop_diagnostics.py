@@ -58,7 +58,9 @@ def verify_peer_diagnostics(folder):
     closed=[e for e in connections if e['phase']=='closed']
     if len(connections)!=16 or len(connected)!=8 or len(closed)!=8 or set(connected)!=set(range(8)) or {e['generation'] for e in closed}!=set(range(8)):
         raise ValueError('incomplete client generation diagnostics')
-    server=[json.loads(line[6:]) for line in (folder/'interop-server.log').read_text(encoding='utf-8').splitlines() if line.startswith('TRACE ')]
+    # Native Windows diagnostics may use the process ANSI code page. Parse
+    # only our ASCII-prefixed JSON records; retain other log bytes verbatim.
+    server=[json.loads(line[6:]) for line in (folder/'interop-server.log').read_bytes().splitlines() if line.startswith(b'TRACE ')]
     for result in closed:
         if result['close_code']!=1000 or result['close_reason']!='done' or result['receive_exception']!='None' or result['parser_exception']!='None':
             raise ValueError('invalid client close diagnostics')

@@ -34,6 +34,8 @@ def diagnostic_guards():
             (folder/'interop-server.log').write_text(''.join('TRACE '+json.dumps(x)+'\n' for x in states))
             verify_peer_diagnostics(folder)
         verify((clients,servers))
+        with (folder/'interop-server.log').open('ab') as log:log.write(b'native system diagnostic: \xb3\xcc\xd0\xf2\n')
+        verify_peer_diagnostics(folder)
         for field,value in [('close_code',1006),('receive_exception','TimeoutError'),('trace',[])]:
             bad=copy.deepcopy(clients);bad[1][field]=value;rejects(verify,(bad,servers))
         for field,value in [('terminals',2),('tls_received_notify',0),('tcp_pending',1),('tls_pending',1),('tls_encrypted',0)]:
