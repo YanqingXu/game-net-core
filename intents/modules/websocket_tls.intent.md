@@ -74,6 +74,28 @@ Explicit abort is allowed to force-close. Close/abort before owner destruction.
 
 ## Verification
 
+The 2026-11-13 user-authorized close interoperability hardening preserves all
+installed APIs and dependency boundaries. Bounded non-installed diagnostics
+correlate each client generation with server WS/TLS/TCP ownership: sent/received
+Close frames, code/reason, SSL/receive exceptions, close_notify flags, pending
+bytes and unique terminal outcome. Strict Close(1000) and layered close checks
+remain mandatory. Retrying an intermittent failure is not root-cause evidence.
+Controllable record segmentation, Close/EOF/close_notify ordering and owner
+continuations must reproduce the identified failure before its fix and pass
+afterwards, with exactly one terminal and zero retained output. Existing tests
+below remain the contract anchors; Windows/Linux, sanitizer and independent
+multi-round WSS peers verify the final frozen source without skipped evidence.
+
+The captured legacy independent sync peer failed in CPython's blocking-read /
+positive-timeout transition across threads. A real TLS header barrier reproduces
+the false TimeoutError before a withheld record body is released. The pinned
+independent qualification peer now owns TLS on one asyncio loop and preserves
+Close(1000, done), sent/received frame and graceful layered-close assertions.
+Each of three rounds adds an explicit raw-FIN-without-close_notify negative
+peer. Per-generation client traces correlate with exactly one zero-residue
+server terminal. The listed evidence driver executes the TLS-header-barrier proof;
+its expected legacy error is root-cause proof, separate from successful peers.
+
 WS-C3 extends tests/integration/websocket_tls/test_websocket_tls_tcp.cpp with
 the same real loopback pressure/reconnect driver used by plain WS. It composes
 real authenticated TlsStream on the independent wire client and the WSS server;

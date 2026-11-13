@@ -71,13 +71,17 @@ with testing and both options ON. It accepts certificate/key, optional loopback
 port and bounded lifetime arguments; port zero prints its actual bound port.
 Its `/echo` policy and finite output cap support reproducible external peers.
 
-The independent pinned `websockets==15.0.1` sync client runs eight generations,
-16 fragmented Unicode/binary exchanges and eight Ping/Pong checks with strict
-CA/hostname validation. Its raw socket teardown omits TLS close_notify: each
-WS Close(1000) still produces an explicit truncated WSS terminal. An additional
-independent Python stdlib TLS peer performs masked WS Close plus `unwrap()` and
-must produce one fully graceful layered terminal. Unknown CA, wrong hostname,
-expired certificate and HTTP policy refusal are mandatory negative cases.
+The independent pinned `websockets==15.0.1` asyncio client keeps TLS I/O on one
+loop. Each of three rounds runs eight generations, 16 fragmented Unicode/binary
+exchanges and eight Ping/Pong checks with strict CA/hostname validation. Every
+healthy connection must receive Close(1000, done) and complete both TLS alerts.
+Independent stdlib TLS peers additionally verify masked WS Close plus unwrap()
+and a deliberate raw FIN without close_notify, with distinct strict terminal
+results. Unknown CA, wrong hostname, expired certificate and HTTP policy refusal
+are mandatory negative cases in every round. Bounded client frame/SSL traces
+correlate peer ports with WS/TLS/TCP state, ledgers and unique server terminals.
+The real TLS header barrier proof and captured legacy synchronous client race
+are described in [WSS close hardening](wss_close_interop.md).
 The test certificate issuer supplies SKI/AKI for strict X.509 verification;
 there is no insecure verification bypass.
 
@@ -86,5 +90,7 @@ Linux ASan/UBSan, Linux TSan and Windows ASan (ten WS/TLS/RPC-TLS/WSS tests).
 Every lane runs real independent WSS peers and installed Core/WS/WSS consumers.
 Release also builds and installs WS-only, TLS-only and both-OFF packages.
 Exact JUnit/inventories, source/run identity, commands, logs and file hashes are
-retained. Existing plain WS, RPC and HP1 fuzz remain independent regression gates.
+retained in the v2 WSS evidence manifest, including all three peer rounds and
+the separately classified legacy timeout proof. Existing plain WS, RPC and HP1
+fuzz remain independent regression gates.
 These finite correctness runs do not establish production capacity or endurance.

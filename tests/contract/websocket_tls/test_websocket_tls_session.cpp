@@ -141,5 +141,46 @@ void eofLeaseAndScheduling(TlsCertificates& cert) {
         GAMENET_TEST_ASSERT(f.messages==1 && f.serverClosed[0].websocket==WebSocketError::SchedulingRejected);f.settled();
     }
 }
+void closeInterleavings(TlsCertificates& cert) {
+    // Independent masked wire fragments cross separate TLS records. The peer
+    // may pipeline its close_notify immediately or wait for the echoed Close.
+    for(unsigned mode=0;mode<6;++mode){
+        WebSocketTlsOptions options;options.tls.bioCapacity=128;
+        options.tls.maxStepsPerDrive=2;options.tls.maxCipherSendChunkBytes=31;
+        options.websocket.codec.maxFramesPerPush=1;
+        TlsOptions clientOptions=options.tls;
+        WebSocketTlsFixture f(cert,options,clientOptions);
+        const auto frame=websocketClientFrame(8,std::string("\x03\xe8",2));
+        const auto expected=std::string("\x88\x02\x03\xe8",4);
+        bool closeSent=false,notifySent=false;
+        if(mode==1)f.ready=[&]{GAMENET_TEST_ASSERT(f.server->close()==WebSocketOperation::Accepted);};
+        f.clientData=[&](auto){
+            if(!closeSent && f.wire.find("\r\n\r\n")!=std::string::npos){
+                closeSent=true;
+                if(mode==3){notifySent=true;(void)f.client->shutdown();return;}
+                const auto prefix=mode==4?frame.size()-1:std::size_t{1};
+                GAMENET_TEST_ASSERT(f.client->trySend(std::string_view(frame).substr(0,prefix))==TlsOperation::Accepted);
+                if(mode!=4)GAMENET_TEST_ASSERT(f.client->trySend(std::string_view(frame).substr(prefix))==TlsOperation::Accepted);
+                if(mode==5){f.clientConnection->shutdown();return;}
+                if(mode!=2){notifySent=true;(void)f.client->shutdown();}
+            }
+            if(mode==2 && !notifySent && f.wire.find(expected)!=std::string::npos){notifySent=true;(void)f.client->shutdown();}
+        };
+        f.run([&]{return !f.serverClosed.empty() && !f.clientClosed.empty();});
+        GAMENET_TEST_ASSERT(closeSent && f.serverClosed.size()==1 && f.clientClosed.size()==1);
+        const auto snapshot=f.server->snapshot();
+        if(mode<3){
+            GAMENET_TEST_ASSERT(notifySent && f.wire.find(expected)!=std::string::npos &&
+                f.serverClosed[0].graceful() && f.clientClosed[0]==TlsError::Graceful &&
+                snapshot.websocket.sentClose && snapshot.websocket.receivedClose &&
+                snapshot.tls.sentCloseNotify && snapshot.tls.receivedCloseNotify);
+        }else{
+            GAMENET_TEST_ASSERT(!f.serverClosed[0].graceful());
+            if(mode==3 || mode==4)GAMENET_TEST_ASSERT(!snapshot.websocket.receivedClose);
+            if(mode==5)GAMENET_TEST_ASSERT(snapshot.tls.terminal==TlsError::Truncated);
+        }
+        f.settled();
+    }
 }
-int main(){TlsCertificates cert;handshakeAndClose(cert);certificateAndTimeouts(cert);serverCloseAndConstruction(cert);backpressure(cert);terminalPaths(cert);eofLeaseAndScheduling(cert);}
+}
+int main(){TlsCertificates cert;handshakeAndClose(cert);certificateAndTimeouts(cert);serverCloseAndConstruction(cert);backpressure(cert);terminalPaths(cert);eofLeaseAndScheduling(cert);closeInterleavings(cert);}
