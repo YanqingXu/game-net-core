@@ -19,6 +19,7 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
+from third_party_licenses import VENDORED_KCP, license_for_path, package_license, copyright_for_path
 
 
 LICENSE_ID = "Apache-2.0"
@@ -103,7 +104,7 @@ def _safe_relative(path: str) -> str:
 
 def _source_header_required(path: str) -> bool:
     pure = PurePosixPath(path)
-    return pure.name == "CMakeLists.txt" or pure.suffix.lower() in SOURCE_SUFFIXES
+    return license_for_path(path) == LICENSE_ID and (pure.name == "CMakeLists.txt" or pure.suffix.lower() in SOURCE_SUFFIXES)
 
 
 def resolve_commit(repo_root: Path, revision: str) -> tuple[str, str, int]:
@@ -168,6 +169,11 @@ def files_from_directory(root: Path) -> list[ReleaseFile]:
 
 def validate_project_metadata(files: Sequence[ReleaseFile], version: str) -> None:
     by_path = {item.path: item.data for item in files}
+    vendored = {"third_party/kcp/" + n for n in VENDORED_KCP}
+    if vendored & by_path.keys():
+        for name, digest in VENDORED_KCP.items():
+            if hashlib.sha256(by_path.get("third_party/kcp/" + name, b"")).hexdigest() != digest:
+                raise ValueError("missing/modified vendored KCP source or license: " + name)
     required = ("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md")
     is_source = "CMakeLists.txt" in by_path
     licensing: dict[str, bytes] = {}
@@ -335,8 +341,8 @@ def create_spdx_document(
                 "checksums": [{"algorithm": "SHA256", "checksumValue": artifact.sha256}],
                 "homepage": PROJECT_URL,
                 "sourceInfo": f"Git commit {commit}; tree {tree}",
-                "licenseConcluded": LICENSE_ID,
-                "licenseDeclared": LICENSE_ID,
+                "licenseConcluded": package_license(package_files),
+                "licenseDeclared": package_license(package_files),
                 "copyrightText": COPYRIGHT_TEXT,
                 "externalRefs": [
                     {
@@ -369,9 +375,9 @@ def create_spdx_document(
                         },
                         {"algorithm": "SHA256", "checksumValue": _sha256(item.data)},
                     ],
-                    "licenseConcluded": LICENSE_ID,
-                    "licenseInfoInFiles": [LICENSE_ID],
-                    "copyrightText": COPYRIGHT_TEXT,
+                    "licenseConcluded": license_for_path(item.path),
+                    "licenseInfoInFiles": [license_for_path(item.path)],
+                    "copyrightText": copyright_for_path(item.path),
                 }
             )
             relationships.append(

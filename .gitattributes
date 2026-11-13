@@ -2,3 +2,4 @@ docs/development/benchmark_results/2026-08-22-ioe-x10-f5d39b8/*.json text eol=lf
 docs/development/benchmark_results/2026-10-13-local-hp0-41ba8f4/*.json text eol=lf
 docs/development/benchmark_results/2026-10-13-local-hp0-41ba8f4/*.zip -text
 tests/fuzz/corpus/hp1_packet_framer_view/* binary
+third_party/kcp/* -text

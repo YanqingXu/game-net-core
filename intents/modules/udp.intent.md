@@ -11,10 +11,18 @@ source_paths: none
 
 # UDP-C1: bounded datagram socket and minimal server
 
+KCP-C1 integration exposed a UDP-C2 lifecycle scan edge: a close may seal a slot
+already visited by an unfinished bounded scan. A shared atomic dirty marker
+must carry that debt into another complete scan even when source signals merge.
+tests/contract/udp/test_udp_peer.cpp verifies this deterministic mid-scan close;
+KCP's immediate idle/close layering exercises the same production path. No UDP
+public API or dependency changes are authorized by this repair.
+
 The 2026-11-12 user authorization enables provisional GameNet::udp, default OFF,
 linking only Core. Existing Core API, TCP/TLS/WS behavior, releases and HP0 gates
 stay unchanged. This native contract supersedes the historical UDP design;
-KCP, PMTU policy and raw ICMP stay deferred. Separate 2026-11-13 UDP-C2
+PMTU policy and raw ICMP stay deferred. Separately authorized KCP-C1 composes
+UDP in its own optional GameNet::kcp target, without a reverse dependency. Separate 2026-11-13 UDP-C2
 authorization adds the bounded explicit peer layer below; the C1 socket API
 and native cancellation contract remain unchanged.
 

@@ -8,6 +8,7 @@ namespace gamenet::udp::detail {
 class UdpPeerTestAccess {
   public:
     static std::weak_ptr<void> state(const UdpPeerServer&);
+    static void visit(UdpPeerServer&);
     static void receive(UdpPeerServer&, const net::InetAddress&, std::string_view, bool = false);
     static void expire(UdpPeerServer&);
     static std::uint64_t nativeId(const UdpPeerServer&);
