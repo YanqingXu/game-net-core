@@ -391,17 +391,22 @@ void IocpPoller::trackCompletionOperation(void* operation) {
 bool IocpPoller::commitNativeCompletionSubmission(
     void* operation,
     std::shared_ptr<void> lifetime) {
-    if (operation == nullptr || !lifetime ||
-        retainedOperations_.contains(operation)) {
-        return false;
-    }
-    const auto [retained, inserted] = retainedOperations_.emplace(
-        operation,
-        std::move(lifetime));
-    if (!inserted) {
+    if (operation == nullptr || !lifetime) {
         return false;
     }
     auto* completion = static_cast<IocpOperation*>(operation);
+    auto retained = retainedOperations_.find(operation);
+    if (retained != retainedOperations_.end()) {
+        // Optional datagrams reserve storage before the OS call. The matching
+        // prepared entry can now commit without allocating; accepted duplicate
+        // submissions and a different storage owner remain rejected.
+        if (!completion->submissionPrepared || completion->submissionAccepted ||
+            retained->second.get() != lifetime.get()) {
+            return false;
+        }
+    } else {
+        retained = retainedOperations_.emplace(operation, std::move(lifetime)).first;
+    }
     completion->observerSource = kInvalidSocket;
     completion->observerRegistrationGeneration = 0;
     completion->observerIdentityCaptured = true;

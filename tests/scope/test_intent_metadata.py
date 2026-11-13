@@ -25,6 +25,7 @@ ALLOWED_TARGETS = {
     "GameNet::core",
     "GameNet::protocol",
     "GameNet::rpc",
+    "GameNet::udp",
     "GameNet::websocket",
     "GameNet::websocket_tls",
     "GameNet::rpc_tls",
@@ -91,6 +92,7 @@ PHASE4_ACTIVE_INTENTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/modules/udp.intent.md": ("installed-library", "GameNet::udp"),
     "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
     "intents/modules/tls.intent.md": ("installed-library", "GameNet::tls"),
     "intents/modules/rpc.intent.md": ("installed-library", "GameNet::rpc"),

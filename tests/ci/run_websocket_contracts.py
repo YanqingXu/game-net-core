@@ -101,7 +101,7 @@ def main() -> None:
         return text
     def configure(directory,enabled):
         command=['cmake','-S',str(repo),'-B',str(directory),'-DCMAKE_BUILD_TYPE='+configuration,
-            '-DGAMENET_ENABLE_WEBSOCKET='+('ON' if enabled else 'OFF'),'-DGAMENET_ENABLE_TLS=OFF',
+            '-DGAMENET_ENABLE_WEBSOCKET='+('ON' if enabled else 'OFF'),'-DGAMENET_ENABLE_TLS=OFF','-DGAMENET_ENABLE_UDP=OFF',
             '-DGAMENET_BUILD_TESTING=ON','-DGAMENET_BUILD_BENCHMARKS=OFF','-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON']
         command+=['-A','x64'] if os.name=='nt' else ['-G','Ninja']
         if enabled and args.profile in {'asan','fuzz'}:command+=['-DGAMENET_ENABLE_ASAN_UBSAN=ON']
@@ -145,7 +145,7 @@ def main() -> None:
         else:
             inventory=verify_inventory(json.loads(execute('inventory',['ctest','--test-dir',str(build),'-C',configuration,'--show-only=json-v1'])))
             api=json.loads((repo/'api/public_api_manifest.json').read_text(encoding='utf-8'))
-            installed=['gamenet_'+n.split('::')[1] for group in api['targets'].values() for n in group if n not in {'GameNet::tls','GameNet::rpc_tls','GameNet::websocket_tls'}]
+            installed=['gamenet_'+n.split('::')[1] for group in api['targets'].values() for n in group if n not in {'GameNet::udp','GameNet::tls','GameNet::rpc_tls','GameNet::websocket_tls'}]
             targets=['gnt_'+n.split('.')[0]+'_websocket_'+hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
             command=['cmake','--build',str(build),'--config',configuration,'--parallel','2']
             if args.profile!='release':command+=['--target',*installed,*targets,'gamenet_websocket_echo_server']

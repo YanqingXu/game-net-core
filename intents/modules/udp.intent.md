@@ -1,157 +1,92 @@
 ---
-status: deferred
-target: GameNet::experimental
-migration_source: mini_trantor
-promote_gate: experimental-only
+status: active
+target: GameNet::udp
+migration_source: native
+promote_gate: none
+artifact_kind: installed-library
+migration_mode: native
+source_commit: none
+source_paths: none
 ---
 
-# Module Intent: UDP Transport
+# UDP-C1: bounded datagram socket and minimal server
 
-## 1. Intent
-UDP transport provides datagram-oriented network input/output on one owner
-EventLoop while preserving mini-trantor's Reactor scheduling discipline.
+The 2026-11-12 user authorization enables provisional GameNet::udp, default OFF,
+linking only Core. Existing Core API, TCP/TLS/WS behavior, releases and HP0 gates
+stay unchanged. This native contract supersedes the historical UDP design;
+KCP, peer/session maps, PMTU policy and raw ICMP stay deferred.
 
-It is the lightweight unreliable transport base for game traffic and for
-preview reliable transports such as KCP. It must not behave like a stream
-connection, and it must not monopolize the owner loop under datagram bursts.
+## Owner and lifetime
 
----
+One EventLoop owns the socket, Channel, operations, callbacks and snapshots.
+Factory/start/snapshot are owner-only. Wrapper destruction requests stop safely. sendTo and stop
+provide thread-safe typed admission; foreign callers never invoke user code.
+The loop outlives the socket and drains stop. Each generation starts once;
+repeat service runs use fresh objects and independent immutable ledgers.
+The wrapper owns state; active state has an explicit lease until settlement.
+Lifecycle/quit callbacks observe state weakly. Datagram/send/stopped callbacks
+may send, stop, throw or release caller references. Dispatch leases state.
+Exceptions stop explicitly without skipping accepted-send settlement. No new datagram callback is committed after the stop seal; a callback frame
+committed under the admission lock before stop may finish. Removed current Channels retire after dispatch.
+Stopped occurs once after zero reservations, queue and native operations.
 
-## 2. Responsibilities
-- own one non-blocking UDP socket and its Channel registration
-- receive datagrams on the owner EventLoop thread
-- expose datagrams to UdpServer as packet callbacks
-- send datagrams to explicit peer addresses
-- let UdpServer maintain peer-address to TransportSessionId mapping
-- limit the number of datagrams processed per read event with a read budget
-- emit lightweight read-batch metrics for fairness and burst diagnostics
-- optionally translate platform UDP PMTU events into path MTU failure callbacks
-  without parsing higher-level transport protocols; Linux uses `MSG_ERRQUEUE`,
-  while other platforms expose explicit adapter capability/query facts until
-  their runtime PMTU sources are validated
-- optionally run a Linux IPv4/IPv6 raw ICMP Packet Too Big listener and convert
-  matching quoted UDP datagrams into the same value-semantic path MTU failure
-  callback
-- preserve the PMTU signal source and a bounded quoted UDP payload prefix in
-  `PathMtuFailure` so higher-level transports can decide whether the signal is
-  authentic for their protocol/session
+## Admission and budgets
 
----
+Every admitted send owns one copied datagram and nonzero id. A mutex protects
+packet AND byte reservations, including in-flight output; empty datagrams still
+consume packet capacity. Rejected sends retain nothing and have no completion.
+Accepted output terminates once as Sent, Cancelled or Error, after reservation
+release and before stopped. Sent means local OS completion, not peer delivery.
+For packets and bytes: accepted = sent + cancelled + failed + pending.
+No fallback queue/task follows capacity or lifecycle-admission refusal.
+Read and send turns have packet/byte budgets; byte budgets fit one maximum
+configured datagram. Linux recvmsg/sendto returns at would-block or budget.
+Windows uses one WSARecvFrom and one WSASendTo at a time, real IOCP identity,
+storage leases and bounded owner completion/lifecycle phases. Operation reuse
+waits for terminal consumption. Stop/quit cancellation retains OVERLAPPED,
+address, buffer and payload storage through late completion and revoked
+observers. A source-private access seam adds no public Core operation/API.
 
-## 3. Non-Responsibilities
-- does not provide reliable delivery by itself
-- does not parse game protocol frames
-- does not own player/session business state
-- does not implement global traffic fairness across multiple sockets
-- does not implement cross-platform raw ICMP or KCP-specific PMTU policy
-- does not decide userspace ICMP authentication; it only supplies the bounded
-  quoted UDP payload evidence to the consumer
-- does not bypass EventLoop scheduling for cross-thread send/stop requests
+## Datagram semantics
 
----
+IPv4/IPv6 preserve family and datagram boundaries; IPv6 sets IPV6_V6ONLY.
+Empty receive is data, never EOF. Finite receive storage yields a bounded
+prefix plus explicit truncated flag; original length is not invented. Linux
+uses recvmsg MSG_TRUNC, Windows recognizes WSAEMSGSIZE completion. Subsequent
+packets remain usable. Oversize/family mismatch output rejects atomically.
+Permanent receive/submission failure stops explicitly. ICMP errors do not
+acquire TCP connection semantics. Callback exceptions cannot strand cleanup.
 
-## 4. Core Invariants
-- UdpSocket fd and Channel state belong to exactly one owner EventLoop
-- Channel registration changes happen only on the owner loop
-- read callbacks run on the owner loop and return after at most the configured
-  datagram budget
-- platform PMTU signal adapter drain runs from the owner-loop Channel error
-  handler; synchronous send `EMSGSIZE` callbacks run in the caller context and
-  are intended for owner-loop send paths
-- raw ICMP listener Channel registration and read handling run only on the
-  owner EventLoop; received ICMP/ICMPv6 packets are filtered by quoted UDP
-  source port before emitting a path MTU failure sample
-- `PathMtuFailure` is a value-semantic sample. Its source enum and quoted UDP
-  payload prefix are advisory evidence, not ownership of packet storage or
-  higher-level session state.
-- stop disables read interest and removes the Channel before destruction
-- UdpServer session maps are cleared on stop
-- stop-after-send requests are dropped by the owner-loop started gate
+## Verification
 
----
+- tests/unit/udp/test_udp_options.cpp: option bounds and invalid setup.
+- tests/contract/udp/test_udp_socket.cpp: IPv4/IPv6, empty/exact/oversize packets,
+  truncation/recovery, packet/byte admission, foreign send/stop, executor
+  saturation, reentry/exception/release, quit, IOCP cancellation, zero residue.
+- tests/integration/udp/test_udp_stress.cpp: real bursts must refuse then
+  recover, timer/second socket fairness, repeated fresh starts/stops and weak
+  generation expiry without stale callbacks.
+- Independent Python UDP peers use both families, binary/empty payloads and
+  the minimal echo server. Execute Windows/Linux Release, ASan/UBSan/TSan,
+  exact inventories, ON/OFF installed isolation and all existing regressions.
+Short stress provides correctness evidence, not capacity/endurance promotion.
 
-## 5. Threading Rules
-- recv and callback dispatch run on the owner EventLoop thread
-- send/close/stop requested cross-thread must marshal to the owner loop through
-  EventLoop APIs
-- metrics callbacks run synchronously on the owner loop and must stay lightweight
-- raw ICMP listener enable/disable is an owner-loop operation; callers must not
-  use it as a cross-thread setter
-- read budget configuration is intended to be set before start or from the owner
-  loop
+The exact evidence driver tests/ci/run_udp_contracts.py and negative-evidence
+guard tests/ci/test_udp_workflow.py run in the dedicated optional UDP workflow.
 
----
+Stop before start releases the unregistered socket/storage and returns Stopped
+without callbacks. A stop racing start seals admission; start commits a final
+lifecycle signal so no request is lost. After registration removal, socket close
+ensures native cancellation progresses while operation/payload leases remain.
 
-## 6. Ownership Rules
-- UdpServer owns UdpSocket through unique_ptr
-- UdpSocket owns Socket and Channel, but does not own EventLoop
-- UdpSocket owns no platform PMTU adapter state; adapter functions are invoked
-  synchronously from owner-loop paths and emit value-semantic samples
-- UdpSocket owns the optional raw ICMP listener through unique_ptr; the listener
-  owns its raw socket and Channel and is stopped before UdpSocket releases it
-- UdpTransportEndpoint observes UdpServer lifetime through a token and does not
-  extend server lifetime
-- UdpServer owns peer/session maps; upper layers should treat session ids as
-  handles, not ownership tokens
+The socket state machine is Created -> Starting -> Running -> Stopping -> Stopped,
+with direct Created -> Stopped on an unstarted stop. Starting seals concurrent
+stop without allowing callbacks or native storage to escape registration.
 
----
+Connection-refused/reset receive indications are per-datagram ICMP diagnostics,
+counted without inventing a peer or closing the shared socket; later valid
+datagrams must recover. Other permanent receive failures stop explicitly.
 
-## 7. Failure Semantics
-- EAGAIN/EWOULDBLOCK ends the current read batch normally
-- EINTR retries without consuming read budget
-- send errors that are not transient are reported through the error callback
-- local `EMSGSIZE` and Linux error queue `EMSGSIZE` may emit a path MTU failure
-  callback with peer address, failed UDP payload size, and any kernel-suggested
-  safe UDP payload size; local/error-queue paths also preserve a bounded copy
-  of the original UDP payload prefix when available
-- unsupported builds keep async platform PMTU signals disabled through explicit
-  adapter capability facts and return false when async configuration is requested
-- raw ICMP listener setup is best-effort: Linux IPv4/IPv6 builds may fail
-  without `CAP_NET_RAW`; unsupported or permission-denied setup returns false
-  and leaves normal UDP/KCP probing behavior intact
-- stop is idempotent and clears session state
-- budget exhaustion returns control to EventLoop; level-triggered readiness will
-  deliver remaining datagrams in later loop iterations
-
----
-
-## 8. Extension Points
-- configurable read budget per UdpSocket/UdpServer
-- read-batch metrics for datagrams, bytes, duration, and budget exhaustion
-- optional path MTU failure callback for reliability layers that own PMTU policy
-- platform PMTU signal adapter for Linux error queue, explicit capability facts,
-  and connected-socket MTU query hooks when the OS exposes them
-- optional IPv4/IPv6 raw ICMP Packet Too Big parser/listener for PMTU signal preview
-- KCP or other reliability layers may reuse UdpSocket without changing EventLoop
-  ownership semantics
-
----
-
-## 9. Test Contracts
-- UdpSocket loopback send/receive works on the owner loop
-- UdpSocket read handler stops at the configured datagram budget
-- UdpServer forwards read-budget configuration to its socket
-- read-batch metrics run on the owner loop and report budget exhaustion
-- UdpSocket reports synchronous `EMSGSIZE` as a path MTU failure event
-- PathMtuSignalAdapter preserves UDP payload-size conversion, Linux error queue
-  configure/drain semantics, platform capability reporting, and unsupported
-  platform disablement
-- IPv4 raw ICMP and ICMPv6 Packet Too Big parsers extract peer address, failed
-  UDP payload size, and suggested safe UDP payload size while rejecting wrong
-  local ports; they also mark the signal as raw ICMP and preserve a bounded
-  quoted UDP payload prefix for upper-layer authentication
-- cross-thread send and stop still marshal safely and drop sends after stop
-
----
-
-## 10. Review Checklist
-- Does read handling return to EventLoop after the configured budget?
-- Are Channel mutations still owner-loop only?
-- Are metrics callbacks lightweight and owner-loop scoped?
-- Is path MTU callback free of higher-level session ownership or protocol parsing?
-- Is quoted UDP payload preservation bounded and left as evidence for consumers,
-  rather than turning UDP into a KCP parser?
-- Is platform PMTU signal handling isolated from UdpSocket ownership and thread state?
-- Is raw ICMP/ICMPv6 setup best-effort, owner-loop scoped, and filtered before callback?
-- Does stop still converge on remove-before-destroy?
-- Does UdpServer avoid holding session-map locks while invoking user callbacks?
+A deterministic pre-callback hook in the datagram contract seals from a foreign
+thread between native receive and callback commitment and verifies no callback
+is committed, while native storage still retires to zero.

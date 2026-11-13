@@ -1,5 +1,18 @@
 # Roadmap
 
+## Optional bounded UDP — UDP-C1 (2026-11-12)
+
+Separate user authorization enables default-OFF provisional GameNet::udp on
+Windows IOCP and Linux epoll, using existing Core types without changing its
+installed headers. Native datagrams retain boundaries, empty payloads and
+explicit truncation. Bounded packet/byte admission and batches, cross-thread
+stop, native lease retirement, callback release and exactly-once completion
+settle to zero. Dual-family independent peers, sanitizer profiles, real burst
+refusal/recovery, fairness and fresh-generation restarts are regression gates.
+See docs/development/udp.md. Historical M10 findings stay historical; KCP/PMTU
+remain deferred. This does not close HP0 or authorize a release.
+
+
 ## WS/WSS session validation — WS-C3 (2026-11-12)
 
 The user-authorized validation milestone reuses existing installed APIs and

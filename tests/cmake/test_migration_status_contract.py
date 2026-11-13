@@ -701,8 +701,15 @@ def main() -> None:
     require(m10_readiness_text, "skipped-by-evidence", m10_readiness)
     require(m10_readiness_text, "advances to M11", m10_readiness)
     for name, path in m10_intents.items():
-        require(m10_intent_texts[name], "status: deferred", path)
-        require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
+        if name == "udp":
+            require(m10_intent_texts[name], "status: active", path)
+            require(m10_intent_texts[name], "target: GameNet::udp", path)
+            require(m10_intent_texts[name], "UDP-C1", path)
+            require(intents_index_text.split("## Active Intents", 1)[1].split("## Deferred Intent Catalog", 1)[0], f"- `intents/modules/{name}.intent.md`", intents_index)
+            assert f"- `intents/modules/{name}.intent.md`" not in deferred_catalog
+        else:
+            require(m10_intent_texts[name], "status: deferred", path)
+            require(deferred_catalog, f"- `intents/modules/{name}.intent.md`", intents_index)
         require(m10_readiness_text, f"`{name}`", m10_readiness)
     for text, source in (
         (status_text, migration_status),
@@ -867,14 +874,14 @@ def main() -> None:
             for term in ("udp", "kcp", "mtu", "datagram")
         )
     ]
-    assert not installed_m10_headers, (
-        "M10 closure must not install UDP/KCP/PMTU/datagram headers: "
-        + ", ".join(str(path) for path in installed_m10_headers)
-    )
+    assert {path.relative_to(repo_root).as_posix() for path in installed_m10_headers} == {
+        "include/gamenet/udp/UdpSocket.h"
+    }, "UDP-C1 authorizes only the explicit UDP surface; KCP/PMTU remain deferred"
+    require((repo_root / "CMakeLists.txt").read_text(), 'option(GAMENET_ENABLE_UDP "Build bounded UDP transport" OFF)', plan)
+    require((repo_root / "src/udp/CMakeLists.txt").read_text(), "add_library(GameNet::udp ALIAS gamenet_udp)", plan)
     for target in (
         "GameNet::experimental_datagram",
         "gamenet_experimental_datagram",
-        "gamenet_udp",
         "gamenet_kcp",
     ):
         assert target not in tracked_cmake_text

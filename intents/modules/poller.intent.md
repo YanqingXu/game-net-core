@@ -238,3 +238,15 @@ into production `EpollReadinessPort`, change Linux epoll/Windows IOCP defaults,
 own a Channel, invoke callbacks, or present portable decode timing as native
 epoll evidence. Formal integration still requires the existing readiness
 contracts on Linux plus active-batch lifecycle validation.
+
+## UDP-C1 source-private composition
+
+Optional UDP reuses Read/Write IOCP identities, operation leases and tracked
+cancellation through a non-installed owner access seam. A weak quit participant
+and current-Channel retirement preserve existing lifecycle rules. Zero/truncated
+datagram policy stays in UDP; no public Core API/TCP behavior changes.
+
+UDP reserves its completion storage map entry before the native call, then
+commits the prepared entry without allocation only after OS acceptance. A
+synchronous failure erases the reserved entry and creates no terminal notice
+or shutdown obligation. Existing unreserved TCP submission keeps its contract.

@@ -27,6 +27,7 @@
       "GameNet::rpc_tls",
       "GameNet::tls",
       "GameNet::transport",
+      "GameNet::udp",
       "GameNet::websocket",
       "GameNet::websocket_tls"
     ],
@@ -65,6 +66,7 @@
       "include/gamenet/tls/TlsStream.h",
       "include/gamenet/transport/TcpTransportEndpoint.h",
       "include/gamenet/transport/TransportEndpoint.h",
+      "include/gamenet/udp/UdpSocket.h",
       "include/gamenet/websocket/WebSocketCodec.h",
       "include/gamenet/websocket/WebSocketSession.h",
       "include/gamenet/websocket/WebSocketTransport.h",

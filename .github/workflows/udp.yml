@@ -1,0 +1,75 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+name: Optional bounded UDP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/**','include/**','tests/**','examples/**','cmake/**','tools/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/udp.intent.md','rules/**','.github/workflows/udp.yml']
+  pull_request:
+    branches: [main]
+    paths: ['src/**','include/**','tests/**','examples/**','cmake/**','tools/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/udp.intent.md','rules/**','.github/workflows/udp.yml']
+permissions:
+  contents: read
+concurrency:
+  group: udp-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  udp:
+    name: UDP (${{ matrix.lane }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - lane: linux-release
+            os: ubuntu-24.04
+            profile: release
+          - lane: linux-asan-ubsan
+            os: ubuntu-24.04
+            profile: asan
+          - lane: linux-tsan
+            os: ubuntu-24.04
+            profile: tsan
+          - lane: windows-release
+            os: windows-latest
+            profile: release
+          - lane: windows-asan
+            os: windows-latest
+            profile: asan
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure TSan address space
+        if: matrix.profile == 'tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Verify UDP intent and exact evidence guards
+        run: |
+          python tests/ci/test_udp_workflow.py
+          python tests/scope/test_intent_semantics.py --with-udp
+      - name: Build and verify UDP contracts, peers and packages
+        shell: bash
+        run: |
+          python tests/ci/run_udp_contracts.py --profile '${{ matrix.profile }}' --build-dir build-udp --output out/udp-evidence
+      - name: Retain UDP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/udp-evidence/
+          if-no-files-found: error
+          retention-days: 14

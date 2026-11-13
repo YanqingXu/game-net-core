@@ -1044,3 +1044,14 @@ py -3 tests\ci\test_phase4_benchmark_workflow.py
 
 The local command and CI workflow should stay aligned so test results remain
 comparable across developer machines and remote validation.
+
+## Optional UDP-C1
+
+`.github/workflows/udp.yml` executes Windows/Linux Release (136 tests each),
+Windows ASan and Linux ASan/UBSan/TSan (all three UDP tests), strict independent
+stdlib Python IPv4/IPv6 peers, installed UDP/Core consumers and physical default
+OFF isolation. The default inventory remains 133; existing TLS/WS/WSS and fuzz
+lanes stay separate. run_udp_contracts.py retains exact source/run/attempt,
+commands, raw logs/JUnit, executable and file hashes. test_udp_workflow.py rejects
+missing/disabled/skipped cases, wrong family/count/interoperability evidence and
+missing workflow lanes. Short stress is correctness evidence, not performance.

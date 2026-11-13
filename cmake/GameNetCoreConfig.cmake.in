@@ -72,4 +72,15 @@ if(GameNetCore_FIND_REQUIRED_experimental_io_uring
     )
 endif()
 
+
+
+set(GameNetCore_udp_FOUND FALSE)
+if("udp" IN_LIST GameNetCore_FIND_COMPONENTS AND @GAMENET_ENABLE_UDP@)
+    include("${CMAKE_CURRENT_LIST_DIR}/GameNetUdpTargets.cmake")
+    set(GameNetCore_udp_FOUND TRUE)
+endif()
+if(GameNetCore_FIND_REQUIRED_udp AND NOT GameNetCore_udp_FOUND)
+    set(GameNetCore_NOT_FOUND_MESSAGE "Required component udp is unavailable; install a package built with GAMENET_ENABLE_UDP=ON.")
+endif()
+
 check_required_components(GameNetCore)
