@@ -1,14 +1,22 @@
 # Copyright 2026 Yanqing Xu
 # SPDX-License-Identifier: Apache-2.0
-import copy,json
+import copy,json,subprocess
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from run_kcp_contracts import CONTRACTS,UDP_CONTRACTS,INTEROP,verify_inventory,verify_results,verify_interop
+from kcp_interop import verify_settled_reset
 def rejects(f,v):
     try:f(v)
     except ValueError:return
     raise AssertionError('invalid KCP evidence accepted')
 def main():
+    class Process:
+        def __init__(self,code):self.code=code
+        def wait(self,timeout):
+            if self.code is None:raise subprocess.TimeoutExpired('test-peer',timeout)
+            return self.code
+    verify_settled_reset(Process(0))
+    for code in [None,1,-1]:rejects(verify_settled_reset,Process(code))
     names=[*[f'baseline.test.{i}' for i in range(133)],*sorted(UDP_CONTRACTS|CONTRACTS)]
     inventory={'tests':[{'name':n,'properties':[{'name':'LABELS','value':['kcp'] if n in CONTRACTS else ['other']}]} for n in names]}
     verify_inventory(inventory)

@@ -9,6 +9,14 @@ EXPECTED={'implementation':'unmodified-upstream','families':[4,6],'messages':8,
           'data_loss_directions':4,'ack_loss_directions':4,'duplicate_directions':4,
           'reorder_directions':4,'bounded_proxy':128,'zero_residue':True,'status':'passed'}
 
+def verify_settled_reset(process):
+    # Windows can report delayed ICMP port-unreachable after a peer closes its
+    # socket normally. Accept it only after that exact peer exits successfully;
+    # its strict native/settlement summary is still checked below.
+    try:code=process.wait(timeout=0.25)
+    except subprocess.TimeoutExpired as error:raise ValueError('UDP reset while KCP peer is active') from error
+    if code!=0:raise ValueError('UDP reset from failed KCP peer')
+
 def verify_evidence(output):
     output=Path(output)
     for family in (4,6):
@@ -50,10 +58,14 @@ def interoperate(server,reference,output,env):
                 if not line.startswith('PORT '):raise ValueError('peer did not announce port: '+line)
                 addresses.append((host,int(line[5:])))
             pending=[];serial=0;packet=[0,0];drops=[[False,False],[False,False]];duplicates=[False,False];reordered=[False,False]
-            peak=0;counts=[0,0];deadline=time.monotonic()+25
+            peak=0;counts=[0,0];post_exit_resets=[0,0];deadline=time.monotonic()+25
             while time.monotonic()<deadline:
                 for source in select.select(sockets,[],[],0.001)[0]:
-                    direction=sockets.index(source);data,peer=source.recvfrom(65536)
+                    direction=sockets.index(source)
+                    try:data,peer=source.recvfrom(65536)
+                    except ConnectionResetError as error:
+                        if getattr(error,'winerror',None)!=10054:raise
+                        verify_settled_reset(processes[direction]);post_exit_resets[direction]+=1;continue
                     if peer[:2]!=addresses[direction]:raise ValueError('unexpected interop UDP source')
                     if not 24<=len(data)<=1200:raise ValueError('nonstandard KCP datagram size')
                     at=0;commands=[]
@@ -91,7 +103,7 @@ def interoperate(server,reference,output,env):
             if summaries[0]!={'status':'passed','received':4,'acknowledged':4,'closed':1,'stopped':1,'residual':0}:raise ValueError('server settlement mismatch')
             if summaries[1]!={'implementation':'unmodified-upstream','status':'passed','messages':4}:raise ValueError('upstream message oracle mismatch')
             if not all(all(d) for d in drops) or not all(duplicates) or not all(reordered):raise ValueError('impairment coverage incomplete')
-            (output/f'{family}-proxy.json').write_text(json.dumps({'drops':drops,'duplicates':duplicates,'reordered':reordered,'peak':peak,'forwarded':counts,'summaries':summaries},indent=2)+'\n',encoding='utf-8')
+            (output/f'{family}-proxy.json').write_text(json.dumps({'drops':drops,'duplicates':duplicates,'reordered':reordered,'peak':peak,'forwarded':counts,'post_exit_resets':post_exit_resets,'summaries':summaries},indent=2)+'\n',encoding='utf-8')
         finally:
             for p in processes:
                 if p.poll() is None:p.kill();p.wait(timeout=5)
