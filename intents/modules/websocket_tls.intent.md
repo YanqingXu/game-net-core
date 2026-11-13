@@ -93,7 +93,7 @@ independent qualification peer now owns TLS on one asyncio loop and preserves
 Close(1000, done), sent/received frame and graceful layered-close assertions.
 Each of three rounds adds an explicit raw-FIN-without-close_notify negative
 peer. Per-generation client traces correlate with exactly one zero-residue
-server terminal. tests/ci/wss_timeout_repro.py is called by the evidence driver;
+server terminal. The listed evidence driver executes the TLS-header-barrier proof;
 its expected legacy error is root-cause proof, separate from successful peers.
 
 WS-C3 extends tests/integration/websocket_tls/test_websocket_tls_tcp.cpp with

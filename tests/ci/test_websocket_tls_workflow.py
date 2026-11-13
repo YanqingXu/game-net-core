@@ -23,7 +23,8 @@ def diagnostic_guards():
              'close_received':"Close(code=1000, reason='done')",'trace':[{'message':'> CLOSE 1000 (OK) done'},{'message':'< CLOSE 1000 (OK) done'}]}])
         servers.append({'event':'closed','peer_port':10000+generation,'terminals':1,'ws_sent_close':1,'ws_received_close':1,
             'tls_sent_notify':1,'tls_received_notify':1,'tcp_pending':0,'ws_controls':0,'ws_input':0,'tls_pending':0,'tls_input':0,
-            'tls_output':0,'tls_accepted':16,'tls_encrypted':16,'tls_discarded':0})
+            'tls_output':0,'tls_accepted':16,'tls_encrypted':16,'tls_discarded':0,'ws_terminal':1,'tls_terminal':1,
+            'ws_fragmented':0,'ws_pending_controls':0,'ws_continuation':0,'tls_pending_writes':0,'ws_enqueued':8,'ws_admitted':8,'ws_discarded':0})
     clients.extend([{'event':'certificate-rejected'} for _ in range(3)]);clients.append({'event':'policy-rejected','status':403})
     with tempfile.TemporaryDirectory() as temporary:
         folder=Path(temporary)
@@ -38,6 +39,7 @@ def diagnostic_guards():
         for field,value in [('terminals',2),('tls_received_notify',0),('tcp_pending',1),('tls_pending',1),('tls_encrypted',0)]:
             bad=copy.deepcopy(servers);bad[0][field]=value;rejects(verify,(clients,bad))
         rejects(verify,(clients[:-1],servers));rejects(verify,(clients,servers[:-1]))
+        bad=copy.deepcopy(clients);bad[3]=copy.deepcopy(bad[1]);rejects(verify,(bad,servers))
 def main():
     diagnostic_guards()
     names=[*[f'baseline.{i}' for i in range(143-len(CONTRACTS))],*sorted(CONTRACTS)]

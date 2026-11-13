@@ -56,7 +56,7 @@ def verify_peer_diagnostics(folder):
     connections=[e for e in events if e['event']=='connection']
     connected={e['generation']:e for e in connections if e['phase']=='connected'}
     closed=[e for e in connections if e['phase']=='closed']
-    if len(connections)!=16 or len(connected)!=8 or len(closed)!=8 or set(connected)!=set(range(8)):
+    if len(connections)!=16 or len(connected)!=8 or len(closed)!=8 or set(connected)!=set(range(8)) or {e['generation'] for e in closed}!=set(range(8)):
         raise ValueError('incomplete client generation diagnostics')
     server=[json.loads(line[6:]) for line in (folder/'interop-server.log').read_text(encoding='utf-8').splitlines() if line.startswith('TRACE ')]
     for result in closed:
@@ -71,11 +71,14 @@ def verify_peer_diagnostics(folder):
         terminal=[e for e in server if e['event']=='closed' and e['peer_port']==port]
         if len(terminal)!=1:raise ValueError('missing unique correlated server terminal')
         state=terminal[0]
+        if state['ws_terminal']!=1 or state['tls_terminal']!=1:raise ValueError('non-graceful correlated terminal')
         if state['terminals']!=1 or not all(state[k] for k in ['ws_sent_close','ws_received_close','tls_sent_notify','tls_received_notify']):
             raise ValueError('incomplete layered close diagnostics')
-        if any(state[k] for k in ['tcp_pending','ws_controls','ws_input','tls_pending','tls_input','tls_output']):
+        if any(state[k] for k in ['tcp_pending','ws_controls','ws_input','ws_fragmented','ws_pending_controls','ws_continuation','tls_pending','tls_pending_writes','tls_input','tls_output']):
             raise ValueError('retained bytes in terminal diagnostics')
         if state['tls_accepted']!=state['tls_encrypted']+state['tls_discarded']:
             raise ValueError('TLS terminal ledger mismatch')
+        if state['ws_enqueued']!=state['ws_admitted']+state['ws_discarded']:
+            raise ValueError('WS terminal ledger mismatch')
     if len([e for e in events if e['event']=='certificate-rejected'])!=3 or [e['status'] for e in events if e['event']=='policy-rejected']!=[403]:
         raise ValueError('missing negative peer diagnostics')

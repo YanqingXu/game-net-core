@@ -34,10 +34,15 @@ struct Diagnostic {
                 <<",\"ws_terminal\":"<<int(s.websocket.terminal)
                 <<",\"ws_sent_close\":"<<s.websocket.sentClose<<",\"ws_received_close\":"<<s.websocket.receivedClose
                 <<",\"ws_controls\":"<<s.websocket.pendingControlBytes<<",\"ws_input\":"<<s.websocket.inputBytes
+                <<",\"ws_fragmented\":"<<s.websocket.fragmentedBytes<<",\"ws_pending_controls\":"<<s.websocket.pendingControls
+                <<",\"ws_continuation\":"<<s.websocket.continuationQueued
+                <<",\"ws_enqueued\":"<<s.websocket.enqueuedControlBytes<<",\"ws_admitted\":"<<s.websocket.admittedControlBytes
+                <<",\"ws_discarded\":"<<s.websocket.discardedControlBytes
                 <<",\"tls_phase\":"<<int(s.tls.phase)<<",\"tls_terminal\":"<<int(s.tls.terminal)
                 <<",\"tls_sent_notify\":"<<s.tls.sentCloseNotify<<",\"tls_received_notify\":"<<s.tls.receivedCloseNotify
                 <<",\"tls_accepted\":"<<s.tls.acceptedPlaintextBytes<<",\"tls_encrypted\":"<<s.tls.encryptedPlaintextBytes
                 <<",\"tls_discarded\":"<<s.tls.discardedPlaintextBytes<<",\"tls_pending\":"<<s.tls.pendingPlaintextBytes
+                <<",\"tls_pending_writes\":"<<s.tls.pendingWrites
                 <<",\"tls_input\":"<<s.tls.bufferedCipherInputBytes<<",\"tls_output\":"<<s.tls.bufferedCipherOutputBytes;
         }
         std::cout<<'}'<<std::endl;
