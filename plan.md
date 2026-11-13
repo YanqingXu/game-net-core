@@ -1,5 +1,30 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## UDP-C2：有界 peer/session 与 TransportEndpoint（2026-11-13 用户授权）
+
+先更新 active UDP/endpoint intent、线程/所有权/测试规则，再添加默认 OFF 的
+GameNet::udp 内的 UdpPeerServer/UdpPeer。UdpSocket 与 Core API 保持不变，udp 仍只
+链接 Core，无 OpenSSL/KCP 依赖。显式 openPeer，不从任意来源报文自动建立会话。
+owner 管理固定上限的槽、地址索引、generation、队列、轮转调度与空闲定时器。
+UDP-C2 各 server 间唯一非零 session id + 槽 generation 隔离旧 handle/任务/完成；地址不是认证身份，
+无 wire generation 的 UDP 旧报文不能与同地址新会话报文区分，不声称认证或重放防护。
+
+每 peer/全局 packet+byte 预算包含 native in-flight；空包仍占 packet 槽。单一共享 native
+输出按 peer 轮转，不堆叠第二个无界队列；普通有界 owner post 驱动数据，生命周期信号
+仅处理 stop/close/quit。拒绝零保留，已接纳输出恰好一次本地 Sent/Cancelled/Error，
+关闭先封口，queued 取消而已提交输出等待真实完成，closed 在本代零 pending 后一次触发。
+跨线程 requestClose 与 server stop 使用预注册生命周期通道，不受普通队列饱和影响。
+回调可重入、抛出或释放外部引用，旧代完成只结算旧代；stop 等底层 IOCP terminal 清算。
+空闲扫描和取消分批有界，关闭中的 peer 继续占容量直到结算。端点弱观察 server，
+现有 TransportEndpoint API 不变，UDP close 仅有本地语义。
+
+合同先于实现：tests/contract/udp/test_udp_peer.cpp，真实压力/换代
+tests/integration/udp/test_udp_peer_stress.cpp，共享有界序列执行器与
+tests/fuzz/udp/fuzz_udp_peer.cpp。独立 Python peer 验证双族、未知来源、空包/截断、
+显式换代和退出清算。Windows/Linux Release、Windows ASan、Linux ASan/UBSan/TSan、
+20,000-unit 状态 fuzz、ON/OFF 安装使用方和现有 CI/TLS/WS/WSS/RPC/HP1 回归通过后
+提交 PR；保留精确提交、JUnit、命令、原始日志、种子、单位数和哈希。无自动合并/发布。
+
 ## WSS 关闭互操作定位与回归加固（2026-11-13 用户授权）
 
 先扩展 WSS/TLS intent 与验证合同，再补充非安装互操作诊断。保留现有 API、默认开关、

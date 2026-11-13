@@ -14,7 +14,75 @@ source_paths: none
 The 2026-11-12 user authorization enables provisional GameNet::udp, default OFF,
 linking only Core. Existing Core API, TCP/TLS/WS behavior, releases and HP0 gates
 stay unchanged. This native contract supersedes the historical UDP design;
-KCP, peer/session maps, PMTU policy and raw ICMP stay deferred.
+KCP, PMTU policy and raw ICMP stay deferred. Separate 2026-11-13 UDP-C2
+authorization adds the bounded explicit peer layer below; the C1 socket API
+and native cancellation contract remain unchanged.
+
+## UDP-C2 explicit peer sessions and endpoint adaptation
+
+UdpPeerServer composes UdpSocket on one outliving EventLoop. Factory, start,
+openPeer, localAddress and snapshot are owner-only. No incoming packet creates
+a peer. A bounded address index selects an explicitly opened live peer; unknown
+sources are counted and dropped. IPv6 scope, address, family and port participate
+in address identity. Each fixed-capacity slot has a monotonically advanced
+generation; each opening also receives a nonzero TransportSessionId unique across
+UDP-C2 server instances in this process. Application-assigned TCP identities are
+not part of that allocator; C2 does not create a shared player/dual-channel map.
+Exhausted identity counters refuse rather than wrap. Duplicate live address opens
+reject. Closing peers occupy capacity until terminal settlement but no longer
+receive; a free slot may open the same address before an old completion arrives.
+Old handles/tasks/receipts retain their original identity and cannot mutate a
+replacement. Raw UDP has no authenticated identity or wire generation: delayed
+packets from the same source address cannot be classified as old/new sessions.
+
+UdpPeer implements existing TransportEndpoint without modifying its interface.
+send/sendDatagram/close run on owner; requestClose and isOpen are thread-safe.
+Owner executor remains safely observable after loop teardown. Handles weakly
+observe server state and do not extend loop lifetime. Closed handles report closed;
+live foreign sends reject. Endpoint send maps packet-size/resource refusal to
+Overloaded; direct sendDatagram preserves InvalidArgument/NoMemory results.
+Accepted means copied local admission; Sent means OS completion, never delivery.
+close has local UDP semantics, not a wire close handshake or remote EOF.
+
+Count AND byte limits apply per peer and globally, including the one shared native
+in-flight packet; empty packets consume a count slot. A ready-peer FIFO chooses one
+packet per peer per round. A single coalesced bounded normal owner post drives
+data; initial scheduling refusal rolls back admission, later scheduling failure
+seals service and cancels pending output. No data uses lifecycle priority to evade
+normal admission. Receive work is already bounded by C1. Idle checks and terminal
+cancellations have finite work-per-turn limits. Idle time measures admitted send
+or delivered receive, uses steady time, and does not refresh on rejected work.
+
+Peer requestClose seals admission under the same synchronization as send and
+datagram callback commitment, records first reason and signals the pre-attached
+lifecycle node without normal-queue allocation. Already committed callback frames
+may finish. Stop/quit seal all peers and native socket. Queued output cancels;
+an already submitted packet waits for its actual C1 terminal. Per-send callbacks
+release count/byte reservations before invocation and occur exactly once for
+accepted ids, zero for rejected work. Per-peer closed occurs once after zero
+pending; server stopped follows all peers, timer/lifecycle retirement and native
+socket Stopped with zero operations/storage. Created -> Running -> Stopping ->
+Stopped is one-shot; stop before start has no user callbacks.
+
+Caller owns wrapper; active state retains a settlement lease. Slots own peer
+records, public handles weakly observe state. Timers/normal posts/native bridges
+observe weakly; dispatch takes a state lease across callbacks. Callbacks may
+send/close/open/stop/throw/release wrapper or handles. Exceptions seal service;
+remaining obligations still settle. One callback cannot recursively dispatch the
+same receipt; old completion identity is ignored after its terminal removal.
+
+Direct contract: `tests/contract/udp/test_udp_peer.cpp` (identity, generations,
+caps, idle, bounded scheduling refusal, cross-thread close under saturation,
+reentry/exception/release, callback and packet/byte ledgers, weak expiry).
+Real fairness/reconnect: `tests/integration/udp/test_udp_peer_stress.cpp`.
+Bounded sequences share tests/support/UdpPeerSequence.h and
+`tests/fuzz/udp/fuzz_udp_peer.cpp`: independent per-id terminal ledger, stepwise
+count/byte ceilings, old receipts/handles, interleavings and final zero residue.
+Test-only receive/idle/late-completion controls are not installed, never replace
+real Windows/Linux native completion or independent dual-family peer evidence.
+All profiles retain exact inventory, hashes, raw results and 20,000 fuzz units.
+`tests/ci/run_udp_peer_fuzz.py` retains and independently rechecks raw bounded
+fuzz evidence; `tests/ci/test_udp_peer_fuzz.py` rejects count/seed/diagnostic drift.
 
 ## Owner and lifetime
 

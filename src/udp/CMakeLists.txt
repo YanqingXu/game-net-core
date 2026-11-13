@@ -1,6 +1,6 @@
 # Copyright 2026 Yanqing Xu
 # SPDX-License-Identifier: Apache-2.0
-add_library(gamenet_udp STATIC UdpSocket.cc)
+add_library(gamenet_udp STATIC UdpSocket.cc UdpPeer.cc)
 add_library(GameNet::udp ALIAS gamenet_udp)
 set_target_properties(gamenet_udp PROPERTIES EXPORT_NAME udp)
 target_include_directories(gamenet_udp PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)

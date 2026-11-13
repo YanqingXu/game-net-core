@@ -130,6 +130,8 @@ These intents apply to the current migrated core:
 - `intents/modules/rpc_tls.intent.md`
 - `intents/modules/tls.intent.md`
 - `intents/modules/udp.intent.md`
+  - UDP-C1 socket plus separately authorized UDP-C2 explicit bounded peer sessions;
+    both belong to default-OFF GameNet::udp. KCP/PMTU remain deferred.
 - `intents/modules/websocket.intent.md`
 - `intents/modules/websocket_tls.intent.md`
 - `intents/modules/transport_endpoint.intent.md`

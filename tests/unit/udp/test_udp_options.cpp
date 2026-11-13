@@ -1,7 +1,8 @@
 // Copyright 2026 Yanqing Xu
 // SPDX-License-Identifier: Apache-2.0
-#include "gamenet/udp/UdpSocket.h"
 #include "gamenet/core/net/EventLoop.h"
+#include "gamenet/udp/UdpPeer.h"
+#include "gamenet/udp/UdpSocket.h"
 #include "support/TestAssert.h"
 #include <stdexcept>
 using namespace gamenet;
@@ -17,6 +18,43 @@ static void unavailableLifecycle() {
                         !loop.attachedLifecycleNodeCount());
 }
 int main() {
+    udp::UdpPeerOptions{}.validate();
+    for (unsigned n = 0; n < 8; ++n) {
+        udp::UdpPeerOptions p;
+        switch (n) {
+        case 0:
+            p.maxPeers = 0;
+            break;
+        case 1:
+            p.maxPeers = 4097;
+            break;
+        case 2:
+            p.maxPendingDatagramsPerPeer = p.socket.maxPendingDatagrams + 1;
+            break;
+        case 3:
+            p.maxPendingBytesPerPeer = p.socket.maxDatagramBytes - 1;
+            break;
+        case 4:
+            p.maxPendingBytesPerPeer = p.socket.maxPendingBytes + 1;
+            break;
+        case 5:
+            p.maxPeersPerTurn = 0;
+            break;
+        case 6:
+            p.maxCompletionsPerTurn = 0;
+            break;
+        case 7:
+            p.idleTimeout = std::chrono::milliseconds(0);
+            break;
+        }
+        bool rejected = false;
+        try {
+            p.validate();
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        GAMENET_TEST_ASSERT(rejected);
+    }
     unavailableLifecycle();
     udp::UdpOptions{}.validate();
     for (unsigned i = 0; i < 9; ++i) {

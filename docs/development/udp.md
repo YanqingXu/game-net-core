@@ -1,5 +1,8 @@
 # Optional bounded UDP — UDP-C1
 
+UDP-C2 adds [explicit bounded peer sessions and endpoint adaptation](udp_peer.md)
+inside the same optional component. The C1 socket contract below is unchanged.
+
 UDP-C1 adds provisional `GameNet::udp`. Enable `GAMENET_ENABLE_UDP=ON`; the
 default build, installed Core discovery and existing TCP/TLS/WS use stay
 unchanged. UDP requires no OpenSSL or reliability library. The published v0.3.1
@@ -110,8 +113,8 @@ exceptions/reference release, stop/start races and eventual weak-state expiry.
 Windows additionally injects pre-submission allocation/native rejection and
 stops while real read and write operations await terminal consumption.
 
-The dedicated workflow runs Windows/Linux Release (136 tests each), Windows
-ASan and Linux ASan/UBSan/TSan (three UDP tests each), independent peers and
+The dedicated workflow runs Windows/Linux Release (138 tests each), Windows
+ASan and Linux ASan/UBSan/TSan (five UDP tests each), independent peers and
 installed consumers. Release lanes additionally build physical OFF packages.
 Exact commit/run/attempt, commands, JUnit, logs, executable/file hashes and
 interop counts are retained. Existing Core/TLS/WS/WSS/fuzz lanes remain separate

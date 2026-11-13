@@ -127,6 +127,7 @@ def main() -> None:
         {"name": "include/gamenet/rpc_tls/RpcTlsSession.h", "category": "provisional"},
         {"name": "include/gamenet/tls/TlsContext.h", "category": "provisional"},
         {"name": "include/gamenet/tls/TlsStream.h", "category": "provisional"},
+        {"name": "include/gamenet/udp/UdpPeer.h", "category": "provisional"},
         {"name": "include/gamenet/udp/UdpSocket.h", "category": "provisional"},
         {"name": "include/gamenet/websocket/WebSocketCodec.h", "category": "provisional"},
         {"name": "include/gamenet/websocket/WebSocketSession.h", "category": "provisional"},
@@ -191,6 +192,7 @@ def main() -> None:
     archived_candidate = copy.deepcopy(manifest)
     archived_candidate["targets"]["provisional"].remove("GameNet::udp")
     archived_candidate["headers"]["provisional"].remove("include/gamenet/udp/UdpSocket.h")
+    archived_candidate["headers"]["provisional"].remove("include/gamenet/udp/UdpPeer.h")
     archived_candidate["package_version"] = "0.3.0"
     archived_candidate["release_label"] = "v0.3.0-production-candidate"
     archived_candidate["targets"]["provisional"].remove("GameNet::websocket")

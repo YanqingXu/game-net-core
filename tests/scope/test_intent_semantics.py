@@ -150,7 +150,7 @@ EXPERIMENTAL_VERIFICATION_PATHS = {
     "tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp",
 }
 
-UDP_VERIFICATION_PATHS = {"tests/unit/udp/test_udp_options.cpp", "tests/contract/udp/test_udp_socket.cpp", "tests/integration/udp/test_udp_stress.cpp"}
+UDP_VERIFICATION_PATHS = {"tests/unit/udp/test_udp_options.cpp", "tests/contract/udp/test_udp_socket.cpp", "tests/integration/udp/test_udp_stress.cpp", "tests/contract/udp/test_udp_peer.cpp", "tests/integration/udp/test_udp_peer_stress.cpp"}
 
 WEBSOCKET_VERIFICATION_PATHS = {"tests/unit/websocket/test_websocket_codec.cpp", "tests/contract/websocket/test_websocket_session.cpp", "tests/integration/websocket/test_websocket_tcp.cpp"}
 

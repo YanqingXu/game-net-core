@@ -1,5 +1,15 @@
 # Migration Status
 
+## UDP-C2 explicit bounded peers (2026-11-13)
+
+The separately authorized UdpPeerServer/UdpPeer layer is part of default-OFF
+GameNet::udp. It adapts existing TransportEndpoint without Core/header changes
+or new runtime dependencies. Bounded peers/queues, generation-safe old handles,
+round-robin output, idle reclaim and exact terminal settlement have direct,
+native stress, independent peer and bounded state-fuzz gates. See
+docs/development/udp_peer.md. UDP wire identity/authentication, KCP and PMTU are
+outside this slice.
+
 ## Optional bounded UDP — UDP-C1 (2026-11-12)
 
 Separate user authorization enables default-OFF provisional GameNet::udp on
@@ -687,7 +697,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 77 | 50 | 16 | 11 | 247 |
+| 77 | 50 | 16 | 11 | 252 |
 
 ## Historical Production-Hardening Evidence
 

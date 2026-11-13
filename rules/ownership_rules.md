@@ -1,5 +1,16 @@
 # ownership_rules.md
 
+## UDP-C2
+
+Active server state owns bounded slots/queues and one settlement lease. Handles
+weakly observe it and retain immutable id/generation plus synchronized close
+gates; they can outlive server/loop safely. Weak timers/posts/bridges do not form
+cycles. Reservations include the sole native in-flight send and release before
+send callbacks. Closing peers remain charged until one closed callback at zero;
+stopped waits for peer/timer/native retirement. Late receipts use original
+generation and cannot address replacement state. User callbacks run under a
+dispatch lease and may release caller references.
+
 ## UDP-C1
 
 UDP wrapper owns state; active state has an explicit lease until stopped. Lifecycle callbacks are weak. Queued/in-flight packets retain count/byte reservations until exactly one completion. OVERLAPPED/address/WSABUF/payload survives cancellation until dequeue. Current removed Channels retire after dispatch; callbacks may release wrapper. Stopped follows zero native/queue/budget residue and callback clearing.

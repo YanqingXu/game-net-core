@@ -3,7 +3,7 @@
 import copy
 from pathlib import Path
 import xml.etree.ElementTree as ET
-from run_udp_contracts import CONTRACTS,INTEROP,verify_inventory,verify_results,verify_interop
+from run_udp_contracts import CONTRACTS,INTEROP,PEER_INTEROP,verify_inventory,verify_results,verify_interop,verify_peer_interop
 
 def rejects(function,value):
     try:function(value)
@@ -22,10 +22,13 @@ def main():
         bad=copy.deepcopy(root);ET.SubElement(bad[0],kind);rejects(lambda v:verify_results(v,CONTRACTS),bad)
     bad=copy.deepcopy(root);bad[0].set('status','notrun');rejects(lambda v:verify_results(v,CONTRACTS),bad)
     verify_interop(INTEROP)
+    verify_peer_interop(PEER_INTEROP)
+    for key,value in [('families',[4]),('datagrams',63),('rotations',0),('unknown_sources',0),('status','failed')]:
+        bad=copy.deepcopy(PEER_INTEROP);bad[key]=value;rejects(verify_peer_interop,bad)
     for key,value in [('families',[4]),('datagrams',47),('empty_datagrams',0),('truncated_datagrams',0),('generations',7),('status','failed')]:
         bad=copy.deepcopy(INTEROP);bad[key]=value;rejects(verify_interop,bad)
     repo=Path(__file__).resolve().parents[2];workflow=(repo/'.github/workflows/udp.yml').read_text(encoding='utf-8')
-    for token in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','--with-udp','run_udp_contracts.py','if: always()','if-no-files-found: error']:
+    for token in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','--with-udp','run_udp_contracts.py','run_udp_peer_fuzz.py','gamenet_fuzz_udp_peer','if: always()','if-no-files-found: error']:
         assert token in workflow,token
     assert 'continue-on-error' not in workflow
     assert 'option(GAMENET_ENABLE_UDP "Build bounded UDP transport" OFF)' in (repo/'CMakeLists.txt').read_text(encoding='utf-8')

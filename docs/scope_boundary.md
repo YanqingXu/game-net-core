@@ -53,5 +53,6 @@ with matching intent, tests, CMake targets, and migration-status updates.
   session/transport value contracts.
 - the pipeline example composes layers but is neither installed nor linked by
   core.
-- UDP/KCP may implement the transport interface later, but only as experimental
-  targets.
+- The separately authorized UDP-C2 optional provisional GameNet::udp implements
+  the existing transport interface through UdpPeer. It remains default OFF and
+  depends only on Core; Core/transport does not depend on UDP. KCP remains deferred.

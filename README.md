@@ -1,5 +1,12 @@
 # game-net-core
 
+## UDP-C2：有界 peer/session 与 endpoint（2026-11-13）
+
+默认关闭的 `GameNet::udp` 增加显式 `UdpPeerServer` / `UdpPeer`，适配现有
+`TransportEndpoint`，保留 Core API 与只依赖 Core 的边界。提供本地身份/换代隔离、
+peer/全局发送预算、轮转公平性、空闲回收和跨线程关闭清算；普通 UDP 报文没有认证或
+wire generation。合同、独立双族互操作与状态 fuzz 见 [UDP peer 文档](docs/development/udp_peer.md)。
+
 ## UDP-C1：可选有界 UDP（2026-11-12）
 
 `GAMENET_ENABLE_UDP=ON` 提供独立 provisional `GameNet::udp`，默认关闭且只依赖 Core。
@@ -59,8 +66,8 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines and UDP/KCP remain deferred;
-TLS and WebSocket have their own TLS-C1/WS-C1 authorizations. Development work does not create a release.
+block this separately authorized feature. Coroutines and KCP remain deferred;
+UDP, TLS and WebSocket have their own later authorizations above. Development work does not create a release.
 
 game-net-core is a modern C++23 networking foundation for game servers.
 

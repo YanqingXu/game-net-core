@@ -19,6 +19,16 @@ if(TARGET gamenet_websocket)
     target_link_options(gamenet_fuzz_websocket_session PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
 
+if(TARGET gamenet_udp)
+    target_compile_options(gamenet_udp PRIVATE -fsanitize=fuzzer-no-link)
+    target_compile_definitions(gamenet_udp PRIVATE GAMENET_INTERNAL_UDP_TEST_HOOKS=1)
+    add_executable(gamenet_fuzz_udp_peer udp/fuzz_udp_peer.cpp)
+    target_include_directories(gamenet_fuzz_udp_peer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(gamenet_fuzz_udp_peer PRIVATE GameNet::udp)
+    target_compile_options(gamenet_fuzz_udp_peer PRIVATE -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
+    target_link_options(gamenet_fuzz_udp_peer PRIVATE -fsanitize=fuzzer,address,undefined)
+endif()
+
 # Instrument production code too: entry-point-only coverage misses RPC branches.
 # Fuzz builds are opt-in development builds, never package evidence.
 foreach(component gamenet_core gamenet_protocol gamenet_rpc)
