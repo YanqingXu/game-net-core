@@ -824,3 +824,11 @@ No other direct mutation path is allowed for core loop state.
 - the endurance supervisor owns a child process and evidence files only; it has
   no access path to Reactor mutable state
 - “Occasionally safe” thread behavior without rule support
+# KCP-C1 thread boundary
+
+KCP engines and session mutation belong to one owner loop. Native input/update
+never calls user code; output only attempts bounded UDP admission. Message and
+completion callbacks run after returning from KCP. Normal bounded work handles
+data; the pre-attached lifecycle source handles close/stop/quit only. Allocator
+hooks are private to the vendored copy, installed once and scoped by thread-local
+arena context; they must not affect another upstream KCP linked by a consumer.

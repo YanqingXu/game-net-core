@@ -39,6 +39,7 @@ PHASE4_ARTIFACTS = {
 CONCRETE_ACTIVE_ARTIFACTS = {
     "intents/modules/udp.intent.md": ("installed-library", "GameNet::udp"),
     "intents/modules/udp_transport.intent.md": ("installed-library", "GameNet::udp_transport"),
+    "intents/modules/kcp_transport.intent.md": ("installed-library", "GameNet::kcp"),
     "intents/modules/websocket_tls.intent.md": ("installed-library", "GameNet::websocket_tls"),
     "intents/modules/websocket.intent.md": ("installed-library", "GameNet::websocket"),
     "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
@@ -122,6 +123,7 @@ FROZEN_CORE_ACTIVE_INTENTS = {
 PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_core": set(),
     "gamenet_udp": {"gamenet_core"},
+    "gamenet_kcp": {"gamenet_core", "gamenet_udp"},
     "gamenet_udp_transport": {"gamenet_core", "gamenet_udp", "gamenet_transport"},
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
@@ -736,6 +738,10 @@ def validate_verification(
                 f"intent fuzz file is not registered with a fuzz target: {test_path}",
             )
         elif test_path.endswith(".cpp"):
+            if "/kcp/" in test_path:
+                if udp_inventory is not None and "GameNet::kcp" in udp_inventory.aliases:
+                    require(test_path in udp_inventory.tests_by_source, f"KCP verification missing: {test_path}")
+                continue
             if test_path in UDP_VERIFICATION_PATHS:
                 if udp_inventory is not None:
                     require(test_path in udp_inventory.tests_by_source, f"UDP verification missing: {test_path}")
@@ -836,6 +842,11 @@ def validate_intent(
         else:
             artifact_inventory = websocket_inventory
 
+    if metadata.get("target") == "GameNet::kcp":
+        if udp_inventory is None or "GameNet::kcp" not in udp_inventory.aliases:
+            experimental_target_without_local_inventory = True
+        else:
+            artifact_inventory = udp_inventory
     if metadata.get("target") in {"GameNet::udp", "GameNet::udp_transport"}:
         if udp_inventory is None:
             experimental_target_without_local_inventory = True
@@ -1181,6 +1192,7 @@ def main() -> None:
     parser.add_argument("--with-tls", action="store_true")
     parser.add_argument("--with-websocket", action="store_true")
     parser.add_argument("--with-udp", action="store_true")
+    parser.add_argument("--with-kcp", action="store_true")
     arguments = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[2]
     fuzz_cmake = (repo_root / "tests" / "fuzz" / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -1247,8 +1259,8 @@ def main() -> None:
             tls_inventory = configure_inventory(repo_root, temp_root / "configured-tls", tls_options)
             validate_dependency_direction(tls_inventory)
         udp_inventory = None
-        if arguments.with_udp:
-            udp_inventory = configure_inventory(repo_root,temp_root / "configured-udp", {"CMAKE_BUILD_TYPE":"Debug", "GAMENET_BUILD_TESTING":"ON", "GAMENET_ENABLE_UDP":"ON", "GAMENET_ENABLE_TLS":"OFF", "CMAKE_DISABLE_FIND_PACKAGE_OpenSSL":"ON"})
+        if arguments.with_udp or arguments.with_kcp:
+            udp_inventory = configure_inventory(repo_root,temp_root / "configured-udp", {"CMAKE_BUILD_TYPE":"Debug", "GAMENET_BUILD_TESTING":"ON", "GAMENET_ENABLE_UDP":"ON", "GAMENET_ENABLE_KCP":"ON" if arguments.with_kcp else "OFF", "GAMENET_ENABLE_TLS":"OFF", "CMAKE_DISABLE_FIND_PACKAGE_OpenSSL":"ON"})
             validate_dependency_direction(udp_inventory)
         websocket_inventory = None
         if arguments.with_websocket:

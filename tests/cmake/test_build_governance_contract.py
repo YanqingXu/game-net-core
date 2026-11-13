@@ -474,7 +474,8 @@ def main() -> None:
         "Copyright 2026 Yanqing Xu",
     ]
     third_party_text = third_party_notices.read_text(encoding="utf-8")
-    require(third_party_text, "do not bundle third-party", third_party_notices)
+    require(third_party_text, "Other components do not bundle third-party", third_party_notices)
+    require(third_party_text, "b1a7a2101dcbb96017681a500d6b82bbe5a88766", third_party_notices)
     require(third_party_text, "PacketFramer fuzz corpus", third_party_notices)
     require(third_party_text, "Apache-2.0", third_party_notices)
     licensing_text = licensing_docs.read_text(encoding="utf-8")

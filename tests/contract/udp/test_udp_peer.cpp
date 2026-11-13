@@ -83,6 +83,26 @@ static void bounded(bool v6) {
                         p->send("x") == udp::UdpResult::Stopped);
     GAMENET_TEST_ASSERT(loop.attachedLifecycleNodeCount() == 0);
 }
+static void closeAfterVisitedSlice() {
+    net::EventLoop loop;
+    test::RawUdp raw;
+    udp::UdpPeerOptions o;
+    o.maxPeers = 4;
+    o.maxPeersPerTurn = 1;
+    unsigned closed = 0;
+    std::shared_ptr<udp::UdpPeerServer> server;
+    server = udp::UdpPeerServer::create(&loop, net::InetAddress("127.0.0.1", 0),
+        {.closed = [&](auto, auto) { ++closed; (void)server->stop(); },
+         .stopped = [&](auto snap) { test::verifyPeerLedger(snap); loop.quit(); }}, o);
+    GAMENET_TEST_ASSERT(server->start() == udp::UdpResult::Accepted);
+    auto p = server->openPeer(raw.address()).peer;
+    GAMENET_TEST_ASSERT(p && p->identity().slot == 0);
+    udp::detail::UdpPeerTestAccess::visit(*server);
+    GAMENET_TEST_ASSERT(p->requestClose(udp::UdpPeerCloseReason::Normal) == DispatchResult::Accepted);
+    loop.runAfter(1s, [] { GAMENET_TEST_FAIL("UDP mid-scan close signal was lost"); });
+    loop.loop();
+    GAMENET_TEST_ASSERT(closed == 1 && !loop.attachedLifecycleNodeCount());
+}
 static void saturatedClose() {
     net::EventLoopOptions lo;
     lo.maxPendingFunctors = 2;
@@ -418,6 +438,7 @@ int main() {
     lateNativeAndQuit();
     acceptedForeignClose();
     saturatedClose();
+    closeAfterVisitedSlice();
     identityAndIdle();
     releaseAndException();
     for (unsigned seed = 0; seed < 32; ++seed) {

@@ -926,3 +926,11 @@ for executing these runtime contracts on Linux and Windows.
 - an owner-approved candidate or release waiver is missing-evidence metadata,
   not a shortened substitute or a successful endurance result; it authorizes
   only its named promotion stage
+# KCP-C1 verification boundary
+
+The KCP engine, transport lifecycle and real UDP regressions live in
+tests/unit/kcp/test_kcp_engine.cpp, tests/contract/kcp/test_kcp_transport.cpp and
+tests/integration/kcp/test_kcp_reliable.cpp. Independent peers compile the pinned
+unchanged upstream and do not link GameNet. Protocol and session fuzz each run
+at least 20k bounded cases with budget/settlement oracles. Windows/Linux,
+sanitizers, package ON/OFF isolation and existing optional regressions are required.

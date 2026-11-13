@@ -1,5 +1,15 @@
 # Migration Status
 
+## KCP-C1 development authorization (2026-11-13)
+
+Optional bounded **standard KCP** is separately authorized in `GameNet::kcp`.
+Both `GAMENET_ENABLE_KCP=ON` and `GAMENET_ENABLE_UDP=ON` are required; defaults
+remain OFF. Core/UDP APIs and OpenSSL independence are preserved. Pinned MIT
+upstream, resource/lifecycle contracts and validation are documented in
+[the KCP guide](development/kcp.md). This is provisional development, without a release or
+production/performance claim. Historical M10 NO-PROMOTION findings below remain
+historical; this new authorization does not promote PMTU or custom KCP-style code.
+
 ## UDP-C2 explicit bounded peers (2026-11-13)
 
 The separately authorized UdpPeerServer/UdpPeer layer is part of default-OFF
@@ -7,7 +17,7 @@ GameNet::udp. Separate optional GameNet::udp_transport adapts TransportEndpoint
 while UDP remains Core-only at include/link levels. Bounded peers/queues, generation-safe old handles,
 round-robin output, idle reclaim and exact terminal settlement have direct,
 native stress, independent peer and bounded state-fuzz gates. See
-docs/development/udp_peer.md. UDP wire identity/authentication, KCP and PMTU are
+docs/development/udp_peer.md. UDP wire identity/authentication and PMTU are
 outside this slice.
 
 ## Optional bounded UDP — UDP-C1 (2026-11-12)
@@ -50,7 +60,7 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines, WebSocket and UDP/KCP remain deferred; TLS has its own TLS-C1 authorization. Development work does not create a release.
+block this separately authorized feature. Coroutines remain deferred; WebSocket/UDP/KCP have separate authorization; TLS has its own TLS-C1 authorization. Development work does not create a release.
 
 The current inventory is 133 configured CTest tests: 9 unit tests, 109 contract tests, and
 15 integration tests, with 105 threading and 110 lifecycle labels.
@@ -697,7 +707,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 78 | 51 | 16 | 11 | 254 |
+| 78 | 52 | 15 | 11 | 260 |
 
 ## Historical Production-Hardening Evidence
 

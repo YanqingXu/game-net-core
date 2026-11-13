@@ -63,18 +63,20 @@ struct UdpPeerGate {
     const net::InetAddress address;
     const net::EventLoopExecutor executor;
     const net::EventLoopLifecycleSource source;
+    const std::shared_ptr<std::atomic<bool>> dirty;
     std::mutex mutex;
     std::atomic<bool> open{true};
     CloseReason reason{CloseReason::Normal};
     UdpPeerGate(UdpPeerIdentity id, net::InetAddress a, net::EventLoopExecutor e,
-                net::EventLoopLifecycleSource s)
-        : identity(id), address(a), executor(e), source(s) {}
+                net::EventLoopLifecycleSource s, std::shared_ptr<std::atomic<bool>> changed)
+        : identity(id), address(a), executor(e), source(s), dirty(std::move(changed)) {}
     bool seal(CloseReason r) {
         std::lock_guard lock(mutex);
         if (!open.load(std::memory_order_relaxed))
             return false;
         reason = r;
         open.store(false, std::memory_order_release);
+        dirty->store(true, std::memory_order_release);
         return true;
     }
 };
@@ -112,6 +114,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
     std::mutex stopMutex;
     UdpPhase phase{UdpPhase::Created};
     std::atomic<bool> stopping{false};
+    const std::shared_ptr<std::atomic<bool>> dirty = std::make_shared<std::atomic<bool>>(false);
     bool nativeStopped{}, posted{}, scanAgain{};
     std::size_t scanCursor{}, scanRemaining{}, idleCursor{};
     std::uint64_t nextId{};
@@ -207,7 +210,8 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
             return;
         }
         std::lock_guard lock(stopMutex);
-        stopping.store(true, std::memory_order_release);
+        if (!stopping.exchange(true, std::memory_order_acq_rel))
+            dirty->store(true, std::memory_order_release);
         (void)socket->stop();
         phase = UdpPhase::Stopped;
     }
@@ -215,7 +219,8 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
         std::lock_guard lock(stopMutex);
         if (phase == UdpPhase::Stopped)
             return UdpResult::Stopped;
-        stopping.store(true, std::memory_order_release);
+        if (!stopping.exchange(true, std::memory_order_acq_rel))
+            dirty->store(true, std::memory_order_release);
         if (phase == UdpPhase::Created) {
             (void)socket->stop();
             phase = UdpPhase::Stopped;
@@ -252,7 +257,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
                 return {UdpResult::Overloaded, {}};
             const UdpPeerIdentity identity{id, slot, generations[slot] + 1};
             auto r = std::make_shared<Record>();
-            r->gate = std::make_shared<UdpPeerGate>(identity, address, executor, source);
+            r->gate = std::make_shared<UdpPeerGate>(identity, address, executor, source, dirty);
             r->handle = std::shared_ptr<UdpPeer>(new UdpPeer(weak_from_this(), r->gate));
             r->key = std::move(key);
             addresses.emplace(r->key, slot);
@@ -448,6 +453,11 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
             }
             (void)socket->stop();
         }
+        // A new seal may concern a slot already passed by an unfinished scan.
+        // Carry that debt across all slices, even if its source signal merges
+        // with a self-signal for the remaining slots.
+        if (dirty->exchange(false, std::memory_order_acq_rel))
+            scanAgain = true;
         if (!scanRemaining)
             scanRemaining = slots.size();
         std::size_t visited = 0, completed = 0;
@@ -517,6 +527,10 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
 
 #ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
 std::weak_ptr<void> detail::UdpPeerTestAccess::state(const UdpPeerServer& s) { return s.state_; }
+void detail::UdpPeerTestAccess::visit(UdpPeerServer& s) {
+    s.state_->loop->assertInLoopThread();
+    s.state_->visit();
+}
 void detail::UdpPeerTestAccess::receive(UdpPeerServer& s, const net::InetAddress& a,
                                         std::string_view b, bool t) {
     s.state_->loop->assertInLoopThread();

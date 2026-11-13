@@ -791,3 +791,11 @@ lifetime after pending/inbound/timer cleanup and buffered RPC dispatch retiremen
 - the endurance supervisor owns the child-process handle, captured log,
   checkpoint, and final evidence; heartbeats copy values and own no runtime
   networking object
+# KCP-C1 ownership boundary
+
+Reserve a full fixed engine arena before session admission. Catch allocator
+exhaustion at the private C++ upstream boundary and discard the whole slab;
+never traverse upstream lists after an interrupted mutation. Weak session
+handles/posts/timers observe an active lease. Commit ACK dispositions before
+callbacks, release pending budgets before each terminal callback, and retain
+closing records until their original UDP peer's native completions retire.

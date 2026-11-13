@@ -75,6 +75,9 @@ jobs:
 
       - name: Check repository guards
         run: |
+          python3 tests/cmake/test_kcp_provenance.py
+          python3 tests/ci/test_kcp_workflow.py
+          python3 tests/ci/test_kcp_fuzz.py
           python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
@@ -357,6 +360,9 @@ jobs:
           fi
       - name: Check repository guards
         run: |
+          python3 tests/cmake/test_kcp_provenance.py
+          python3 tests/ci/test_kcp_workflow.py
+          python3 tests/ci/test_kcp_fuzz.py
           python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
@@ -592,6 +598,9 @@ jobs:
 
       - name: Check repository guards
         run: |
+          python3 tests/cmake/test_kcp_provenance.py
+          python3 tests/ci/test_kcp_workflow.py
+          python3 tests/ci/test_kcp_fuzz.py
           python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py
@@ -758,6 +767,9 @@ jobs:
 
       - name: Check repository guards
         run: |
+          python3 tests/cmake/test_kcp_provenance.py
+          python3 tests/ci/test_kcp_workflow.py
+          python3 tests/ci/test_kcp_fuzz.py
           python3 tests/ci/test_tls_workflow.py
           python3 tests/scope/test_scope_guard.py
           python3 tests/scope/test_intent_consistency.py

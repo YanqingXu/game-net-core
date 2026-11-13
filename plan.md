@@ -1,5 +1,32 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## KCP-C1：可选、有界标准 KCP（2026-11-13 用户授权）
+
+先重写 active KCP intent 和线程/所有权/测试规则，标准 KCP 固定上游
+b1a7a2101dcbb96017681a500d6b82bbe5a88766，保留原始源码与 MIT 许可并核对哈希。
+默认 OFF 的 GameNet::kcp 显式要求 UDP ON，只依赖 Core/UDP；现有 API 和
+无 OpenSSL 边界不变。C1 不增加 TransportEndpoint 适配或自定义线格式。
+
+上游审计确认 ACK 队列不受窗口约束、分配失败存在 abort/空指针路径、send
+可能部分接纳、output 返回值不改变重传推进。采用固定会话 arena、预分配 ACK、
+整包预检、全片段发送预算和私有 C++ 编译异常边界；耗尽直接丢弃会话 arena。
+UDP 输出拒绝按链路丢包交给重传，不堆第二个队列。限制会话、conv 历史、
+消息/字节、分片/窗口/ACK、全局内存、每轮工作和发送寿命。
+
+显式地址/新 conv + UDP 本地 generation 隔离旧 handle/迟到完成。owner-only
+协议操作；跨线程关闭先封口、生命周期通道清算。用户回调退出 KCP 后执行，
+允许重入/释放；ACK 提交先于回调和后续关闭，每个接纳发送恰好一次本地终结。
+closed/stopped 等到底层 native 完成，零 pending/预算/任务/定时器残留。
+
+合同先于实现：engine unit、transport contract、真实双族压力 integration；独立
+原版 KCP peer 经有界故障代理覆盖丢数据/ACK、乱序、重复、延迟，补充背压恢复、
+公平性和换代。Windows/Linux Release、Windows ASan、Linux ASan/UBSan/TSan、
+协议与状态 fuzz 各 20k、安装 ON/OFF 消费者及全部既有回归通过后提交 PR。
+保留冻结提交、完整清单与原始日志；本任务不合并、不发布、不改已发布资产。
+
+集成回归发现 UDP-C2 分批扫描中已访问槽的新关闭可被合并信号掩盖；增加 dirty
+标记跨完整扫描保留清算债务及确定性合同，UDP 公共 API 和依赖保持不变。
+
 ## UDP-C2：有界 peer/session 与 TransportEndpoint（2026-11-13 用户授权）
 
 先更新 active UDP/endpoint intent、线程/所有权/测试规则，再添加默认 OFF 的
