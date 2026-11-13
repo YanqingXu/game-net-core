@@ -53,6 +53,10 @@ or Failed; rejected sends have id zero, no reservation and no completion.
 Pending reservations are released before callbacks. First close wins. closed
 waits for protocol/pending cleanup and the original UDP peer's native retirement;
 stopped waits for all records, timers, posts and native IOCP completions.
+Partial start must also terminate when a nested UDP server fails before acquiring
+its active lease: observe its proven Stopped phase rather than waiting for a
+callback that an unstarted layer does not emit. Capacity-zero/one/two contracts
+cover each registration boundary without synthesizing native completions.
 
 ## Bounded algorithm and failure behavior
 

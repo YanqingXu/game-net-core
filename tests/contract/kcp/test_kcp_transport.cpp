@@ -314,7 +314,31 @@ void aggregateBudget() {
     loop.loop();
     GAMENET_TEST_ASSERT(terminals == 3);
 }
+void failedStart() {
+    for (std::size_t capacity : {std::size_t(0), std::size_t(1), std::size_t(2)}) {
+        net::EventLoop loop({.maxLifecycleNodes = capacity});
+        unsigned stopped = 0;
+        auto s = kcp::KcpTransport::create(&loop, net::InetAddress("127.0.0.1", 0),
+                                           {.stopped = [&](auto snap) {
+                                               ledger(snap);
+                                               ++stopped;
+                                               loop.quit();
+                                           }});
+        const auto weak = kcp::detail::KcpTestAccess::state(*s);
+        GAMENET_TEST_ASSERT(s->start() == kcp::KcpResult::OwnerUnavailable);
+        if (capacity) {
+            loop.runAfter(1s, [] { GAMENET_TEST_FAIL("KCP partial start leaked"); });
+            loop.loop();
+            GAMENET_TEST_ASSERT(stopped == 1);
+        } else
+            GAMENET_TEST_ASSERT(!stopped && s->snapshot().phase == udp::UdpPhase::Stopped);
+        s.reset();
+        GAMENET_TEST_ASSERT(weak.expired() && !loop.attachedLifecycleNodeCount());
+    }
+}
 int main() {
+    std::cerr << "KCP failed start\n";
+    failedStart();
     std::cerr << "KCP cancel\n";
     cancel(false);
     cancel(true);

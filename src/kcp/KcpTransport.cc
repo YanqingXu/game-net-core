@@ -471,6 +471,11 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
                 timer = {};
             }
             (void)socket->stop();
+            // A nested start can fail before acquiring its active lease and
+            // consequently emits no stopped callback. Its Stopped snapshot is
+            // still proof that all its native work has retired.
+            if (socket->snapshot().phase == Phase::Stopped)
+                nativeStopped = true;
         }
         if (dirty->exchange(false, std::memory_order_acq_rel))
             cleanupAgain = true;
