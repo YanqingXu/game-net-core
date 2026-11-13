@@ -4,7 +4,9 @@
 
 先更新 active UDP/endpoint intent、线程/所有权/测试规则，再添加默认 OFF 的
 GameNet::udp 内的 UdpPeerServer/UdpPeer。UdpSocket 与 Core API 保持不变，udp 仍只
-链接 Core，无 OpenSSL/KCP 依赖。显式 openPeer，不从任意来源报文自动建立会话。
+引用并链接 Core，无 OpenSSL/KCP/transport 依赖。独立可选组合组件 GameNet::udp_transport
+的 UdpTransportEndpoint 适配现有接口；只请求 udp 的消费者不加载此组件。
+显式 openPeer，不从任意来源报文自动建立会话。
 owner 管理固定上限的槽、地址索引、generation、队列、轮转调度与空闲定时器。
 UDP-C2 各 server 间唯一非零 session id + 槽 generation 隔离旧 handle/任务/完成；地址不是认证身份，
 无 wire generation 的 UDP 旧报文不能与同地址新会话报文区分，不声称认证或重放防护。

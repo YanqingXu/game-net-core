@@ -54,5 +54,6 @@ with matching intent, tests, CMake targets, and migration-status updates.
 - the pipeline example composes layers but is neither installed nor linked by
   core.
 - The separately authorized UDP-C2 optional provisional GameNet::udp implements
-  the existing transport interface through UdpPeer. It remains default OFF and
+  the existing transport interface through the separate GameNet::udp_transport.
+  GameNet::udp remains default OFF and
   depends only on Core; Core/transport does not depend on UDP. KCP remains deferred.

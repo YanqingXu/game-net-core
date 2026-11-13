@@ -54,14 +54,14 @@ def main():
         if enabled and args.profile=='asan':command+=['-DGAMENET_ENABLE_ASAN_UBSAN=ON']
         if enabled and args.profile=='tsan':command+=['-DGAMENET_ENABLE_TSAN=ON']
         return command
-    def consumer(name,prefix,udp,succeeds=True):
+    def consumer(name,prefix,udp,succeeds=True,adapter=False):
         directory=build/name
         command=['cmake','-S',str(repo/'tests/cmake/udp_install_consumer'),'-B',str(directory),'-DCMAKE_BUILD_TYPE='+config,
-            '-DCMAKE_PREFIX_PATH='+str(prefix),'-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON','-DREQUEST_UDP='+('ON' if udp else 'OFF')]
+            '-DCMAKE_PREFIX_PATH='+str(prefix),'-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON','-DREQUEST_UDP='+('ON' if udp else 'OFF'),'-DREQUEST_UDP_TRANSPORT='+('ON' if adapter else 'OFF')]
         command+=['-A','x64'] if os.name=='nt' else ['-G','Ninja']
         text=execute(name+'-configure',command,succeeds)
         if not succeeds:
-            if 'Required component udp is unavailable' not in text:raise ValueError('UDP OFF rejection failed for wrong reason')
+            if 'Required component '+('udp_transport' if adapter else 'udp')+' is unavailable' not in text:raise ValueError('UDP OFF rejection failed for wrong reason')
             return
         execute(name+'-build',['cmake','--build',str(directory),'--config',config,'--parallel','2'])
         text=execute(name+'-test',['ctest','--test-dir',str(directory),'-C',config,'--output-on-failure','--no-tests=error'])
@@ -93,13 +93,15 @@ def main():
         manifest['peer_binary_sha256']=hashlib.sha256(peer_binary.read_bytes()).hexdigest()
         manifest['peer_interop']=peer_interoperate(peer_binary,out/'peer-interop',env);verify_peer_interop(manifest['peer_interop'])
         prefix=build/'prefix';execute('install',['cmake','--install',str(build),'--config',config,'--prefix',str(prefix)])
-        consumer('udp-consumer',prefix,True);consumer('core-consumer',prefix,False)
+        consumer('udp-consumer',prefix,True);consumer('adapter-consumer',prefix,True,adapter=True);consumer('core-consumer',prefix,False)
         if args.profile=='release':
             off=build/'off';execute('off-configure',configure(off,False))
-            execute('off-build',['cmake','--build',str(off),'--config',config,'--parallel','2','--target',*[t for t in installed if t!='gamenet_udp']])
+            execute('off-build',['cmake','--build',str(off),'--config',config,'--parallel','2','--target',*[t for t in installed if t not in {'gamenet_udp','gamenet_udp_transport'}]])
             off_prefix=off/'prefix';execute('off-install',['cmake','--install',str(off),'--config',config,'--prefix',str(off_prefix)])
             if (off_prefix/'include/gamenet/udp').exists() or list(off_prefix.rglob('GameNetUdpTargets.cmake')):raise ValueError('UDP leaked into OFF package')
             consumer('off-core-consumer',off_prefix,False);consumer('off-udp-rejection',off_prefix,True,False);manifest['off_isolation']='passed'
+            if (off_prefix/'include/gamenet/udp_transport').exists() or list(off_prefix.rglob('GameNetUdpTransportTargets.cmake')):raise ValueError('UDP adapter leaked into OFF package')
+            consumer('off-adapter-rejection',off_prefix,True,False,adapter=True)
         manifest['status']='passed'
     finally:
         manifest['files']={p.relative_to(out).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in out.rglob('*') if p.is_file() and p!=out/'manifest.json'}

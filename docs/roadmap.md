@@ -3,8 +3,8 @@
 ## UDP-C2 explicit bounded peers (2026-11-13)
 
 Separate authorization adds UdpPeerServer and generation-bearing UdpPeer in the
-default-OFF UDP component, implementing the existing TransportEndpoint with no
-Core API or dependency-direction change. Explicit address admission, peer/global
+default-OFF UDP component. A separate default-OFF GameNet::udp_transport adapts
+TransportEndpoint; UDP remains Core-only at include/link levels. Explicit address admission, peer/global
 packet and byte caps, round-robin output, bounded idle/cancellation work, saturated
 foreign lifecycle close and old-identity settlement are verified by real native
 pressure, fixed/state fuzz and independent dual-family peers. See

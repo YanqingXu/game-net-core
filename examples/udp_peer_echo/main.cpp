@@ -28,19 +28,19 @@ int main(int argc, char** argv) {
                      ++truncated;
                  if (bytes == "rotate") {
                      old = peer;
-                     (void)old->close(transport::CloseReason::Replaced);
+                     (void)old->close(udp::UdpPeerCloseReason::Replaced);
                      current = server->openPeer(peer->address()).peer;
                      if (!current || current->id() == old->id() ||
-                         old->send("stale") != transport::EndpointResult::Closed) {
+                         old->send("stale") != udp::UdpResult::Stopped) {
                          failed = true;
                          (void)server->stop();
                          return;
                      }
-                     if (current->send("rotated") != transport::EndpointResult::Accepted) {
+                     if (current->send("rotated") != udp::UdpResult::Accepted) {
                          failed = true;
                          (void)server->stop();
                      }
-                 } else if (peer->send(bytes) != transport::EndpointResult::Accepted) {
+                 } else if (peer->send(bytes) != udp::UdpResult::Accepted) {
                      failed = true;
                      (void)server->stop();
                  }

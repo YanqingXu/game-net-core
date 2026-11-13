@@ -659,7 +659,7 @@ add_gamenet_component_test(integration metrics gamenet_metrics_integration_depen
 
 if(GAMENET_ENABLE_UDP)
     add_gamenet_component_test(integration udp GameNet::udp ${CMAKE_CURRENT_SOURCE_DIR}/integration/udp/test_udp_peer_stress.cpp threading lifecycle)
-    add_gamenet_component_test(contract udp GameNet::udp ${CMAKE_CURRENT_SOURCE_DIR}/contract/udp/test_udp_peer.cpp threading lifecycle)
+    add_gamenet_component_test(contract udp GameNet::udp_transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/udp/test_udp_peer.cpp threading lifecycle)
     add_gamenet_component_test(unit udp GameNet::udp ${CMAKE_CURRENT_SOURCE_DIR}/unit/udp/test_udp_options.cpp)
     add_gamenet_component_test(contract udp GameNet::udp ${CMAKE_CURRENT_SOURCE_DIR}/contract/udp/test_udp_socket.cpp threading lifecycle)
     add_gamenet_component_test(integration udp GameNet::udp ${CMAKE_CURRENT_SOURCE_DIR}/integration/udp/test_udp_stress.cpp threading lifecycle)

@@ -174,7 +174,7 @@ def main():
             match=re.search(r'set\(CMAKE_CXX_COMPILER "([^"]+)"',path.read_text(encoding='utf-8'))
             if match:env['PATH']=str(Path(match[1]).parent)+os.pathsep+env.get('PATH','');break
         inventory=verify_inventory(json.loads(execute('inventory',['ctest','--test-dir',str(build),'-C',config,'--show-only=json-v1'])))
-        installed=['gamenet_'+n.split('::')[1] for group in json.loads((repo/'api/public_api_manifest.json').read_text())['targets'].values() for n in group if n!='GameNet::udp']
+        installed=['gamenet_'+n.split('::')[1] for group in json.loads((repo/'api/public_api_manifest.json').read_text())['targets'].values() for n in group if n not in {'GameNet::udp','GameNet::udp_transport'}]
         targets=['gnt_'+n.split('.')[0]+'_'+n.split('.')[1]+'_'+hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
         command=['cmake','--build',str(build),'--config',config,'--parallel','2']
         integration=build/'tests'/('' if os.name!='nt' else config)/('gnt_integration_websocket_tls_'+hashlib.sha1(b'integration.websocket_tls.test_websocket_tls_tcp').hexdigest()[:10]+('.exe' if os.name=='nt' else ''))

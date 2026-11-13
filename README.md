@@ -2,8 +2,8 @@
 
 ## UDP-C2：有界 peer/session 与 endpoint（2026-11-13）
 
-默认关闭的 `GameNet::udp` 增加显式 `UdpPeerServer` / `UdpPeer`，适配现有
-`TransportEndpoint`，保留 Core API 与只依赖 Core 的边界。提供本地身份/换代隔离、
+默认关闭的 `GameNet::udp` 增加显式 `UdpPeerServer` / `UdpPeer`；独立可选
+`GameNet::udp_transport` 适配现有 `TransportEndpoint`，保留 Core API 和 UDP 只依赖 Core 的边界。提供本地身份/换代隔离、
 peer/全局发送预算、轮转公平性、空闲回收和跨线程关闭清算；普通 UDP 报文没有认证或
 wire generation。合同、独立双族互操作与状态 fuzz 见 [UDP peer 文档](docs/development/udp_peer.md)。
 

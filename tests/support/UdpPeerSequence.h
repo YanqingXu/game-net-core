@@ -94,7 +94,7 @@ inline void runUdpPeerSequence(std::span<const std::uint8_t> input) {
                  GAMENET_TEST_ASSERT(p->isOpen() && !closed.contains(p->identity()));
                  if (reentry == 1) {
                      reentry = 0;
-                     (void)p->close(transport::CloseReason::Normal);
+                     (void)p->close(udp::UdpPeerCloseReason::Normal);
                  } else if (reentry == 2) {
                      reentry = 0;
                      send(p, "");
@@ -165,7 +165,7 @@ inline void runUdpPeerSequence(std::span<const std::uint8_t> input) {
             break;
         case 4:
             if (p)
-                (void)p->close(transport::CloseReason::Replaced);
+                (void)p->close(udp::UdpPeerCloseReason::Replaced);
             break;
         case 5:
             udp::detail::UdpPeerTestAccess::receive(*server, raw[index].address(), "x",
@@ -185,7 +185,7 @@ inline void runUdpPeerSequence(std::span<const std::uint8_t> input) {
             if (p) {
                 const auto before = p->identity();
                 auto hold = p;
-                (void)hold->requestClose(transport::CloseReason::GoingAway);
+                (void)hold->requestClose(udp::UdpPeerCloseReason::GoingAway);
                 GAMENET_TEST_ASSERT(hold->identity() == before);
             }
             break;
@@ -197,7 +197,7 @@ inline void runUdpPeerSequence(std::span<const std::uint8_t> input) {
     loop.loop();
     GAMENET_TEST_ASSERT(stopped == 1 && loop.attachedLifecycleNodeCount() == 0);
     for (const auto& p : handles)
-        GAMENET_TEST_ASSERT(!p->isOpen() && p->send("stale") == transport::EndpointResult::Closed);
+        GAMENET_TEST_ASSERT(!p->isOpen() && p->send("stale") == udp::UdpResult::Stopped);
     handles.clear();
     server.reset();
     GAMENET_TEST_ASSERT(weak.expired());

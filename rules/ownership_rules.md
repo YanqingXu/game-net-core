@@ -2,6 +2,9 @@
 
 ## UDP-C2
 
+The separate UdpTransportEndpoint owns only a peer handle, whose server reference
+is weak. Adapter lifetime cannot extend socket, server or EventLoop lifetime.
+
 Active server state owns bounded slots/queues and one settlement lease. Handles
 weakly observe it and retain immutable id/generation plus synchronized close
 gates; they can outlive server/loop safely. Weak timers/posts/bridges do not form

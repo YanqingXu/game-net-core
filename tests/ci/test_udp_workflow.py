@@ -34,5 +34,10 @@ def main():
     assert 'option(GAMENET_ENABLE_UDP "Build bounded UDP transport" OFF)' in (repo/'CMakeLists.txt').read_text(encoding='utf-8')
     driver=(repo/'tests/ci/run_udp_contracts.py').read_text(encoding='utf-8')
     for token in ['CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON','off-udp-rejection','--no-tests=error','verify_interop','binary_sha256',"manifest['files']"]:assert token in driver
+    for token in ['adapter-consumer','off-adapter-rejection','GameNetUdpTransportTargets.cmake']:assert token in driver
+    peer=(repo/'include/gamenet/udp/UdpPeer.h').read_text(encoding='utf-8')
+    assert 'gamenet/transport/' not in peer and 'gamenet/udp_transport/' not in peer
+    udp_cmake=(repo/'src/udp/CMakeLists.txt').read_text()
+    assert 'GameNet::transport' not in udp_cmake and 'GameNet::udp_transport' not in udp_cmake
     print('UDP exact inventory, actual execution, dual-family peers and default-OFF guards passed')
 if __name__=='__main__':main()

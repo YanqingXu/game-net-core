@@ -2,8 +2,10 @@
 
 `GameNet::udp` now offers `UdpPeerServer` and `UdpPeer` in addition to the
 unchanged `UdpSocket`. `GAMENET_ENABLE_UDP` remains OFF by default. Both APIs link
-only Core; `UdpPeer` implements the existing header-only `TransportEndpoint`
-interface without adding a transport, TLS or reliability dependency. The public
+only Core at both include and link levels. The separate `GameNet::udp_transport`
+component provides `UdpTransportEndpoint`, composing UDP and the existing
+TransportEndpoint interface. Request `COMPONENTS udp_transport` and link that
+target when using the adapter; requesting only `udp` never imports it. The public
 Core API, published v0.3.1 tag and packages are unchanged.
 
 ## Why and where
@@ -21,7 +23,7 @@ auto server = gamenet::udp::UdpPeerServer::create(&loop, local, callbacks, optio
 if (server->start() == gamenet::udp::UdpResult::Accepted) {
     auto opened = server->openPeer(remote);
     if (opened.result == gamenet::udp::UdpResult::Accepted) {
-        std::shared_ptr<gamenet::transport::TransportEndpoint> endpoint = opened.peer;
+        auto endpoint = std::make_shared<gamenet::udp_transport::UdpTransportEndpoint>(opened.peer);
         const auto admitted = endpoint->send("one datagram"); // owner only
         // Handle overload explicitly; no automatic application retry queue.
         (void)admitted;
@@ -123,6 +125,8 @@ and observed scan/cancellation turn maxima.
 ## Reading and verification
 
 - `include/gamenet/udp/UdpPeer.h`: installed contract and options.
+- `include/gamenet/udp_transport/UdpTransportEndpoint.h`: separate optional
+  endpoint adapter; its implementation adds no queue or callbacks.
 - `src/udp/UdpPeer.cc`: peer gates, records, admission, round robin and settlement.
 - `tests/contract/udp/test_udp_peer.cpp`: direct identity, bounds, real idle,
   saturated foreign close, native old receipt, quit, reentry/release and 32 fixed

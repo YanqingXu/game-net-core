@@ -1,6 +1,7 @@
 // Copyright 2026 Yanqing Xu
 // SPDX-License-Identifier: Apache-2.0
 #include "support/UdpPeerSequence.h"
+#include "support/TestAssert.h"
 #include <set>
 using namespace gamenet;
 using namespace std::chrono_literals;
@@ -73,11 +74,11 @@ static void generation(unsigned generation) {
             for (unsigned n = 0; n < 4; ++n)
                 GAMENET_TEST_ASSERT(a->sendDatagram(prefix + "cancel" + std::to_string(n)).result ==
                                     udp::UdpResult::Accepted);
-            GAMENET_TEST_ASSERT(a->close(transport::CloseReason::Replaced) ==
-                                transport::EndpointResult::Accepted);
+            GAMENET_TEST_ASSERT(a->close(udp::UdpPeerCloseReason::Replaced) ==
+                                udp::UdpResult::Accepted);
             replacement = server->openPeer(hot.address()).peer;
             GAMENET_TEST_ASSERT(replacement && replacement->id() != a->id());
-            GAMENET_TEST_ASSERT(a->send("stale") == transport::EndpointResult::Closed);
+            GAMENET_TEST_ASSERT(a->send("stale") == udp::UdpResult::Stopped);
             udp::detail::UdpPeerTestAccess::replay(*server,
                                                    std::numeric_limits<std::uint64_t>::max());
             GAMENET_TEST_ASSERT(replacement->sendDatagram(prefix + "recovered").result ==

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/udp/UdpPeer.h"
+#include "gamenet/udp_transport/UdpTransportEndpoint.h"
 #include "support/RawUdp.h"
 #include "support/TestAssert.h"
 #include "support/UdpPeerSequence.h"
@@ -65,7 +66,7 @@ static void bounded(bool v6) {
     GAMENET_TEST_ASSERT(q->sendDatagram("").result == udp::UdpResult::Accepted);
     GAMENET_TEST_ASSERT(q->sendDatagram("").result == udp::UdpResult::Overloaded);
     std::thread foreign([&] {
-        GAMENET_TEST_ASSERT(p->send("x") == transport::EndpointResult::WrongThread);
+        GAMENET_TEST_ASSERT(p->send("x") == udp::UdpResult::WrongThread);
         GAMENET_TEST_ASSERT(server->openPeer(a.address()).result == udp::UdpResult::WrongThread);
         GAMENET_TEST_ASSERT(server->start() == udp::UdpResult::WrongThread);
     });
@@ -79,7 +80,7 @@ static void bounded(bool v6) {
     loop.runAfter(5s, [] { GAMENET_TEST_FAIL("UDP peer bounded timeout"); });
     loop.loop();
     GAMENET_TEST_ASSERT(done == 3 && closed == 2 && !p->isOpen() &&
-                        p->send("x") == transport::EndpointResult::Closed);
+                        p->send("x") == udp::UdpResult::Stopped);
     GAMENET_TEST_ASSERT(loop.attachedLifecycleNodeCount() == 0);
 }
 static void saturatedClose() {
@@ -107,9 +108,9 @@ static void saturatedClose() {
     GAMENET_TEST_ASSERT(p->sendDatagram("rollback").result == udp::UdpResult::Overloaded);
     GAMENET_TEST_ASSERT(!s->snapshot().pendingBytes && !s->snapshot().acceptedDatagrams);
     std::thread closer([&] {
-        GAMENET_TEST_ASSERT(p->requestClose(transport::CloseReason::Replaced) ==
+        GAMENET_TEST_ASSERT(p->requestClose(udp::UdpPeerCloseReason::Replaced) ==
                             DispatchResult::Accepted);
-        GAMENET_TEST_ASSERT(p->requestClose(transport::CloseReason::Normal) ==
+        GAMENET_TEST_ASSERT(p->requestClose(udp::UdpPeerCloseReason::Normal) ==
                             DispatchResult::EndpointClosed);
         (void)s->stop();
     });
@@ -134,17 +135,17 @@ static void identityAndIdle() {
                  ++closed;
                  if (closed == 1) {
                      GAMENET_TEST_ASSERT(identity == old->identity() &&
-                                         reason == transport::CloseReason::Replaced);
+                                         reason == udp::UdpPeerCloseReason::Replaced);
                      current = s->openPeer(raw.address()).peer;
                      GAMENET_TEST_ASSERT(current && current->identity().slot == identity.slot &&
                                          current->identity().generation ==
                                              identity.generation + 1 &&
                                          current->id() != old->id());
-                     GAMENET_TEST_ASSERT(old->send("old") == transport::EndpointResult::Closed);
+                     GAMENET_TEST_ASSERT(old->send("old") == udp::UdpResult::Stopped);
                      udp::detail::UdpPeerTestAccess::replay(*s, 9999);
                  } else {
                      GAMENET_TEST_ASSERT(closed == 2 &&
-                                         reason == transport::CloseReason::IdleTimeout);
+                                         reason == udp::UdpPeerCloseReason::IdleTimeout);
                      (void)s->stop();
                  }
              },
@@ -157,8 +158,7 @@ static void identityAndIdle() {
         o);
     GAMENET_TEST_ASSERT(s->start() == udp::UdpResult::Accepted);
     old = s->openPeer(raw.address()).peer;
-    GAMENET_TEST_ASSERT(old->close(transport::CloseReason::Replaced) ==
-                        transport::EndpointResult::Accepted);
+    GAMENET_TEST_ASSERT(old->close(udp::UdpPeerCloseReason::Replaced) == udp::UdpResult::Accepted);
     loop.runAfter(5s, [] { GAMENET_TEST_FAIL("identity/idle timeout"); });
     loop.loop();
     GAMENET_TEST_ASSERT(closed == 2);
@@ -243,8 +243,8 @@ static void lateNativeAndQuit() {
     GAMENET_TEST_ASSERT(loop.executor().post([&] {
         oldReceipt = udp::detail::UdpPeerTestAccess::nativeId(*s);
         GAMENET_TEST_ASSERT(oldReceipt);
-        GAMENET_TEST_ASSERT(old->close(transport::CloseReason::Replaced) ==
-                            transport::EndpointResult::Accepted);
+        GAMENET_TEST_ASSERT(old->close(udp::UdpPeerCloseReason::Replaced) ==
+                            udp::UdpResult::Accepted);
         current = s->openPeer(raw.address()).peer;
         GAMENET_TEST_ASSERT(current);
         GAMENET_TEST_ASSERT(current->sendDatagram("new-native").result == udp::UdpResult::Accepted);
@@ -277,7 +277,7 @@ static void acceptedForeignClose() {
              },
          .closed =
              [&](auto, auto reason) {
-                 GAMENET_TEST_ASSERT(done == 4 && reason == transport::CloseReason::Replaced);
+                 GAMENET_TEST_ASSERT(done == 4 && reason == udp::UdpPeerCloseReason::Replaced);
                  ++closed;
              },
          .stopped =
@@ -293,7 +293,7 @@ static void acceptedForeignClose() {
     GAMENET_TEST_ASSERT(loop.executor().post([] {}) == net::PostResult::Accepted);
     GAMENET_TEST_ASSERT(loop.executor().post([] {}) == net::PostResult::QueueFull);
     std::thread foreign([&] {
-        GAMENET_TEST_ASSERT(p->requestClose(transport::CloseReason::Replaced) ==
+        GAMENET_TEST_ASSERT(p->requestClose(udp::UdpPeerCloseReason::Replaced) ==
                             DispatchResult::Accepted);
         (void)s->stop();
     });
@@ -325,8 +325,8 @@ static void detachedHandleAndUnstarted() {
         GAMENET_TEST_ASSERT(stopped == 1 && weak.expired());
     }
     GAMENET_TEST_ASSERT(!handle->isOpen() && !handle->ownerExecutor().available() &&
-                        handle->send("after-loop") == transport::EndpointResult::Closed &&
-                        handle->requestClose(transport::CloseReason::Normal) ==
+                        handle->send("after-loop") == udp::UdpResult::Stopped &&
+                        handle->requestClose(udp::UdpPeerCloseReason::Normal) ==
                             DispatchResult::EndpointClosed);
     {
         net::EventLoop loop;
@@ -339,6 +339,61 @@ static void detachedHandleAndUnstarted() {
     }
 }
 int main() {
+    std::shared_ptr<transport::TransportEndpoint> endpoint;
+    {
+        net::EventLoopOptions lo;
+        lo.maxPendingFunctors = 2;
+        lo.maxFunctorsPerIteration = 2;
+        lo.reservedPendingFunctors = 0;
+        net::EventLoop loop(lo);
+        test::RawUdp raw, other;
+        unsigned done = 0, closed = 0;
+        auto server = udp::UdpPeerServer::create(&loop, net::InetAddress(0, true),
+                                                 {.sendComplete = [&](auto, auto) { ++done; },
+                                                  .closed =
+                                                      [&](auto, auto) {
+                                                          if (++closed == 2)
+                                                              (void)loop.executor().post([] {});
+                                                      },
+                                                  .stopped =
+                                                      [&](auto s) {
+                                                          test::verifyPeerLedger(s);
+                                                          loop.quit();
+                                                      }});
+        GAMENET_TEST_ASSERT(server->start() == udp::UdpResult::Accepted);
+        auto p = server->openPeer(raw.address()).peer;
+        endpoint = std::make_shared<udp_transport::UdpTransportEndpoint>(p);
+        GAMENET_TEST_ASSERT(endpoint->id().value == p->id() &&
+                            endpoint->ownerExecutor().id() == p->ownerExecutor().id() &&
+                            endpoint->isOpen());
+        GAMENET_TEST_ASSERT(endpoint->send("admitted") == transport::EndpointResult::Accepted &&
+                            endpoint->send(std::string(1201, 'x')) ==
+                                transport::EndpointResult::Overloaded);
+        auto q = server->openPeer(other.address()).peer;
+        udp_transport::UdpTransportEndpoint second(q);
+        GAMENET_TEST_ASSERT(second.close(transport::CloseReason::Normal) ==
+                            transport::EndpointResult::Accepted);
+        GAMENET_TEST_ASSERT(loop.executor().post([] {}) == net::PostResult::Accepted);
+        std::thread foreign([&] {
+            GAMENET_TEST_ASSERT(endpoint->send("foreign") ==
+                                    transport::EndpointResult::WrongThread &&
+                                endpoint->close(transport::CloseReason::Normal) ==
+                                    transport::EndpointResult::WrongThread);
+            GAMENET_TEST_ASSERT(endpoint->requestClose(transport::CloseReason::Replaced) ==
+                                DispatchResult::Accepted);
+            (void)server->stop();
+        });
+        foreign.join();
+        loop.runAfter(5s, [] { GAMENET_TEST_FAIL("UDP adapter saturation timeout"); });
+        loop.loop();
+        GAMENET_TEST_ASSERT(done == 1 && closed == 2 && !endpoint->isOpen() &&
+                            endpoint->close(transport::CloseReason::Normal) ==
+                                transport::EndpointResult::Closed);
+    }
+    GAMENET_TEST_ASSERT(endpoint->send("after-loop") == transport::EndpointResult::Closed &&
+                        !endpoint->ownerExecutor().available() &&
+                        endpoint->requestClose(transport::CloseReason::Normal) ==
+                            DispatchResult::EndpointClosed);
     for (std::size_t capacity : {std::size_t(0), std::size_t(1)}) {
         net::EventLoop loop({.maxLifecycleNodes = capacity});
         unsigned stopped = 0;

@@ -105,7 +105,7 @@ def run(args: argparse.Namespace) -> None:
         targets = ["gnt_" + n.split(".")[0] + "_" + n.split(".")[1] + "_" + hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
         targets += ["gnt_" + n.split(".")[0] + "_" + n.split(".")[1] + "_" + hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(RPC_C3)]
         api = json.loads((repo / "api/public_api_manifest.json").read_text(encoding="utf-8"))
-        installed = ["gamenet_" + name.split("::")[1] for group in api["targets"].values() for name in group if name not in {"GameNet::udp", "GameNet::websocket", "GameNet::websocket_tls"}]
+        installed = ["gamenet_" + name.split("::")[1] for group in api["targets"].values() for name in group if name not in {"GameNet::udp", "GameNet::udp_transport", "GameNet::websocket", "GameNet::websocket_tls"}]
         command = ["cmake", "--build", str(build), "--config", configuration, "--parallel", str(args.jobs)]
         if args.profile != "release": command += ["--target", *installed, *targets]
         execute("build", command)

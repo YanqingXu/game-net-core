@@ -25,8 +25,9 @@ openPeer, localAddress and snapshot are owner-only. No incoming packet creates
 a peer. A bounded address index selects an explicitly opened live peer; unknown
 sources are counted and dropped. IPv6 scope, address, family and port participate
 in address identity. Each fixed-capacity slot has a monotonically advanced
-generation; each opening also receives a nonzero TransportSessionId unique across
-UDP-C2 server instances in this process. Application-assigned TCP identities are
+generation; each opening also receives a nonzero uint64 identity unique across
+UDP-C2 server instances in this process, wrapped as TransportSessionId only by the
+separate udp_transport adapter. Application-assigned TCP identities are
 not part of that allocator; C2 does not create a shared player/dual-channel map.
 Exhausted identity counters refuse rather than wrap. Duplicate live address opens
 reject. Closing peers occupy capacity until terminal settlement but no longer
@@ -35,11 +36,13 @@ Old handles/tasks/receipts retain their original identity and cannot mutate a
 replacement. Raw UDP has no authenticated identity or wire generation: delayed
 packets from the same source address cannot be classified as old/new sessions.
 
-UdpPeer implements existing TransportEndpoint without modifying its interface.
+UdpPeer has no transport include or link. The independently exported
+GameNet::udp_transport / UdpTransportEndpoint implements existing TransportEndpoint
+without modifying its interface; see udp_transport.intent.md.
 send/sendDatagram/close run on owner; requestClose and isOpen are thread-safe.
 Owner executor remains safely observable after loop teardown. Handles weakly
 observe server state and do not extend loop lifetime. Closed handles report closed;
-live foreign sends reject. Endpoint send maps packet-size/resource refusal to
+live foreign sends reject. The separate endpoint maps packet-size/resource refusal to
 Overloaded; direct sendDatagram preserves InvalidArgument/NoMemory results.
 Accepted means copied local admission; Sent means OS completion, never delivery.
 close has local UDP semantics, not a wire close handshake or remote EOF.

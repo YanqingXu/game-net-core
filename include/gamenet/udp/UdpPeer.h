@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 // 显式 UDP 对端会话；身份只隔离本地生命周期，不认证网络来源。
-#include "gamenet/transport/TransportEndpoint.h"
+#include "gamenet/core/DispatchResult.h"
+#include "gamenet/core/net/EventLoopExecutor.h"
 #include "gamenet/udp/UdpSocket.h"
 #include <chrono>
+#include <compare>
 
 namespace gamenet::udp {
 namespace detail {
@@ -13,7 +15,7 @@ struct UdpPeerGate;
 class UdpPeerTestAccess;
 } // namespace detail
 struct UdpPeerIdentity {
-    transport::TransportSessionId id{};
+    std::uint64_t id{};
     std::size_t slot{};
     std::uint64_t generation{};
     auto operator<=>(const UdpPeerIdentity&) const = default;
@@ -38,17 +40,25 @@ struct UdpPeerSnapshot {
     std::size_t maxPeersVisitedPerTurn{}, maxCompletionsPerTurn{};
     UdpSnapshot socket{};
 };
-class UdpPeer final : public transport::TransportEndpoint {
+enum class UdpPeerCloseReason {
+    Normal,
+    GoingAway,
+    ProtocolError,
+    Replaced,
+    IdleTimeout,
+    Overloaded
+};
+class UdpPeer final {
   public:
     UdpPeerIdentity identity() const noexcept;
     net::InetAddress address() const;
-    transport::TransportSessionId id() const noexcept override;
-    net::EventLoopExecutor ownerExecutor() const noexcept override;
-    transport::EndpointResult send(std::string_view bytes) override;
+    std::uint64_t id() const noexcept;
+    net::EventLoopExecutor ownerExecutor() const noexcept;
+    UdpResult send(std::string_view bytes);
     UdpSendAdmission sendDatagram(std::string_view bytes);
-    transport::EndpointResult close(transport::CloseReason reason) override;
-    gamenet::DispatchResult requestClose(transport::CloseReason reason) noexcept override;
-    bool isOpen() const noexcept override;
+    UdpResult close(UdpPeerCloseReason reason);
+    gamenet::DispatchResult requestClose(UdpPeerCloseReason reason) noexcept;
+    bool isOpen() const noexcept;
 
   private:
     friend struct detail::UdpPeerState;
@@ -65,7 +75,7 @@ struct UdpPeerCallbacks {
     // reenter/release.
     std::function<void(std::shared_ptr<UdpPeer>, std::string_view, bool)> datagram;
     std::function<void(UdpPeerIdentity, UdpSendCompletion)> sendComplete;
-    std::function<void(UdpPeerIdentity, transport::CloseReason)> closed;
+    std::function<void(UdpPeerIdentity, UdpPeerCloseReason)> closed;
     std::function<void(UdpPeerSnapshot)> stopped;
 };
 // Owner: create/start/openPeer/address/snapshot. Thread-safe: stop/destruction.

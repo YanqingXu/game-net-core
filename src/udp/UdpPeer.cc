@@ -17,8 +17,7 @@
 #include <vector>
 
 namespace gamenet::udp {
-using transport::CloseReason;
-using transport::EndpointResult;
+using CloseReason = UdpPeerCloseReason;
 namespace {
 std::atomic<std::uint64_t> sessionSequence{};
 std::uint64_t nextSession() {
@@ -251,7 +250,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
             const auto id = nextSession();
             if (!id)
                 return {UdpResult::Overloaded, {}};
-            const UdpPeerIdentity identity{{id}, slot, generations[slot] + 1};
+            const UdpPeerIdentity identity{id, slot, generations[slot] + 1};
             auto r = std::make_shared<Record>();
             r->gate = std::make_shared<UdpPeerGate>(identity, address, executor, source);
             r->handle = std::shared_ptr<UdpPeer>(new UdpPeer(weak_from_this(), r->gate));
@@ -549,7 +548,7 @@ UdpPeer::UdpPeer(std::weak_ptr<detail::UdpPeerState> state,
     : state_(std::move(state)), gate_(std::move(gate)) {}
 UdpPeerIdentity UdpPeer::identity() const noexcept { return gate_->identity; }
 net::InetAddress UdpPeer::address() const { return gate_->address; }
-transport::TransportSessionId UdpPeer::id() const noexcept { return gate_->identity.id; }
+std::uint64_t UdpPeer::id() const noexcept { return gate_->identity.id; }
 net::EventLoopExecutor UdpPeer::ownerExecutor() const noexcept { return gate_->executor; }
 bool UdpPeer::isOpen() const noexcept {
     return gate_->open.load(std::memory_order_acquire) && gate_->executor.available();
@@ -565,20 +564,7 @@ UdpSendAdmission UdpPeer::sendDatagram(std::string_view bytes) {
         return s->send(gate_->identity, bytes);
     return {UdpResult::Stopped, 0};
 }
-EndpointResult UdpPeer::send(std::string_view bytes) {
-    switch (sendDatagram(bytes).result) {
-    case UdpResult::Accepted:
-        return EndpointResult::Accepted;
-    case UdpResult::Stopped:
-        return EndpointResult::Closed;
-    case UdpResult::WrongThread:
-        return EndpointResult::WrongThread;
-    case UdpResult::OwnerUnavailable:
-        return EndpointResult::OwnerUnavailable;
-    default:
-        return EndpointResult::Overloaded;
-    }
-}
+UdpResult UdpPeer::send(std::string_view bytes) { return sendDatagram(bytes).result; }
 gamenet::DispatchResult UdpPeer::requestClose(CloseReason reason) noexcept {
     if (!gate_->seal(reason))
         return DispatchResult::EndpointClosed;
@@ -588,15 +574,15 @@ gamenet::DispatchResult UdpPeer::requestClose(CloseReason reason) noexcept {
     return r == net::PostResult::OwnerUnavailable ? DispatchResult::OwnerUnavailable
                                                   : DispatchResult::Shutdown;
 }
-EndpointResult UdpPeer::close(CloseReason reason) {
+UdpResult UdpPeer::close(CloseReason reason) {
     if (!gate_->open.load(std::memory_order_acquire))
-        return EndpointResult::Closed;
+        return UdpResult::Stopped;
     if (!gate_->executor.available())
-        return EndpointResult::OwnerUnavailable;
+        return UdpResult::OwnerUnavailable;
     if (!gate_->executor.isInOwnerThread())
-        return EndpointResult::WrongThread;
-    return requestClose(reason) == DispatchResult::Accepted ? EndpointResult::Accepted
-                                                            : EndpointResult::OwnerUnavailable;
+        return UdpResult::WrongThread;
+    return requestClose(reason) == DispatchResult::Accepted ? UdpResult::Accepted
+                                                            : UdpResult::OwnerUnavailable;
 }
 std::shared_ptr<UdpPeerServer> UdpPeerServer::create(net::EventLoop* loop,
                                                      const net::InetAddress& local,

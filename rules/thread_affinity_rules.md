@@ -2,6 +2,10 @@
 
 ## UDP-C2
 
+UdpTransportEndpoint is a separate composition component; UDP peer code has no
+transport dependency. The adapter delegates on the same owner, installs no
+callbacks and creates no scheduling/queue policy.
+
 Peer slots/index/generations/queues, round-robin scheduling, idle timer and
 callbacks belong to the UDP socket owner. send/open/close/snapshot reject foreign
 mutation. requestClose/stop seal synchronized admission and notify a pre-attached
