@@ -62,6 +62,7 @@ inline void runUdpPeerSequence(std::span<const std::uint8_t> input) {
                             s.pendingBytes == bytes - terminalBytes);
         GAMENET_TEST_ASSERT(s.peers <= o.maxPeers && s.pendingDatagrams <= 5 &&
                             s.pendingBytes <= 80 && s.scheduledPosts <= 1);
+        GAMENET_TEST_ASSERT(s.maxPeersVisitedPerTurn <= 2 && s.maxCompletionsPerTurn <= 2);
         for (auto& p : handles) {
             const auto [n, b] = udp::detail::UdpPeerTestAccess::pending(*server, p->identity());
             GAMENET_TEST_ASSERT(n <= 3 && b <= 48);

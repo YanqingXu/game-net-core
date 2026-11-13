@@ -431,6 +431,11 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
     }
     void visit() {
         auto lease = shared_from_this();
+        {
+            std::lock_guard lock(stopMutex);
+            if (phase == UdpPhase::Stopped)
+                return;
+        }
         if (loop->phase() != net::EventLoopPhase::Running)
             (void)requestStop();
         if (stopping.load(std::memory_order_acquire)) {
