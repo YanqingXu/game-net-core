@@ -12,6 +12,9 @@ mutation. requestClose/stop seal synchronized admission and notify a pre-attache
 lifecycle node; ordinary data uses one coalesced bounded normal post. No foreign
 callbacks or data fallback on lifecycle priority. Callback commitment shares the
 close seal; reentrant callbacks may release handles/wrapper or replace peers.
+An independent shared atomic scan request preserves newly sealed or completed
+work behind the current scan cursor. Foreign callers touch only admission gates
+and this request; the owner consumes it without weakening per-turn budgets.
 
 ## UDP-C1
 

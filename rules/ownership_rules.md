@@ -13,6 +13,9 @@ send callbacks. Closing peers remain charged until one closed callback at zero;
 stopped waits for peer/timer/native retirement. Late receipts use original
 generation and cannot address replacement state. User callbacks run under a
 dispatch lease and may release caller references.
+The shared scan request owns neither server nor loop. A C1 start refusal before
+registration has no stopped callback obligation: synchronous unstarted stop must
+permit C2 node retirement and release of its settlement lease during quit drain.
 
 ## UDP-C1
 

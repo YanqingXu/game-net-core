@@ -100,6 +100,11 @@ slots per tick, using a cadence between 1 and 100 ms. Reclamation can therefore
 lag the timeout by a bounded scan cycle. Close/stop cancellation likewise scans
 in bounded slices, retaining remaining-work debt across the entire scan. This
 last invariant has a real three-slot/one-completion-per-turn pressure regression.
+An independent atomic scan request also preserves new closes and late native
+terminals behind the scan cursor; a coalesced wakeup cannot consume that work
+merely by finishing the old scan. Owner-only one-shot test checkpoints force
+foreign close, stop and last-wrapper release in this window, checking zero
+residue without a later quit or unrelated close rescuing settlement.
 
 ## Terminal meaning and observability
 
@@ -121,6 +126,11 @@ cancellation, accepted internal-post retirement and native Stopped, including IO
 cancellation dequeue. No message callback runs after peer closed. Snapshots also
 expose unknown sources, idle closes, stale receipt rejection, callback exceptions,
 and observed scan/cancellation turn maxima.
+If foreign quit arrives between peer lifecycle registration and socket start,
+the socket can refuse before creating native work. Its unstarted stop is
+synchronous and emits no native stopped callback. The peer server recognizes
+that terminal, retires its own lifecycle node and releases its settlement lease;
+both default and single-slot configurations have a forced-interleaving regression.
 
 ## Reading and verification
 
