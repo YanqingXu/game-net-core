@@ -67,6 +67,16 @@ pending; server stopped follows all peers, timer/lifecycle retirement and native
 socket Stopped with zero operations/storage. Created -> Running -> Stopping ->
 Stopped is one-shot; stop before start has no user callbacks.
 
+Lifecycle signal coalescing must not lose work arriving behind a bounded scan
+cursor. Peer seals, the first server stop and a sealed peer's native terminal
+retain a fresh full-scan obligation independently of continuation/cancellation
+debt. Each turn keeps the existing peer/completion budgets. A handle may retain
+the synchronized scan request, but never server or EventLoop ownership.
+If quit wins after C2 registration but before C1 start, C1 may refuse without
+registering or promising a stopped callback. Its synchronous unstarted stop
+settles the native obligation; C2 must still retire its node and settlement
+lease, emit stopped once and allow the owner quit drain to finish.
+
 Caller owns wrapper; active state retains a settlement lease. Slots own peer
 records, public handles weakly observe state. Timers/normal posts/native bridges
 observe weakly; dispatch takes a state lease across callbacks. Callbacks may
@@ -76,7 +86,9 @@ same receipt; old completion identity is ignored after its terminal removal.
 
 Direct contract: `tests/contract/udp/test_udp_peer.cpp` (identity, generations,
 caps, idle, bounded scheduling refusal, cross-thread close under saturation,
-reentry/exception/release, callback and packet/byte ledgers, weak expiry).
+reentry/exception/release, callback and packet/byte ledgers, weak expiry,
+start/foreign-quit interleaving and foreign close/stop/wrapper release behind a
+partial scan without an unrelated shutdown signal rescuing cleanup).
 Real fairness/reconnect: `tests/integration/udp/test_udp_peer_stress.cpp`.
 Bounded sequences share tests/support/UdpPeerSequence.h and
 `tests/fuzz/udp/fuzz_udp_peer.cpp`: independent per-id terminal ledger, stepwise

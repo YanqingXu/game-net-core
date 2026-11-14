@@ -6,6 +6,8 @@
 #include "support/RawUdp.h"
 #include "support/TestAssert.h"
 #include "support/UdpPeerSequence.h"
+#include <condition_variable>
+#include <mutex>
 #include <set>
 #include <thread>
 using namespace gamenet;
@@ -16,6 +18,201 @@ static void ledger(const udp::UdpPeerSnapshot& s) {
     GAMENET_TEST_ASSERT(s.acceptedBytes ==
                         s.sentBytes + s.cancelledBytes + s.failedBytes + s.pendingBytes);
     GAMENET_TEST_ASSERT(s.opened == s.closed + s.peers);
+}
+static void loopWithWatchdog(net::EventLoop& loop) {
+    // quit seals timer admission, so the start/quit regression needs an
+    // independent failure deadline. Synchronization, not timing, sets the race.
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool returned = false;
+    std::thread watchdog([&] {
+        std::unique_lock lock(mutex);
+        if (!condition.wait_for(lock, 5s, [&] { return returned; }))
+            GAMENET_TEST_FAIL("UDP peer start/quit failed to drain");
+    });
+    loop.loop();
+    {
+        std::lock_guard lock(mutex);
+        returned = true;
+    }
+    condition.notify_one();
+    watchdog.join();
+}
+static void startQuitInterleaving(bool singleSlot) {
+    net::EventLoop loop;
+    udp::UdpPeerOptions options;
+    if (singleSlot) {
+        options.maxPeers = 1;
+        options.maxPeersPerTurn = 1;
+    }
+    const auto owner = std::this_thread::get_id();
+    unsigned checkpoints = 0, stopped = 0;
+    std::shared_ptr<udp::UdpPeerServer> server;
+    server = udp::UdpPeerServer::create(
+        &loop, net::InetAddress(0, true),
+        {.sendComplete = [](auto, auto) { GAMENET_TEST_FAIL("unstarted send callback"); },
+         .closed = [](auto, auto) { GAMENET_TEST_FAIL("unstarted peer callback"); },
+         .stopped = [&](auto snapshot) {
+             GAMENET_TEST_ASSERT(std::this_thread::get_id() == owner && ++stopped == 1);
+             test::verifyPeerLedger(snapshot);
+             GAMENET_TEST_ASSERT(snapshot.phase == udp::UdpPhase::Stopped &&
+                                 snapshot.socket.phase == udp::UdpPhase::Stopped &&
+                                 !loop.attachedLifecycleNodeCount());
+             server.reset();
+         }}, options);
+    const auto weak = udp::detail::UdpPeerTestAccess::state(*server);
+    udp::detail::UdpPeerTestAccess::beforeSocketStart(*server, [&] {
+        GAMENET_TEST_ASSERT(++checkpoints == 1 && loop.attachedLifecycleNodeCount() == 1);
+        std::thread quitter([&] { loop.quit(); });
+        quitter.join();
+        GAMENET_TEST_ASSERT(loop.phase() == net::EventLoopPhase::Quiescing);
+    });
+    GAMENET_TEST_ASSERT(server->start() == udp::UdpResult::OwnerUnavailable && checkpoints == 1);
+    loopWithWatchdog(loop);
+    GAMENET_TEST_ASSERT(stopped == 1 && !server && weak.expired() &&
+                        !loop.attachedLifecycleNodeCount() && !loop.pendingLifecycleNodeCount());
+}
+enum class ScanClose { Peer, Server, Release };
+static void closeBehindScan(ScanClose mode, bool smallTurns) {
+    net::EventLoop loop;
+    test::RawUdp raw;
+    udp::UdpPeerOptions options;
+    if (smallTurns) {
+        options.maxPeers = 64;
+        options.maxPeersPerTurn = 1;
+    }
+    options.maxCompletionsPerTurn = 1;
+    options.idleTimeout = 24h;
+    const auto owner = std::this_thread::get_id();
+    unsigned checkpoints = 0, completed = 0, closed = 0, stopped = 0;
+    std::set<std::uint64_t> ids;
+    std::shared_ptr<udp::UdpPeerServer> server;
+    server = udp::UdpPeerServer::create(
+        &loop, net::InetAddress(0, true),
+        {.sendComplete = [&](auto, auto completion) {
+             GAMENET_TEST_ASSERT(std::this_thread::get_id() == owner && !closed &&
+                                 completion.status == udp::UdpSendStatus::Cancelled &&
+                                 ids.insert(completion.id).second);
+             ++completed;
+         },
+         .closed = [&](auto, auto reason) {
+             GAMENET_TEST_ASSERT(std::this_thread::get_id() == owner && ++closed == 1 &&
+                                 completed == 2);
+             GAMENET_TEST_ASSERT(reason == (mode == ScanClose::Peer
+                 ? udp::UdpPeerCloseReason::Replaced : udp::UdpPeerCloseReason::GoingAway));
+             if (mode == ScanClose::Peer) {
+                 // Only an already delivered closed callback may stop this
+                 // service. A missing close cannot be rescued by shutdown.
+                 const auto snapshot = server->snapshot();
+                 test::verifyPeerLedger(snapshot);
+                 GAMENET_TEST_ASSERT(!snapshot.peers && !snapshot.pendingDatagrams &&
+                                     !snapshot.pendingBytes);
+                 (void)server->stop();
+             }
+         },
+         .stopped = [&](auto snapshot) {
+             GAMENET_TEST_ASSERT(std::this_thread::get_id() == owner && ++stopped == 1 &&
+                                 closed == 1 && completed == 2);
+             test::verifyPeerLedger(snapshot);
+             GAMENET_TEST_ASSERT(snapshot.phase == udp::UdpPhase::Stopped &&
+                                 snapshot.socket.phase == udp::UdpPhase::Stopped &&
+                                 snapshot.maxPeersVisitedPerTurn <= options.maxPeersPerTurn &&
+                                 snapshot.maxCompletionsPerTurn <= options.maxCompletionsPerTurn &&
+                                 !loop.attachedLifecycleNodeCount());
+             server.reset();
+             loop.quit();
+         }}, options);
+    const auto weak = udp::detail::UdpPeerTestAccess::state(*server);
+    GAMENET_TEST_ASSERT(server->start() == udp::UdpResult::Accepted);
+    auto peer = server->openPeer(raw.address()).peer;
+    GAMENET_TEST_ASSERT(peer && peer->identity().slot == 0);
+    GAMENET_TEST_ASSERT(peer->sendDatagram("first").result == udp::UdpResult::Accepted &&
+                        peer->sendDatagram("second").result == udp::UdpResult::Accepted);
+    udp::detail::UdpPeerTestAccess::afterScan(*server, [&] {
+        GAMENET_TEST_ASSERT(++checkpoints == 1 && peer->isOpen());
+        if (mode == ScanClose::Release) {
+            std::thread releaser([held = std::move(server)]() mutable { held.reset(); });
+            releaser.join();
+        } else {
+            std::thread closer([&] {
+                if (mode == ScanClose::Peer) {
+                    GAMENET_TEST_ASSERT(peer->requestClose(udp::UdpPeerCloseReason::Replaced) ==
+                                        DispatchResult::Accepted);
+                    GAMENET_TEST_ASSERT(peer->requestClose(udp::UdpPeerCloseReason::Normal) ==
+                                        DispatchResult::EndpointClosed);
+                } else
+                    GAMENET_TEST_ASSERT(server->stop() == udp::UdpResult::Accepted);
+            });
+            closer.join();
+        }
+    });
+    loop.runAfter(5s, [] { GAMENET_TEST_FAIL("UDP peer close behind scan failed to settle"); });
+    loop.loop();
+    GAMENET_TEST_ASSERT(checkpoints == 1 && stopped == 1 && !server && weak.expired() &&
+                        !peer->isOpen() && peer->send("stale") == udp::UdpResult::Stopped &&
+                        !loop.attachedLifecycleNodeCount() && !loop.pendingLifecycleNodeCount());
+}
+static void nativeTerminalBehindScan(bool smallTurns) {
+    net::EventLoop loop;
+    test::RawUdp raw;
+    udp::UdpPeerOptions options;
+    if (smallTurns) {
+        options.maxPeers = 4;
+        options.maxPeersPerTurn = 1;
+    }
+    options.idleTimeout = 24h;
+    const auto precedingPeers = options.maxPeersPerTurn;
+    unsigned completed = 0, closed = 0, stopped = 0;
+    std::shared_ptr<udp::UdpPeerServer> server;
+    std::shared_ptr<udp::UdpPeer> peer;
+    server = udp::UdpPeerServer::create(
+        &loop, net::InetAddress(0, true),
+        {.sendComplete = [&](auto identity, auto completion) {
+             GAMENET_TEST_ASSERT(identity == peer->identity() && ++completed == 1 &&
+                                 completion.status == udp::UdpSendStatus::Sent);
+             test::verifyPeerLedger(server->snapshot());
+         },
+         .closed = [&](auto identity, auto reason) {
+             ++closed;
+             if (identity == peer->identity()) {
+                 GAMENET_TEST_ASSERT(completed == 1 &&
+                                     reason == udp::UdpPeerCloseReason::Replaced);
+                 // No stop/quit may rescue a missed native terminal scan.
+                 (void)server->stop();
+             } else
+                 GAMENET_TEST_ASSERT(reason == udp::UdpPeerCloseReason::GoingAway);
+         },
+         .stopped = [&](auto snapshot) {
+             test::verifyPeerLedger(snapshot);
+             GAMENET_TEST_ASSERT(++stopped == 1 && closed == precedingPeers + 1 &&
+                                 snapshot.sentDatagrams == 1 && !snapshot.cancelledDatagrams &&
+                                 snapshot.maxPeersVisitedPerTurn <= options.maxPeersPerTurn);
+             server.reset();
+             loop.quit();
+         }}, options);
+    const auto weak = udp::detail::UdpPeerTestAccess::state(*server);
+    GAMENET_TEST_ASSERT(server->start() == udp::UdpResult::Accepted);
+    for (std::size_t n = 0; n < precedingPeers; ++n)
+        GAMENET_TEST_ASSERT(server->openPeer(net::InetAddress(
+            "127.0.0.1", static_cast<std::uint16_t>(10000 + n))).result == udp::UdpResult::Accepted);
+    peer = server->openPeer(raw.address()).peer;
+    GAMENET_TEST_ASSERT(peer && peer->identity().slot == precedingPeers &&
+                        peer->sendDatagram("native").result == udp::UdpResult::Accepted);
+    // The initial scan advances to this peer's slot. The normal send post
+    // admits C1 output before this close, then the next scan skips its native
+    // receipt. Its actual terminal must retain a new full-scan obligation.
+    GAMENET_TEST_ASSERT(loop.executor().post([&] {
+        GAMENET_TEST_ASSERT(udp::detail::UdpPeerTestAccess::nativeId(*server));
+        std::thread closer([&] {
+            GAMENET_TEST_ASSERT(peer->requestClose(udp::UdpPeerCloseReason::Replaced) ==
+                                DispatchResult::Accepted);
+        });
+        closer.join();
+    }) == net::PostResult::Accepted);
+    loop.runAfter(5s, [] { GAMENET_TEST_FAIL("UDP peer native terminal behind scan lost"); });
+    loop.loop();
+    GAMENET_TEST_ASSERT(stopped == 1 && !server && weak.expired() && !peer->isOpen() &&
+                        !loop.attachedLifecycleNodeCount() && !loop.pendingLifecycleNodeCount());
 }
 static void bounded(bool v6) {
     net::EventLoop loop;
@@ -339,6 +536,14 @@ static void detachedHandleAndUnstarted() {
     }
 }
 int main() {
+    startQuitInterleaving(false);
+    startQuitInterleaving(true);
+    for (const auto mode : {ScanClose::Peer, ScanClose::Server, ScanClose::Release}) {
+        closeBehindScan(mode, false);
+        closeBehindScan(mode, true);
+    }
+    nativeTerminalBehindScan(false);
+    nativeTerminalBehindScan(true);
     std::shared_ptr<transport::TransportEndpoint> endpoint;
     {
         net::EventLoopOptions lo;

@@ -6,6 +6,11 @@ tests/contract/udp/test_udp_peer.cpp covers explicit admission, unique identity,
 generation reuse, stale handle/receipt isolation, per-peer/global packet+byte
 bounds, idle expiry, ordinary-post failure, saturated foreign lifecycle close,
 reentry/throw/release, exactly-once output/peer terminal and zero residue.
+The same contract forces foreign quit between C2 registration and C1 start,
+and foreign close/stop/last-wrapper release after a target slot was scanned.
+Default and single-slot/small-turn configurations must settle without rescue
+signals, preserve first close reasons and exact send ledgers, retire lifecycle
+nodes/native storage and expire weak state observations.
 tests/integration/udp/test_udp_peer_stress.cpp proves real refusal/recovery,
 round-robin progress and repeated generations on Windows IOCP/Linux epoll.
 tests/support/UdpPeerSequence.h and tests/fuzz/udp/fuzz_udp_peer.cpp compare

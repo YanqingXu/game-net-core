@@ -14,6 +14,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace gamenet::udp {
@@ -58,23 +59,30 @@ void UdpPeerOptions::validate() const {
         throw std::invalid_argument("invalid UDP peer budgets/idle timeout");
 }
 namespace detail {
+// Handles retain only this mailbox, never a server/loop lease. A lifecycle
+// signal may coalesce with a partial scan; the work request must survive it.
+struct UdpPeerScanRequest {
+    std::atomic<bool> pending{false};
+};
 struct UdpPeerGate {
     const UdpPeerIdentity identity;
     const net::InetAddress address;
     const net::EventLoopExecutor executor;
     const net::EventLoopLifecycleSource source;
+    const std::shared_ptr<UdpPeerScanRequest> scanRequest;
     std::mutex mutex;
     std::atomic<bool> open{true};
     CloseReason reason{CloseReason::Normal};
     UdpPeerGate(UdpPeerIdentity id, net::InetAddress a, net::EventLoopExecutor e,
-                net::EventLoopLifecycleSource s)
-        : identity(id), address(a), executor(e), source(s) {}
+                net::EventLoopLifecycleSource s, std::shared_ptr<UdpPeerScanRequest> scan)
+        : identity(id), address(a), executor(e), source(s), scanRequest(std::move(scan)) {}
     bool seal(CloseReason r) {
         std::lock_guard lock(mutex);
         if (!open.load(std::memory_order_relaxed))
             return false;
         reason = r;
         open.store(false, std::memory_order_release);
+        scanRequest->pending.store(true, std::memory_order_release);
         return true;
     }
 };
@@ -109,6 +117,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
     std::shared_ptr<UdpPeerState> activeLease;
     net::TimerId timer;
     net::EventLoopLifecycleSource source;
+    const std::shared_ptr<UdpPeerScanRequest> scanRequest{std::make_shared<UdpPeerScanRequest>()};
     std::mutex stopMutex;
     UdpPhase phase{UdpPhase::Created};
     std::atomic<bool> stopping{false};
@@ -116,6 +125,13 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
     std::size_t scanCursor{}, scanRemaining{}, idleCursor{};
     std::uint64_t nextId{};
     UdpPeerSnapshot stats;
+#ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
+    std::function<void()> beforeSocketStartHook, afterScanHook;
+    static void runHook(std::function<void()>& hook) {
+        if (auto callback = std::exchange(hook, {}))
+            callback();
+    }
+#endif
 
     UdpPeerState(net::EventLoop* owner, UdpPeerCallbacks cb, UdpPeerOptions o)
         : loop(owner), executor(owner->executor()), options(o), callbacks(std::move(cb)),
@@ -167,6 +183,9 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
                         s->visit();
                 });
             activeLease = self;
+#ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
+            runHook(beforeSocketStartHook);
+#endif
             const auto result = socket->start();
             if (result != UdpResult::Accepted) {
                 (void)requestStop();
@@ -215,7 +234,8 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
         std::lock_guard lock(stopMutex);
         if (phase == UdpPhase::Stopped)
             return UdpResult::Stopped;
-        stopping.store(true, std::memory_order_release);
+        if (!stopping.exchange(true, std::memory_order_acq_rel))
+            scanRequest->pending.store(true, std::memory_order_release);
         if (phase == UdpPhase::Created) {
             (void)socket->stop();
             phase = UdpPhase::Stopped;
@@ -252,7 +272,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
                 return {UdpResult::Overloaded, {}};
             const UdpPeerIdentity identity{id, slot, generations[slot] + 1};
             auto r = std::make_shared<Record>();
-            r->gate = std::make_shared<UdpPeerGate>(identity, address, executor, source);
+            r->gate = std::make_shared<UdpPeerGate>(identity, address, executor, source, scanRequest);
             r->handle = std::shared_ptr<UdpPeer>(new UdpPeer(weak_from_this(), r->gate));
             r->key = std::move(key);
             addresses.emplace(r->key, slot);
@@ -388,9 +408,11 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
         if (!r->queue.empty() && r->gate->open.load(std::memory_order_acquire))
             enqueueReady(receipt.peer.slot);
         if (!r->gate->open.load(std::memory_order_acquire) ||
-            stopping.load(std::memory_order_acquire))
+            stopping.load(std::memory_order_acquire)) {
+            // A prior slice may already have skipped this in-flight record.
+            scanRequest->pending.store(true, std::memory_order_release);
             (void)source.signal();
-        else if (!schedule())
+        } else if (!schedule())
             (void)requestStop();
     }
     void receive(const net::InetAddress& address, std::string_view bytes, bool truncated) {
@@ -446,9 +468,15 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
                 (void)loop->tryCancel(timer);
                 timer = {};
             }
-            (void)socket->stop();
+            // C1's unstarted stop is synchronous and deliberately emits no
+            // stopped callback. Do not wait for a native obligation it never
+            // accepted when quit raced its start.
+            if (socket->stop() == UdpResult::Stopped)
+                nativeStopped = true;
         }
-        if (!scanRemaining)
+        // Restart coverage from the current cursor, preserving fairness while
+        // revisiting every slot after newly published close/completion work.
+        if (scanRequest->pending.exchange(false, std::memory_order_acq_rel) || !scanRemaining)
             scanRemaining = slots.size();
         std::size_t visited = 0, completed = 0;
         bool retry = false;
@@ -484,11 +512,14 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
         }
         stats.maxPeersVisitedPerTurn = std::max(stats.maxPeersVisitedPerTurn, visited);
         stats.maxCompletionsPerTurn = std::max(stats.maxCompletionsPerTurn, completed);
+#ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
+        runHook(afterScanHook);
+#endif
         // Cancellation debt belongs to the whole bounded scan, not just the last
         // slice. A later slice visiting an empty/live slot cannot erase earlier
         // peers' remaining obligations.
         scanAgain = scanAgain || retry;
-        if (scanRemaining || scanAgain) {
+        if (scanRemaining || scanAgain || scanRequest->pending.load(std::memory_order_acquire)) {
             if (!scanRemaining)
                 scanAgain = false;
             (void)source.signal();
@@ -517,6 +548,14 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
 
 #ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
 std::weak_ptr<void> detail::UdpPeerTestAccess::state(const UdpPeerServer& s) { return s.state_; }
+void detail::UdpPeerTestAccess::beforeSocketStart(UdpPeerServer& s, std::function<void()> hook) {
+    s.state_->loop->assertInLoopThread();
+    s.state_->beforeSocketStartHook = std::move(hook);
+}
+void detail::UdpPeerTestAccess::afterScan(UdpPeerServer& s, std::function<void()> hook) {
+    s.state_->loop->assertInLoopThread();
+    s.state_->afterScanHook = std::move(hook);
+}
 void detail::UdpPeerTestAccess::receive(UdpPeerServer& s, const net::InetAddress& a,
                                         std::string_view b, bool t) {
     s.state_->loop->assertInLoopThread();
