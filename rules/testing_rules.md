@@ -948,3 +948,9 @@ after quit, including capture-destructor reentry without leaked cancellation
 permission. Source-private closure-lifetime witnesses are not installed and
 must expire before stopped as well as after wrapper release. Ready ticks after
 quit retain GoingAway/Cancelled, never SchedulingRejected/TransportError.
+Message and ACK completion callbacks additionally force owner/foreign stop/quit,
+final-wrapper release and exceptions at an expired send deadline. Remaining
+unacknowledged sends cancel, committed ACKs survive, and explicit close keeps
+its first reason. The Core timer contract forces foreign add cancellation and
+quit/retirement before owner insertion, including extracted normal batches,
+repeating timers, capture-destructor reentry, bounded rejection and capacity reuse.

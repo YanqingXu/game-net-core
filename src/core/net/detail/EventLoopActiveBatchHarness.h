@@ -86,6 +86,13 @@ public:
         loop.doExpiredTimers(now);
     }
 
+    static void runPendingFunctors(EventLoop& loop, std::size_t maxCount) {
+        loop.assertInLoopThread();
+        if (loop.looping_ || loop.callingPendingFunctors_.load(std::memory_order_relaxed))
+            throw std::logic_error("pending-batch harness requires an idle owner EventLoop");
+        loop.doPendingFunctors(maxCount);
+    }
+
     static void configurePendingFunctorCapacity(
         EventLoop& loop,
         std::size_t normalCapacity,

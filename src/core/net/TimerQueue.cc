@@ -10,6 +10,7 @@
 #include <chrono>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -17,6 +18,59 @@
 namespace gamenet::net {
 
 namespace {
+
+// Observes only pending foreign adds; accepted normal functors own their Timer.
+// Keep this source-local so the installed TimerQueue layout/API stays unchanged.
+// The index never runs capture destruction under its lock or retains unknown ids.
+template <class Timer> class PendingTimerAdds {
+public:
+    bool publish(const TimerQueue* queue, const std::shared_ptr<Timer>& timer,
+                 std::size_t capacity) {
+        std::lock_guard lock(mutex_);
+        auto [entry, created] = queues_.try_emplace(queue);
+        auto& timers = entry->second;
+        if (timers.size() >= capacity)
+            return false;
+        try {
+            timers.emplace(timer->sequence, timer);
+        } catch (...) {
+            if (created)
+                queues_.erase(entry);
+            throw;
+        }
+        return true;
+    }
+    std::shared_ptr<Timer> find(const TimerQueue* queue, std::int64_t sequence) {
+        std::lock_guard lock(mutex_);
+        const auto entry = queues_.find(queue);
+        if (entry == queues_.end())
+            return {};
+        const auto timer = entry->second.find(sequence);
+        return timer == entry->second.end() ? nullptr : timer->second.lock();
+    }
+    void erase(const TimerQueue* queue, std::int64_t sequence) {
+        std::lock_guard lock(mutex_);
+        const auto entry = queues_.find(queue);
+        if (entry == queues_.end())
+            return;
+        entry->second.erase(sequence);
+        if (entry->second.empty())
+            queues_.erase(entry);
+    }
+    void erase(const TimerQueue* queue) {
+        std::lock_guard lock(mutex_);
+        queues_.erase(queue);
+    }
+private:
+    std::mutex mutex_;
+    std::unordered_map<const TimerQueue*,
+        std::unordered_map<std::int64_t, std::weak_ptr<Timer>>> queues_;
+};
+
+template <class Timer> PendingTimerAdds<Timer>& pendingTimerAdds() {
+    static PendingTimerAdds<Timer> pending;
+    return pending;
+}
 
 int ceilMilliseconds(std::chrono::steady_clock::duration delay) {
     using namespace std::chrono;
@@ -83,10 +137,13 @@ void RepeatingTimerOptions::validate() const {
 TimerQueue::TimerQueue(EventLoop* loop)
     : loop_(loop),
       nextSequence_(1) {
+    // Establish static lifetime before any global EventLoop can finish construction.
+    (void)pendingTimerAdds<Timer>();
 }
 
 TimerQueue::~TimerQueue() {
     loop_->assertInLoopThread();
+    pendingTimerAdds<Timer>().erase(this);
 }
 
 TimerScheduleResult TimerQueue::tryAddTimer(
@@ -123,8 +180,24 @@ TimerScheduleResult TimerQueue::tryAddTimer(
         return {PostResult::Accepted, timerId};
     }
 
-    const PostResult result = loop_->executor().post(
-        [this, timer] { addTimerInLoop(timer); });
+    auto& pending = pendingTimerAdds<Timer>();
+    if (!pending.publish(this, timer,
+            detail::EventLoopLifecycleRegistry::normalPendingFunctorCapacity(*loop_))) {
+        return {loop_->phase() == EventLoopPhase::Running ? PostResult::QueueFull
+                                                         : PostResult::Shutdown, {}};
+    }
+    PostResult result;
+    try {
+        result = loop_->executor().post([this, timer] {
+            pendingTimerAdds<Timer>().erase(this, timer->sequence);
+            addTimerInLoop(timer);
+        });
+    } catch (...) {
+        pending.erase(this, timer->sequence);
+        throw;
+    }
+    if (result != PostResult::Accepted)
+        pending.erase(this, timer->sequence);
     return {result, result == PostResult::Accepted ? timerId : TimerId{}};
 }
 
@@ -174,7 +247,8 @@ void TimerQueue::cancel(TimerId timerId) {
 
 void TimerQueue::addTimerInLoop(TimerPtr timer) {
     loop_->assertInLoopThread();
-    insert(std::move(timer));
+    if (!timer->canceled)
+        insert(std::move(timer));
 }
 
 void TimerQueue::cancelInLoop(TimerId timerId) {
@@ -182,6 +256,12 @@ void TimerQueue::cancelInLoop(TimerId timerId) {
 
     const auto found = timersById_.find(timerId.sequence_);
     if (found == timersById_.end()) {
+        if (auto timer = pendingTimerAdds<Timer>().find(this, timerId.sequence_)) {
+            timer->canceled = true;
+            // Leave only cancelled metadata for the accepted add functor. Clear
+            // before destruction so capture reentry cannot observe the callback.
+            auto callback = std::exchange(timer->callback, {});
+        }
         return;
     }
 

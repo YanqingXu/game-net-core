@@ -3,6 +3,7 @@
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/kcp/KcpTransport.h"
 #include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
+#include "../../../src/core/net/detail/EventLoopLifecycleRegistry.h"
 #include "../../../src/udp/UdpPeerTestAccess.h"
 #include "support/KcpSequence.h"
 #include "support/RawUdp.h"
@@ -20,6 +21,112 @@ void ledger(const kcp::KcpSnapshot& s) {
                             !s.protocolBytes && !s.scheduledPosts &&
                             !s.udp.peers && !s.udp.pendingDatagrams && !s.udp.pendingBytes &&
                             !s.udp.socket.nativeOperations && !s.udp.socket.receiveStorageBytes);
+}
+
+enum class CallbackClose { Stop, ForeignStop, Quit, ForeignQuit, Release, Throw, SessionClose };
+void callbackCloseAtSendDeadline(CallbackClose action, bool acknowledgment) {
+    net::EventLoop loop;
+    test::RawUdp raw;
+    kcp::KcpOptions o;
+    o.maxSessions = o.maxSessionsPerTurn = 1;
+    o.udp.maxPeers = o.udp.maxPeersPerTurn = 1;
+    o.idleTimeout = o.udp.idleTimeout = 1h;
+    unsigned reentered = 0, received = 0, acked = 0, cancelled = 0, closed = 0, stopped = 0;
+    std::set<std::uint64_t> terminals;
+    std::shared_ptr<kcp::KcpTransport> s;
+    std::shared_ptr<kcp::KcpSession> p;
+    std::weak_ptr<void> kcpTimer, udpTimer;
+    net::TimerId watchdog, pump;
+    auto close = [&] {
+        GAMENET_TEST_ASSERT(++reentered == 1);
+        switch (action) {
+            case CallbackClose::Stop:
+                GAMENET_TEST_ASSERT(s->stop() == kcp::KcpResult::Accepted);
+                break;
+            case CallbackClose::ForeignStop: {
+                std::thread foreign([&] {
+                    GAMENET_TEST_ASSERT(s->stop() == kcp::KcpResult::Accepted);
+                });
+                foreign.join();
+                break;
+            }
+            case CallbackClose::Quit: loop.quit(); break;
+            case CallbackClose::ForeignQuit: {
+                std::thread foreign([&] { loop.quit(); });
+                foreign.join();
+                break;
+            }
+            case CallbackClose::Release: s.reset(); break;
+            case CallbackClose::Throw: throw std::runtime_error("KCP callback stop at deadline");
+            case CallbackClose::SessionClose:
+                GAMENET_TEST_ASSERT(p->close() == kcp::KcpResult::Accepted);
+                break;
+        }
+        GAMENET_TEST_ASSERT(!p->isOpen());
+    };
+    s = kcp::KcpTransport::create(
+        &loop, net::InetAddress("127.0.0.1", 0),
+        {.message = [&](auto peer, auto bytes) {
+             GAMENET_TEST_ASSERT(!acknowledgment && peer == p && bytes == "close");
+             ++received;
+             close();
+         },
+         .sendComplete = [&](auto id, auto c) {
+             GAMENET_TEST_ASSERT(id == p->identity() && terminals.insert(c.id).second);
+             if (c.status == kcp::KcpSendStatus::Acknowledged) {
+                 GAMENET_TEST_ASSERT(acknowledgment && !acked++);
+                 close();
+             } else {
+                 GAMENET_TEST_ASSERT(c.status == kcp::KcpSendStatus::Cancelled);
+                 ++cancelled;
+             }
+         },
+         .closed = [&](auto, auto reason) {
+             const auto expected = action == CallbackClose::SessionClose
+                                       ? kcp::KcpCloseReason::Normal : kcp::KcpCloseReason::GoingAway;
+             GAMENET_TEST_ASSERT(reason == expected && ++closed == 1);
+             if (s) (void)s->stop();
+         },
+         .stopped = [&](auto snap) {
+             ledger(snap);
+             GAMENET_TEST_ASSERT(snap.accepted == (acknowledgment ? 2 : 1) && !snap.failed &&
+                                 snap.acknowledged == unsigned(acknowledgment) && snap.cancelled == 1 &&
+                                 snap.callbackExceptions == unsigned(action == CallbackClose::Throw) &&
+                                 kcpTimer.expired() && udpTimer.expired() && ++stopped == 1);
+             net::detail::EventLoopLifecycleRegistry::retireTimer(loop, pump);
+             net::detail::EventLoopLifecycleRegistry::retireTimer(loop, watchdog);
+             loop.quit();
+         }}, o);
+    const auto weak = kcp::detail::KcpTestAccess::state(*s);
+    GAMENET_TEST_ASSERT(s->start() == kcp::KcpResult::Accepted);
+    kcpTimer = kcp::detail::KcpTestAccess::timerLifetime(*s);
+    udpTimer = udp::detail::UdpPeerTestAccess::timerLifetime(kcp::detail::KcpTestAccess::udpServer(*s));
+    p = s->openSession(raw.address(), 208).session;
+    GAMENET_TEST_ASSERT(p && p->send("pending").id);
+    if (acknowledgment) {
+        GAMENET_TEST_ASSERT(p->send("unacknowledged").id);
+        kcp::detail::KcpTestAccess::advance(*s, 0ms);
+        pump = loop.runEvery(1ms, [&] {
+            if (reentered) return;
+            char wire[1200];
+            const auto length = recv(raw.fd, wire, sizeof(wire), 0);
+            if (length < 24) return;
+            auto ack = test::kcpPacket(208, 82, 0, 1);
+            test::kcpWrite32(ack, 8, test::kcpRead32(wire + 8));
+            kcp::detail::KcpTestAccess::input(*s, p->identity(), ack);
+            kcp::detail::KcpTestAccess::advance(*s, 11s);
+        });
+    } else {
+        kcp::detail::KcpTestAccess::input(*s, p->identity(), test::kcpPacket(208, 81, 0, 0, "close"));
+        kcp::detail::KcpTestAccess::advance(*s, 11s);
+    }
+    watchdog = loop.runAfter(3s, [] { GAMENET_TEST_FAIL("KCP callback/deadline close did not settle"); });
+    loop.loop();
+    GAMENET_TEST_ASSERT(reentered == 1 && received == unsigned(!acknowledgment) &&
+                        acked == unsigned(acknowledgment) && cancelled == 1 && closed == 1 &&
+                        stopped == 1 && !p->isOpen() && !loop.attachedLifecycleNodeCount());
+    s.reset();
+    GAMENET_TEST_ASSERT(weak.expired() && kcpTimer.expired() && udpTimer.expired());
 }
 
 void quitRetiresTimers(bool foreign, bool saturated, bool readyBatch = false) {
@@ -456,6 +563,11 @@ void failedStart() {
     }
 }
 int main() {
+    for (auto action : {CallbackClose::Stop, CallbackClose::ForeignStop, CallbackClose::Quit,
+                        CallbackClose::ForeignQuit, CallbackClose::Release, CallbackClose::Throw,
+                        CallbackClose::SessionClose})
+        for (bool acknowledgment : {false, true})
+            callbackCloseAtSendDeadline(action, acknowledgment);
     for (bool foreign : {false, true})
         for (bool saturated : {false, true})
             quitRetiresTimers(foreign, saturated);

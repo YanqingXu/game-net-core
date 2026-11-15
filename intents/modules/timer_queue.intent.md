@@ -61,6 +61,13 @@ one owner-loop timer or an explicit owner-loop sweep.
 - catch-up callbacks are ordinary budgeted timer callbacks on later loop turns,
   never recursive calls from the current callback frame
 - cancel must prevent future firing, even if requested cross-thread
+- An Accepted foreign add remains discoverable before its owner insertion runs,
+  including after the add functor has entered an extracted normal batch. Owner
+  cancellation releases its callback captures and marks that known timer so
+  later insertion cannot revive it. A source-local synchronized weak index is
+  capped per queue by normal pending-functor capacity; it owns no callback and
+  creates no tombstones for unknown ids. Rejection, insertion and queue teardown
+  remove its entries. Timer containers and cancellation remain owner-only.
 - Source-private lifecycle retirement runs synchronously on the owner even in
   Quiescing/FinalDraining/Shutdown, retires registrations and marks already
   extracted timers cancelled (their current dispatch lease may finish),
@@ -161,6 +168,11 @@ only EventLoop so no standalone queue can claim Accepted without being polled.
 - EventLoop timer entry points reject non-positive repeating intervals and
   invalid options; private TimerQueue paths repeat validation defensively
 - cancel before expiration prevents callback execution
+- Foreign add followed by owner cancellation or quit/retirement before insertion
+  must suppress firing and release captures on owner, including repeating timers,
+  earlier functors in the same extracted batch and destructor reentry. Pending
+  admission is bounded, rejected captures release, and capacity recovers after
+  draining; stale cancellation cannot accumulate metadata.
 - canceling a ready timer from an earlier ready callback prevents the canceled
   callback from firing
 - a ready population larger than the configured per-iteration budget retains

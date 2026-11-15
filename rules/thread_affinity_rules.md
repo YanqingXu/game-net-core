@@ -286,6 +286,10 @@ No other direct mutation path is allowed for core loop state.
   OwnerUnavailable are distinct, and rejected add returns no valid TimerId.
   Legacy timer creation maps those results to exceptions while legacy cancel
   intentionally discards them
+- Foreign timer add publishes only synchronized weak pending metadata before
+  normal posting. The source-local pending index is bounded by each loop's normal
+  queue capacity. Only owner mutates cancellation/captures or the timer containers;
+  owner cancellation also covers add functors already extracted for dispatch.
 - DeadlineQueue is owner-loop-only. A driver may be one TimerQueue timer, but
   logical targets never receive one timer callback each; expiration policy runs
   after a budgeted advance returns generation-tagged values to the owner
@@ -839,3 +843,6 @@ hooks are private to the vendored copy, installed once and scoped by thread-loca
 arena context; they must not affect another upstream KCP linked by a consumer.
 KCP and nested UDP timers retire on their owner before stopped, even during quit.
 The UDP closed bridge preserves IdleTimeout without overwriting an earlier KCP seal.
+After message/ACK callback reentry, owner observes quit/stop before further data
+work. Internal close-reason commits take the stop mutex before the session gate;
+an already sealed local stop cannot become Timeout/Failed on callback return.

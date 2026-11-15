@@ -60,6 +60,11 @@ authoritative. Neither path synthesizes native completion.
 During owner quit or an existing local stop, a UDP terminal or already-ready
 update tick keeps GoingAway/Cancelled semantics instead of inventing a transport
 or scheduling failure before KCP's own quiesce visit.
+After message or ACK completion callback reentry, observe local stop/quit before
+continuing data work or committing a timeout. Internal reason seals serialize
+with stop and keep GoingAway/Cancelled if stop already won; previously committed
+ACK results and an earlier session close remain authoritative. Callback exception
+and last-wrapper destruction use the same rule.
 Partial start must also terminate when a nested UDP server fails before acquiring
 its active lease: observe its proven Stopped phase rather than waiting for a
 callback that an unstarted layer does not emit. Capacity-zero/one/two contracts
@@ -102,6 +107,9 @@ local cancellation, without a network close handshake or remote delivery promise
   Owner/foreign quit under normal-queue saturation must remove both KCP/UDP timer
   registrations before stopped. Deterministic UDP-first/KCP-first idle expiry
   and explicit-close/UDP-idle races preserve the first KCP disposition.
+  Message/ACK callbacks force owner/foreign stop/quit, last-wrapper release and
+  exceptions against an expired unacknowledged send, retaining Cancelled and
+  committed ACKs; explicit session close supplies the first-reason control.
 - tests/integration/kcp/test_kcp_reliable.cpp: real IPv4/IPv6 UDP, burst/backpressure
   recovery, fairness and multiple fresh-conv generations.
 - tests/fuzz/kcp/fuzz_kcp_protocol.cpp and tests/fuzz/kcp/fuzz_kcp_session.cpp:

@@ -32,6 +32,9 @@ Old handles never acquire a replacement generation.
 Owner cleanup retires both KCP and UDP idle timers even after quit seals public
 timer admission. If UDP expires first, its IdleTimeout is preserved in KCP;
 local quit remains GoingAway with Cancelled sends. An earlier KCP seal wins.
+The same cancellation rule applies when a message or ACK completion callback
+stops/quits, throws or releases the last wrapper while another send deadline is
+already due; already committed ACKs remain Acknowledged.
 
 Default MTU 1200, send window 32, receive window 128, send-segment cap 64 and ACK
 cap 256 are validated. Message size defaults 16 KiB, per-session pending count

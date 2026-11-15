@@ -197,6 +197,11 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
         return source.signal() == net::PostResult::OwnerUnavailable ? KcpResult::OwnerUnavailable
                                                                     : KcpResult::Accepted;
     }
+    bool stopRequested() {
+        if (loop->phase() != net::EventLoopPhase::Running)
+            (void)requestStop();
+        return stopping->load(std::memory_order_acquire);
+    }
     static int output(void* context, std::string_view bytes) noexcept {
         auto& r = *static_cast<Record*>(context);
         try {
@@ -259,6 +264,12 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
         }
     }
     void seal(const std::shared_ptr<Record>& r, KcpCloseReason reason) {
+        // A callback/foreign stop can win after pulse's earlier observation.
+        // Serialize the reason commit with that admission seal, in send's lock order.
+        std::lock_guard serviceLock(stopMutex);
+        if (stopping->load(std::memory_order_relaxed) ||
+            loop->phase() != net::EventLoopPhase::Running)
+            reason = KcpCloseReason::GoingAway;
         if (r->gate->seal(reason))
             (void)source.signal();
     }
@@ -339,9 +350,7 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
         schedule();
     }
     void schedule() {
-        if (loop->phase() != net::EventLoopPhase::Running)
-            (void)requestStop();
-        if (stopping->load(std::memory_order_acquire)) {
+        if (stopRequested()) {
             (void)source.signal();
             return;
         }
@@ -381,7 +390,7 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
     }
     void pulse() {
         auto lease = shared_from_this();
-        if (stopping->load(std::memory_order_acquire)) {
+        if (stopRequested()) {
             (void)source.signal();
             return;
         }
@@ -417,6 +426,8 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
                 terminal(r, KcpSendStatus::Acknowledged);
             }
             while (work < options.maxMessagesPerSessionTurn) {
+                if (stopRequested())
+                    break;
                 std::optional<std::string_view> message;
                 {
                     std::lock_guard serviceLock(stopMutex);
@@ -436,6 +447,11 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
             total += work;
             if (work == options.maxMessagesPerSessionTurn)
                 again = true;
+            // ACK/message callbacks may stop, quit, throw or drop the final wrapper.
+            // Leave their unacknowledged sends to cancellation cleanup, even when
+            // this pulse entered with an already-expired send deadline.
+            if (stopRequested())
+                break;
             if (r->gate->open.load(std::memory_order_acquire)) {
                 if (r->engine->failed())
                     seal(r, KcpCloseReason::ProtocolError);

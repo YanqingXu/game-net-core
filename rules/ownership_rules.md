@@ -494,6 +494,11 @@ lifetime after pending/inbound/timer cleanup and buffered RPC dispatch retiremen
 
 ## 6. Timer / Scheduled Tasks
 - Timer containers own timer metadata
+- Pending foreign adds are owned by their admitted normal functors. A bounded
+  source-local weak index observes them until insertion/rejection/teardown; it
+  owns no callbacks and never retains unknown-cancel tombstones. Owner cancellation
+  clears a pending callback before capture destruction can reenter, while the
+  already accepted functor retains only cancelled metadata until it drains.
 - Scheduled callbacks do not imply ownership of arbitrary target objects
 - Cancellation semantics must be explicit
 - Source-private lifecycle timer retirement is synchronous owner cleanup in any
@@ -808,3 +813,6 @@ never traverse upstream lists after an interrupted mutation. Weak session
 handles/posts/timers observe an active lease. Commit ACK dispositions before
 callbacks, release pending budgets before each terminal callback, and retain
 closing records until their original UDP peer's native completions retire.
+Message/ACK callbacks may stop, quit, throw or release the final wrapper; the
+dispatch lease survives and subsequent internal timeout seals respect local
+stop. Already committed ACKs still terminate as Acknowledged.
