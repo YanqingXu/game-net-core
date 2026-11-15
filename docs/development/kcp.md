@@ -29,6 +29,9 @@ before returning. Callbacks run on owner outside locks and native KCP; they may
 reenter/throw/release. Destroying a running wrapper requests stop. Keep the owner
 alive and draining until stopped, which includes UDP/IOCP terminal retirement.
 Old handles never acquire a replacement generation.
+Owner cleanup retires both KCP and UDP idle timers even after quit seals public
+timer admission. If UDP expires first, its IdleTimeout is preserved in KCP;
+local quit remains GoingAway with Cancelled sends. An earlier KCP seal wins.
 
 Default MTU 1200, send window 32, receive window 128, send-segment cap 64 and ACK
 cap 256 are validated. Message size defaults 16 KiB, per-session pending count

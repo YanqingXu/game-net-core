@@ -61,6 +61,13 @@ one owner-loop timer or an explicit owner-loop sweep.
 - catch-up callbacks are ordinary budgeted timer callbacks on later loop turns,
   never recursive calls from the current callback frame
 - cancel must prevent future firing, even if requested cross-thread
+- Source-private lifecycle retirement runs synchronously on the owner even in
+  Quiescing/FinalDraining/Shutdown, retires registrations and marks already
+  extracted timers cancelled (their current dispatch lease may finish),
+  and invalidates the participant's TimerId only after cancellation. It admits
+  no work and invokes no callback. Public tryCancel keeps its Shutdown result.
+  Its one-use permission is consumed before destroying captures, so reentrant
+  public cancellation cannot inherit cleanup admission.
 - a callback may cancel a later ready timer that was not extracted into the
   current budget; removal from the ordered container prevents its later firing
 - one DeadlineQueue belongs to one owner EventLoop; every operation is
@@ -159,6 +166,9 @@ only EventLoop so no standalone queue can claim Accepted without being polled.
 - a ready population larger than the configured per-iteration budget retains
   order, yields to later EventLoop phases, and reports exact remaining work
 - timer queue teardown owns only timer metadata and does not leave backend registration behind
+- tests/contract/timer_queue/test_timer_queue.cpp verifies lifecycle retirement
+  after quit, including another callback already extracted in the ready batch,
+  capture release and unchanged public cancellation admission.
 - bucket quantization never fires early; same-key replacement rejects a stale
   cancel; ready populations larger than the advance budget retain exact
   continuation state

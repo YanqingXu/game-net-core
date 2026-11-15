@@ -32,6 +32,7 @@ namespace {
 
 thread_local EventLoop* t_loopInThisThread = nullptr;
 thread_local bool t_attachQuiesceParticipant = false;
+thread_local const EventLoop* t_timerRetirementLoop = nullptr;
 std::atomic<std::uint64_t> nextExecutorId{1};
 constexpr std::size_t kMaxControlSources = 65536;
 constexpr std::size_t kMaxIocpCompletionBatchSize = 64;
@@ -90,6 +91,24 @@ EventLoopLifecycleRegistry::attachQuiesceParticipant(
         t_attachQuiesceParticipant = false;
         throw;
     }
+}
+
+void EventLoopLifecycleRegistry::retireTimer(EventLoop& loop, TimerId& timer) {
+    loop.assertInLoopThread();
+    const auto* previous = std::exchange(t_timerRetirementLoop, &loop);
+    const auto result = loop.tryCancel(timer);
+    t_timerRetirementLoop = previous;
+    if (result != PostResult::Accepted) {
+        LOG_FATAL << "owner lifecycle timer retirement was rejected";
+    }
+    timer = {};
+}
+
+bool EventLoopLifecycleRegistry::consumeTimerRetirement(const EventLoop& loop) noexcept {
+    if (t_timerRetirementLoop != &loop)
+        return false;
+    t_timerRetirementLoop = nullptr;
+    return true;
 }
 
 #ifdef GAMENET_INTERNAL_TEST_HOOKS

@@ -9,6 +9,7 @@ namespace gamenet::udp::detail {
 class UdpPeerTestAccess {
   public:
     static std::weak_ptr<void> state(const UdpPeerServer&);
+    static std::weak_ptr<void> timerLifetime(const UdpPeerServer&);
     static void visit(UdpPeerServer&);
     // One-shot owner checkpoints; callbacks run without admission locks.
     static void beforeSocketStart(UdpPeerServer&, std::function<void()>);

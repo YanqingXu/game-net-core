@@ -4,6 +4,7 @@
 #include "gamenet/core/net/TimerQueue.h"
 
 #include "gamenet/core/net/EventLoop.h"
+#include "detail/EventLoopLifecycleRegistry.h"
 
 #include <algorithm>
 #include <chrono>
@@ -155,7 +156,8 @@ PostResult TimerQueue::tryCancel(TimerId timerId) noexcept {
     }
 
     if (loop_->isInLoopThread()) {
-        if (loop_->phase() != EventLoopPhase::Running) {
+        const bool retirement = detail::EventLoopLifecycleRegistry::consumeTimerRetirement(*loop_);
+        if (loop_->phase() != EventLoopPhase::Running && !retirement) {
             return PostResult::Shutdown;
         }
         cancelInLoop(timerId);

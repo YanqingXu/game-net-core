@@ -11,6 +11,8 @@ and foreign close/stop/last-wrapper release after a target slot was scanned.
 Default and single-slot/small-turn configurations must settle without rescue
 signals, preserve first close reasons and exact send ledgers, retire lifecycle
 nodes/native storage and expire weak state observations.
+Owner/foreign quit, with and without normal-queue saturation, must additionally
+leave no TimerQueue registrations before stopped and after wrapper release.
 tests/integration/udp/test_udp_peer_stress.cpp proves real refusal/recovery,
 round-robin progress and repeated generations on Windows IOCP/Linux epoll.
 tests/support/UdpPeerSequence.h and tests/fuzz/udp/fuzz_udp_peer.cpp compare
@@ -939,3 +941,10 @@ tests/integration/kcp/test_kcp_reliable.cpp. Independent peers compile the pinne
 unchanged upstream and do not link GameNet. Protocol and session fuzz each run
 at least 20k bounded cases with budget/settlement oracles. Windows/Linux,
 sanitizers, package ON/OFF isolation and existing optional regressions are required.
+KCP contracts force UDP-first and KCP-first idle expiry plus explicit close before
+UDP idle, and verify IdleTimeout/first-reason preservation and exact settlement.
+The timer contract verifies owner cleanup of queued and already-extracted timers
+after quit, including capture-destructor reentry without leaked cancellation
+permission. Source-private closure-lifetime witnesses are not installed and
+must expire before stopped as well as after wrapper release. Ready ticks after
+quit retain GoingAway/Cancelled, never SchedulingRejected/TransportError.

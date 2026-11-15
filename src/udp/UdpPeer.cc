@@ -127,6 +127,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
     UdpPeerSnapshot stats;
 #ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
     std::function<void()> beforeSocketStartHook, afterScanHook;
+    std::weak_ptr<void> timerLifetime;
     static void runHook(std::function<void()>& hook) {
         if (auto callback = std::exchange(hook, {}))
             callback();
@@ -195,10 +196,18 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
             const auto interval =
                 std::max(std::chrono::milliseconds(1),
                          std::min(options.idleTimeout / 2, std::chrono::milliseconds(100)));
-            const auto scheduled = loop->tryRunEvery(interval, [weak] {
+            auto tick = [weak] {
                 if (auto s = weak.lock())
                     s->idle(Clock::now());
-            });
+            };
+#ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
+            auto witness = std::make_shared<int>(0);
+            timerLifetime = witness;
+            const auto scheduled = loop->tryRunEvery(interval,
+                [tick = std::move(tick), witness = std::move(witness)] { tick(); });
+#else
+            const auto scheduled = loop->tryRunEvery(interval, std::move(tick));
+#endif
             if (scheduled.result != net::PostResult::Accepted) {
                 (void)requestStop();
                 (void)source.signal();
@@ -465,8 +474,7 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
                 phase = UdpPhase::Stopping;
             }
             if (timer.valid()) {
-                (void)loop->tryCancel(timer);
-                timer = {};
+                net::detail::EventLoopLifecycleRegistry::retireTimer(*loop, timer);
             }
             // C1's unstarted stop is synchronous and deliberately emits no
             // stopped callback. Do not wait for a native obligation it never
@@ -548,6 +556,10 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
 
 #ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
 std::weak_ptr<void> detail::UdpPeerTestAccess::state(const UdpPeerServer& s) { return s.state_; }
+std::weak_ptr<void> detail::UdpPeerTestAccess::timerLifetime(const UdpPeerServer& s) {
+    s.state_->loop->assertInLoopThread();
+    return s.state_->timerLifetime;
+}
 void detail::UdpPeerTestAccess::visit(UdpPeerServer& s) {
     s.state_->loop->assertInLoopThread();
     s.state_->visit();

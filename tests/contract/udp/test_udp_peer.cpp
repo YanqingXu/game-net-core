@@ -38,6 +38,49 @@ static void loopWithWatchdog(net::EventLoop& loop) {
     condition.notify_one();
     watchdog.join();
 }
+static void quitRetiresTimer(bool foreign, bool saturated) {
+    net::EventLoop loop({.maxPendingFunctors = 4, .reservedPendingFunctors = 0,
+                         .maxFunctorsPerIteration = 1});
+    test::RawUdp raw;
+    unsigned completed = 0, closed = 0, stopped = 0;
+    std::weak_ptr<void> timerLifetime;
+    auto s = udp::UdpPeerServer::create(
+        &loop, net::InetAddress("127.0.0.1", 0),
+        {.sendComplete = [&](auto, auto c) {
+             GAMENET_TEST_ASSERT(c.status == udp::UdpSendStatus::Cancelled);
+             ++completed;
+         },
+         .closed = [&](auto, auto reason) {
+             GAMENET_TEST_ASSERT(reason == udp::UdpPeerCloseReason::GoingAway);
+             ++closed;
+         },
+         .stopped = [&](auto snap) {
+             test::verifyPeerLedger(snap);
+             GAMENET_TEST_ASSERT(snap.acceptedDatagrams == 1 && snap.cancelledDatagrams == 1 &&
+                                 !snap.socket.nativeOperations && !snap.socket.receiveStorageBytes &&
+                                 timerLifetime.expired());
+             ++stopped;
+         }});
+    const auto weak = udp::detail::UdpPeerTestAccess::state(*s);
+    GAMENET_TEST_ASSERT(s->start() == udp::UdpResult::Accepted);
+    timerLifetime = udp::detail::UdpPeerTestAccess::timerLifetime(*s);
+    GAMENET_TEST_ASSERT(!timerLifetime.expired());
+    auto p = s->openPeer(raw.address()).peer;
+    GAMENET_TEST_ASSERT(p && p->sendDatagram("pending").id);
+    if (saturated)
+        while (loop.executor().post([] {}) == net::PostResult::Accepted) {}
+    if (foreign) {
+        std::thread quitter([&] { loop.quit(); });
+        quitter.join();
+    } else
+        loop.quit();
+    loopWithWatchdog(loop);
+    GAMENET_TEST_ASSERT(completed == 1 && closed == 1 && stopped == 1 &&
+                        !loop.attachedLifecycleNodeCount());
+    s.reset();
+    GAMENET_TEST_ASSERT(weak.expired() && !p->isOpen() && timerLifetime.expired());
+}
+
 static void startQuitInterleaving(bool singleSlot) {
     net::EventLoop loop;
     udp::UdpPeerOptions options;
@@ -556,6 +599,9 @@ static void detachedHandleAndUnstarted() {
     }
 }
 int main() {
+    for (bool foreign : {false, true})
+        for (bool saturated : {false, true})
+            quitRetiresTimer(foreign, saturated);
     startQuitInterleaving(false);
     startQuitInterleaving(true);
     for (const auto mode : {ScanClose::Peer, ScanClose::Server, ScanClose::Release}) {

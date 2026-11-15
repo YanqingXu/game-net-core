@@ -79,6 +79,13 @@ public:
             loop.options_.maxFunctorsPerIteration);
     }
 
+    static void runExpiredTimers(
+        EventLoop& loop,
+        gamenet::base::Timestamp now) {
+        loop.assertInLoopThread();
+        loop.doExpiredTimers(now);
+    }
+
     static void configurePendingFunctorCapacity(
         EventLoop& loop,
         std::size_t normalCapacity,

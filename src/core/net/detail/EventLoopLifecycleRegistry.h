@@ -45,6 +45,13 @@ public:
     }
 
     // Non-installed owner-adapter access; does not expose a public selector.
+    // Synchronous cleanup in any owner phase, including quit/final drain. This
+    // neither schedules work nor changes public tryCancel admission semantics.
+    static void retireTimer(EventLoop& loop, TimerId& timer);
+    // TimerQueue consumes this one-use owner permission before destroying any
+    // callback capture, so reentrant public cancellation cannot inherit it.
+    static bool consumeTimerRetirement(const EventLoop& loop) noexcept;
+
     static Poller& backend(EventLoop& loop) noexcept { return *loop.poller_; }
     static void retireRemovedChannel(
         EventLoop& loop,

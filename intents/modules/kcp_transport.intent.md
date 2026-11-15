@@ -53,6 +53,13 @@ or Failed; rejected sends have id zero, no reservation and no completion.
 Pending reservations are released before callbacks. First close wins. closed
 waits for protocol/pending cleanup and the original UDP peer's native retirement;
 stopped waits for all records, timers, posts and native IOCP completions.
+Timer retirement uses the source-private owner cleanup path after quit, rather
+than discarding a rejected public cancellation result. UDP IdleTimeout maps to
+KCP IdleTimeout when UDP wins the idle race; an earlier KCP close reason remains
+authoritative. Neither path synthesizes native completion.
+During owner quit or an existing local stop, a UDP terminal or already-ready
+update tick keeps GoingAway/Cancelled semantics instead of inventing a transport
+or scheduling failure before KCP's own quiesce visit.
 Partial start must also terminate when a nested UDP server fails before acquiring
 its active lease: observe its proven Stopped phase rather than waiting for a
 callback that an unstarted layer does not emit. Capacity-zero/one/two contracts
@@ -92,6 +99,9 @@ local cancellation, without a network close handshake or remote delivery promise
   fixed arena/ACK/fragment bounds and deterministic loss/reorder/duplicate recovery.
 - tests/contract/kcp/test_kcp_transport.cpp: options, admission, cross-thread seal,
   reentry/release, timeout, exactly-once completion, generation and zero residue.
+  Owner/foreign quit under normal-queue saturation must remove both KCP/UDP timer
+  registrations before stopped. Deterministic UDP-first/KCP-first idle expiry
+  and explicit-close/UDP-idle races preserve the first KCP disposition.
 - tests/integration/kcp/test_kcp_reliable.cpp: real IPv4/IPv6 UDP, burst/backpressure
   recovery, fairness and multiple fresh-conv generations.
 - tests/fuzz/kcp/fuzz_kcp_protocol.cpp and tests/fuzz/kcp/fuzz_kcp_session.cpp:

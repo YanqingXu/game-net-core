@@ -15,6 +15,8 @@ close seal; reentrant callbacks may release handles/wrapper or replace peers.
 An independent shared atomic scan request preserves newly sealed or completed
 work behind the current scan cursor. Foreign callers touch only admission gates
 and this request; the owner consumes it without weakening per-turn budgets.
+Idle timer retirement is owner-only through the source-private lifecycle path,
+including quit drain; it never posts to a sealed normal queue.
 
 ## UDP-C1
 
@@ -835,3 +837,5 @@ completion callbacks run after returning from KCP. Normal bounded work handles
 data; the pre-attached lifecycle source handles close/stop/quit only. Allocator
 hooks are private to the vendored copy, installed once and scoped by thread-local
 arena context; they must not affect another upstream KCP linked by a consumer.
+KCP and nested UDP timers retire on their owner before stopped, even during quit.
+The UDP closed bridge preserves IdleTimeout without overwriting an earlier KCP seal.

@@ -74,6 +74,9 @@ accepted ids, zero for rejected work. Per-peer closed occurs once after zero
 pending; server stopped follows all peers, timer/lifecycle retirement and native
 socket Stopped with zero operations/storage. Created -> Running -> Stopping ->
 Stopped is one-shot; stop before start has no user callbacks.
+The owner retires its idle timer synchronously through source-private lifecycle
+cleanup, including after quit seals public timer cancellation. The timer must
+be absent from TimerQueue before stopped, not merely have an invalid local id.
 
 Lifecycle signal coalescing must not lose work arriving behind a bounded scan
 cursor. Peer seals, the first server stop and a sealed peer's native terminal

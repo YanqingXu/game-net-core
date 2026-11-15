@@ -4,6 +4,7 @@
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
+#include "../../../src/core/net/detail/EventLoopLifecycleRegistry.h"
 
 #include "support/FutureTest.h"
 #include "support/TestAssert.h"
@@ -18,7 +19,67 @@
 
 using namespace std::chrono_literals;
 
+static void lifecycleTimerRetirement(bool afterDrain) {
+    using namespace gamenet::net;
+    EventLoop loop({.maxPendingFunctors = 1, .reservedPendingFunctors = 0,
+                    .maxFunctorsPerIteration = 1});
+    auto otherCapture = std::make_shared<int>(42);
+    std::weak_ptr<int> otherWeak = otherCapture;
+    auto other = loop.runAfter(1h, [otherCapture] { GAMENET_TEST_FAIL("other timer fired"); });
+    otherCapture.reset();
+    PostResult reentrant = PostResult::Accepted;
+    struct Capture {
+        EventLoop& loop;
+        TimerId other;
+        PostResult& result;
+        Capture(EventLoop& l, TimerId id, PostResult& r) : loop(l), other(id), result(r) {}
+        ~Capture() { result = loop.tryCancel(other); }
+    };
+    auto capture = std::make_shared<Capture>(loop, other, reentrant);
+    std::weak_ptr<Capture> weak = capture;
+    auto timer = loop.runEvery(1h, [capture] { GAMENET_TEST_FAIL("retired timer fired"); });
+    capture.reset();
+    GAMENET_TEST_ASSERT(loop.executor().post([] {}) == PostResult::Accepted);
+    std::thread quitter([&] { loop.quit(); });
+    quitter.join();
+    if (afterDrain)
+        loop.loop();
+    GAMENET_TEST_ASSERT(loop.tryCancel(timer) == PostResult::Shutdown && !weak.expired());
+    detail::EventLoopLifecycleRegistry::retireTimer(loop, timer);
+    GAMENET_TEST_ASSERT(!timer.valid() && weak.expired() &&
+                        reentrant == PostResult::Shutdown && !otherWeak.expired());
+    detail::EventLoopLifecycleRegistry::retireTimer(loop, other);
+    GAMENET_TEST_ASSERT(!other.valid() && otherWeak.expired());
+    detail::EventLoopLifecycleRegistry::retireTimer(loop, timer); // Already retired is harmless.
+    if (!afterDrain)
+        loop.loop();
+}
+
+static void retireExtractedTimerAfterQuit() {
+    using namespace gamenet::net;
+    EventLoop loop;
+    TimerId later;
+    unsigned fired = 0;
+    auto capture = std::make_shared<int>(42);
+    std::weak_ptr<int> weak = capture;
+    const auto when = gamenet::base::now();
+    loop.runAt(when, [&] {
+        loop.quit();
+        GAMENET_TEST_ASSERT(loop.tryCancel(later) == PostResult::Shutdown);
+        // Both timers have the same ready deadline and fit the default batch.
+        detail::EventLoopLifecycleRegistry::retireTimer(loop, later);
+        GAMENET_TEST_ASSERT(!later.valid());
+    });
+    later = loop.runAt(when, [capture, &fired] { ++fired; });
+    capture.reset();
+    loop.loop();
+    GAMENET_TEST_ASSERT(!fired && weak.expired());
+}
+
 int main() {
+    lifecycleTimerRetirement(false);
+    lifecycleTimerRetirement(true);
+    retireExtractedTimerAfterQuit();
     {
         gamenet::net::EventLoopThread loopThread;
         gamenet::net::EventLoop* loop = loopThread.startLoop();

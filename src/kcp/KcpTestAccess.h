@@ -6,6 +6,8 @@ namespace gamenet::kcp::detail {
 class KcpTestAccess final {
   public:
     static std::weak_ptr<void> state(const KcpTransport&);
+    static std::weak_ptr<void> timerLifetime(const KcpTransport&);
+    static udp::UdpPeerServer& udpServer(KcpTransport&);
     static void input(KcpTransport&, KcpIdentity, std::string_view, bool truncated = false);
     static void advance(KcpTransport&, std::chrono::milliseconds);
     static void exhaust(KcpTransport&, KcpIdentity);

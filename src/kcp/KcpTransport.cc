@@ -79,6 +79,9 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
     std::size_t cursor{}, remaining{}, cleanupCursor{}, cleanupRemaining{};
     std::uint64_t nextId{};
     KcpSnapshot stats;
+#ifdef GAMENET_INTERNAL_KCP_TEST_HOOKS
+    std::weak_ptr<void> timerLifetime;
+#endif
     std::chrono::milliseconds timeOffset{};
     Clock::time_point now() const { return Clock::now() + timeOffset; }
     KcpState(net::EventLoop* l, KcpCallbacks cb, KcpOptions o)
@@ -134,10 +137,18 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
                 failStart();
                 return result;
             }
-            auto scheduled = loop->tryRunEvery(options.interval, [weak] {
+            auto tick = [weak] {
                 if (auto s = weak.lock())
                     s->schedule();
-            });
+            };
+#ifdef GAMENET_INTERNAL_KCP_TEST_HOOKS
+            auto witness = std::make_shared<int>(0);
+            timerLifetime = witness;
+            auto scheduled = loop->tryRunEvery(options.interval,
+                [tick = std::move(tick), witness = std::move(witness)] { tick(); });
+#else
+            auto scheduled = loop->tryRunEvery(options.interval, std::move(tick));
+#endif
             if (scheduled.result != net::PostResult::Accepted) {
                 failStart();
                 return KcpResult::OwnerUnavailable;
@@ -328,6 +339,8 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
         schedule();
     }
     void schedule() {
+        if (loop->phase() != net::EventLoopPhase::Running)
+            (void)requestStop();
         if (stopping->load(std::memory_order_acquire)) {
             (void)source.signal();
             return;
@@ -443,12 +456,18 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
         if (stopping->load(std::memory_order_acquire))
             (void)source.signal();
     }
-    void peerClosed(udp::UdpPeerIdentity id) {
+    void peerClosed(udp::UdpPeerIdentity id, udp::UdpPeerCloseReason reason) {
         auto r = find(id);
         if (!r)
             return;
         r->wireClosed = true;
-        seal(r, KcpCloseReason::TransportError);
+        if (loop->phase() != net::EventLoopPhase::Running)
+            (void)requestStop();
+        const auto mapped = stopping->load(std::memory_order_acquire)
+                                ? KcpCloseReason::GoingAway
+                                : reason == udp::UdpPeerCloseReason::IdleTimeout
+                                      ? KcpCloseReason::IdleTimeout : KcpCloseReason::TransportError;
+        seal(r, mapped);
         dirty->store(true, std::memory_order_release);
         (void)source.signal();
     }
@@ -467,8 +486,7 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
                 phase = Phase::Stopping;
             }
             if (timer.valid()) {
-                (void)loop->tryCancel(timer);
-                timer = {};
+                net::detail::EventLoopLifecycleRegistry::retireTimer(*loop, timer);
             }
             (void)socket->stop();
             // A nested start can fail before acquiring its active lease and
@@ -543,6 +561,14 @@ struct KcpState : std::enable_shared_from_this<KcpState> {
 } // namespace detail
 #ifdef GAMENET_INTERNAL_KCP_TEST_HOOKS
 std::weak_ptr<void> detail::KcpTestAccess::state(const KcpTransport& s) { return s.state_; }
+std::weak_ptr<void> detail::KcpTestAccess::timerLifetime(const KcpTransport& s) {
+    s.state_->loop->assertInLoopThread();
+    return s.state_->timerLifetime;
+}
+udp::UdpPeerServer& detail::KcpTestAccess::udpServer(KcpTransport& s) {
+    s.state_->loop->assertInLoopThread();
+    return *s.state_->socket;
+}
 void detail::KcpTestAccess::input(KcpTransport& s, KcpIdentity id, std::string_view bytes,
                                   bool truncated) {
     s.state_->loop->assertInLoopThread();
@@ -614,9 +640,9 @@ std::shared_ptr<KcpTransport> KcpTransport::create(net::EventLoop* loop,
                                                 p->receive(peer->identity(), bytes, truncated);
                                         },
                                     .closed =
-                                        [weak](auto id, auto) {
+                                        [weak](auto id, auto reason) {
                                             if (auto p = weak.lock())
-                                                p->peerClosed(id);
+                                                p->peerClosed(id, reason);
                                         },
                                     .stopped =
                                         [weak](auto) {

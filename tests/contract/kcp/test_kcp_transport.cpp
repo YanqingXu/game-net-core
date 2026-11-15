@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/kcp/KcpTransport.h"
+#include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
+#include "../../../src/udp/UdpPeerTestAccess.h"
 #include "support/KcpSequence.h"
 #include "support/RawUdp.h"
 #include "support/TestAssert.h"
@@ -16,7 +18,124 @@ void ledger(const kcp::KcpSnapshot& s) {
     if (s.phase == udp::UdpPhase::Stopped)
         GAMENET_TEST_ASSERT(!s.sessions && !s.pendingMessages && !s.pendingBytes &&
                             !s.protocolBytes && !s.scheduledPosts &&
-                            !s.udp.socket.nativeOperations);
+                            !s.udp.peers && !s.udp.pendingDatagrams && !s.udp.pendingBytes &&
+                            !s.udp.socket.nativeOperations && !s.udp.socket.receiveStorageBytes);
+}
+
+void quitRetiresTimers(bool foreign, bool saturated, bool readyBatch = false) {
+    net::EventLoop loop({.maxPendingFunctors = 4, .reservedPendingFunctors = 0,
+                         .maxFunctorsPerIteration = 1});
+    test::RawUdp raw;
+    unsigned completed = 0, closed = 0, stopped = 0;
+    std::weak_ptr<void> kcpTimer, udpTimer;
+    auto s = kcp::KcpTransport::create(
+        &loop, net::InetAddress("127.0.0.1", 0),
+        {.sendComplete = [&](auto, auto c) {
+             GAMENET_TEST_ASSERT(c.status == kcp::KcpSendStatus::Cancelled);
+             ++completed;
+         },
+         .closed = [&](auto, auto reason) {
+             GAMENET_TEST_ASSERT(reason == kcp::KcpCloseReason::GoingAway);
+             ++closed;
+         },
+         .stopped = [&](auto snap) {
+             ledger(snap);
+             GAMENET_TEST_ASSERT(snap.accepted == 2 && snap.cancelled == 2 &&
+                                 kcpTimer.expired() && udpTimer.expired());
+             ++stopped;
+         }});
+    const auto weak = kcp::detail::KcpTestAccess::state(*s);
+    GAMENET_TEST_ASSERT(s->start() == kcp::KcpResult::Accepted);
+    kcpTimer = kcp::detail::KcpTestAccess::timerLifetime(*s);
+    udpTimer = udp::detail::UdpPeerTestAccess::timerLifetime(
+        kcp::detail::KcpTestAccess::udpServer(*s));
+    GAMENET_TEST_ASSERT(!kcpTimer.expired() && !udpTimer.expired());
+    auto p = s->openSession(raw.address(), 207).session;
+    GAMENET_TEST_ASSERT(p && p->send("pending").id && p->send("").id);
+    if (saturated)
+        while (loop.executor().post([] {}) == net::PostResult::Accepted) {}
+    if (readyBatch) {
+        // quit runs first, followed by the already-extracted repeating ticks.
+        loop.runAt(base::now() - 1h, [&] { loop.quit(); });
+        net::detail::EventLoopActiveBatchHarness::runExpiredTimers(loop, base::now() + 1s);
+    } else if (foreign) {
+        std::thread quitter([&] { loop.quit(); });
+        quitter.join();
+    } else
+        loop.quit();
+    loop.loop();
+    GAMENET_TEST_ASSERT(completed == 2 && closed == 1 && stopped == 1 &&
+                        !loop.attachedLifecycleNodeCount());
+    s.reset();
+    GAMENET_TEST_ASSERT(weak.expired() && !p->isOpen() &&
+                        kcpTimer.expired() && udpTimer.expired());
+}
+
+enum class IdleOrder { UdpFirst, KcpFirst, ExplicitCloseFirst };
+void idleCloseInterleaving(IdleOrder order) {
+    net::EventLoop loop;
+    test::RawUdp raw;
+    kcp::KcpOptions o;
+    o.maxSessions = o.maxSessionsPerTurn = 1;
+    o.udp.maxPeers = o.udp.maxPeersPerTurn = 1;
+    o.interval = 100ms;
+    o.idleTimeout = o.udp.idleTimeout = 1h;
+    const auto expected = order == IdleOrder::ExplicitCloseFirst ? kcp::KcpCloseReason::Normal
+                                                               : kcp::KcpCloseReason::IdleTimeout;
+    const unsigned accepted = order == IdleOrder::KcpFirst ? 0 : 2;
+    unsigned completed = 0, closed = 0, stopped = 0;
+    std::weak_ptr<void> kcpTimer, udpTimer;
+    net::TimerId watchdog;
+    std::shared_ptr<kcp::KcpTransport> s;
+    s = kcp::KcpTransport::create(
+        &loop, net::InetAddress("127.0.0.1", 0),
+        {.sendComplete = [&](auto, auto c) {
+             const auto status = expected == kcp::KcpCloseReason::Normal
+                                     ? kcp::KcpSendStatus::Cancelled : kcp::KcpSendStatus::Failed;
+             GAMENET_TEST_ASSERT(c.status == status);
+             ++completed;
+         },
+         .closed = [&](auto, auto reason) {
+             GAMENET_TEST_ASSERT(reason == expected && s->snapshot().udp.idleClosed == 1);
+             ++closed;
+             (void)s->stop();
+         },
+         .stopped = [&](auto snap) {
+             ledger(snap);
+             GAMENET_TEST_ASSERT(snap.accepted == accepted);
+             ++stopped;
+             GAMENET_TEST_ASSERT(loop.tryCancel(watchdog) == net::PostResult::Accepted);
+             GAMENET_TEST_ASSERT(kcpTimer.expired() && udpTimer.expired());
+             loop.quit();
+         }}, o);
+    const auto weak = kcp::detail::KcpTestAccess::state(*s);
+    GAMENET_TEST_ASSERT(s->start() == kcp::KcpResult::Accepted);
+    kcpTimer = kcp::detail::KcpTestAccess::timerLifetime(*s);
+    udpTimer = udp::detail::UdpPeerTestAccess::timerLifetime(
+        kcp::detail::KcpTestAccess::udpServer(*s));
+    GAMENET_TEST_ASSERT(!kcpTimer.expired() && !udpTimer.expired());
+    auto p = s->openSession(raw.address(), 208).session;
+    GAMENET_TEST_ASSERT(p);
+    if (accepted)
+        GAMENET_TEST_ASSERT(p->send("pending").id && p->send("").id);
+    watchdog = loop.runAfter(2s, [] { GAMENET_TEST_FAIL("KCP/UDP idle ordering did not settle"); });
+    if (order == IdleOrder::KcpFirst) {
+        kcp::detail::KcpTestAccess::advance(*s, 1h + 1ms);
+        net::detail::EventLoopActiveBatchHarness::runFairRound(loop, {}, base::now());
+        GAMENET_TEST_ASSERT(!p->isOpen()); // KCP has already committed IdleTimeout.
+    } else if (order == IdleOrder::ExplicitCloseFirst)
+        GAMENET_TEST_ASSERT(p->close() == kcp::KcpResult::Accepted);
+    // Force the real UDP idle and lifecycle paths synchronously. No fake close
+    // callback/native completion, or wall-clock race, selects the winning seal.
+    auto& wire = kcp::detail::KcpTestAccess::udpServer(*s);
+    udp::detail::UdpPeerTestAccess::expire(wire);
+    udp::detail::UdpPeerTestAccess::visit(wire);
+    GAMENET_TEST_ASSERT(!p->isOpen() && s->snapshot().udp.idleClosed == 1);
+    loop.loop();
+    GAMENET_TEST_ASSERT(completed == accepted && closed == 1 && stopped == 1 &&
+                        !loop.attachedLifecycleNodeCount());
+    s.reset();
+    GAMENET_TEST_ASSERT(weak.expired());
 }
 void cancel(bool saturated) {
     net::EventLoopOptions lo;
@@ -337,6 +456,13 @@ void failedStart() {
     }
 }
 int main() {
+    for (bool foreign : {false, true})
+        for (bool saturated : {false, true})
+            quitRetiresTimers(foreign, saturated);
+    quitRetiresTimers(false, false, true);
+    quitRetiresTimers(false, true, true);
+    for (auto order : {IdleOrder::UdpFirst, IdleOrder::KcpFirst, IdleOrder::ExplicitCloseFirst})
+        idleCloseInterleaving(order);
     std::cerr << "KCP failed start\n";
     failedStart();
     std::cerr << "KCP cancel\n";

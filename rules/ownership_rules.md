@@ -16,6 +16,8 @@ dispatch lease and may release caller references.
 The shared scan request owns neither server nor loop. A C1 start refusal before
 registration has no stopped callback obligation: synchronous unstarted stop must
 permit C2 node retirement and release of its settlement lease during quit drain.
+Quit cleanup must remove the actual idle timer registration before clearing its
+TimerId and emitting stopped; rejected public cancellation is not retirement.
 
 ## UDP-C1
 
@@ -494,6 +496,10 @@ lifetime after pending/inbound/timer cleanup and buffered RPC dispatch retiremen
 - Timer containers own timer metadata
 - Scheduled callbacks do not imply ownership of arbitrary target objects
 - Cancellation semantics must be explicit
+- Source-private lifecycle timer retirement is synchronous owner cleanup in any
+  loop phase: retire the registration, suppress an extracted callback and clear
+  the TimerId afterward. The current dispatch lease may finish. Consume the
+  one-use permission before destroying captures; public admission stays sealed.
 - `TimerScheduleResult::Accepted` transfers timer metadata into current or
   already-accepted owner work. A rejected result carries no valid TimerId;
   EventLoop shutdown discards future timer metadata rather than extending loop
