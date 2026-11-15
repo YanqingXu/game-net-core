@@ -6,8 +6,14 @@ repository does not bundle OpenSSL binaries, private keys or trust stores.
 Provider source, license and notices: https://openssl-library.org/source/ and
 https://github.com/openssl/openssl/blob/openssl-3.0/LICENSE.txt.
 
-The game-net-core source and binary distributions do not bundle third-party
-library source or binary dependencies.
+The optional, default-OFF `GameNet::kcp` component bundles unchanged standard
+KCP source from skywind3000/kcp commit
+`b1a7a2101dcbb96017681a500d6b82bbe5a88766`, licensed under MIT, Copyright (c)
+2017 Lin Wei (skywind3000 at gmail.com). Original source, exact byte hashes and the full license are in
+`third_party/kcp/`; an enabled installed package includes `kcp/LICENSE` alongside
+this notice and statically incorporates that source. Source distributions include
+it even with KCP disabled. Upstream: https://github.com/skywind3000/kcp.
+Other components do not bundle third-party source or binary dependencies.
 
 Project-authored material in these distributions is licensed under
 Apache-2.0 as stated by the top-level `LICENSE` and `NOTICE` files.

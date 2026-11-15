@@ -548,6 +548,10 @@ struct UdpPeerState : std::enable_shared_from_this<UdpPeerState> {
 
 #ifdef GAMENET_INTERNAL_UDP_TEST_HOOKS
 std::weak_ptr<void> detail::UdpPeerTestAccess::state(const UdpPeerServer& s) { return s.state_; }
+void detail::UdpPeerTestAccess::visit(UdpPeerServer& s) {
+    s.state_->loop->assertInLoopThread();
+    s.state_->visit();
+}
 void detail::UdpPeerTestAccess::beforeSocketStart(UdpPeerServer& s, std::function<void()> hook) {
     s.state_->loop->assertInLoopThread();
     s.state_->beforeSocketStartHook = std::move(hook);

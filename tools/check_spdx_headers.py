@@ -5,6 +5,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+from third_party_licenses import VENDORED_KCP
 import subprocess
 from pathlib import Path
 
@@ -13,6 +16,17 @@ CPP_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp"}
 HASH_SUFFIXES = {".cmake", ".in", ".py", ".ps1", ".sh", ".yaml", ".yml"}
 SPDX_IDENTIFIER = "SPDX-License-Identifier: Apache-2.0"
 COPYRIGHT = "Copyright 2026 Yanqing Xu"
+
+def verify_vendored_kcp(repo_root: Path) -> None:
+    directory = repo_root / "third_party/kcp"
+    provenance = json.loads((directory / "upstream.json").read_text(encoding="utf-8"))
+    if provenance != {"repository":"https://github.com/skywind3000/kcp",
+                      "commit":"b1a7a2101dcbb96017681a500d6b82bbe5a88766",
+                      "license":"MIT", "modified":False, "sha256":VENDORED_KCP}:
+        raise SystemExit("KCP provenance drift")
+    for name, digest in VENDORED_KCP.items():
+        if hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
+            raise SystemExit("modified vendored KCP: " + name)
 
 
 def tracked_and_untracked_files(repo_root: Path) -> list[Path]:
@@ -102,10 +116,12 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
+    verify_vendored_kcp(repo_root)
     eligible = sorted(
         path
         for path in tracked_and_untracked_files(repo_root)
         if path.is_file() and comment_prefix(path) is not None
+        and path.relative_to(repo_root).as_posix() not in {"third_party/kcp/" + n for n in VENDORED_KCP}
     )
     changed = 0
     if args.apply:

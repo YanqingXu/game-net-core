@@ -1,5 +1,15 @@
 # Roadmap
 
+## KCP-C1 development authorization (2026-11-13)
+
+Optional bounded **standard KCP** is separately authorized in `GameNet::kcp`.
+Both `GAMENET_ENABLE_KCP=ON` and `GAMENET_ENABLE_UDP=ON` are required; defaults
+remain OFF. Core/UDP APIs and OpenSSL independence are preserved. Pinned MIT
+upstream, resource/lifecycle contracts and validation are documented in
+[the KCP guide](development/kcp.md). This is provisional development, without a release or
+production/performance claim. Historical M10 NO-PROMOTION findings below remain
+historical; this new authorization does not promote PMTU or custom KCP-style code.
+
 ## UDP-C2 explicit bounded peers (2026-11-13)
 
 Separate authorization adds UdpPeerServer and generation-bearing UdpPeer in the
@@ -106,7 +116,7 @@ response, deadlines, cancellation, disconnect settlement and exactly-once local
 completion. See `intents/modules/rpc.intent.md`, `plan.md` and
 `docs/development/callback_rpc.md` for the current scope. Historical M7
 `NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines and UDP/KCP remain deferred;
+block this separately authorized feature. Coroutines remain deferred; UDP/KCP have separate authorization;
 TLS and WebSocket have separate authorizations. Development work does not create a release.
 
 game-net-core is the component-split migration target for `mini_trantor`.

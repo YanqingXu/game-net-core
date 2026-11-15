@@ -701,10 +701,10 @@ def main() -> None:
     require(m10_readiness_text, "skipped-by-evidence", m10_readiness)
     require(m10_readiness_text, "advances to M11", m10_readiness)
     for name, path in m10_intents.items():
-        if name == "udp":
+        if name in {"udp", "kcp_transport"}:
             require(m10_intent_texts[name], "status: active", path)
-            require(m10_intent_texts[name], "target: GameNet::udp", path)
-            require(m10_intent_texts[name], "UDP-C1", path)
+            require(m10_intent_texts[name], "target: GameNet::" + ("udp" if name == "udp" else "kcp"), path)
+            require(m10_intent_texts[name], "UDP-C1" if name == "udp" else "KCP-C1", path)
             require(intents_index_text.split("## Active Intents", 1)[1].split("## Deferred Intent Catalog", 1)[0], f"- `intents/modules/{name}.intent.md`", intents_index)
             assert f"- `intents/modules/{name}.intent.md`" not in deferred_catalog
         else:
@@ -875,14 +875,13 @@ def main() -> None:
         )
     ]
     assert {path.relative_to(repo_root).as_posix() for path in installed_m10_headers} == {
-        "include/gamenet/udp/UdpSocket.h", "include/gamenet/udp/UdpPeer.h", "include/gamenet/udp_transport/UdpTransportEndpoint.h"
-    }, "UDP-C1/C2 authorize only explicit UDP surfaces; KCP/PMTU remain deferred"
+        "include/gamenet/udp/UdpSocket.h", "include/gamenet/udp/UdpPeer.h", "include/gamenet/udp_transport/UdpTransportEndpoint.h", "include/gamenet/kcp/KcpTransport.h"
+    }, "UDP-C1/C2 and separately authorized KCP-C1 surfaces; PMTU stays deferred"
     require((repo_root / "CMakeLists.txt").read_text(), 'option(GAMENET_ENABLE_UDP "Build bounded UDP transport" OFF)', plan)
     require((repo_root / "src/udp/CMakeLists.txt").read_text(), "add_library(GameNet::udp ALIAS gamenet_udp)", plan)
     for target in (
         "GameNet::experimental_datagram",
         "gamenet_experimental_datagram",
-        "gamenet_kcp",
     ):
         assert target not in tracked_cmake_text
     require(

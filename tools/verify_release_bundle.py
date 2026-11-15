@@ -14,6 +14,7 @@ from typing import Sequence
 
 from assemble_release import LICENSE_ID, validate_project_metadata
 from assemble_release import ReleaseFile as ReleaseFile
+from third_party_licenses import license_for_path, package_license, copyright_for_path
 
 
 def sha256(path: Path) -> str:
@@ -120,8 +121,9 @@ def validate_spdx(
     assert package_ids == set(package_inputs)
     files_by_id = {str(item["SPDXID"]): item for item in files}
     for package in packages:
-        assert package["licenseDeclared"] == LICENSE_ID
-        assert package["licenseConcluded"] == LICENSE_ID
+        package_files, artifact = package_inputs[str(package["SPDXID"])]
+        assert package["licenseDeclared"] == package_license(package_files)
+        assert package["licenseConcluded"] == package_license(package_files)
         assert package["filesAnalyzed"] is True
         verification_code = package["packageVerificationCode"]["packageVerificationCodeValue"]
         assert re.fullmatch(
@@ -142,8 +144,10 @@ def validate_spdx(
             {"algorithm": "SHA256", "checksumValue": artifact["sha256"]}
         ]
     for item in files:
-        assert item["licenseConcluded"] == LICENSE_ID
-        assert item["licenseInfoInFiles"] == [LICENSE_ID]
+        path = str(item["fileName"]).removeprefix("./")
+        assert item["licenseConcluded"] == license_for_path(path)
+        assert item["licenseInfoInFiles"] == [license_for_path(path)]
+        assert item["copyrightText"] == copyright_for_path(path)
         algorithms = {entry["algorithm"] for entry in item["checksums"]}
         assert algorithms == {"SHA1", "SHA256"}
     described = set(document["documentDescribes"])

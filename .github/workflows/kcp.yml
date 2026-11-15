@@ -1,0 +1,105 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+name: Optional bounded standard KCP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','rules/**','.github/workflows/kcp.yml']
+  pull_request:
+    branches: [main]
+    paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','rules/**','.github/workflows/kcp.yml']
+permissions:
+  contents: read
+concurrency:
+  group: kcp-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  kcp:
+    name: KCP (${{ matrix.lane }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - lane: linux-release
+            os: ubuntu-24.04
+            profile: release
+          - lane: linux-asan-ubsan
+            os: ubuntu-24.04
+            profile: asan
+          - lane: linux-tsan
+            os: ubuntu-24.04
+            profile: tsan
+          - lane: windows-release
+            os: windows-latest
+            profile: release
+          - lane: windows-asan
+            os: windows-latest
+            profile: asan
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Configure TSan address space
+        if: matrix.profile == 'tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Verify KCP intent and evidence guards
+        run: |
+          python tests/ci/test_kcp_workflow.py
+          python tests/ci/test_kcp_fuzz.py
+          python tests/scope/test_intent_semantics.py --with-kcp
+      - name: Verify contracts, independent upstream peers and packages
+        run: |
+          python tests/ci/run_kcp_contracts.py --profile '${{ matrix.profile }}' --build-dir build-kcp --output out/kcp-evidence
+      - name: Read back evidence
+        run: python tests/ci/run_kcp_contracts.py --verify-output out/kcp-evidence
+      - name: Retain KCP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcp-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/kcp-evidence/
+          if-no-files-found: error
+          retention-days: 14
+  fuzz:
+    name: KCP protocol and session fuzz
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure bounded instrumented KCP
+        run: cmake -S . -B build-kcp-fuzz -G Ninja -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug -DGAMENET_ENABLE_UDP=ON -DGAMENET_ENABLE_KCP=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_WEBSOCKET=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DGAMENET_BUILD_FUZZING=ON -DGAMENET_BUILD_TESTING=OFF -DGAMENET_ENABLE_ASAN_UBSAN=ON
+      - name: Build both KCP fuzz targets
+        run: cmake --build build-kcp-fuzz --parallel 2 --target gamenet_fuzz_kcp_protocol gamenet_fuzz_kcp_session
+      - name: Execute and independently verify bounded fuzz
+        run: |
+          python3 tests/ci/run_kcp_fuzz.py --kind protocol --build-dir build-kcp-fuzz --output out/kcp-protocol-fuzz
+          python3 tests/ci/run_kcp_fuzz.py --verify-output out/kcp-protocol-fuzz
+          python3 tests/ci/run_kcp_fuzz.py --kind session --build-dir build-kcp-fuzz --output out/kcp-session-fuzz
+          python3 tests/ci/run_kcp_fuzz.py --verify-output out/kcp-session-fuzz
+      - name: Retain raw KCP fuzz evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcp-fuzz-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            out/kcp-protocol-fuzz/
+            out/kcp-session-fuzz/
+          if-no-files-found: error
+          retention-days: 14

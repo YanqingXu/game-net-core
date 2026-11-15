@@ -17,7 +17,12 @@ invalid inline field.
 Installed CMake packages export `GameNetCore_LICENSE=Apache-2.0` and paths to
 the installed `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`. Every source
 and binary release archive must include those files, and the SPDX 2.3 release
-SBOM must declare and conclude `Apache-2.0` for project packages and files.
+SBOM must declare and conclude `Apache-2.0` for project-owned files. KCP-C1's
+unchanged pinned `third_party/kcp/{ikcp.c,ikcp.h,LICENSE}` retains MIT and its
+original copyright; the enabled static KCP library and source packages conclude
+`Apache-2.0 AND MIT`. Exact upstream hashes are checked before any narrow header
+exemption, and enabled installed packages retain the original MIT license.
+Historical release assets and their SBOMs remain unchanged.
 
 The authorization permitted creation and publication of `v0.3.0` only after
 all exact-commit gates passed. Those gates and final artifact verification

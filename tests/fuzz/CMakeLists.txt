@@ -29,6 +29,19 @@ if(TARGET gamenet_udp)
     target_link_options(gamenet_fuzz_udp_peer PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()
 
+if(TARGET gamenet_kcp)
+    target_compile_options(gamenet_kcp PRIVATE -fsanitize=fuzzer-no-link)
+    target_compile_definitions(gamenet_kcp PRIVATE GAMENET_INTERNAL_KCP_TEST_HOOKS=1)
+    add_executable(gamenet_fuzz_kcp_protocol kcp/fuzz_kcp_protocol.cpp)
+    add_executable(gamenet_fuzz_kcp_session kcp/fuzz_kcp_session.cpp)
+    foreach(kind protocol session)
+        target_include_directories(gamenet_fuzz_kcp_${kind} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+        target_link_libraries(gamenet_fuzz_kcp_${kind} PRIVATE GameNet::kcp)
+        target_compile_options(gamenet_fuzz_kcp_${kind} PRIVATE -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
+        target_link_options(gamenet_fuzz_kcp_${kind} PRIVATE -fsanitize=fuzzer,address,undefined)
+    endforeach()
+endif()
+
 # Instrument production code too: entry-point-only coverage misses RPC branches.
 # Fuzz builds are opt-in development builds, never package evidence.
 foreach(component gamenet_core gamenet_protocol gamenet_rpc)

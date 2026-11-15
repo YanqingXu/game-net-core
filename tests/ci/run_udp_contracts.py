@@ -77,7 +77,7 @@ def main():
             if m:env['PATH']=str(Path(m[1]).parent)+os.pathsep+env.get('PATH','');break
         inventory=verify_inventory(json.loads(execute('inventory',['ctest','--test-dir',str(build),'-C',config,'--show-only=json-v1'])))
         api=json.loads((repo/'api/public_api_manifest.json').read_text(encoding='utf-8'))
-        installed=['gamenet_'+name.split('::')[1] for group in api['targets'].values() for name in group if name not in {'GameNet::tls','GameNet::rpc_tls','GameNet::websocket','GameNet::websocket_tls'}]
+        installed=['gamenet_'+name.split('::')[1] for group in api['targets'].values() for name in group if name not in {'GameNet::kcp','GameNet::tls','GameNet::rpc_tls','GameNet::websocket','GameNet::websocket_tls'}]
         targets=['gnt_'+n.split('.')[0]+'_udp_'+hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(CONTRACTS)]
         command=['cmake','--build',str(build),'--config',config,'--parallel','2']
         if args.profile!='release':command+=['--target',*installed,*targets,'gamenet_udp_echo_server','gamenet_udp_peer_echo_server']
