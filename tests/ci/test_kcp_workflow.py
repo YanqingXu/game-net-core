@@ -36,7 +36,8 @@ def main():
     for key,value in [('families',[4]),('messages',7),('data_loss_directions',0),('ack_loss_directions',0),('duplicate_directions',0),('reorder_directions',0),('zero_residue',False),('status','failed')]:
         bad=copy.deepcopy(INTEROP);bad[key]=value;rejects(verify_interop,bad)
     repo=Path(__file__).resolve().parents[2];workflow=(repo/'.github/workflows/kcp.yml').read_text(encoding='utf-8')
-    for token in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','--with-kcp','run_kcp_contracts.py','--verify-output','if: always()','if-no-files-found: error']:
+    for token in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','--with-kcp','run_kcp_contracts.py','--verify-output','if: always()','if-no-files-found: error',
+                  'clang-tsan-full:','clang++-18','libclang-rt-18-dev','run_clang_tsan_gate.py','test_clang_tsan_gate.py','--verify-output out/clang-tsan-evidence','include-hidden-files: true']:
         assert token in workflow,token
     assert 'continue-on-error' not in workflow
     assert 'option(GAMENET_ENABLE_KCP "Build bounded standard KCP messages" OFF)' in (repo/'CMakeLists.txt').read_text()

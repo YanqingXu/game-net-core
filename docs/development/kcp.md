@@ -74,3 +74,22 @@ and protocol/session fuzz at 20k each. The dedicated workflow records Windows/
 Linux Release, Windows ASan, Linux ASan/UBSan and TSan evidence, package consumers,
 clean source identities and all raw hashes. Existing optional protocol checks
 remain separate. These contracts are not capacity or production validation.
+
+The independent `clang-tsan-full` job additionally runs the complete 141-test
+UDP/KCP-enabled inventory with Clang 18 on pull requests and main pushes. It
+keeps the existing GCC TSan lane. An external allocation control uses the same
+complete shared TSan runtime as the custom-new TCP contract: atomic accesses
+must exit 0, and a deliberate heap race must report the custom-new/malloc stack
+and exit 66. The probe is outside CTest and does not increase its inventory.
+No test filtering, skipping or sanitizer suppression satisfies this gate.
+
+Run `python3 tests/ci/run_clang_tsan_gate.py --compiler clang++-18 --build-dir
+build-clang-tsan --output out/clang-tsan-evidence`, then independently read it
+back with `python3 tests/ci/run_clang_tsan_gate.py --verify-output
+out/clang-tsan-evidence`. Linux needs Clang/LLVM 18 and its compiler-rt package;
+the workflow installs these explicitly. Evidence retains source/run identity,
+toolchain/cache/compile commands, all 141 JUnit records, raw commands/logs,
+runtime linkage, probe binary/diagnostics and SHA-256 file identities. Empty,
+wrong-compiler, incorrectly successful race, suppressed or tampered evidence
+fails the readback. `DEBUGINFOD_URLS` is empty during the run so symbolization
+uses the installed LLVM toolchain without waiting for remote debug downloads.
