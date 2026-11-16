@@ -1,5 +1,14 @@
 # thread_affinity_rules.md
 
+## KCP-C2
+
+KcpTransportEndpoint delegates send/close on the KcpSession owner and adds no
+queue, timer or callback. Foreign callers marshal owned data through the captured
+executor; requestClose alone delegates the pre-attached lifecycle lane, including
+normal-queue saturation. Closed session precedence is inherited from KCP.
+Both echo processes keep their owner draining through KCP stopped; the client
+continues servicing ACKs through its finite receive window.
+
 ## UDP-C2
 
 UdpTransportEndpoint is a separate composition component; UDP peer code has no

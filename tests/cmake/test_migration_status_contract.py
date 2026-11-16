@@ -875,7 +875,7 @@ def main() -> None:
         )
     ]
     assert {path.relative_to(repo_root).as_posix() for path in installed_m10_headers} == {
-        "include/gamenet/udp/UdpSocket.h", "include/gamenet/udp/UdpPeer.h", "include/gamenet/udp_transport/UdpTransportEndpoint.h", "include/gamenet/kcp/KcpTransport.h"
+        "include/gamenet/udp/UdpSocket.h", "include/gamenet/udp/UdpPeer.h", "include/gamenet/udp_transport/UdpTransportEndpoint.h", "include/gamenet/kcp/KcpTransport.h", "include/gamenet/kcp_transport/KcpTransportEndpoint.h"
     }, "UDP-C1/C2 and separately authorized KCP-C1 surfaces; PMTU stays deferred"
     require((repo_root / "CMakeLists.txt").read_text(), 'option(GAMENET_ENABLE_UDP "Build bounded UDP transport" OFF)', plan)
     require((repo_root / "src/udp/CMakeLists.txt").read_text(), "add_library(GameNet::udp ALIAS gamenet_udp)", plan)

@@ -1,5 +1,13 @@
 # ownership_rules.md
 
+## KCP-C2
+
+The application owns the endpoint, which owns a session handle with weak
+transport observation. It cannot retain a KCP transport or EventLoop. Immutable
+peer identity and generation isolate stale endpoints. Adapters install no
+callbacks; existing KCP callback leases and exactly-once pending settlement
+remain authoritative. Examples release wrappers only after stopped/native drain.
+
 ## UDP-C2
 
 The separate UdpTransportEndpoint owns only a peer handle, whose server reference

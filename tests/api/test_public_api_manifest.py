@@ -122,6 +122,7 @@ def main() -> None:
     assert reviewed_difference["summary"]["has_changes"] is True
     assert reviewed_difference["changes"]["headers"]["added"] == [
         {"name": "include/gamenet/kcp/KcpTransport.h", "category": "provisional"},
+        {"name": "include/gamenet/kcp_transport/KcpTransportEndpoint.h", "category": "provisional"},
         {"name": "include/gamenet/rpc/RpcChannel.h", "category": "provisional"},
         {"name": "include/gamenet/rpc/RpcCodec.h", "category": "provisional"},
         {"name": "include/gamenet/rpc/RpcTransport.h", "category": "provisional"},
@@ -138,6 +139,7 @@ def main() -> None:
     ]
     assert reviewed_difference["changes"]["targets"]["added"] == [
         {"name": "GameNet::kcp", "category": "provisional"},
+        {"name": "GameNet::kcp_transport", "category": "provisional"},
         {"name": "GameNet::rpc", "category": "provisional"},
         {"name": "GameNet::rpc_tls", "category": "provisional"},
         {"name": "GameNet::tls", "category": "provisional"},
@@ -195,6 +197,8 @@ def main() -> None:
     # Reproduce the archived review with its original candidate version.
     archived_candidate = copy.deepcopy(manifest)
     archived_candidate["targets"]["provisional"].remove("GameNet::kcp")
+    archived_candidate["targets"]["provisional"].remove("GameNet::kcp_transport")
+    archived_candidate["headers"]["provisional"].remove("include/gamenet/kcp_transport/KcpTransportEndpoint.h")
     archived_candidate["headers"]["provisional"].remove("include/gamenet/kcp/KcpTransport.h")
     archived_candidate["targets"]["provisional"].remove("GameNet::udp")
     archived_candidate["targets"]["provisional"].remove("GameNet::udp_transport")

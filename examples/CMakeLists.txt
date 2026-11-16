@@ -1,6 +1,13 @@
 # Copyright 2026 Yanqing Xu
 # SPDX-License-Identifier: Apache-2.0
 
+if(GAMENET_ENABLE_KCP)
+    foreach(role server client)
+        add_executable(gamenet_kcp_echo_${role} kcp_echo/${role}.cpp kcp_echo/EchoExample.cc)
+        target_link_libraries(gamenet_kcp_echo_${role} PRIVATE GameNet::kcp_transport)
+    endforeach()
+endif()
+
 if(GAMENET_ENABLE_WEBSOCKET)
     add_executable(gamenet_websocket_echo_server websocket_echo/main.cpp)
     target_link_libraries(gamenet_websocket_echo_server PRIVATE GameNet::websocket)

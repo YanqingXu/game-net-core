@@ -40,6 +40,7 @@ CONCRETE_ACTIVE_ARTIFACTS = {
     "intents/modules/udp.intent.md": ("installed-library", "GameNet::udp"),
     "intents/modules/udp_transport.intent.md": ("installed-library", "GameNet::udp_transport"),
     "intents/modules/kcp_transport.intent.md": ("installed-library", "GameNet::kcp"),
+    "intents/modules/kcp_endpoint.intent.md": ("installed-library", "GameNet::kcp_transport"),
     "intents/modules/websocket_tls.intent.md": ("installed-library", "GameNet::websocket_tls"),
     "intents/modules/websocket.intent.md": ("installed-library", "GameNet::websocket"),
     "intents/modules/rpc_tls.intent.md": ("installed-library", "GameNet::rpc_tls"),
@@ -124,6 +125,7 @@ PRODUCTION_TARGET_DEPENDENCIES = {
     "gamenet_core": set(),
     "gamenet_udp": {"gamenet_core"},
     "gamenet_kcp": {"gamenet_core", "gamenet_udp"},
+    "gamenet_kcp_transport": {"gamenet_core", "gamenet_udp", "gamenet_kcp", "gamenet_transport"},
     "gamenet_udp_transport": {"gamenet_core", "gamenet_udp", "gamenet_transport"},
     "gamenet_protocol": {"gamenet_core"},
     "gamenet_rpc": {"gamenet_core", "gamenet_protocol"},
@@ -842,7 +844,7 @@ def validate_intent(
         else:
             artifact_inventory = websocket_inventory
 
-    if metadata.get("target") == "GameNet::kcp":
+    if metadata.get("target") in {"GameNet::kcp", "GameNet::kcp_transport"}:
         if udp_inventory is None or "GameNet::kcp" not in udp_inventory.aliases:
             experimental_target_without_local_inventory = True
         else:

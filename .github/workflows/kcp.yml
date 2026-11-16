@@ -45,7 +45,7 @@ jobs:
         run: |
           python3 tests/ci/test_kcp_workflow.py
           python3 tests/ci/test_clang_tsan_gate.py
-      - name: Run all 141 tests and allocator detection controls
+      - name: Run all 142 tests and allocator detection controls
         run: |
           python3 tests/ci/run_clang_tsan_gate.py --compiler clang++-18 --build-dir build-clang-tsan --output out/clang-tsan-evidence
       - name: Independently read back full-gate evidence
@@ -105,6 +105,7 @@ jobs:
       - name: Verify KCP intent and evidence guards
         run: |
           python tests/ci/test_kcp_workflow.py
+          python tests/ci/kcp_examples.py --self-test
           python tests/ci/test_kcp_fuzz.py
           python tests/scope/test_intent_semantics.py --with-kcp
       - name: Verify contracts, independent upstream peers and packages
