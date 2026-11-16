@@ -149,6 +149,13 @@ accepted bytes arrive before EOF, and cover direct completion, multiple
 one-functor rounds, rejected write-complete notification admission, concurrent
 send-versus-close decisions, and exact zero-reservation settlement on both
 Linux/epoll and Windows/IOCP.
+Its malloc/free-backed allocation replacements must continue to pause the real
+payload copy after admission and inject `std::bad_alloc`; neither path may be
+skipped under sanitizers. Clang TSan links its complete shared runtime for this
+one test, with a build RPATH to the compiler's runtime directory, so ELF symbol
+interposition preserves the replacements without duplicate static definitions.
+Other targets retain their existing sanitizer linkage. Keep instrumentation and
+malloc/free interception enabled; no sanitizer suppression replaces this gate.
 
 ## 5. EventLoop Required Test Examples
 - runInLoop executes immediately on same thread

@@ -34,6 +34,23 @@ function(add_gamenet_test layer module source)
     add_executable(${target} ${source})
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(${target} PRIVATE GameNet::core)
+    if(GAMENET_ENABLE_TSAN AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+       AND test_id STREQUAL "contract.tcp_connection.test_tcp_connection_cross_thread_shutdown")
+        # This test supplies malloc/free-backed new/delete to pause or fail the
+        # actual payload allocation after output reservation. The static Clang
+        # TSan C++ archive defines the same operators. Use the complete shared
+        # runtime for this test so normal ELF interposition preserves those
+        # replacements and TSan's malloc/free interception, with no suppressions.
+        execute_process(
+            COMMAND "${CMAKE_CXX_COMPILER}" --print-runtime-dir
+            OUTPUT_VARIABLE GAMENET_CLANG_TSAN_RUNTIME_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            COMMAND_ERROR_IS_FATAL ANY
+        )
+        target_link_options(${target} PRIVATE -shared-libsan)
+        set_property(TARGET ${target} APPEND PROPERTY
+            BUILD_RPATH "${GAMENET_CLANG_TSAN_RUNTIME_DIR}")
+    endif()
     add_test(NAME "${test_id}" COMMAND ${target})
     set_tests_properties("${test_id}" PROPERTIES LABELS "${test_labels}")
     gamenet_configure_test_runtime("${test_id}")
