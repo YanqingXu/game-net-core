@@ -1,5 +1,14 @@
 # Roadmap
 
+## Clang TSan full-suite regression gate (2026-11-16)
+
+A separately authorized Clang 18 job exercises the full 141-test UDP/KCP-enabled
+inventory on PR/main pushes, alongside the existing GCC TSan lane. An external
+allocator control proves clean atomic access and expected heap-race detection;
+independent readback checks exact execution, toolchain, source/run identity,
+runtime linkage and raw evidence hashes. See the KCP guide. This adds no KCP-C2
+API or performance/release promotion.
+
 ## KCP-C1 development authorization (2026-11-13)
 
 Optional bounded **standard KCP** is separately authorized in `GameNet::kcp`.

@@ -117,6 +117,13 @@ local cancellation, without a network close handshake or remote delivery promise
 - tests/ci/run_kcp_contracts.py: Windows/Linux Release, Windows ASan,
   Linux ASan/UBSan and TSan, independent unchanged upstream-only UDP peer,
   loss/ACK-loss/reorder/duplicate/delay, installed ON/OFF consumer isolation.
+- tests/ci/run_clang_tsan_gate.py: a separate Linux Clang 18 TSan gate runs the
+  full 141-test UDP/KCP-enabled inventory on PRs and main pushes, preserving the
+  existing GCC lane. Its allocation probe is outside CTest: atomic access exits
+  zero, while a deliberate heap race exits 66 with a real TSan allocation stack.
+  No suppression or skipped test counts as passing. Retain toolchain/source/run
+  identity, commands, JUnit, runtime linkage, diagnostics and hashes, then verify
+  the retained evidence independently.
 
 Each fuzz target requires at least 20,000 bounded sanitizer executions and exact
 head/inventory/raw-log evidence. Existing Core, UDP, TLS/RPC-TLS, WS/WSS,

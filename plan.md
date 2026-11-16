@@ -1,5 +1,14 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## Clang TSan 全量 CI 门禁（2026-11-16 用户授权）
+
+在 KCP 工作流新增独立 Linux Clang 18 TSan 任务，保留原 GCC 覆盖。PR 与
+main push 都执行 UDP/KCP ON、TLS/WS OFF 的完整 141 项测试，不按标签筛选。
+独立分配探针验证原子访问退出 0、真实堆竞争报告并退出 66，保留 custom-new/
+malloc 栈；探针不注册到 CTest，不改变清单数量，不使用 sanitizer suppression。
+归档源码/运行身份、工具链、命令、JUnit、共享运行库与符号、诊断和文件哈希，
+执行独立证据复核及拒绝假通过的合同。本轮不扩展 KCP-C2、API 或发布范围。
+
 ## KCP-C1：可选、有界标准 KCP（2026-11-13 用户授权）
 
 先重写 active KCP intent 和线程/所有权/测试规则，标准 KCP 固定上游

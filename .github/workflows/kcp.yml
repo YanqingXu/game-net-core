@@ -15,6 +15,51 @@ concurrency:
   group: kcp-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  clang-tsan-full:
+    name: Clang 18 TSan full suite and allocation controls
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GAMENET_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: mini_trantor
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the pinned Clang toolchain and complete runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 llvm-18 libclang-rt-18-dev ninja-build
+      - name: Configure TSan address space
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Verify full-gate rejection contracts
+        run: |
+          python3 tests/ci/test_kcp_workflow.py
+          python3 tests/ci/test_clang_tsan_gate.py
+      - name: Run all 141 tests and allocator detection controls
+        run: |
+          python3 tests/ci/run_clang_tsan_gate.py --compiler clang++-18 --build-dir build-clang-tsan --output out/clang-tsan-evidence
+      - name: Independently read back full-gate evidence
+        run: |
+          python3 tests/ci/run_clang_tsan_gate.py --verify-output out/clang-tsan-evidence
+      - name: Retain full Clang TSan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tsan-full-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/clang-tsan-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
   kcp:
     name: KCP (${{ matrix.lane }})
     runs-on: ${{ matrix.os }}
