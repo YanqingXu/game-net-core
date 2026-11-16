@@ -381,7 +381,10 @@ inline inside TcpConnection.
   one producer sends then shuts down, covers direct writes and multiple
   one-functor rounds, rejects later sends, survives dropped write-complete
   notifications, and reconciles concurrent send-versus-shutdown to the exact
-  accepted payload before EOF with zero reserved output
+  accepted payload before EOF with zero reserved output.
+  It pauses a real foreign payload allocation after reservation and covers both
+  normal-queue refusal and `std::bad_alloc`, proving the last rollback resumes
+  owner half-close. Sanitizer builds must retain these allocation checkpoints.
 - `tests/contract/io_engine/test_cross_backend_tcp_semantics.cpp` verifies that
   an accepted foreign Send reaches the peer before EOF while a Send issued
   after the same thread's accepted graceful request returns `Closed` on Linux
