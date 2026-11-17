@@ -1,5 +1,17 @@
 # testing_rules.md
 
+## KCP-C4
+
+The default-OFF/non-installed gamenet_kcp_validation and its supervisor obey
+intents/usecases/kcp_capacity_endurance.intent.md. Six capacity/family smoke
+profiles and 1800-second uninterrupted dual-family development runs retain actual
+PID/RSS, heartbeat, native fault/terminal ledgers and zero cleanup. Release RSS
+budgets and sanitizer diagnostic memory are distinct. Strict raw-file/JSONL
+readback rejects missing phases, early exit, changed parameters/PID, fabricated
+zero, nonzero residue and tampering. The existing TCP 1h/3h and HP0 fixed-lab
+contracts retain their scopes. test_kcp_capacity_endurance.py and
+test_kcp_validation_contract.py enforce evidence and physical build boundaries.
+
 ## KCP-C3
 
 tests/integration/kcp/test_kcp_game_layers.cpp exercises real IPv4/IPv6 KCP and

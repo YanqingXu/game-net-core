@@ -1,5 +1,19 @@
 # Roadmap
 
+## KCP-C4 bounded development validation (2026-11-17)
+
+User authorization adds a default-OFF, non-installed `gamenet_kcp_validation`
+tool, separately from installed APIs and HP0. Its intent preregisters 1/8/32
+sessions, both address families, bounded protocol/pending/proxy resources,
+real data/ACK blackholes, healthy-peer progress, timeout/replacement/history
+refusal and zero-native-residue settlement. Strict raw evidence binds one PID,
+source/build/binary identities, local terminals, remote receive and actual RSS.
+Windows/Linux Release each require a continuous 1800-second dual-family run;
+six-profile smoke supplements the five KCP lanes and full 143-test Clang TSan
+gate. Existing interoperability, fuzz, package and optional regressions remain
+required. This is development evidence, without production capacity, TCP
+candidate-1h/release-3h completion, HP0 promotion or a release.
+
 ## KCP-C3 upper-layer integration contracts (2026-11-17)
 
 Separate user authorization composes real KCP endpoints with existing

@@ -75,6 +75,7 @@ CONCRETE_ACTIVE_ARTIFACTS = {
         "benchmark",
         "gamenet_hot_path_benchmark",
     ),
+    "intents/usecases/kcp_capacity_endurance.intent.md": ("benchmark", "gamenet_kcp_validation"),
     "intents/usecases/hp1_packet_framer_view_prestudy.intent.md": (
         "benchmark",
         "gamenet_hp1_packet_framer_view_benchmark",
@@ -844,7 +845,7 @@ def validate_intent(
         else:
             artifact_inventory = websocket_inventory
 
-    if metadata.get("target") in {"GameNet::kcp", "GameNet::kcp_transport"}:
+    if metadata.get("target") in {"GameNet::kcp", "GameNet::kcp_transport", "gamenet_kcp_validation"}:
         if udp_inventory is None or "GameNet::kcp" not in udp_inventory.aliases:
             experimental_target_without_local_inventory = True
         else:
@@ -1262,7 +1263,7 @@ def main() -> None:
             validate_dependency_direction(tls_inventory)
         udp_inventory = None
         if arguments.with_udp or arguments.with_kcp:
-            udp_inventory = configure_inventory(repo_root,temp_root / "configured-udp", {"CMAKE_BUILD_TYPE":"Debug", "GAMENET_BUILD_TESTING":"ON", "GAMENET_ENABLE_UDP":"ON", "GAMENET_ENABLE_KCP":"ON" if arguments.with_kcp else "OFF", "GAMENET_ENABLE_TLS":"OFF", "CMAKE_DISABLE_FIND_PACKAGE_OpenSSL":"ON"})
+            udp_inventory = configure_inventory(repo_root,temp_root / "configured-udp", {"CMAKE_BUILD_TYPE":"Debug", "GAMENET_BUILD_TESTING":"ON", "GAMENET_ENABLE_UDP":"ON", "GAMENET_ENABLE_KCP":"ON" if arguments.with_kcp else "OFF", "GAMENET_BUILD_KCP_VALIDATION":"ON" if arguments.with_kcp else "OFF", "GAMENET_ENABLE_TLS":"OFF", "CMAKE_DISABLE_FIND_PACKAGE_OpenSSL":"ON"})
             validate_dependency_direction(udp_inventory)
         websocket_inventory = None
         if arguments.with_websocket:

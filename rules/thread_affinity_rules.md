@@ -1,5 +1,13 @@
 # thread_affinity_rules.md
 
+## KCP-C4
+
+The non-installed validation child owns all transport/proxy/cycle mutation on
+one explicit EventLoop. Its bounded phase timer observes native progress; it
+does not block an owner waiting for supervision. The Python supervisor touches
+only the child PID, logs and OS RSS; it cannot mutate loop-owned state. Stop
+retains existing public lifecycle marshalling and drains through stopped.
+
 ## KCP-C3
 
 Network loops own KCP and callbacks; management owns SessionManager and routing;

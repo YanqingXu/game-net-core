@@ -1,5 +1,13 @@
 # ownership_rules.md
 
+## KCP-C4
+
+The validation executable owns real KCP engines and public native UDP proxies
+until all original operations retire. Proxies add no unbounded queue. Current
+cycle ledgers and receive copies have explicit bounds and are released between
+cycles. The supervisor owns exactly one child per declared sample and joins it;
+an interrupted/restarted child cannot satisfy continuous-duration evidence.
+
 ## KCP-C3
 
 Broadcast plans/tasks retain endpoint references, owned payload and revocable

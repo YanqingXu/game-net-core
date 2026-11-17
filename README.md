@@ -1,5 +1,9 @@
 # game-net-core
 
+KCP-C4 adds default-OFF, non-installed capacity/fault/development-endurance
+validation, with actual PID/RSS and zero-residue evidence. See the
+[C4 instructions](docs/development/kcp.md#kcp-c4-development-validation).
+
 KCP-C3 adds real cross-loop session/logic/broadcast contracts with generation-safe
 broadcast handoff and exact shutdown settlement. See [the KCP guide](docs/development/kcp.md).
 

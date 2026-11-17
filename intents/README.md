@@ -95,6 +95,7 @@ These intents apply to the current migrated core:
 - `intents/usecases/production_candidate_release.intent.md`
 - `intents/usecases/core_performance_baseline.intent.md`
 - `intents/usecases/hot_path_cost_baseline.intent.md`
+- `intents/usecases/kcp_capacity_endurance.intent.md`
 - `intents/usecases/hp1_packet_framer_view_prestudy.intent.md`
 - `intents/usecases/hp2_spsc_mailbox_prestudy.intent.md`
 - `intents/usecases/hp3_epoll_slot_dispatch_prestudy.intent.md`

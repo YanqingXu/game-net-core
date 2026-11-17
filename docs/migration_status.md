@@ -1,5 +1,18 @@
 # Migration Status
 
+## KCP-C4 bounded development validation (2026-11-17)
+
+The separately authorized C4 slice adds intent/rules, an opt-in non-installed
+validation tool and independently verified `gamenet.kcp_capacity_endurance.v1`
+evidence. Preregistered 1/8/32-session IPv4/IPv6 cycles exercise capacity refusal,
+data/ACK loss recovery, healthy-peer isolation, timeout/fresh generation and
+zero-residue native retirement. Release development runs require one PID for at
+least 1800 seconds on Windows and Linux. Sanitizer smoke retains the complete
+fault/resource contracts, with RSS diagnostic rather than Release ceilings.
+Native CTest inventories remain default 133, KCP 143 and all-optionals 153;
+C4 runs separately in all five KCP lanes and the complete Clang TSan job.
+No installed API, production capacity claim, HP0 or release promotion is added.
+
 ## KCP-C3 upper-layer integration contracts (2026-11-17)
 
 The authorized slice adds a real IPv4/IPv6 cross-loop KCP/session/logic/broadcast
@@ -726,7 +739,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 79 | 53 | 15 | 11 | 272 |
+| 80 | 54 | 15 | 11 | 274 |
 
 ## Historical Production-Hardening Evidence
 
