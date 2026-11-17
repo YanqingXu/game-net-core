@@ -1,5 +1,12 @@
 # game-net-core
 
+## KCP-C2：端点适配与双端示例（2026-11-16）
+
+独立可选 `GameNet::kcp_transport` 提供 `KcpTransportEndpoint`，复用现有 KCP
+会话的 owner、背压和生命周期关闭语义，KCP 仍只依赖 Core/UDP。新增显式地址/
+conv 的 server/client 示例，覆盖双族、空消息、分片、有限等待与零残留退出。
+用法、边界和验证方式见 [KCP 文档](docs/development/kcp.md)。
+
 ## KCP-C1 development authorization (2026-11-13)
 
 Optional bounded **standard KCP** is separately authorized in `GameNet::kcp`.

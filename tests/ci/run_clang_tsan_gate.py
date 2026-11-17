@@ -16,17 +16,25 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from run_kcp_contracts import verify_inventory, verify_results
+from run_kcp_contracts import FULL_TEST_COUNT, verify_inventory, verify_results
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = "gamenet.clang_tsan_gate.v1"
+SCHEMA = "gamenet.clang_tsan_gate.v2"
 FAULT_TEST = "contract.tcp_connection.test_tcp_connection_cross_thread_shutdown"
 FAULT_TARGET = "gnt_contract_tcp_connection_" + hashlib.sha1(FAULT_TEST.encode()).hexdigest()[:10]
 INPUTS = ["CMakeLists.txt", "cmake/Sanitizers.cmake", "tests/CMakeLists.txt",
           "tests/ci/run_clang_tsan_gate.py", "tests/ci/test_clang_tsan_gate.py",
           "tests/ci/run_kcp_contracts.py", "tests/ci/run_udp_contracts.py",
           "tests/support/ClangTsanAllocatorProbe.cpp", ".github/workflows/kcp.yml",
-          "tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp"]
+          "tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp",
+          "include/gamenet/kcp_transport/KcpTransportEndpoint.h", "src/kcp_transport/KcpTransportEndpoint.cc",
+          "src/kcp_transport/CMakeLists.txt", "tests/contract/kcp/test_kcp_transport_endpoint.cpp",
+          "tests/ci/kcp_examples.py", "examples/kcp_echo/EchoExample.cc", "examples/kcp_echo/EchoExample.h",
+          "examples/kcp_echo/server.cpp", "examples/kcp_echo/client.cpp", "examples/CMakeLists.txt",
+          "cmake/GameNetCoreConfig.cmake.in", "api/public_api_manifest.json",
+          "tests/ci/run_tls_contracts.py", "tests/ci/run_websocket_contracts.py",
+          "tests/ci/run_websocket_tls_contracts.py",
+          "tests/cmake/kcp_install_consumer/CMakeLists.txt", "tests/cmake/kcp_install_consumer/main.cpp"]
 
 
 def require(condition, message):
@@ -78,7 +86,7 @@ def verify_output(output):
     output = Path(output)
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     require(manifest.get("schema") == SCHEMA and manifest.get("status") == "passed", "incomplete gate")
-    require(manifest.get("executed_tests") == 141, "full inventory not executed")
+    require(manifest.get("executed_tests") == FULL_TEST_COUNT, "full inventory not executed")
     require(re.fullmatch(r"[0-9a-f]{64}", manifest.get("fault_binary_sha256", "")), "invalid fault binary identity")
     require(re.fullmatch(r"[0-9a-f]{40}", manifest.get("commit_sha", "")), "invalid source identity")
     if manifest.get("workflow_sha"):
@@ -237,7 +245,7 @@ def run(args):
         manifest["status"] = "failed"
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         raise
-    print("Clang 18 TSan full gate passed: 141 tests, atomic exit 0, heap race exit 66", flush=True)
+    print(f"Clang 18 TSan full gate passed: {FULL_TEST_COUNT} tests, atomic exit 0, heap race exit 66", flush=True)
 
 
 def main():

@@ -6,19 +6,21 @@ import argparse,hashlib,json,os,platform,re,subprocess,sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from kcp_interop import interoperate, verify_evidence, EXPECTED as INTEROP
+from kcp_examples import exercise_examples, verify_examples
 from run_udp_contracts import CONTRACTS as UDP_CONTRACTS
-CONTRACTS={'unit.kcp.test_kcp_engine','contract.kcp.test_kcp_transport','integration.kcp.test_kcp_reliable'}
+CONTRACTS={'unit.kcp.test_kcp_engine','contract.kcp.test_kcp_transport','contract.kcp.test_kcp_transport_endpoint','integration.kcp.test_kcp_reliable'}
+FULL_TEST_COUNT = 142
 
 def verify_inventory(document):
     tests=document.get('tests',[]);names=[t['name'] for t in tests]
-    if len(names)!=141 or len(set(names))!=141:raise ValueError('KCP inventory must be exactly 141')
+    if len(names)!=FULL_TEST_COUNT or len(set(names))!=FULL_TEST_COUNT:raise ValueError('KCP inventory must be exactly 142')
     selected=set()
     for t in tests:
         props={p['name']:p['value'] for p in t.get('properties',[])}
         if 'kcp' in props.get('LABELS',[]):
             if props.get('DISABLED',False):raise ValueError('disabled KCP contract')
             selected.add(t['name'])
-    if selected!=CONTRACTS:raise ValueError('exact three KCP tests required')
+    if selected!=CONTRACTS:raise ValueError('exact four KCP tests required')
     if not UDP_CONTRACTS<=set(names):raise ValueError('UDP prerequisite contracts missing')
     return set(names)
 
@@ -33,7 +35,7 @@ def verify_interop(value):
 
 def verify_output(output):
     output=Path(output);d=json.loads((output/'manifest.json').read_text(encoding='utf-8'))
-    if d.get('schema')!='gamenet.kcp_contracts.v1' or d.get('status')!='passed':raise ValueError('incomplete KCP evidence')
+    if d.get('schema')!='gamenet.kcp_contracts.v2' or d.get('status')!='passed':raise ValueError('incomplete KCP evidence')
     if not re.fullmatch('[0-9a-f]{40}',d.get('commit_sha','')):raise ValueError('invalid KCP source identity')
     if d.get('workflow_sha') and (d['workflow_sha']!=d['commit_sha'] or d['working_tree']):raise ValueError('wrong/dirty KCP source')
     for key,env in [('workflow_sha','GITHUB_SHA'),('run_id','GITHUB_RUN_ID'),('run_attempt','GITHUB_RUN_ATTEMPT')]:
@@ -49,8 +51,9 @@ def verify_output(output):
     if d.get('executed_tests')!=len(expected):raise ValueError('KCP count drift')
     verify_interop(d.get('interop'))
     verify_evidence(output/'interop')
+    if verify_examples(output/'examples') != d.get('examples'):raise ValueError('KCP example evidence drift')
     if len(d.get('binary_sha256',{}))!=2 or not all(re.fullmatch('[0-9a-f]{64}',s) for s in d['binary_sha256'].values()):raise ValueError('invalid KCP binary identities')
-    if d.get('consumers')!=['kcp','udp','core']:raise ValueError('KCP package consumer missing')
+    if d.get('consumers')!=['kcp_transport','kcp','udp','core']:raise ValueError('KCP package consumer missing')
     if d['profile']=='release' and d.get('off_isolation')!='passed':raise ValueError('KCP OFF evidence missing')
     return d
 
@@ -63,7 +66,7 @@ def main():
     env=os.environ.copy();config='Release' if a.profile=='release' else 'Debug'
     if a.profile=='asan':env.update(ASAN_OPTIONS='halt_on_error=1',UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1')
     if a.profile=='tsan':env['TSAN_OPTIONS']='halt_on_error=1'
-    d={'schema':'gamenet.kcp_contracts.v1','status':'failed','profile':a.profile,'platform':platform.platform(),
+    d={'schema':'gamenet.kcp_contracts.v2','status':'failed','profile':a.profile,'platform':platform.platform(),
        'workflow_sha':env.get('GITHUB_SHA'),'run_id':env.get('GITHUB_RUN_ID'),'run_attempt':env.get('GITHUB_RUN_ATTEMPT')}
     def run(name,cmd,success=True):
         (out/(name+'-command.json')).write_text(json.dumps(cmd,indent=2)+'\n',encoding='utf-8');print('Running '+name,flush=True)
@@ -86,7 +89,7 @@ def main():
         cmd+=['-A','x64'] if os.name=='nt' else ['-G','Ninja']
         text=run(name+'-configure',cmd,success)
         if not success:
-            if 'Required component kcp is unavailable' not in text:raise ValueError('KCP rejection failed for wrong reason')
+            if 'Required component '+mode+' is unavailable' not in text:raise ValueError('KCP rejection failed for wrong reason')
             return
         run(name+'-build',['cmake','--build',str(directory),'--config',config,'--parallel','2'])
         run(name+'-test',['ctest','--test-dir',str(directory),'-C',config,'--output-on-failure','--no-tests=error'])
@@ -104,7 +107,7 @@ def main():
         selected=CONTRACTS|UDP_CONTRACTS
         targets=['gnt_'+n.split('.')[0]+'_'+n.split('.')[1]+'_'+hashlib.sha1(n.encode()).hexdigest()[:10] for n in sorted(selected)]
         cmd=['cmake','--build',str(build),'--config',config,'--parallel','2']
-        if a.profile!='release':cmd+=['--target',*installed,*targets,'gamenet_kcp_interop_server','gamenet_kcp_reference']
+        if a.profile!='release':cmd+=['--target',*installed,*targets,'gamenet_kcp_interop_server','gamenet_kcp_reference','gamenet_kcp_echo_server','gamenet_kcp_echo_client']
         run('build',cmd)
         cmd=['ctest','--test-dir',str(build),'-C',config,'--output-on-failure','--timeout','60','--no-tests=error','--output-junit',str(out/'ctest-junit.xml')]
         if a.profile!='release':cmd+=['-L','^(kcp|udp)$']
@@ -114,18 +117,22 @@ def main():
         server=directory/('gamenet_kcp_interop_server'+suffix);reference=directory/('gamenet_kcp_reference'+suffix)
         d['binary_sha256']={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in [server,reference]}
         d['interop']=interoperate(server,reference,out/'interop',env);verify_interop(d['interop'])
+        examples=build/'examples'/('' if os.name!='nt' else config)
+        d['examples']=exercise_examples(examples/('gamenet_kcp_echo_server'+suffix), examples/('gamenet_kcp_echo_client'+suffix), out/'examples', env)
         prefix=build/'prefix';run('install',['cmake','--install',str(build),'--config',config,'--prefix',str(prefix)])
         if (prefix/'share/doc/GameNetCore/kcp/LICENSE').read_bytes()!=(repo/'third_party/kcp/LICENSE').read_bytes():raise ValueError('MIT license missing')
-        for mode in ['kcp','udp','core']:consumer(mode+'-consumer',prefix,mode)
-        d['consumers']=['kcp','udp','core']
+        for mode in ['kcp_transport','kcp','udp','core']:consumer(mode+'-consumer',prefix,mode)
+        d['consumers']=['kcp_transport','kcp','udp','core']
         if a.profile=='release':
             text=run('kcp-without-udp',configure(build/'invalid',True,False),False)
             if 'requires explicit GAMENET_ENABLE_UDP=ON' not in text:raise ValueError('invalid dependency rejected for wrong reason')
             off=build/'off';run('off-configure',configure(off,False))
-            run('off-build',['cmake','--build',str(off),'--config',config,'--parallel','2','--target',*[t for t in installed if t!='gamenet_kcp']])
+            run('off-build',['cmake','--build',str(off),'--config',config,'--parallel','2','--target',*[t for t in installed if not t.startswith('gamenet_kcp')]])
             off_prefix=off/'prefix';run('off-install',['cmake','--install',str(off),'--config',config,'--prefix',str(off_prefix)])
             if (off_prefix/'include/gamenet/kcp').exists() or list(off_prefix.rglob('GameNetKcpTargets.cmake')) or list(off_prefix.rglob('*gamenet_kcp*')):raise ValueError('KCP leaked into OFF package')
-            consumer('off-core',off_prefix,'core');consumer('off-udp',off_prefix,'udp');consumer('off-kcp',off_prefix,'kcp',False);d['off_isolation']='passed'
+            if (off_prefix/'include/gamenet/kcp_transport').exists() or list(off_prefix.rglob('GameNetKcpTransportTargets.cmake')):raise ValueError('KCP endpoint leaked into OFF package')
+            consumer('off-core',off_prefix,'core');consumer('off-udp',off_prefix,'udp');consumer('off-kcp',off_prefix,'kcp',False)
+            consumer('off-kcp-transport',off_prefix,'kcp_transport',False);d['off_isolation']='passed'
         d['status']='passed'
     finally:
         d['files']={f.relative_to(out).as_posix():hashlib.sha256(f.read_bytes()).hexdigest() for f in out.rglob('*') if f.is_file() and f!=out/'manifest.json'}

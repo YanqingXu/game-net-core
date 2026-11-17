@@ -101,5 +101,10 @@ endpoint and cannot establish public API semantics.
   Its direct contract is tests/contract/udp/test_udp_peer.cpp. Core/transport does
   not depend on UDP; disabled packages export no UDP surface.
 - Deferred from the source design: broader transport-manager policy.
+- KCP-C2 separately authorizes KcpTransportEndpoint in GameNet::kcp_transport
+  under intents/modules/kcp_endpoint.intent.md. It composes this interface with
+  existing weak-state KCP sessions, preserves KCP's closed-first precedence and
+  lifecycle close capability, and adds no callback, queue or reverse dependency.
+  Reliable ordered admission and protocol ACKs do not promise application delivery.
 - Dropped behavior: none; raw owner-loop scheduling is replaced by the
   EventLoop-owned executor admission contract during Phase 4 hardening.

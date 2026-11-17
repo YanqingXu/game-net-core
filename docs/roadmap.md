@@ -1,9 +1,19 @@
 # Roadmap
 
+## KCP-C2 endpoint composition and examples (2026-11-16)
+
+The user authorizes separate optional GameNet::kcp_transport with weak-session
+KcpTransportEndpoint, preserving the KCP/Core/UDP/transport interfaces and KCP's
+Core/UDP-only dependency. Explicit-address server/client examples and direct
+owner/lifetime/result contracts extend the enabled inventory to 142; default
+remains 133. Validation retains five platform/sanitizer lanes, full Clang TSan,
+independent upstream interoperability, 20k-per-target fuzz and installed ON/OFF
+isolation. This is provisional development, without release/performance promotion.
+
 ## Clang TSan full-suite regression gate (2026-11-16)
 
-A separately authorized Clang 18 job exercises the full 141-test UDP/KCP-enabled
-inventory on PR/main pushes, alongside the existing GCC TSan lane. An external
+A separately authorized Clang 18 job exercises the full UDP/KCP-enabled inventory
+(initially 141 tests; 142 with KCP-C2) on PR/main pushes, alongside the existing GCC TSan lane. An external
 allocator control proves clean atomic access and expected heap-race detection;
 independent readback checks exact execution, toolchain, source/run identity,
 runtime linkage and raw evidence hashes. See the KCP guide. This adds no KCP-C2

@@ -1,5 +1,14 @@
 # Migration Status
 
+## KCP-C2 endpoint composition and examples (2026-11-16)
+
+Separate optional GameNet::kcp_transport adapts existing KCP sessions without
+changing the KCP/Core/UDP/transport contracts or KCP's Core/UDP-only dependency.
+Explicit-address server/client examples use finite ACK-service windows and stop
+through native retirement. A new endpoint contract extends UDP/KCP-enabled CTest
+to 142; default remains 133. See the active KCP endpoint intent and KCP guide for
+ownership, result/reason mappings, package isolation and verification boundaries.
+
 ## KCP-C1 development authorization (2026-11-13)
 
 Optional bounded **standard KCP** is separately authorized in `GameNet::kcp`.
@@ -707,7 +716,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 78 | 52 | 15 | 11 | 262 |
+| 79 | 53 | 15 | 11 | 268 |
 
 ## Historical Production-Hardening Evidence
 

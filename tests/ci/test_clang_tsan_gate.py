@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from run_clang_tsan_gate import FAULT_TEST, INPUTS, SCHEMA, digest, file_hashes, verify_output
-from run_kcp_contracts import CONTRACTS, UDP_CONTRACTS
+from run_kcp_contracts import CONTRACTS, UDP_CONTRACTS, FULL_TEST_COUNT
 
 
 class GateEvidence(unittest.TestCase):
@@ -21,7 +21,7 @@ class GateEvidence(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.output = Path(directory.name)
-        self.manifest = {"schema": SCHEMA, "status": "passed", "executed_tests": 141,
+        self.manifest = {"schema": SCHEMA, "status": "passed", "executed_tests": FULL_TEST_COUNT,
             "fault_binary_sha256": "f" * 64,
             "commit_sha": "a" * 40, "working_tree": "", "workflow_sha": None,
             "runtime_dir": "/compiler/runtime", "environment": {"TSAN_OPTIONS": "halt_on_error=1:exitcode=66"},

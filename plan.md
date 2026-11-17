@@ -1,5 +1,15 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## KCP-C2：端点适配与双端示例（2026-11-16 用户授权）
+
+先落实 intents/modules/kcp_endpoint.intent.md，再添加独立可选 GameNet::kcp_transport，
+通过弱状态 KcpSession 适配既有 TransportEndpoint，不改变 KCP/Core/UDP/transport
+公共契约和依赖。身份取唯一 peer id，owner-only send/close、跨线程生命周期关闭、
+原因映射、首因保持、换代隔离和退出零残留先由合同约束。双端示例显式配置地址/conv，
+使用真实消息应答及有界 ACK 服务窗口，经 stopped 后退出。补齐 Windows/Linux、
+五条 sanitizer 路线、完整 142 项 Clang TSan、20k 协议/会话 fuzz、独立互通、
+安装 ON/OFF 边界和已有回归；本轮不作生产、性能或发布推广。
+
 ## Clang TSan 全量 CI 门禁（2026-11-16 用户授权）
 
 在 KCP 工作流新增独立 Linux Clang 18 TSan 任务，保留原 GCC 覆盖。PR 与
@@ -8,6 +18,7 @@ main push 都执行 UDP/KCP ON、TLS/WS OFF 的完整 141 项测试，不按标�
 malloc 栈；探针不注册到 CTest，不改变清单数量，不使用 sanitizer suppression。
 归档源码/运行身份、工具链、命令、JUnit、共享运行库与符号、诊断和文件哈希，
 执行独立证据复核及拒绝假通过的合同。本轮不扩展 KCP-C2、API 或发布范围。
+该 CI 切片已完成并合入；后续独立授权的 KCP-C2 增加一项端点合同后，完整清单为 142。
 
 ## KCP-C1：可选、有界标准 KCP（2026-11-13 用户授权）
 

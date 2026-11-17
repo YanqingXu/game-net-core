@@ -241,6 +241,10 @@ def main() -> None:
     for component in ("tls", "transport", "udp_transport", "rpc", "websocket"):
         assert_violation(repo_root, "src/kcp/BadDependency.cc", f'target_link_libraries(gamenet_kcp PRIVATE GameNet::{component})\n', "disallowed component")
     assert_clean(repo_root, "src/udp_transport/Adapter.cc", '#include "gamenet/udp/UdpPeer.h"\n#include "gamenet/transport/TransportEndpoint.h"\n')
+    assert_clean(repo_root, "src/kcp_transport/Adapter.cc", '#include "gamenet/kcp/KcpTransport.h"\n#include "gamenet/transport/TransportEndpoint.h"\n')
+    for layer in ("core", "udp", "kcp", "transport"):
+        assert_violation(repo_root, f"src/{layer}/BadEndpoint.cc", '#include "gamenet/kcp_transport/KcpTransportEndpoint.h"\n', "disallowed component")
+    assert_violation(repo_root, "src/kcp_transport/BadTls.cc", '#include "gamenet/tls/TlsStream.h"\n', "disallowed component")
     assert_violation(repo_root, "include/gamenet/udp/BadEndpoint.h", '#include "gamenet/transport/TransportEndpoint.h"\n', "disallowed component")
     assert_violation(repo_root, "src/udp/BadAdapter.cc", '#include "gamenet/udp_transport/UdpTransportEndpoint.h"\n', "disallowed component")
     assert_violation(repo_root, "src/transport/BadUdp.cc", '#include "gamenet/udp/UdpPeer.h"\n', "disallowed component")

@@ -1,8 +1,47 @@
-# Optional bounded standard KCP (KCP-C1)
+# Optional bounded standard KCP (KCP-C1/C2)
 
 `GameNet::kcp` is a provisional message transport over explicit UDP peers. Build
 with both `-DGAMENET_ENABLE_KCP=ON -DGAMENET_ENABLE_UDP=ON`; both default OFF.
 There is no OpenSSL, custom wire header or TransportEndpoint dependency.
+The separately requested `GameNet::kcp_transport` component adapts the existing
+TransportEndpoint interface; KCP itself retains its Core/UDP-only dependency.
+
+```cmake
+find_package(GameNetCore CONFIG REQUIRED COMPONENTS kcp_transport)
+target_link_libraries(your_server PRIVATE GameNet::kcp_transport)
+```
+
+`gamenet::kcp_transport::KcpTransportEndpoint(session)` retains a session handle,
+not its transport or loop. Its id is the globally unique peer id; equal convs
+in different transports do not collide. Null construction throws. `send` and
+`close` remain owner-only; foreign callers post owned data through ownerExecutor.
+`requestClose` uses KCP's lifecycle lane even when the normal queue is full.
+The adapter changes no callbacks. Accepted is bounded copied-message admission;
+ACK and close retain the C1 semantics described below. Closed/unavailable
+sessions report Closed before a thread check, while an open foreign call reports
+WrongThread. Invalid/oversize, allocation or capacity refusal reports Overloaded.
+Normal, GoingAway, ProtocolError and IdleTimeout map directly; Replaced maps to
+GoingAway/local cancellation, Overloaded to ResourceExhausted. First close wins.
+
+The build also provides two finite examples (run each command in its own terminal):
+
+```sh
+build/examples/gamenet_kcp_echo_server 127.0.0.1 20000 127.0.0.1 20001 1001 10000
+build/examples/gamenet_kcp_echo_client 127.0.0.1 20001 127.0.0.1 20000 1001 "hello KCP" 3000
+```
+
+MSVC binaries are under `build/examples/Release/` with `.exe`. Both sides must
+agree on explicit addresses/ports and a fresh nonzero conv; use `::1` at both
+ends for IPv6. An empty quoted message is valid; messages up to the configured
+16 KiB bound are fragmented as needed. The optional final argument is a finite
+deadline in milliseconds (100..60000). Client defaults to 3000, server to 10000;
+client waits through its window to service ACKs for the echo, since KCP has no
+remote close handshake. Server succeeds after its echo is acknowledged. Set the
+server deadline longer than the client's window. Missing responses, incorrect
+payloads, refusals or incomplete settlement produce nonzero exits. Both sides
+stop/drain to `stopped` and print a `KCP_ECHO_SUMMARY` with actual terminal counts
+and a zero-residue flag. These examples are explicit-address diagnostics, with
+no authentication, automatic peers or production/performance claim.
 
 ```cmake
 find_package(GameNetCore CONFIG REQUIRED COMPONENTS kcp)
@@ -67,7 +106,7 @@ Interrupted native mutation
 discards the entire arena without following partial lists. MSVC disables `/EHc`
 for this target so allocator exceptions cross the private C-linkage boundary.
 
-Verification uses three CTest tests (141 with UDP, versus default 133), real
+Verification uses four CTest tests (142 with UDP, versus default 133), real
 IPv4/IPv6 pressure/reconnect, a separate unchanged-upstream/native-socket peer
 through bounded bidirectional data/ACK loss, duplication, reordering and delay,
 and protocol/session fuzz at 20k each. The dedicated workflow records Windows/
@@ -75,7 +114,7 @@ Linux Release, Windows ASan, Linux ASan/UBSan and TSan evidence, package consume
 clean source identities and all raw hashes. Existing optional protocol checks
 remain separate. These contracts are not capacity or production validation.
 
-The independent `clang-tsan-full` job additionally runs the complete 141-test
+The independent `clang-tsan-full` job additionally runs the complete 142-test
 UDP/KCP-enabled inventory with Clang 18 on pull requests and main pushes. It
 keeps the existing GCC TSan lane. An external allocation control uses the same
 complete shared TSan runtime as the custom-new TCP contract: atomic accesses
@@ -88,7 +127,7 @@ build-clang-tsan --output out/clang-tsan-evidence`, then independently read it
 back with `python3 tests/ci/run_clang_tsan_gate.py --verify-output
 out/clang-tsan-evidence`. Linux needs Clang/LLVM 18 and its compiler-rt package;
 the workflow installs these explicitly. Evidence retains source/run identity,
-toolchain/cache/compile commands, all 141 JUnit records, raw commands/logs,
+toolchain/cache/compile commands, all 142 JUnit records, raw commands/logs,
 runtime linkage, probe binary/diagnostics and SHA-256 file identities. Empty,
 wrong-compiler, incorrectly successful race, suppressed or tampered evidence
 fails the readback. `DEBUGINFOD_URLS` is empty during the run so symbolization
