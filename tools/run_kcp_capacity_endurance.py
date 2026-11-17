@@ -242,7 +242,7 @@ def run_sample(binary, n, family, duration, out, env):
     command = [str(binary), '--sessions', str(n), '--family', str(family), '--duration-seconds', str(duration),
                '--conv-base', str(secrets.randbelow(0x7ffff000)+1)]
     (out/sample['command']).write_text(json.dumps(command)+'\n', encoding='utf-8')
-    start = time.monotonic(); last = start
+    start = time.monotonic(); last = start; last_rss = None
     messages = queue.Queue(maxsize=32)
     with (out/sample['stderr']).open('wb') as err, (out/sample['events']).open('wb') as log, (out/sample['rss']).open('w', encoding='utf-8') as rss_log:
         child = subprocess.Popen(command, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=err)
@@ -262,18 +262,22 @@ def run_sample(binary, n, family, duration, out, env):
                 if now-start > duration+120 or now-last > 60:
                     sample['deadline_expired'] = True
                     raise RuntimeError('child/heartbeat deadline')
-                try:
-                    current, peak = external_rss(child.pid)
-                    if current and peak:
-                        rss_log.write(json.dumps(dict(pid=child.pid, elapsed_seconds=now-start, rss_bytes=current, peak_rss_bytes=peak))+'\n'); rss_log.flush()
-                except (OSError, KeyError, ProcessLookupError):
-                    # Linux can remove VmRSS/VmHWM before waitpid reports the exit.
-                    # Accept missing data only after confirming termination; preserve
-                    # a null observation and its reason instead of a fabricated zero.
-                    child.wait(timeout=0.5)
-                    rss_log.write(json.dumps(dict(pid=child.pid, elapsed_seconds=now-start,
-                        rss_bytes=None, peak_rss_bytes=None, reason='process-exited'))+'\n')
-                    rss_log.flush()
+                demand(last_rss is None or now >= last_rss, 'supervisor clock regressed')
+                # Draining a burst can revisit a coarse Windows clock tick.
+                # Observe once at that real time; never invent a later timestamp.
+                if last_rss is None or now > last_rss:
+                    try:
+                        current, peak = external_rss(child.pid)
+                        if current and peak:
+                            rss_log.write(json.dumps(dict(pid=child.pid, elapsed_seconds=now-start, rss_bytes=current, peak_rss_bytes=peak))+'\n'); rss_log.flush()
+                    except (OSError, KeyError, ProcessLookupError):
+                        # Linux can remove VmRSS/VmHWM before waitpid reports the exit.
+                        # Confirm termination and retain an explicit missing observation.
+                        child.wait(timeout=0.5)
+                        rss_log.write(json.dumps(dict(pid=child.pid, elapsed_seconds=now-start,
+                            rss_bytes=None, peak_rss_bytes=None, reason='process-exited'))+'\n')
+                        rss_log.flush()
+                    last_rss = now
                 try:
                     line = messages.get(timeout=0.1)
                 except queue.Empty:
@@ -296,6 +300,18 @@ def run_sample(binary, n, family, duration, out, env):
     demand(sample['returncode'] == 0, 'child failed: '+sample['stderr'])
     sample['proof'] = validate_events(load_lines(out/sample['events']), n, family, duration, child.pid, env.get('GAMENET_C4_SANITIZED') == '1')
     return sample
+
+
+def _verify_generated_output(out, document):
+    """An unsuccessful final readback must leave a failed producer checkpoint."""
+    try:
+        return verify_output(out)
+    except BaseException as error:
+        document['status'] = 'failed'
+        document['error'] = str(error)
+        document['files'] = hashes(out)
+        (out/'manifest.json').write_text(json.dumps(document, indent=2)+'\n', encoding='utf-8')
+        raise
 
 
 def main():
@@ -380,7 +396,7 @@ def main():
     finally:
         d['files'] = hashes(out)
         (out/'manifest.json').write_text(json.dumps(d, indent=2)+'\n', encoding='utf-8')
-    verify_output(out)
+    _verify_generated_output(out, d)
     print('KCP-C4 '+a.mode+' passed (development evidence only)', flush=True)
 
 

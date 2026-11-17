@@ -6,9 +6,11 @@ import importlib.util
 import unittest
 import json
 import os
+import math
 import subprocess
 import sys
 import tempfile
+import time
 from unittest import mock
 from pathlib import Path
 
@@ -196,6 +198,39 @@ class PortableEvidence(unittest.TestCase):
         p=self.out/self.d['samples'][0]['rss']
         p.write_text(json.dumps(dict(pid=123,elapsed_seconds=0.1,rss_bytes=None,peak_rss_bytes=None,reason='process-exited'))+'\n')
         self.reject()
+    def test_duplicate_external_clock_rejected(self):
+        p=self.out/self.d['samples'][0]['rss']
+        rows=[json.loads(line) for line in p.read_text().splitlines()]
+        rows[1]['elapsed_seconds']=rows[0]['elapsed_seconds']
+        p.write_text(''.join(json.dumps(row)+'\n' for row in rows));self.reject()
+    def test_failed_final_readback_marks_producer_failed(self):
+        p=self.out/self.d['samples'][0]['rss']
+        rows=[json.loads(line) for line in p.read_text().splitlines()]
+        rows[1]['elapsed_seconds']=rows[0]['elapsed_seconds']
+        p.write_text(''.join(json.dumps(row)+'\n' for row in rows));self.seal()
+        with self.assertRaisesRegex(ValueError,'external sample clock'):
+            c4._verify_generated_output(self.out,self.d)
+        checkpoint=json.loads((self.out/'manifest.json').read_text())
+        self.assertEqual(checkpoint['status'],'failed')
+        self.assertIn('external sample clock',checkpoint['error'])
+    def test_supervisor_samples_once_per_clock_tick(self):
+        child_script=self.out/'clock-child.py'
+        child_script.write_text('import json,os,time\nrows='+repr(events(1,4,2))+\
+            '\nfor i,row in enumerate(rows):\n if i==1:time.sleep(2.05)\n row["pid"]=os.getpid()\n print(json.dumps(row),flush=True)\n')
+        original=subprocess.Popen;monotonic=time.monotonic;children=[]
+        def spawn(command,**kwargs):
+            child=original([sys.executable,str(child_script)],**kwargs);children.append(child);return child
+        # A coarse real clock exposes repeated ticks while draining a burst of
+        # child records, without inventing a later observation timestamp.
+        with mock.patch.object(c4.subprocess,'Popen',side_effect=spawn), \
+             mock.patch.object(c4.time,'monotonic',side_effect=lambda:math.floor(monotonic())):
+            sample=c4.run_sample('not-used',1,4,2,self.out,os.environ.copy())
+        self.assertEqual(sample['returncode'],0)
+        self.assertTrue(children[0].stdout.closed)
+        rows=c4.load_lines(self.out/sample['rss'])
+        times=[row['elapsed_seconds'] for row in rows]
+        self.assertGreaterEqual(len(times),2)
+        self.assertTrue(all(a<b for a,b in zip(times,times[1:])),times)
     def test_child_killed_and_joined_on_malformed_output(self):
         child_script=self.out/'bad-child.py'
         child_script.write_text('import time\nprint("malformed",flush=True)\ntime.sleep(120)\n')
