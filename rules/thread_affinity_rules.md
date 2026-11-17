@@ -1,5 +1,14 @@
 # thread_affinity_rules.md
 
+## KCP-C3
+
+Network loops own KCP and callbacks; management owns SessionManager and routing;
+logic owns handlers/output. Only immutable bindings/targets and owned payloads
+cross those domains. Routed and queued broadcast work rechecks binding on the
+endpoint owner before send. Coordinator barriers never make one owner wait for
+another owner. Teardown stops manager/logic/dispatcher admission before draining
+network owners through KCP stopped and original native retirement.
+
 ## KCP-C2
 
 KcpTransportEndpoint delegates send/close on the KcpSession owner and adds no

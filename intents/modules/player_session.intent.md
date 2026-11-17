@@ -104,6 +104,11 @@ inventory, combat, map, room, account-provider, or other business data.
 
 ## Verification
 
+- KCP-C3 adds tests/integration/kcp/test_kcp_game_layers.cpp: real endpoints on
+  distinct network owners, management-only indexes, rebind revocation, delayed
+  old offline, stale logic/broadcast work and shutdown settlement. It changes no
+  authentication-provider policy or session ownership.
+
 - `tests/contract/game_session/test_session_manager_contract.cpp` verifies
   creation, duplicate login policies, transport-id uniqueness, rebind, stale
   disconnect cleanup, heartbeat, idle expiry, read-only public session views,

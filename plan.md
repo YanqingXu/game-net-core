@@ -1,5 +1,19 @@
 # game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS
 
+## KCP-C3：上层会话与广播集成验证（2026-11-17 用户授权）
+
+复用已有 API，以真实 IPv4/IPv6 KCP 端点连接独立网络、管理与逻辑 owner。
+先在 kcp_endpoint、player_session、logic_loop、broadcast intent 及线程/所有权/
+测试规则约束换代、重入、跨域 owned 数据和关闭清算，再由
+tests/integration/kcp/test_kcp_game_layers.cpp 验证。覆盖同端点刷新后旧计划/旧任务、
+重绑后的迟到 offline、排队及 handler 期间的逻辑代际撤销、pending/task/byte/
+normal queue 拒绝、健康 owner 进度和饱和 shutdown。修复广播计划丢失绑定凭证的问题，
+在 dispatch 与 owner send 前重验，保留预算、回调、结果与公共签名。
+分开记录本地接纳、协议终结和远端消息；退出各层归零。KCP 清单为 143、专项十项，
+默认仍为 133；完成五平台/sanitizer 路线、全量 Clang TSan 与分配探针、两类各 20k
+fuzz、独立互通、ON/OFF 消费者及现有 UDP/TLS/WS/WSS/RPC/HP1 回归。
+证据保留真实 dirty 状态与原始哈希；提交、推送并创建 PR 附完整验证结果，不自动合并或发布。
+
 ## KCP-C2：端点适配与双端示例（2026-11-16 用户授权）
 
 先落实 intents/modules/kcp_endpoint.intent.md，再添加独立可选 GameNet::kcp_transport，

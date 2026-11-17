@@ -45,7 +45,7 @@ jobs:
         run: |
           python3 tests/ci/test_kcp_workflow.py
           python3 tests/ci/test_clang_tsan_gate.py
-      - name: Run all 142 tests and allocator detection controls
+      - name: Run all 143 tests and allocator detection controls
         run: |
           python3 tests/ci/run_clang_tsan_gate.py --compiler clang++-18 --build-dir build-clang-tsan --output out/clang-tsan-evidence
       - name: Independently read back full-gate evidence

@@ -118,7 +118,7 @@ local cancellation, without a network close handshake or remote delivery promise
   Linux ASan/UBSan and TSan, independent unchanged upstream-only UDP peer,
   loss/ACK-loss/reorder/duplicate/delay, installed ON/OFF consumer isolation.
 - tests/ci/run_clang_tsan_gate.py: a separate Linux Clang 18 TSan gate runs the
-  full 142-test UDP/KCP-enabled inventory (including the KCP-C2 endpoint contract)
+  full 143-test UDP/KCP-enabled inventory (including the KCP-C2 endpoint contract)
   on PRs and main pushes, preserving the
   existing GCC lane. Its allocation probe is outside CTest: atomic access exits
   zero, while a deliberate heap race exits 66 with a real TSan allocation stack.

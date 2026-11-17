@@ -85,6 +85,7 @@ if(GAMENET_ENABLE_KCP)
     add_gamenet_component_test(contract kcp GameNet::kcp ${CMAKE_CURRENT_SOURCE_DIR}/contract/kcp/test_kcp_transport.cpp threading lifecycle)
     add_gamenet_component_test(contract kcp GameNet::kcp_transport ${CMAKE_CURRENT_SOURCE_DIR}/contract/kcp/test_kcp_transport_endpoint.cpp threading lifecycle)
     add_gamenet_component_test(integration kcp GameNet::kcp ${CMAKE_CURRENT_SOURCE_DIR}/integration/kcp/test_kcp_reliable.cpp threading lifecycle)
+    add_gamenet_component_test(integration kcp "GameNet::kcp_transport;GameNet::game_session;GameNet::game_logic;GameNet::broadcast" ${CMAKE_CURRENT_SOURCE_DIR}/integration/kcp/test_kcp_game_layers.cpp threading lifecycle)
 endif()
 
 add_gamenet_component_test(unit rpc GameNet::rpc ${CMAKE_CURRENT_SOURCE_DIR}/unit/rpc/test_rpc_codec.cpp)

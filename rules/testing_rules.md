@@ -1,5 +1,15 @@
 # testing_rules.md
 
+## KCP-C3
+
+tests/integration/kcp/test_kcp_game_layers.cpp exercises real IPv4/IPv6 KCP and
+distinct management/logic/network loops. Explicit barriers force pre-dispatch
+and queued-task rebind, stale commands, pending refusal, full normal queues,
+healthy-owner progress and shutdown. Assert typed terminal counts and exact
+zero state; sleeps and fake endpoints cannot establish the C3 boundary. Include
+the test in all five KCP lanes and the complete Clang TSan gate, updating exact
+inventories and rejection contracts while retaining existing fuzz/interop gates.
+
 ## KCP-C2
 
 tests/contract/kcp/test_kcp_transport_endpoint.cpp verifies actual endpoint sends,
@@ -8,7 +18,7 @@ under saturated ordinary admission, first reason, stale-generation isolation and
 outliving-owner safety. tests/ci/kcp_examples.py executes both real examples on
 IPv4/IPv6 with empty/fragmented messages and negative options/deadlines. The KCP
 runner adds installed adapter discovery and physical OFF rejection to all five
-existing lanes. The full Clang TSan gate now requires all 142 native tests; its
+existing lanes. The full Clang TSan gate now requires all 143 native tests; its
 external atomic/race probes retain their original semantics. Existing independent
 upstream interoperability, 20k protocol/session fuzz and optional regressions
 remain required. No skipped case, sleep-based fake peer or copied summary
@@ -170,7 +180,7 @@ one test, with a build RPATH to the compiler's runtime directory, so ELF symbol
 interposition preserves the replacements without duplicate static definitions.
 Other targets retain their existing sanitizer linkage. Keep instrumentation and
 malloc/free interception enabled; no sanitizer suppression replaces this gate.
-The dedicated Clang 18 TSan CI gate executes the entire 142-test KCP/UDP-enabled
+The dedicated Clang 18 TSan CI gate executes the entire 143-test KCP/UDP-enabled
 inventory, separately from the existing GCC configuration. Its external
 allocation probe must pass atomic accesses and diagnose deliberate non-atomic
 heap accesses with exit 66 and malloc/custom-new stacks. Do not add the probe to
