@@ -47,6 +47,7 @@ ALLOWED_TARGETS = {
     "gamenet_multi_io_sharded_hybrid_echo",
     "gamenet_core_benchmark",
     "gamenet_hot_path_benchmark",
+    "gamenet_kcp_validation",
     "gamenet_hp1_packet_framer_view_benchmark",
     "gamenet_hp2_spsc_mailbox_benchmark",
     "gamenet_hp3_epoll_slot_dispatch_benchmark",
@@ -95,6 +96,7 @@ PHASE4_ACTIVE_INTENTS = {
 }
 
 CONCRETE_ACTIVE_ARTIFACTS = {
+    "intents/usecases/kcp_capacity_endurance.intent.md": ("benchmark", "gamenet_kcp_validation"),
     "intents/modules/udp.intent.md": ("installed-library", "GameNet::udp"),
     "intents/modules/udp_transport.intent.md": ("installed-library", "GameNet::udp_transport"),
     "intents/modules/kcp_transport.intent.md": ("installed-library", "GameNet::kcp"),

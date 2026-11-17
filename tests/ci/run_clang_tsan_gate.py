@@ -41,7 +41,10 @@ INPUTS = ["CMakeLists.txt", "cmake/Sanitizers.cmake", "tests/CMakeLists.txt",
           "src/broadcast/BroadcastDispatcher.cc",
           "tests/contract/broadcast/test_broadcast_rejection_contract.cpp",
           "src/game_session/SessionManager.cc", "src/game_session/PlayerSession.cc",
-          "src/game_logic/LogicLoop.cc", "src/game_logic/GameCommandQueue.cc"]
+          "src/game_logic/LogicLoop.cc", "src/game_logic/GameCommandQueue.cc",
+          "benchmarks/kcp_validation/CMakeLists.txt", "benchmarks/kcp_validation/main.cpp",
+          "tools/run_kcp_capacity_endurance.py", "tests/ci/test_kcp_capacity_endurance.py",
+          "tests/cmake/test_kcp_validation_contract.py", "intents/usecases/kcp_capacity_endurance.intent.md"]
 
 
 def require(condition, message):

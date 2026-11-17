@@ -49,6 +49,10 @@ def main():
                   'clang-tsan-full:','clang++-18','libclang-rt-18-dev','run_clang_tsan_gate.py','test_clang_tsan_gate.py','--verify-output out/clang-tsan-evidence','include-hidden-files: true']:
         assert token in workflow,token
     assert 'python tests/ci/kcp_examples.py --self-test' in workflow
+    for token in ['test_kcp_capacity_endurance.py', 'test_kcp_validation_contract.py',
+                  'tools/run_kcp_capacity_endurance.py --profile', '--compiler clang++-18 --build-dir build-clang-tsan',
+                  '--verify-output out/kcp-c4-evidence', '--verify-output out/kcp-c4-clang-tsan']:
+        assert token in workflow, token
     assert 'PUBLIC GameNet::kcp GameNet::transport' in (repo/'src/kcp_transport/CMakeLists.txt').read_text()
     assert 'continue-on-error' not in workflow
     assert 'option(GAMENET_ENABLE_KCP "Build bounded standard KCP messages" OFF)' in (repo/'CMakeLists.txt').read_text()

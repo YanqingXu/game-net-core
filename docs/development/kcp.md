@@ -1,4 +1,53 @@
-# Optional bounded standard KCP (KCP-C1/C2/C3)
+# Optional bounded standard KCP (KCP-C1/C2/C3/C4)
+
+## KCP-C4 development validation
+
+The C4 intent is `intents/usecases/kcp_capacity_endurance.intent.md`. The tool
+defaults OFF and is neither installed nor exported. Its owner loop creates real
+KCP sessions and bounded native UDP forwarding sockets; the Python supervisor
+only owns the child, logs, deadlines and external process-memory observations.
+There is no second proxy queue or automatic reconnect policy.
+
+```sh
+python tools/run_kcp_capacity_endurance.py --profile release --build-dir build-kcp-c4 --output out/kcp-c4-smoke
+python tools/run_kcp_capacity_endurance.py --profile release --mode soak --build-dir build-kcp-c4 --output out/kcp-c4-development-30m
+python tools/run_kcp_capacity_endurance.py --verify-output out/kcp-c4-development-30m
+```
+
+Use a fresh output directory. The runner explicitly enables KCP, UDP and
+`GAMENET_BUILD_KCP_VALIDATION=ON`; `--profile asan` and `--profile tsan` select
+instrumented smoke (TSan is Linux-only; `--compiler clang++-18` selects the full
+gate's toolchain). Windows uses the MSVC ASan runtime next to its compiler.
+Smoke runs all six 1/8/32-session IPv4/IPv6 profiles. Soak uses one uninterrupted
+N=32 process for at least 1800 seconds, alternating complete IPv4/IPv6 cycles;
+the current cycle finishes before final settlement. Run soak on both Windows
+and Linux. Sanitizer smoke does not count as a 30-minute development run.
+
+Every cycle observes full pending pressure, refuses excess sessions/messages,
+drops actual data and ACK datagrams, requires healthy-peer progress during a
+blackhole, restores ordered empty/fragmented messages, times out an unreachable
+send, rejects stale/reused identities, exchanges a fresh generation, cancels a
+local pending send, exhausts conv history and refuses a second protocol arena.
+Each accepted id has exactly one local terminal; remote receives are counted
+separately. A complete cycle releases all protocol/pending/native UDP storage
+and lifecycle nodes before the next RSS sample. Only current-cycle ledgers live
+in the child. Conv values are explicit test configuration, without authentication.
+
+`manifest.json` uses `gamenet.kcp_capacity_endurance.v1`. Raw child JSONL includes
+its real PID, backend, configured bounds, monotonic cycle/time, exact ledgers,
+arena/pending/proxy peaks, RSS/OS high water and zero-residue result. External
+PID RSS samples, UTC start/end, commands, compiler configuration, source-input
+copies, binary and SHA-256 file inventory accompany it. Release ceilings are
+512 MiB peak and 64 MiB post-warmup retained RSS growth; sanitizer RSS remains
+diagnostic. Missing records, restarts, shortened duration, altered limits,
+duplicates, nonzero exit/residue and tampering fail independent readback.
+Failed/interrupted runs retain checkpoints and are never promoted to success.
+
+The existing five KCP lanes, full 143-test Clang 18 TSan gate and allocator
+controls remain intact; C4 smoke is an additional step. Existing upstream
+interoperability, 20k protocol/session fuzz and installed consumers remain
+required. C4 evidence is developmental: it does not establish production
+capacity, complete TCP candidate-1h/release-3h gates, promote HP0, or issue a release.
 
 KCP-C3 composes actual endpoints with SessionManager, LogicLoop and broadcast
 across distinct network/management/logic loops. Bindings and owned payloads cross
