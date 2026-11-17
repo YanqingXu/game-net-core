@@ -68,6 +68,10 @@ explicit logic `EventLoop` drains a fixed maximum on each tick.
 
 ## Verification
 
+- KCP-C3 tests/integration/kcp/test_kcp_game_layers.cpp composes real KCP input,
+  management-published binding values, a separate logic owner and broadcast
+  output, including queued/handler-time revocation and bounded shutdown drops.
+
 - `tests/contract/game_logic/test_logic_loop_contract.cpp` verifies rejection
   reasons, fixed tick batch limits, handler/output context, metrics, and stopped
   behavior.

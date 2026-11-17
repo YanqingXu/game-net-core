@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from run_clang_tsan_gate import FAULT_TEST, INPUTS, SCHEMA, digest, file_hashes, verify_output
 from run_kcp_contracts import CONTRACTS, UDP_CONTRACTS, FULL_TEST_COUNT
+from kcp_game_layers import TEST as GAME_TEST, EXPECTED
 
 
 class GateEvidence(unittest.TestCase):
@@ -43,7 +44,10 @@ class GateEvidence(unittest.TestCase):
         self.write("inventory.log", json.dumps({"tests": tests}))
         suite = ET.Element("testsuite")
         for name in names:
-            ET.SubElement(suite, "testcase", {"name": name, "status": "run"})
+            case=ET.SubElement(suite, "testcase", {"name": name, "status": "run"})
+            if name==GAME_TEST:
+                ET.SubElement(case,'system-out').text='\n'.join('KCP_C3 '+ ' '.join(f'{k}={v}' for k,v in dict(family=family,**EXPECTED).items()) for family in [4,6])
+        self.manifest['game_layers']=[dict(family=f,**EXPECTED) for f in [4,6]]
         ET.ElementTree(suite).write(self.output / "ctest-junit.xml")
         self.write("compiler.log", "Ubuntu clang version 18.1.3")
         self.write("compiler.cmake", 'set(CMAKE_CXX_COMPILER_ID "Clang")\nset(CMAKE_CXX_COMPILER_VERSION "18.1.3")')
@@ -52,7 +56,8 @@ class GateEvidence(unittest.TestCase):
             "GAMENET_ENABLE_ASAN_UBSAN": "OFF", "GAMENET_BUILD_TESTING": "ON",
             "GAMENET_ENABLE_TLS": "OFF", "GAMENET_ENABLE_WEBSOCKET": "OFF"}.items()))
         self.write("compile_commands.json", json.dumps([{"file": "tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp",
-            "command": "clang++-18 -fsanitize=thread -std=c++23"}]))
+            "command": "clang++-18 -fsanitize=thread -std=c++23"},
+            {"file":"tests/integration/kcp/test_kcp_game_layers.cpp","command":"clang++-18 -fsanitize=thread -std=c++23"}]))
         self.write("build.ninja", "-fsanitize=thread -shared-libsan")
         self.write("dynamic.log", "NEEDED libclang_rt.tsan-x86_64.so\nRUNPATH /compiler/runtime")
         self.write("symbols.log", "\n".join("0000 T operator " + name for name in [
@@ -84,6 +89,29 @@ class GateEvidence(unittest.TestCase):
 
     def test_hash_tampering(self):
         self.write("probe-race.log", "forged result")
+        self.rejected()
+
+    def test_uninstrumented_c3(self):
+        data=json.loads((self.output/'compile_commands.json').read_text())
+        data[1]['command']='clang++-18 -std=c++23'
+        self.write('compile_commands.json',json.dumps(data))
+        self.resign()
+        self.rejected()
+
+    def test_missing_c3_family(self):
+        tree=ET.parse(self.output/'ctest-junit.xml')
+        case=next(t for t in tree.getroot() if t.get('name')==GAME_TEST)
+        case.find('system-out').text=case.findtext('system-out').splitlines()[0]
+        tree.write(self.output/'ctest-junit.xml')
+        self.resign()
+        self.rejected()
+
+    def test_c3_cannot_claim_zero_executed_boundaries(self):
+        tree=ET.parse(self.output/'ctest-junit.xml')
+        case=next(t for t in tree.getroot() if t.get('name')==GAME_TEST)
+        case.find('system-out').text=case.findtext('system-out').replace('pending_cancel=1','pending_cancel=0')
+        tree.write(self.output/'ctest-junit.xml')
+        self.resign()
         self.rejected()
 
     def test_probe_success_cannot_replace_race(self):

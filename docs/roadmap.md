@@ -1,5 +1,18 @@
 # Roadmap
 
+## KCP-C3 upper-layer integration contracts (2026-11-17)
+
+Separate user authorization composes real KCP endpoints with existing
+SessionManager, LogicLoop and BroadcastDispatcher on distinct owner loops.
+Same-endpoint refresh and replacement revoke queued logic and routed/queued
+broadcast work; plans retain immutable bindings through owner-side send.
+Native dual-family contracts separate admission, protocol receipts and receive,
+force real pending/task/byte/normal-queue refusal and saturated shutdown, and
+require exact zero cleanup. The KCP-enabled inventory is 143 (default 133), with
+ten UDP/KCP tests per focused sanitizer lane. Full Clang TSan, independent
+upstream peers, both 20k fuzz targets and ON/OFF packages remain required.
+No new public signature, authentication policy, HP0 promotion or release is added.
+
 ## KCP-C2 endpoint composition and examples (2026-11-16)
 
 The user authorizes separate optional GameNet::kcp_transport with weak-session

@@ -1,5 +1,14 @@
 # ownership_rules.md
 
+## KCP-C3
+
+Broadcast plans/tasks retain endpoint references, owned payload and revocable
+binding values, not SessionManager or PlayerSession. A binding does not extend
+manager/transport/loop life. Release manager on management and stopped LogicLoop
+on logic; keep KCP wrappers and network owners alive until stopped. Exactly-once
+local transport receipts and zero dispatcher/logic/native residue are separate
+from remote application receive counts.
+
 ## KCP-C2
 
 The application owns the endpoint, which owns a session handle with weak

@@ -439,11 +439,10 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
 
     if (plan.payload_->size() > limits_.maxBytesPerTask) {
         for (const auto& batch : plan.batches_) {
-            for (const auto& endpoint : batch.endpoints) {
+            for (const auto& target : batch.targets) {
                 recordImmediateDrop(
                     BroadcastReason::DispatchTaskByteLimit,
-                    endpoint ? endpoint->id()
-                             : gamenet::transport::TransportSessionId{});
+                    target.id());
             }
         }
         std::lock_guard lock(progressState->mutex);
@@ -458,10 +457,14 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
     const auto chunkSize = std::min(limits_.maxEndpointsPerTask, byBytes);
 
     for (auto& batch : plan.batches_) {
-        std::vector<std::shared_ptr<gamenet::transport::TransportEndpoint>>
-            validEndpoints;
-        validEndpoints.reserve(batch.endpoints.size());
-        for (const auto& endpoint : batch.endpoints) {
+        std::vector<BroadcastTarget> validTargets;
+        validTargets.reserve(batch.targets.size());
+        for (const auto& target : batch.targets) {
+            if (!target.eligible()) {
+                recordImmediateDrop(BroadcastReason::OfflineSession, target.id());
+                continue;
+            }
+            const auto& endpoint = target.endpoint();
             if (!endpoint) {
                 recordImmediateDrop(BroadcastReason::InvalidPlan, {});
                 continue;
@@ -475,10 +478,10 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                 recordImmediateDrop(BroadcastReason::EndpointClosed, endpoint->id());
                 continue;
             }
-            validEndpoints.push_back(endpoint);
+            validTargets.push_back(target);
         }
 
-        if (validEndpoints.empty()) {
+        if (validTargets.empty()) {
             continue;
         }
 
@@ -486,15 +489,15 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
         const auto ownerOutstanding =
             state_->ownerFor(ownerId, limits_);
 
-        for (std::size_t offset = 0; offset < validEndpoints.size();
+        for (std::size_t offset = 0; offset < validTargets.size();
              offset += chunkSize) {
             const auto end =
-                std::min(validEndpoints.size(), offset + chunkSize);
-            std::vector<std::shared_ptr<gamenet::transport::TransportEndpoint>>
+                std::min(validTargets.size(), offset + chunkSize);
+            std::vector<BroadcastTarget>
                 chunk(
-                    validEndpoints.begin() +
+                    validTargets.begin() +
                         static_cast<std::ptrdiff_t>(offset),
-                    validEndpoints.begin() +
+                    validTargets.begin() +
                         static_cast<std::ptrdiff_t>(end));
             const auto bytes = logicalBytes(plan.payload_->size(), chunk.size());
 
@@ -528,8 +531,8 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                     bytes,
                     plan.priority_);
             if (reservationFailure != BroadcastReason::None) {
-                for (const auto& endpoint : chunk) {
-                    recordImmediateDrop(reservationFailure, endpoint->id());
+                for (const auto& target : chunk) {
+                    recordImmediateDrop(reservationFailure, target.id());
                 }
                 continue;
             }
@@ -552,7 +555,8 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                         ~ReleaseGuard() { release(); }
                     } guard{std::move(releaseReservation)};
 
-                    for (const auto& endpoint : endpoints) {
+                    for (const auto& target : endpoints) {
+                        const auto& endpoint = target.endpoint();
                         BroadcastMetric metric{
                             .event = BroadcastMetricEvent::Scheduled,
                             .reason = BroadcastReason::None,
@@ -561,7 +565,9 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                         };
                         emitMetricNoexcept(metricCallback, metric);
                         auto reason = BroadcastReason::None;
-                        if (!endpoint->isOpen()) {
+                        if (!target.eligible()) {
+                            reason = BroadcastReason::OfflineSession;
+                        } else if (!endpoint->isOpen()) {
                             reason = BroadcastReason::EndpointClosed;
                         } else {
                             try {
@@ -593,7 +599,7 @@ DispatchSummary BroadcastDispatcher::dispatch(BroadcastPlan plan) const {
                 rollback.dismiss();
                 const auto reason = postFailureReason(posted);
                 for (std::size_t index = offset; index < end; ++index) {
-                    recordImmediateDrop(reason, validEndpoints[index]->id());
+                    recordImmediateDrop(reason, validTargets[index].id());
                 }
                 continue;
             }

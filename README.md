@@ -1,5 +1,8 @@
 # game-net-core
 
+KCP-C3 adds real cross-loop session/logic/broadcast contracts with generation-safe
+broadcast handoff and exact shutdown settlement. See [the KCP guide](docs/development/kcp.md).
+
 ## KCP-C2：端点适配与双端示例（2026-11-16）
 
 独立可选 `GameNet::kcp_transport` 提供 `KcpTransportEndpoint`，复用现有 KCP

@@ -1,5 +1,15 @@
 # Migration Status
 
+## KCP-C3 upper-layer integration contracts (2026-11-17)
+
+The authorized slice adds a real IPv4/IPv6 cross-loop KCP/session/logic/broadcast
+contract. A reproduced stale-plan send after same-endpoint binding refresh is
+fixed by retaining immutable targets through dispatch and owner execution;
+revoked work reports OfflineSession and releases reservations. Default inventory
+remains 133; KCP/UDP enabled is 143 and focused sanitizer inventory is ten.
+Verification records actual source identity and raw evidence; development checks
+do not imply hosted CI, capacity, performance or release promotion.
+
 ## KCP-C2 endpoint composition and examples (2026-11-16)
 
 Separate optional GameNet::kcp_transport adapts existing KCP sessions without
@@ -716,7 +726,7 @@ the source of truth.
 
 | Formal | Active | Deferred | Legacy | Explicit verification paths |
 | ---: | ---: | ---: | ---: | ---: |
-| 79 | 53 | 15 | 11 | 268 |
+| 79 | 53 | 15 | 11 | 272 |
 
 ## Historical Production-Hardening Evidence
 

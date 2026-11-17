@@ -17,9 +17,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from run_kcp_contracts import FULL_TEST_COUNT, verify_inventory, verify_results
+from kcp_game_layers import TEST as GAME_TEST, verify_game_layers
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = "gamenet.clang_tsan_gate.v2"
+SCHEMA = "gamenet.clang_tsan_gate.v3"
 FAULT_TEST = "contract.tcp_connection.test_tcp_connection_cross_thread_shutdown"
 FAULT_TARGET = "gnt_contract_tcp_connection_" + hashlib.sha1(FAULT_TEST.encode()).hexdigest()[:10]
 INPUTS = ["CMakeLists.txt", "cmake/Sanitizers.cmake", "tests/CMakeLists.txt",
@@ -34,7 +35,13 @@ INPUTS = ["CMakeLists.txt", "cmake/Sanitizers.cmake", "tests/CMakeLists.txt",
           "cmake/GameNetCoreConfig.cmake.in", "api/public_api_manifest.json",
           "tests/ci/run_tls_contracts.py", "tests/ci/run_websocket_contracts.py",
           "tests/ci/run_websocket_tls_contracts.py",
-          "tests/cmake/kcp_install_consumer/CMakeLists.txt", "tests/cmake/kcp_install_consumer/main.cpp"]
+          "tests/cmake/kcp_install_consumer/CMakeLists.txt", "tests/cmake/kcp_install_consumer/main.cpp",
+          "tests/integration/kcp/test_kcp_game_layers.cpp", "tests/ci/kcp_game_layers.py",
+          "include/gamenet/broadcast/BroadcastTypes.h", "src/broadcast/BroadcastRouter.cc",
+          "src/broadcast/BroadcastDispatcher.cc",
+          "tests/contract/broadcast/test_broadcast_rejection_contract.cpp",
+          "src/game_session/SessionManager.cc", "src/game_session/PlayerSession.cc",
+          "src/game_logic/LogicLoop.cc", "src/game_logic/GameCommandQueue.cc"]
 
 
 def require(condition, message):
@@ -107,6 +114,9 @@ def verify_output(output):
     require(len(fault) == 1 and "-fsanitize=thread" in fault[0]["command"] and
             "-std=c++23" in fault[0]["command"], "fault contract compilation is not instrumented")
     require(not re.search(r"-fno-sanitize|sanitize-ignorelist", fault[0]["command"]), "fault contract bypass")
+    game = [entry for entry in compile_commands if entry['file'].endswith('tests/integration/kcp/test_kcp_game_layers.cpp')]
+    require(len(game)==1 and '-fsanitize=thread' in game[0]['command'] and '-std=c++23' in game[0]['command']
+            and not re.search(r'-fno-sanitize|sanitize-ignorelist',game[0]['command']), 'C3 contract instrumentation missing/bypassed')
     cache = (output / "CMakeCache.txt").read_text()
     for name, value in {"GAMENET_ENABLE_KCP": "ON", "GAMENET_ENABLE_UDP": "ON",
                         "GAMENET_ENABLE_TSAN": "ON", "GAMENET_ENABLE_ASAN_UBSAN": "OFF",
@@ -119,6 +129,7 @@ def verify_output(output):
     require(all(not any(p["name"] == "DISABLED" and p["value"] for p in test.get("properties", []))
                 for test in inventory["tests"]), "disabled test")
     verify_results(ET.parse(output / "ctest-junit.xml").getroot(), expected)
+    require(verify_game_layers(ET.parse(output/'ctest-junit.xml').getroot())==manifest.get('game_layers'), 'C3 evidence drift')
     commands = manifest["commands"]
     required = {"compiler", "runtime", "configure", "inventory", "build", "ctest",
                 "dynamic", "symbols", "probe-build", "probe-atomic", "probe-race"}
@@ -216,6 +227,7 @@ def run(args):
                           "--no-tests=error", "--output-junit", output / "ctest-junit.xml"])
         verify_results(ET.parse(output / "ctest-junit.xml").getroot(), expected)
         manifest["executed_tests"] = len(expected)
+        manifest['game_layers'] = verify_game_layers(ET.parse(output/'ctest-junit.xml').getroot())
         shutil.copyfile(build / "CMakeCache.txt", output / "CMakeCache.txt")
         shutil.copyfile(build / "build.ninja", output / "build.ninja")
         shutil.copyfile(build / "compile_commands.json", output / "compile_commands.json")

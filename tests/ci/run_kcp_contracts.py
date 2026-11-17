@@ -7,20 +7,21 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from kcp_interop import interoperate, verify_evidence, EXPECTED as INTEROP
 from kcp_examples import exercise_examples, verify_examples
+from kcp_game_layers import TEST as GAME_TEST, verify_game_layers
 from run_udp_contracts import CONTRACTS as UDP_CONTRACTS
-CONTRACTS={'unit.kcp.test_kcp_engine','contract.kcp.test_kcp_transport','contract.kcp.test_kcp_transport_endpoint','integration.kcp.test_kcp_reliable'}
-FULL_TEST_COUNT = 142
+CONTRACTS={'unit.kcp.test_kcp_engine','contract.kcp.test_kcp_transport','contract.kcp.test_kcp_transport_endpoint','integration.kcp.test_kcp_reliable',GAME_TEST}
+FULL_TEST_COUNT = 143
 
 def verify_inventory(document):
     tests=document.get('tests',[]);names=[t['name'] for t in tests]
-    if len(names)!=FULL_TEST_COUNT or len(set(names))!=FULL_TEST_COUNT:raise ValueError('KCP inventory must be exactly 142')
+    if len(names)!=FULL_TEST_COUNT or len(set(names))!=FULL_TEST_COUNT:raise ValueError('KCP inventory must be exactly 143')
     selected=set()
     for t in tests:
         props={p['name']:p['value'] for p in t.get('properties',[])}
         if 'kcp' in props.get('LABELS',[]):
             if props.get('DISABLED',False):raise ValueError('disabled KCP contract')
             selected.add(t['name'])
-    if selected!=CONTRACTS:raise ValueError('exact four KCP tests required')
+    if selected!=CONTRACTS:raise ValueError('exact five KCP tests required')
     if not UDP_CONTRACTS<=set(names):raise ValueError('UDP prerequisite contracts missing')
     return set(names)
 
@@ -35,7 +36,7 @@ def verify_interop(value):
 
 def verify_output(output):
     output=Path(output);d=json.loads((output/'manifest.json').read_text(encoding='utf-8'))
-    if d.get('schema')!='gamenet.kcp_contracts.v2' or d.get('status')!='passed':raise ValueError('incomplete KCP evidence')
+    if d.get('schema')!='gamenet.kcp_contracts.v3' or d.get('status')!='passed':raise ValueError('incomplete KCP evidence')
     if not re.fullmatch('[0-9a-f]{40}',d.get('commit_sha','')):raise ValueError('invalid KCP source identity')
     if d.get('workflow_sha') and (d['workflow_sha']!=d['commit_sha'] or d['working_tree']):raise ValueError('wrong/dirty KCP source')
     for key,env in [('workflow_sha','GITHUB_SHA'),('run_id','GITHUB_RUN_ID'),('run_attempt','GITHUB_RUN_ATTEMPT')]:
@@ -48,6 +49,7 @@ def verify_output(output):
     inventory=verify_inventory(json.loads((output/'inventory.log').read_text(encoding='utf-8')))
     expected=inventory if d['profile']=='release' else CONTRACTS|UDP_CONTRACTS
     verify_results(ET.parse(output/'ctest-junit.xml').getroot(),expected)
+    if verify_game_layers(ET.parse(output/'ctest-junit.xml').getroot())!=d.get('game_layers'):raise ValueError('C3 evidence drift')
     if d.get('executed_tests')!=len(expected):raise ValueError('KCP count drift')
     verify_interop(d.get('interop'))
     verify_evidence(output/'interop')
@@ -66,7 +68,7 @@ def main():
     env=os.environ.copy();config='Release' if a.profile=='release' else 'Debug'
     if a.profile=='asan':env.update(ASAN_OPTIONS='halt_on_error=1',UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1')
     if a.profile=='tsan':env['TSAN_OPTIONS']='halt_on_error=1'
-    d={'schema':'gamenet.kcp_contracts.v2','status':'failed','profile':a.profile,'platform':platform.platform(),
+    d={'schema':'gamenet.kcp_contracts.v3','status':'failed','profile':a.profile,'platform':platform.platform(),
        'workflow_sha':env.get('GITHUB_SHA'),'run_id':env.get('GITHUB_RUN_ID'),'run_attempt':env.get('GITHUB_RUN_ATTEMPT')}
     def run(name,cmd,success=True):
         (out/(name+'-command.json')).write_text(json.dumps(cmd,indent=2)+'\n',encoding='utf-8');print('Running '+name,flush=True)
@@ -113,6 +115,7 @@ def main():
         if a.profile!='release':cmd+=['-L','^(kcp|udp)$']
         run('ctest',cmd);expected=inventory if a.profile=='release' else selected
         verify_results(ET.parse(out/'ctest-junit.xml').getroot(),expected);d['executed_tests']=len(expected)
+        d['game_layers']=verify_game_layers(ET.parse(out/'ctest-junit.xml').getroot())
         directory=build/'tests'/('' if os.name!='nt' else config);suffix='.exe' if os.name=='nt' else ''
         server=directory/('gamenet_kcp_interop_server'+suffix);reference=directory/('gamenet_kcp_reference'+suffix)
         d['binary_sha256']={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in [server,reference]}

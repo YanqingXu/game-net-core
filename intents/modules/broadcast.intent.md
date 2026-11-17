@@ -28,6 +28,10 @@ state.
   optional current-generation binding check.
 - Plans own shared payload bytes and endpoint references until dispatch tasks
   finish.
+- Plans also retain immutable binding capabilities. Revalidate each tracked
+  generation at dispatch and immediately before owner-side send; revocation is
+  an OfflineSession terminal drop, with every reservation released. This applies
+  to a plan routed before rebind and to a task admitted before rebind.
 - `BroadcastDispatcher::dispatch` may be called on the management loop; it
   never calls `send` there. Every chunk is queued to its endpoint owner loop.
 - Plans carry non-owning `EventLoopExecutor` capabilities rather than raw loop
@@ -81,6 +85,10 @@ state.
   terminal send results that occur after `dispatch()` returns.
 
 ## Verification
+
+- KCP-C3 tests/integration/kcp/test_kcp_game_layers.cpp uses real KCP endpoints
+  on distinct owners, retained pre-rebind plans/tasks, real pending refusal and
+  ordinary-queue saturation, exact progress/budgets and stopped/native cleanup.
 
 - `tests/contract/broadcast/test_broadcast_contract.cpp` verifies grouping,
   deduplication, offline filtering, hard/soft budgets, payload sharing, bounded

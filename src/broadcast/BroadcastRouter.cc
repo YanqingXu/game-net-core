@@ -93,7 +93,7 @@ BroadcastPlan BroadcastRouter::route(
         if (inserted) {
             plan.batches_.push_back({.ownerExecutor = ownerExecutor});
         }
-        plan.batches_[found->second].endpoints.push_back(endpoint);
+        plan.batches_[found->second].targets.push_back(target);
         ++plan.accepted_;
         emit(BroadcastMetricEvent::Routed, BroadcastReason::None, id, plan.payload_->size());
     }

@@ -1,4 +1,20 @@
-# Optional bounded standard KCP (KCP-C1/C2)
+# Optional bounded standard KCP (KCP-C1/C2/C3)
+
+KCP-C3 composes actual endpoints with SessionManager, LogicLoop and broadcast
+across distinct network/management/logic loops. Bindings and owned payloads cross
+loops; mutable PlayerSession views do not. Broadcast plans/tasks keep revocable
+bindings and check them at dispatch and immediately before send. A refreshed or
+rebound generation produces OfflineSession rather than a stale send, including
+when the same endpoint remains open. Admission is distinct from protocol ACK and
+remote receive. The dual-family test forces pending/task/byte/queue refusal,
+healthy-owner progress, stale logic, delayed offline and saturated shutdown with
+an unacknowledged send, then verifies exact terminal accounting and zero residue.
+See tests/integration/kcp/test_kcp_game_layers.cpp and the C3 intent/rules.
+Evidence schemas gamenet.kcp_contracts.v3 and gamenet.clang_tsan_gate.v3 require
+the actual two-family C3 summaries and reject absent/partial records. Current
+enabled inventory is 143; focused UDP/KCP sanitizer inventory is ten; default is
+133. The gate verifies C3 is TSan-instrumented as well as the allocation-fault
+contract. No new installed signature or production/performance claim is added.
 
 `GameNet::kcp` is a provisional message transport over explicit UDP peers. Build
 with both `-DGAMENET_ENABLE_KCP=ON -DGAMENET_ENABLE_UDP=ON`; both default OFF.
@@ -106,7 +122,7 @@ Interrupted native mutation
 discards the entire arena without following partial lists. MSVC disables `/EHc`
 for this target so allocator exceptions cross the private C-linkage boundary.
 
-Verification uses four CTest tests (142 with UDP, versus default 133), real
+Verification uses five CTest tests (143 with UDP, versus default 133), real
 IPv4/IPv6 pressure/reconnect, a separate unchanged-upstream/native-socket peer
 through bounded bidirectional data/ACK loss, duplication, reordering and delay,
 and protocol/session fuzz at 20k each. The dedicated workflow records Windows/
@@ -114,7 +130,7 @@ Linux Release, Windows ASan, Linux ASan/UBSan and TSan evidence, package consume
 clean source identities and all raw hashes. Existing optional protocol checks
 remain separate. These contracts are not capacity or production validation.
 
-The independent `clang-tsan-full` job additionally runs the complete 142-test
+The independent `clang-tsan-full` job additionally runs the complete 143-test
 UDP/KCP-enabled inventory with Clang 18 on pull requests and main pushes. It
 keeps the existing GCC TSan lane. An external allocation control uses the same
 complete shared TSan runtime as the custom-new TCP contract: atomic accesses
@@ -127,7 +143,7 @@ build-clang-tsan --output out/clang-tsan-evidence`, then independently read it
 back with `python3 tests/ci/run_clang_tsan_gate.py --verify-output
 out/clang-tsan-evidence`. Linux needs Clang/LLVM 18 and its compiler-rt package;
 the workflow installs these explicitly. Evidence retains source/run identity,
-toolchain/cache/compile commands, all 142 JUnit records, raw commands/logs,
+toolchain/cache/compile commands, all 143 JUnit records, raw commands/logs,
 runtime linkage, probe binary/diagnostics and SHA-256 file identities. Empty,
 wrong-compiler, incorrectly successful race, suppressed or tampered evidence
 fails the readback. `DEBUGINFOD_URLS` is empty during the run so symbolization

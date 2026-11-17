@@ -120,7 +120,7 @@ public:
 private:
     struct LoopBatch {
         gamenet::net::EventLoopExecutor ownerExecutor;
-        std::vector<std::shared_ptr<gamenet::transport::TransportEndpoint>> endpoints;
+        std::vector<BroadcastTarget> targets;
     };
 
     BroadcastPlan() = default;

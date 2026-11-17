@@ -9,7 +9,46 @@ source_commit: none
 source_paths: none
 ---
 
-# KCP-C2: endpoint composition and two-process echo examples
+# KCP-C2/C3: endpoint composition and upper-layer integration
+
+## KCP-C3 authorization and contracts (2026-11-17)
+
+The user authorizes real KCP endpoints composed with existing SessionManager,
+LogicLoop and BroadcastDispatcher. No new installed API or transport-manager
+policy is needed. Trusted test identities are supplied out of band, not inferred
+from a UDP address or conv. KCP wire, explicit peers, default-OFF dependencies,
+local ACK semantics and release/performance boundaries remain unchanged.
+
+- Each KCP transport and its callbacks belong to its network EventLoop. A
+  distinct management loop owns SessionManager/indexes/routing; a distinct logic
+  loop owns handlers/output. Cross-loop work carries owned bytes and immutable
+  SessionBinding/BroadcastTarget values, never mutable PlayerSession aliases.
+- The test application owns transports until stopped, owns/releases the manager
+  on management and the stopped LogicLoop on logic, and keeps every EventLoop
+  alive until accepted work and original native operations have drained.
+- Rebind revokes a generation before publishing its replacement. Both queued
+  logic work and already-routed/queued broadcast work revalidate that binding
+  before producing a handler/output/send side effect. A delayed old offline or
+  old endpoint close cannot remove or close the replacement.
+- Management callbacks may reenter after indexes commit. Logic handler/output
+  and owner KCP callbacks retain existing reentry/release rules; tests synchronize
+  through coordinator-owned latches, not synchronous loop-to-loop waits.
+- Ordinary-queue refusal, outstanding task/byte limits and real KCP pending
+  refusal have distinct terminal accounting. One pressured owner must not block
+  another. requestClose retains the lifecycle lane under normal-queue saturation.
+- Upper-layer send admission, protocol Acknowledged/Cancelled/Failed and actual
+  remote receive are separate ledgers. Every accepted KCP send has exactly one
+  local terminal; rejected work has no transport reservation. Shutdown converges
+  manager indexes, logic queue, dispatcher budgets and KCP/UDP/native state to
+  zero without inventing ACKs or remote close handshakes.
+
+tests/integration/kcp/test_kcp_game_layers.cpp verifies these contracts over real
+IPv4/IPv6 sockets and distinct owner loops with deterministic execution barriers.
+It joins all five native platform/sanitizer lanes and full Clang TSan inventory;
+existing independent interoperability, both 20k fuzz campaigns and ON/OFF
+consumers stay required. Update exact inventories and reject missing/skipped
+records. Development evidence records dirty source honestly and cannot promote
+HP0, production readiness or a release.
 
 ## Authorization and invariants
 
@@ -78,7 +117,7 @@ required discovery with the correct component diagnostic.
 - tests/ci/run_kcp_contracts.py: all five existing Windows/Linux sanitizer lanes,
   unchanged independent upstream interoperability, installed ON/OFF consumer
   isolation and the new dual-process examples.
-- tests/ci/run_clang_tsan_gate.py: complete 142-test inventory, existing custom-new
+- tests/ci/run_clang_tsan_gate.py: complete 143-test inventory, existing custom-new
   semantics, atomic exit 0 and expected heap-race exit 66, with independent readback.
 - tests/fuzz/kcp/fuzz_kcp_protocol.cpp and tests/fuzz/kcp/fuzz_kcp_session.cpp:
   preserve bounded 20k-per-target protocol/state regression and original oracles.

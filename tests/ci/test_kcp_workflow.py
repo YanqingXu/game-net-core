@@ -5,6 +5,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from run_kcp_contracts import CONTRACTS,UDP_CONTRACTS,INTEROP,verify_inventory,verify_results,verify_interop
 from kcp_interop import verify_settled_reset
+from kcp_game_layers import TEST as GAME_TEST, EXPECTED, verify_game_layers
 def rejects(f,v):
     try:f(v)
     except ValueError:return
@@ -29,6 +30,14 @@ def main():
     root=ET.Element('testsuite')
     for name in CONTRACTS:ET.SubElement(root,'testcase',{'name':name,'status':'run'})
     verify_results(root,CONTRACTS)
+    case=next(t for t in root if t.get('name')==GAME_TEST)
+    ET.SubElement(case,'system-out').text='\n'.join('KCP_C3 '+' '.join(f'{k}={v}' for k,v in dict(family=family,**EXPECTED).items()) for family in [4,6])
+    verify_game_layers(root)
+    bad=copy.deepcopy(root);next(t for t in bad if t.get('name')==GAME_TEST).find('system-out').text='';rejects(verify_game_layers,bad)
+    bad=copy.deepcopy(root);next(t for t in bad if t.get('name')==GAME_TEST).find('system-out').text=case.findtext('system-out').replace('family=6','family=4');rejects(verify_game_layers,bad)
+    bad=copy.deepcopy(inventory)
+    next(t for t in bad['tests'] if t['name']==GAME_TEST)['properties'][0]['value']=['other']
+    rejects(verify_inventory,bad)
     for kind in ['failure','error','skipped']:
         bad=copy.deepcopy(root);ET.SubElement(bad[0],kind);rejects(lambda v:verify_results(v,CONTRACTS),bad)
     bad=copy.deepcopy(root);bad[0].set('status','notrun');rejects(lambda v:verify_results(v,CONTRACTS),bad)

@@ -6,6 +6,7 @@
 
 #include "gamenet/core/net/EventLoop.h"
 #include "gamenet/core/net/EventLoopThread.h"
+#include "gamenet/game_session/SessionManager.h"
 #include "support/FutureTest.h"
 #include "support/TestAssert.h"
 
@@ -246,6 +247,44 @@ int main() {
     GAMENET_TEST_ASSERT(
         rejectedMetrics[2].reason == gamenet::broadcast::BroadcastReason::SendRejected);
 
+    // Binding revocation must survive both routing and owner-queue handoff,
+    // even when refresh leaves exactly the same endpoint open.
+    {
+        gamenet::game_session::SessionManager sessions(&managementLoop);
+        gamenet::broadcast::BroadcastRouter router(&managementLoop);
+        gamenet::broadcast::BroadcastDispatcher dispatcher;
+        auto endpoint=std::make_shared<ControlledEndpoint>(99,firstLoop->executor());
+        auto binding=sessions.authenticate("refresh",endpoint).session->binding();
+        const auto route=[&] {
+            const std::vector targets{gamenet::broadcast::BroadcastTarget(endpoint,binding)};
+            return router.route(std::make_shared<const std::string>("stale"),targets);
+        };
+        auto plan=route();
+        binding=sessions.authenticate("refresh",endpoint).session->binding();
+        auto dropped=dispatcher.dispatch(std::move(plan));
+        GAMENET_TEST_ASSERT(dropped.reasonCount(gamenet::broadcast::BroadcastReason::OfflineSession)==1);
+        GAMENET_TEST_ASSERT(endpoint->sendCount()==0 && endpoint->isOpen());
+
+        std::promise<void> entered,release,drained;
+        auto enteredFuture=entered.get_future();
+        auto released=release.get_future().share();
+        auto drainedFuture=drained.get_future();
+        GAMENET_TEST_ASSERT(firstLoop->executor().post([&entered,released]{
+            entered.set_value();
+            GAMENET_TEST_ASSERT(released.wait_for(2s)==std::future_status::ready);
+        })==gamenet::net::PostResult::Accepted);
+        GAMENET_TEST_ASSERT(enteredFuture.wait_for(2s)==std::future_status::ready);
+        auto queued=dispatcher.dispatch(route());
+        GAMENET_TEST_ASSERT(queued.scheduledTasks==1);
+        binding=sessions.authenticate("refresh",endpoint).session->binding();
+        release.set_value();
+        GAMENET_TEST_ASSERT(firstLoop->executor().post([&]{drained.set_value();})==gamenet::net::PostResult::Accepted);
+        GAMENET_TEST_ASSERT(drainedFuture.wait_for(2s)==std::future_status::ready);
+        const auto progress=queued.progress->snapshot();
+        GAMENET_TEST_ASSERT(progress.complete && !progress.acceptedEndpoints && progress.droppedEndpoints==1);
+        GAMENET_TEST_ASSERT(progress.reasonCount(gamenet::broadcast::BroadcastReason::OfflineSession)==1);
+        GAMENET_TEST_ASSERT(endpoint->sendCount()==0 && !dispatcher.outstanding().tasks && !dispatcher.outstanding().bytes);
+    }
     firstThread.stop();
     secondThread.stop();
 }
