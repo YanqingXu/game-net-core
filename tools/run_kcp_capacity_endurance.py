@@ -252,6 +252,7 @@ def run_sample(binary, n, family, duration, out, env):
                 for line in child.stdout:
                     messages.put(line)
             finally:
+                child.stdout.close()
                 messages.put(None)
         thread = threading.Thread(target=reader, daemon=True); thread.start()
         try:

@@ -80,6 +80,11 @@ class Evidence(unittest.TestCase):
 
 class PortableEvidence(unittest.TestCase):
     def setUp(self):
+        # Synthetic local evidence must not inherit the host workflow identity.
+        # Keep PATH/runtime settings for the real malformed-child process test.
+        self.environment=mock.patch.dict(os.environ,dict(GITHUB_SHA='',GITHUB_RUN_ID='',GITHUB_RUN_ATTEMPT=''))
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
         self.temp=tempfile.TemporaryDirectory(prefix='kcp-c4-evidence-')
         self.addCleanup(self.temp.cleanup)
         self.out=Path(self.temp.name)
@@ -125,6 +130,38 @@ class PortableEvidence(unittest.TestCase):
         if reseal:self.seal()
         with self.assertRaises((ValueError,FileNotFoundError)):c4.verify_output(self.out)
     def test_valid_portable_readback(self):c4.verify_output(self.out)
+    def ci_fixture(self):
+        self.d.update(workflow_sha='a'*40,run_id='101',run_attempt='2',working_tree='')
+        (self.out/'worktree.log').write_text('')
+        self.seal()
+        return dict(GITHUB_SHA='a'*40,GITHUB_RUN_ID='101',GITHUB_RUN_ATTEMPT='2')
+    def test_ci_identity_matches(self):
+        with mock.patch.dict(os.environ,self.ci_fixture()):c4.verify_output(self.out)
+    def test_ci_sha_mismatch(self):
+        env=self.ci_fixture();env['GITHUB_SHA']='b'*40
+        with mock.patch.dict(os.environ,env):
+            with self.assertRaisesRegex(ValueError,'wrong CI identity workflow_sha'):c4.verify_output(self.out)
+    def test_ci_run_id_mismatch(self):
+        env=self.ci_fixture();env['GITHUB_RUN_ID']='102'
+        with mock.patch.dict(os.environ,env):
+            with self.assertRaisesRegex(ValueError,'wrong CI identity run_id'):c4.verify_output(self.out)
+    def test_ci_attempt_mismatch(self):
+        env=self.ci_fixture();env['GITHUB_RUN_ATTEMPT']='3'
+        with mock.patch.dict(os.environ,env):
+            with self.assertRaisesRegex(ValueError,'wrong CI identity run_attempt'):c4.verify_output(self.out)
+    def test_ci_identity_missing_from_evidence(self):
+        with mock.patch.dict(os.environ,dict(GITHUB_SHA='a'*40,GITHUB_RUN_ID='101',GITHUB_RUN_ATTEMPT='2')):
+            with self.assertRaisesRegex(ValueError,'wrong CI identity workflow_sha'):c4.verify_output(self.out)
+    def test_ci_dirty_source(self):
+        env=self.ci_fixture();self.d['working_tree']='local'
+        (self.out/'worktree.log').write_text('local');self.seal()
+        with mock.patch.dict(os.environ,env):
+            with self.assertRaisesRegex(ValueError,'dirty/wrong CI source'):c4.verify_output(self.out)
+    def test_ci_wrong_source_commit(self):
+        env=self.ci_fixture();self.d['commit_sha']='b'*40
+        (self.out/'commit.log').write_text('b'*40+'\n');self.seal()
+        with mock.patch.dict(os.environ,env):
+            with self.assertRaisesRegex(ValueError,'dirty/wrong CI source'):c4.verify_output(self.out)
     def test_failed_checkpoint(self):self.d['status']='failed';self.reject()
     def test_promotion(self):self.d['promotion']=True;self.reject()
     def test_missing_capacity_profile(self):self.d['samples'].pop();self.reject()
@@ -168,6 +205,7 @@ class PortableEvidence(unittest.TestCase):
         with mock.patch.object(c4.subprocess,'Popen',side_effect=spawn):
             with self.assertRaises(ValueError):c4.run_sample('not-used',1,4,2,self.out,os.environ.copy())
         self.assertIsNotNone(children[0].poll())
+        self.assertTrue(children[0].stdout.closed)
         checkpoint=json.loads((self.out/'n1-family4-checkpoint.json').read_text())
         self.assertEqual(checkpoint['pid'],children[0].pid)
         self.assertNotIn('proof',checkpoint)
