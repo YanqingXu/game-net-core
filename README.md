@@ -1,108 +1,325 @@
 # game-net-core
 
-KCP-C4 adds default-OFF, non-installed capacity/fault/development-endurance
-validation, with actual PID/RSS and zero-residue evidence. See the
-[C4 instructions](docs/development/kcp.md#kcp-c4-development-validation).
+A C++23 networking foundation for game servers, split component by component
+from `mini_trantor`. A single-owner EventLoop combines native readiness on
+Linux/epoll and completion on Windows/IOCP with explicit ownership, lifecycle
+and backpressure contracts.
 
-KCP-C3 adds real cross-loop session/logic/broadcast contracts with generation-safe
-broadcast handoff and exact shutdown settlement. See [the KCP guide](docs/development/kcp.md).
+The library provides TCP networking plus separate protocol, transport, session,
+logic and broadcast building blocks. Intent defines behavior; tests enforce
+the contracts that implementations must preserve.
 
-## KCP-C2：端点适配与双端示例（2026-11-16）
+[Quick start](#quick-start) · [Components](#current-scope) ·
+[KCP-C1–C4](#kcp-milestones) · [Validation](#continuous-integration) ·
+[Documentation](#documentation)
 
-独立可选 `GameNet::kcp_transport` 提供 `KcpTransportEndpoint`，复用现有 KCP
-会话的 owner、背压和生命周期关闭语义，KCP 仍只依赖 Core/UDP。新增显式地址/
-conv 的 server/client 示例，覆盖双族、空消息、分片、有限等待与零残留退出。
-用法、边界和验证方式见 [KCP 文档](docs/development/kcp.md)。
+## Current Status
 
-## KCP-C1 development authorization (2026-11-13)
+The latest stable release is
+[`v0.3.1`](https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.1),
+installed as `GameNetCore 0.3.1`. Its accepted-output graceful-shutdown fix and
+package checks are recorded in the
+[preflight report](docs/development/releases/v0.3.1-preflight.md).
 
-Optional bounded **standard KCP** is separately authorized in `GameNet::kcp`.
-Both `GAMENET_ENABLE_KCP=ON` and `GAMENET_ENABLE_UDP=ON` are required; defaults
-remain OFF. Core/UDP APIs and OpenSSL independence are preserved. Pinned MIT
-upstream, resource/lifecycle contracts and validation are documented in
-[the KCP guide](docs/development/kcp.md). This is provisional development, without a release or
-production/performance claim. Historical M10 NO-PROMOTION findings below remain
-historical; this new authorization does not promote PMTU or custom KCP-style code.
+The component descriptions below refer to the current `main` source tree.
+Recent RPC, TLS, WS/WSS and UDP/KCP work has separate development authorization;
+availability in a published package depends on that package's source revision
+and build options. New development on `main` does not create a release.
 
-## UDP-C2：有界 peer/session 与 endpoint（2026-11-13）
+KCP-C1 through KCP-C4 are implemented. C4 was merged in
+[PR #36](https://github.com/YanqingXu/game-net-core/pull/36) at `009830a` on
+2026-11-17, including bounded capacity, fault recovery and development endurance
+validation. Its tool defaults OFF and is not installed or exported.
 
-默认关闭的 `GameNet::udp` 增加显式 `UdpPeerServer` / `UdpPeer`；独立可选
-`GameNet::udp_transport` 适配现有 `TransportEndpoint`，保留 Core API 和 UDP 只依赖 Core 的边界。提供本地身份/换代隔离、
-peer/全局发送预算、轮转公平性、空闲回收和跨线程关闭清算；普通 UDP 报文没有认证或
-wire generation。合同、独立双族互操作与状态 fuzz 见 [UDP peer 文档](docs/development/udp_peer.md)。
+Formal HP0 performance promotion remains `DEFER`; the fixed-laboratory gate
+is separate from feature correctness and development endurance. Current scope,
+decisions and execution plans are tracked in [roadmap](docs/roadmap.md),
+[migration status](docs/migration_status.md) and [plan](plan.md).
 
-## UDP-C1：可选有界 UDP（2026-11-12）
+## Quick Start
 
-`GAMENET_ENABLE_UDP=ON` 提供独立 provisional `GameNet::udp`，默认关闭且只依赖 Core。
-IPv4/IPv6 数据报、零长度、显式截断、数量/字节预算、跨线程接纳与 IOCP 取消清算
-配有最小 echo server、独立 Python UDP 互操作及突发/公平性/反复启停合同。
-用法与验证见 [UDP 文档](docs/development/udp.md)。现有 v0.3.1 发行包不包含此开发组件。
+Use CMake 3.20 or newer and a C++23 compiler. The Linux example also uses Ninja;
+Windows requires MSVC and a Windows SDK. Use separate, fresh build directories
+for optional features and sanitizer profiles.
 
+Linux:
 
-## WS session/state validation — WS-C3 (2026-11-12)
+```sh
+cmake -S . -B out/build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build out/build/linux --parallel 2
+ctest --test-dir out/build/linux --output-on-failure --no-tests=error
+```
 
-Bounded owner-session action fuzz and eight-generation real WS/WSS pressure
-regressions validate admission/recovery, reentry/release, callback isolation and
-exact terminal/budget cleanup. Existing API, optional flags and OpenSSL-free
-plain WS discovery remain available. See [WS validation](docs/development/websocket.md).
+Windows, from PowerShell:
 
-## Optional WSS composition — WS-C2 (2026-11-12)
+```powershell
+cmake -S . -B out/build/windows -A x64
+cmake --build out/build/windows --config Release --parallel 2
+ctest --test-dir out/build/windows -C Release --output-on-failure --no-tests=error
+```
 
-Both `GAMENET_ENABLE_WEBSOCKET=ON` and `GAMENET_ENABLE_TLS=ON` enable provisional
-`GameNet::websocket_tls`. Explicit TLS-before-Upgrade admission, bounded output
-recovery and WS Close / TLS close_notify settlement preserve existing ws usage
-and OpenSSL-free Core/WS-only package discovery. See
-[WSS composition and validation](docs/development/websocket_tls.md).
+Tests and examples are built by default. The default CTest inventory is 133;
+TLS, WebSocket, UDP, KCP, experimental io_uring, fuzz and benchmark tooling are
+opt-in. Core-only builds do not require OpenSSL.
 
-## Optional bounded WebSocket — WS-C1 (2026-11-12)
+Install a completed Linux build with:
 
-`GAMENET_ENABLE_WEBSOCKET=ON` builds provisional `GameNet::websocket` and a
-minimal loopback echo server. Strict HTTP Upgrade, masking, fragmented messages,
-UTF-8, Ping/Pong, bounded output recovery and close settlement compose existing
-TCP. Core-only discovery stays independent; no OpenSSL is required. See
-[WebSocket usage and validation](docs/development/websocket.md). Published
-v0.3.1 packages predate this development component.
+```sh
+cmake --install out/build/linux --prefix out/install
+```
 
-## Optional RPC over TLS — RPC-C2 (2026-11-11)
+On Windows, use `out/build/windows` and add `--config Release`. Set a consumer's
+`CMAKE_PREFIX_PATH` to the resulting install prefix, then link the required
+component:
 
-`GameNet::rpc_tls` explicitly composes authenticated TLS with callback RPC.
-It is built only with `GAMENET_ENABLE_TLS=ON` and requested separately as
-`COMPONENTS rpc_tls`; existing TCP RPC and Core/RPC-only dependency isolation
-remain available. RPC requests are admitted only after TLS-ready, with bounded
-send/pending budgets and exactly-once local terminal settlement. See
-[RPC/TLS composition](docs/development/callback_rpc_tls.md).
+```cmake
+find_package(GameNetCore CONFIG REQUIRED COMPONENTS core)
+target_link_libraries(my_server PRIVATE GameNet::core)
+```
 
-## Optional OpenSSL TLS — TLS-C1 (2026-11-11)
+Optional components must be enabled when building the package and explicitly
+requested by consumers, for example `COMPONENTS kcp_transport`. See
+[release packaging](docs/development/release_packaging.md) and
+[build profiles](docs/development/build_profiles.md) for consumer checks,
+presets, sanitizer, native tuning and PGO workflows.
 
-The separately authorized provisional `GameNet::tls` component is default OFF.
-ON enables real OpenSSL nonblocking TLS over existing owner-local TCP, with
-certificate/identity verification, bounded queues and close_notify settlement.
-See `docs/development/openssl_tls.md` and the active TLS intent for composition,
-callback lifetime and package isolation. Historical M9 decisions below remain
-history; TLS-C1 does not promote WebSocket/DNS/HTTP or the old ConnectionTransport.
-Default CI stays 133 tests; TLS-enabled has 138 (three TLS and two RPC/TLS tests).
+## Current Scope
 
-## Callback RPC feature milestone — 2026-11-11
+Stable / Core:
 
-RPC-C1 now authorizes a native provisional `GameNet::rpc` component, independently
-of HP0 performance promotion. It provides bounded owner-local callback request/
-response, deadlines, cancellation, disconnect settlement and exactly-once local
-completion. See `intents/modules/rpc.intent.md`, `plan.md` and
-`docs/development/callback_rpc.md` for the current scope. Historical M7
-`NO-PROMOTION` decisions below remain consumer-comparison history; they do not
-block this separately authorized feature. Coroutines remain deferred; KCP-C1 has separate authorization;
-UDP, TLS and WebSocket have their own later authorizations above. Development work does not create a release.
+- Logger
+- EventLoop
+- Channel
+- Poller
+- TimerQueue
+- Buffer
+- InetAddress
+- Socket
+- Acceptor
+- Connector
+- TcpConnection
+- TcpServer
+- TcpClient
+- EventLoopThreadPool
 
-game-net-core is a modern C++23 networking foundation for game servers.
+Phase 4 Foundations:
 
-It is built around a single-owner EventLoop scheduler/event pump with native
-Readiness and Completion semantics, and aims to provide a small, testable, and
-extensible base for game-server networking.
+- `GameNet::protocol`: length-delimited PacketFramer
+- `GameNet::transport`: TransportEndpoint and TCP adapter
+- `GameNet::game_session`: PlayerSession and SessionManager
+- `GameNet::game_logic`: bounded GameCommandQueue and LogicLoop
+- `GameNet::broadcast`: owner-loop routing, bounded dispatch and backpressure reasons
+- `GameNet::rpc`: bounded callback request/response, deadlines, cancellation and
+  disconnect settlement; see [callback RPC](docs/development/callback_rpc.md)
 
-The repository is a component-by-component split and migration of the larger
-`mini_trantor` project. The goal is to extract the networking foundation first,
-stabilize it with clear ownership/threading contracts, and then promote higher
-layers only after the core is proven.
+Optional components on `main` (all options below default OFF):
+
+| Component / tool | Build requirement | Contract and usage |
+| --- | --- | --- |
+| `GameNet::udp`, `GameNet::udp_transport` | `GAMENET_ENABLE_UDP=ON` | [Bounded datagrams](docs/development/udp.md), [explicit peers and endpoint](docs/development/udp_peer.md) |
+| `GameNet::kcp`, `GameNet::kcp_transport` | `GAMENET_ENABLE_KCP=ON` and `GAMENET_ENABLE_UDP=ON` | [Standard KCP sessions, endpoint and examples](docs/development/kcp.md) |
+| `GameNet::tls`, `GameNet::rpc_tls` | `GAMENET_ENABLE_TLS=ON`; OpenSSL 3.0+ | [TLS](docs/development/openssl_tls.md), [RPC/TLS](docs/development/callback_rpc_tls.md) |
+| `GameNet::websocket` | `GAMENET_ENABLE_WEBSOCKET=ON` | [Bounded WS protocol and state validation](docs/development/websocket.md) |
+| `GameNet::websocket_tls` | Both WebSocket and TLS options ON | [WSS composition and interoperability](docs/development/websocket_tls.md) |
+| `GameNet::experimental_io_uring` | `GAMENET_ENABLE_EXPERIMENTAL=ON`; Linux only | Explicit experimental Server/Client component; native backend defaults remain epoll/IOCP |
+| `gamenet_kcp_validation` | `GAMENET_BUILD_KCP_VALIDATION=ON`, KCP and UDP ON | [C4 validation](docs/development/kcp.md#kcp-c4-development-validation); non-installed, outside CTest |
+
+KCP depends on Core/UDP; its endpoint adapter composes the separate transport
+interface. Core and plain UDP/KCP/WS consumers remain independent of OpenSSL.
+Default packages contain no disabled optional component headers or libraries.
+
+Deferred work includes game-specific packet headers/business serialization,
+coroutines, DNS, general HTTP services, PMTU and the historical custom KCP-style
+design. Standard KCP and WSS have their own active implementations above.
+
+## KCP Milestones
+
+| Milestone | Implemented scope |
+| --- | --- |
+| C1 | Bounded standard KCP message sessions over explicit UDP peers, pinned MIT upstream, resource/lifecycle contracts and independent interoperability |
+| C2 | `KcpTransportEndpoint` and finite server/client examples, preserving owner affinity, backpressure and terminal semantics |
+| C3 | Real cross-loop integration with SessionManager, LogicLoop and BroadcastDispatcher, generation-safe bindings and exact shutdown settlement |
+| C4 | 1/8/32-session IPv4/IPv6 capacity profiles, data/ACK blackholes, healthy-peer progress, recovery, timeout/replacement/history refusal and zero-residue cleanup |
+
+Build KCP explicitly in a separate tree:
+
+```sh
+cmake -S . -B out/build/kcp -DCMAKE_BUILD_TYPE=Release -DGAMENET_ENABLE_UDP=ON -DGAMENET_ENABLE_KCP=ON
+cmake --build out/build/kcp --config Release --parallel 2
+ctest --test-dir out/build/kcp -C Release --output-on-failure --no-tests=error
+```
+
+Both ends must agree on known addresses and a fresh nonzero conv. Protocol ACK
+means peer protocol reception; application processing is a separate contract.
+Address/conv configuration is not authentication, and the examples do not add
+discovery or an automatic reconnect policy. See the [KCP guide](docs/development/kcp.md)
+for dual-family echo commands, ownership and close semantics.
+
+C4's Python 3 runner builds the private tool and writes independently verified
+`gamenet.kcp_capacity_endurance.v1` evidence. Use a fresh output directory for
+each run:
+
+```sh
+python3 tools/run_kcp_capacity_endurance.py --profile release --build-dir out/build/kcp-c4 --output out/c4-smoke
+python3 tools/run_kcp_capacity_endurance.py --profile release --mode soak --build-dir out/build/kcp-c4 --output out/c4-development-30m
+python3 tools/run_kcp_capacity_endurance.py --verify-output out/c4-development-30m
+```
+
+On Windows, use `py -3` or your environment's Python 3 executable in place of
+`python3`. Smoke runs six capacity/family profiles. Soak runs one N=32 process
+for at least 1800 seconds, alternating IPv4/IPv6 cycles; run it on each platform.
+`--profile asan` and Linux `--profile tsan` provide separate instrumented smoke.
+The [C4 intent](intents/usecases/kcp_capacity_endurance.intent.md) defines the
+limits, real PID/RSS observations, exact terminal ledgers and failure policy.
+
+This is development evidence. Production capacity, HP0 performance promotion
+and TCP candidate-1h/release-3h certification retain their separate gates.
+
+## Examples
+
+Run the TCP echo server and client in separate terminals after the default build:
+
+```sh
+./out/build/linux/examples/echo_server 7000
+```
+
+```sh
+./out/build/linux/examples/echo_client 127.0.0.1 7000 hello
+```
+
+Windows binaries are `out/build/windows/examples/Release/echo_server.exe` and
+`echo_client.exe`. The default build also provides `game_server_pipeline_demo`,
+composing framed TCP authentication, sessions and logic handling in an example.
+It is not an installed all-in-one pipeline library.
+
+Optional builds add UDP socket/peer echo servers, bounded WS echo and KCP
+server/client examples; use the corresponding [module guides](#documentation)
+for address arguments, finite deadlines and shutdown behavior.
+
+## Supported Builds
+
+The current CMake target-system allow-list is Linux and Windows:
+
+- Linux/epoll is Tier 1 and owns the release, sanitizer, performance, and
+  long-duration reference evidence.
+- Windows/IOCP is a required Tier 2 functional and package platform, including
+  native completion ownership/cancellation, Debug/Release and consumer checks.
+  Linux remains the fixed long-duration reference platform.
+- macOS, BSD variants, and other target systems fail during configure.
+
+All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
+rejected, and no binary ABI compatibility is promised before 1.0.
+`GAMENET_ENABLE_TLS` is default OFF; ON builds the optional OpenSSL `GameNet::tls` component. The default-off
+`GAMENET_ENABLE_EXPERIMENTAL=ON` is accepted only on Linux and builds the
+Linux-only IOE-X1–X15 io_uring Engine/Pump/TCP/Hub/listener, semantic Adapter,
+single-/multi-owner Server, active Client, cross-backend semantic contracts,
+and benchmark tooling. It also installs the explicit
+`GameNet::experimental_io_uring` component and Server/Client header closure;
+it does not replace epoll, select a backend automatically, or enable deferred
+transports. Windows rejects that option. Default packages contain no io_uring
+target, library, or header.
+
+See [Platform and Build Support](docs/development/platform_support.md) for the
+backend tiers and platform contracts. The component table above and the
+individual module guides describe the current optional feature flags.
+
+## Continuous Integration
+
+Native test inventories depend on the selected build:
+
+| Configuration / gate | Tests |
+| --- | ---: |
+| Default | 133 |
+| UDP + KCP | 143 |
+| UDP + KCP + TLS + WS/WSS | 153 |
+| Focused UDP/KCP sanitizer lane | 10 |
+| Full Clang 18 TSan UDP/KCP gate | 143, plus allocator atomic/race controls |
+
+C4 runs outside CTest: six native capacity/family profiles in each of the five
+KCP platform/sanitizer lanes and the full Clang TSan job. Its evidence reader has
+54 rejection/process/identity/clock contracts. Protocol and session fuzz each
+execute 20,000 units with seed 424242; independent upstream peers, installed
+consumers and physical ON/OFF isolation supplement the native tests.
+
+The [PR #36 checkpoint](https://github.com/YanqingXu/game-net-core/pull/36)
+at `aa6f410` passed all eight workflows and 38 checks. Twenty official CI ZIPs
+were independently read back on Windows and Linux. Its local Release development
+runs completed 1801.609 seconds / 278 cycles on Windows and 1803.112 seconds /
+293 cycles on Linux, with zero residue in every completed cycle. These results
+belong to that validated feature checkpoint; the PR records source/binary
+identity, scope and the CI fixes.
+
+See [CI scope and commands](docs/development/ci.md),
+[KCP validation](docs/development/kcp.md) and the
+[KCP workflow](.github/workflows/kcp.yml) for exact inventory, sanitizer,
+interoperability, fuzz and artifact-readback requirements.
+
+## Documentation
+
+- [Roadmap](docs/roadmap.md), [migration status](docs/migration_status.md) and
+  [execution plan](plan.md)
+- [Intent catalog](intents/README.md) and [engineering rules](rules/)
+- [Runtime Profile selection](docs/architecture/runtime_profile_load_selection_guide.md)
+  and [build profiles](docs/development/build_profiles.md)
+- [Callback RPC](docs/development/callback_rpc.md), [RPC/TLS](docs/development/callback_rpc_tls.md)
+  and [OpenSSL TLS](docs/development/openssl_tls.md)
+- [UDP](docs/development/udp.md), [UDP peers](docs/development/udp_peer.md)
+  and [KCP](docs/development/kcp.md)
+- [WebSocket](docs/development/websocket.md) and [WSS](docs/development/websocket_tls.md)
+
+## Development Workflow
+
+game-net-core preserves the original intent-driven workflow:
+
+```text
+intent -> invariants -> threading -> ownership -> contracts -> tests -> implementation
+```
+
+Before changing a core module, read the matching file in `intents/` and the
+relevant rules in `rules/`. Deferred intents are preserved for future phases,
+but they do not expand the current implementation scope by themselves.
+
+## Non-goals
+
+The project provides networking building blocks rather than a full game server,
+AOI/world-state system, database/cache framework or complete gateway platform.
+Provisional component validation does not certify a production deployment.
+
+## Licensing Status
+
+game-net-core is licensed under the [Apache License 2.0](LICENSE). The owner
+authorized this transition on 2026-08-23; project attribution and dependency
+boundaries are recorded in [NOTICE](NOTICE) and
+[Third-Party Notices](THIRD_PARTY_NOTICES.md). Installed CMake packages include
+those files and export `GameNetCore_LICENSE=Apache-2.0`. See
+[Licensing Status](docs/development/licensing.md) and
+[Release Packaging](docs/development/release_packaging.md). The authorized
+transition and complete exact-commit evidence matrix produced the stable
+[`v0.3.0` Release](https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.0)
+on 2026-08-23.
+
+## Layout
+
+```text
+include/gamenet/   Public headers
+src/               Component implementations
+tests/             Unit, contract, integration and engineering checks
+examples/          Minimal runnable compositions
+benchmarks/        Opt-in performance and development validation tools
+tools/             Evidence runners and engineering utilities
+docs/              Architecture, usage, scope and validation records
+intents/           Module and use-case contracts
+rules/             Threading, ownership, lifecycle and testing rules
+```
+
+## Historical Checkpoints
+
+The records below describe the migration and promotion decisions at their
+original checkpoints. Current independently authorized components are listed
+above; the [migration status](docs/migration_status.md) preserves the full evidence.
+
+<details>
+<summary>Migration, release and HP0–HP8 history</summary>
 
 ## Migration Goal
 
@@ -180,7 +397,7 @@ implemented at `e43393c85fa37604d340fe866610756c99f4fe4e` and closed at
 `588acd079be93de3e230ba4f07dd111f7bec6a3c`: package-only dual-platform,
 sanitizer, repeat, fuzz, true-TCP, and independent-consumer 8/8 evidence found
 different wire, correlation, owner, and completion contracts. M7 is therefore
-closed as `NO-PROMOTION`; Core RPC stays deferred with no RPC/Lua package
+closed as `NO-PROMOTION`; at that checkpoint Core RPC remained deferred with no RPC/Lua package
 surface and no empty v0.6 release. M8 then compared Core
 `e5ea9efa71dbe52e841423ec3cac3e9529158b22`, callback-only gateway
 `588acd079be93de3e230ba4f07dd111f7bec6a3c`, and Actor-bound
@@ -196,14 +413,14 @@ tests explicitly skipped. Gateway has no TLS/WebSocket/DNS implementation and
 YanGame's native-worker internal-RPC mTLS explicitly excludes GameNet
 EventLoop TLS, so no substitutable two-consumer contract exists. M9 closes as
 `NO-PROMOTION`; all five transport/protocol intents remain deferred, no empty
-v0.8 release exists, and M10 UDP/KCP evidence review is the next governance
+v0.8 release existed, and M10 UDP/KCP evidence review was the next governance
 front. M10 then audited Core `f1f89f0`, gateway `588acd0`, independent
 `YanGameServer@b525416`, and historical migration source
 `mini_trantor@3eba368`. Both external consumers have no datagram runtime, all
 five intents remain deferred, and the old source lacks the current typed,
 generation-safe, bounded, dual-platform contract. M10 closes as
 `NO-PROMOTION`; no experimental datagram package or empty v0.9 release exists,
-and M11 v1.0 stabilization/release readiness becomes the final planned audit.
+and M11 v1.0 stabilization/release readiness became the final planned audit.
 M11 then audited Core `a2977c9`; after rebuilding the current tree, Windows
 Release passed 130/130, fixed-tick passed 20/20, Windows install consumers
 passed 2/2, and v0.3 tooling contracts passed 10/10;
@@ -293,131 +510,4 @@ decision.
 See `docs/migration_status.md` for the current phase status and verification
 state.
 
-## Current Scope
-
-Stable / Core:
-
-- Logger
-- EventLoop
-- Channel
-- Poller
-- TimerQueue
-- Buffer
-- InetAddress
-- Socket
-- Acceptor
-- Connector
-- TcpConnection
-- TcpServer
-- TcpClient
-- EventLoopThreadPool
-
-Phase 4 Foundations:
-
-- `GameNet::protocol`: length-delimited PacketFramer
-- `GameNet::transport`: TransportEndpoint and TCP adapter
-- `GameNet::game_session`: PlayerSession and SessionManager
-- `GameNet::game_logic`: bounded GameCommandQueue and LogicLoop
-- `GameNet::broadcast`: owner-loop routing, bounded dispatch, and backpressure reasons
-
-Linux-only experimental package (explicit opt-in):
-
-- `GameNet::experimental_io_uring`: `IoUringTcpServer` and
-  `IoUringTcpClient` façades with an independent experimental API manifest
-
-Planned / Deferred Modules:
-
-- game packet headers and serialization codecs
-- UDP/KCP experimental transport
-- coroutine, DNS, general HTTP, and WSS adapters
-
-## Non-goals
-
-This project is not:
-
-- a full game server framework
-- a production KCP implementation
-- an AOI/world-state framework
-- a database/cache framework
-- a complete gateway platform
-
-## Supported Builds
-
-The current CMake target-system allow-list is Linux and Windows:
-
-- Linux/epoll is Tier 1 and owns the release, sanitizer, performance, and
-  long-duration reference evidence.
-- Windows/IOCP is a required Tier 2 functional and package platform until the
-  M3 batching, error-path, ownership, and capacity promotion gates complete.
-- macOS, BSD variants, and other target systems fail during configure.
-
-All installed targets are static-only before 1.0. `BUILD_SHARED_LIBS=ON` is
-rejected, and no binary ABI compatibility is promised before 1.0.
-`GAMENET_ENABLE_TLS` is default OFF; ON builds the optional OpenSSL `GameNet::tls` component. The default-off
-`GAMENET_ENABLE_EXPERIMENTAL=ON` is accepted only on Linux and builds the
-Linux-only IOE-X1–X15 io_uring Engine/Pump/TCP/Hub/listener, semantic Adapter,
-single-/multi-owner Server, active Client, cross-backend semantic contracts,
-and benchmark tooling. It also installs the explicit
-`GameNet::experimental_io_uring` component and Server/Client header closure;
-it does not replace epoll, select a backend automatically, or enable deferred
-transports. Windows rejects that option. Default packages contain no io_uring
-target, library, or header.
-
-See [Platform and Build Support](docs/development/platform_support.md) for the
-support tiers, exact option behavior, commands, and Windows promotion criteria.
-
-## Licensing Status
-
-game-net-core is licensed under the [Apache License 2.0](LICENSE). The owner
-authorized this transition on 2026-08-23; project attribution and dependency
-boundaries are recorded in [NOTICE](NOTICE) and
-[Third-Party Notices](THIRD_PARTY_NOTICES.md). Installed CMake packages include
-those files and export `GameNetCore_LICENSE=Apache-2.0`. See
-[Licensing Status](docs/development/licensing.md) and
-[Release Packaging](docs/development/release_packaging.md). The authorized
-transition and complete exact-commit evidence matrix produced the stable
-[`v0.3.0` Release](https://github.com/YanqingXu/game-net-core/releases/tag/v0.3.0)
-on 2026-08-23.
-
-## Layout
-
-```text
-include/gamenet/   Public headers
-src/               Implementation
-tests/             Unit, contract, and integration tests
-examples/          Minimal runnable examples
-docs/              Architecture and scope notes
-intents/           Intent-driven module and architecture contracts
-rules/             Engineering rules for core behavior
-```
-
-## Examples
-
-- `echo_server`: minimal raw TCP echo server built on `TcpServer` and `TcpConnection`.
-- `echo_client`: minimal raw TCP echo client built on `TcpClient`.
-- `game_server_pipeline_demo`: Phase 4 composition from framed TCP authentication
-  through session/logic handling to a framed response. It is an example target,
-  not an installed all-in-one pipeline library.
-
-```bash
-echo_server 7000
-echo_client 127.0.0.1 7000 hello
-```
-
-## Development Workflow
-
-game-net-core preserves the original intent-driven workflow:
-
-```text
-intent -> invariants -> threading -> ownership -> contracts -> tests -> implementation
-```
-
-Before changing a core module, read the matching file in `intents/` and the
-relevant rules in `rules/`. Deferred intents are preserved for future phases,
-but they do not expand the current implementation scope by themselves.
-
-## Continuous Integration
-
-The CI gate builds and tests the Reactor/TCP core plus active Phase 4 targets,
-examples, Release configuration, and install/package consumer path. See
-`docs/development/ci.md` for the workflow scope and local equivalent commands.
+</details>
