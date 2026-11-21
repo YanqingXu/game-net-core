@@ -77,6 +77,10 @@ diagnostic rather than applying Release allocator budgets. It cannot claim a
 30-minute run. The supervisor enforces heartbeat/phase/overall deadlines,
 retains failed/interrupted checkpoints and kills/joins a stuck child.
 
+The independent reader accepts soak evidence only from a Release build.
+Manual CI runs the Windows/IOCP and Linux/epoll Release samples at the same
+dispatched commit and retains each platform's raw evidence for separate readback.
+
 Missing/duplicate/malformed records, nonzero child exit, early duration, process
 replacement, omitted fault profile/family, counter/parameter drift, nonzero
 residue or missing/tampered raw evidence fails closed. Independent readback

@@ -237,8 +237,9 @@ Native test inventories depend on the selected build:
 
 C4 runs outside CTest: six native capacity/family profiles in each of the five
 KCP platform/sanitizer lanes and the full Clang TSan job. Its evidence reader has
-54 rejection/process/identity/clock contracts. Protocol and session fuzz each
-execute 20,000 units with seed 424242; independent upstream peers, installed
+59 regression tests covering evidence rejection, process identity and clock behavior.
+The KCP workflow also supports a manual 30-minute Release soak on both platforms.
+Protocol and session fuzz each execute 20,000 units with seed 424242; independent upstream peers, installed
 consumers and physical ON/OFF isolation supplement the native tests.
 
 The [PR #36 checkpoint](https://github.com/YanqingXu/game-net-core/pull/36)

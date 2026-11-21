@@ -6,6 +6,32 @@ import xml.etree.ElementTree as ET
 from run_kcp_contracts import CONTRACTS,UDP_CONTRACTS,INTEROP,verify_inventory,verify_results,verify_interop
 from kcp_interop import verify_settled_reset
 from kcp_game_layers import TEST as GAME_TEST, EXPECTED, verify_game_layers
+from test_workflow_jobs import job_block, step_block
+
+
+def verify_manual_soak(workflow):
+    dispatch = workflow.split('  workflow_dispatch:\n', 1)[1].split('  push:\n', 1)[0]
+    assert '      c4_soak:\n' in dispatch
+    assert '        type: boolean\n' in dispatch and '        default: false\n' in dispatch
+    assert 'group: kcp-${{ inputs.c4_soak && github.run_id || github.ref }}' in workflow
+    for job in ('clang-tsan-full', 'kcp', 'fuzz'):
+        assert "if: github.event_name != 'workflow_dispatch' || !inputs.c4_soak" in job_block(workflow, job)
+
+    soak = job_block(workflow, 'c4-soak')
+    assert "if: github.event_name == 'workflow_dispatch' && inputs.c4_soak" in soak
+    assert 'runs-on: ${{ matrix.os }}' in soak and 'os: [ubuntu-24.04, windows-latest]' in soak
+    assert 'fail-fast: false' in soak
+    assert 'ref: ${{ github.sha }}' in step_block(soak, 'Checkout the dispatched commit')
+    run = 'run: python tools/run_kcp_capacity_endurance.py'
+    evidence = 'out/kcp-c4-soak'
+    assert f'{run} --profile release --mode soak --build-dir build-kcp-soak --output {evidence}' in soak
+    assert f'{run} --verify-output {evidence}' in step_block(soak, 'Read back raw endurance evidence')
+    upload = step_block(soak, 'Retain raw endurance evidence')
+    assert 'if: always()' in upload and 'uses: actions/upload-artifact@' in upload
+    assert 'name: kcp-c4-soak-${{ matrix.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' in upload
+    assert f'path: {evidence}/' in upload and 'if-no-files-found: error' in upload
+
+
 def rejects(f,v):
     try:f(v)
     except ValueError:return
@@ -45,6 +71,7 @@ def main():
     for key,value in [('families',[4]),('messages',7),('data_loss_directions',0),('ack_loss_directions',0),('duplicate_directions',0),('reorder_directions',0),('zero_residue',False),('status','failed')]:
         bad=copy.deepcopy(INTEROP);bad[key]=value;rejects(verify_interop,bad)
     repo=Path(__file__).resolve().parents[2];workflow=(repo/'.github/workflows/kcp.yml').read_text(encoding='utf-8')
+    verify_manual_soak(workflow)
     for token in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','--with-kcp','run_kcp_contracts.py','--verify-output','if: always()','if-no-files-found: error',
                   'clang-tsan-full:','clang++-18','libclang-rt-18-dev','run_clang_tsan_gate.py','test_clang_tsan_gate.py','--verify-output out/clang-tsan-evidence','include-hidden-files: true']:
         assert token in workflow,token

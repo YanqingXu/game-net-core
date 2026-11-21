@@ -3,6 +3,11 @@
 name: Optional bounded standard KCP
 on:
   workflow_dispatch:
+    inputs:
+      c4_soak:
+        description: Run the 30-minute KCP-C4 Release soak on Windows and Linux
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','benchmarks/kcp_validation/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','intents/usecases/kcp_capacity_endurance.intent.md','rules/**','.github/workflows/kcp.yml']
@@ -12,11 +17,44 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: kcp-${{ github.ref }}
+  group: kcp-${{ inputs.c4_soak && github.run_id || github.ref }}
   cancel-in-progress: true
 jobs:
+  c4-soak:
+    name: C4 Release endurance (${{ matrix.os }})
+    if: github.event_name == 'workflow_dispatch' && inputs.c4_soak
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    steps:
+      - name: Checkout the dispatched commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check endurance evidence contracts
+        run: python tests/ci/test_kcp_capacity_endurance.py
+      - name: Run the uninterrupted Release soak
+        run: python tools/run_kcp_capacity_endurance.py --profile release --mode soak --build-dir build-kcp-soak --output out/kcp-c4-soak
+      - name: Read back raw endurance evidence
+        run: python tools/run_kcp_capacity_endurance.py --verify-output out/kcp-c4-soak
+      - name: Retain raw endurance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcp-c4-soak-${{ matrix.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/kcp-c4-soak/
+          if-no-files-found: error
+          retention-days: 14
   clang-tsan-full:
     name: Clang 18 TSan full suite and allocation controls
+    if: github.event_name != 'workflow_dispatch' || !inputs.c4_soak
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
@@ -75,6 +113,7 @@ jobs:
           retention-days: 14
   kcp:
     name: KCP (${{ matrix.lane }})
+    if: github.event_name != 'workflow_dispatch' || !inputs.c4_soak
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     strategy:
@@ -154,6 +193,7 @@ jobs:
           retention-days: 14
   fuzz:
     name: KCP protocol and session fuzz
+    if: github.event_name != 'workflow_dispatch' || !inputs.c4_soak
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
