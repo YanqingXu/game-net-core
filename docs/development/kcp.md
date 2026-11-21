@@ -67,6 +67,21 @@ remote receive. The dual-family test forces pending/task/byte/queue refusal,
 healthy-owner progress, stale logic, delayed offline and saturated shutdown with
 an unacknowledged send, then verifies exact terminal accounting and zero residue.
 See tests/integration/kcp/test_kcp_game_layers.cpp and the C3 intent/rules.
+The same CTest entry runs the churn case once per family. It drops the
+impaired peer's return ACKs while data continues to arrive and repeats
+same-endpoint refresh before replacing the session on another network loop.
+Each refresh, replacement and explicit close has queued logic and broadcast
+work, with a healthy recipient on a separate owner. The end of each round
+checks local terminals, remote messages, and zero retained work, timers and
+native storage before reusing the same owner loops.
+
+For a 30-minute Release run, build with UDP and KCP enabled. Use
+`ctest --test-dir <build> -C Release -N -V -R "^integration.kcp.test_kcp_game_layers$"`
+to locate the test executable, then run it with `--churn-soak`.
+Each `KCP_C3_CHURN` record reports the completed round and address family.
+The final `KCP_C3_SOAK` line records the actual monotonic duration and round
+count. Use the default CTest command for the short sanitizer run.
+
 Evidence schemas gamenet.kcp_contracts.v3 and gamenet.clang_tsan_gate.v3 require
 the actual two-family C3 summaries and reject absent/partial records. Current
 enabled inventory is 143; focused UDP/KCP sanitizer inventory is ten; default is

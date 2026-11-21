@@ -282,7 +282,17 @@ def check_text(root: Path, path: Path) -> list[Violation]:
                     if rel.startswith(("src/kcp/", "include/gamenet/kcp/", "src/kcp_transport/", "include/gamenet/kcp_transport/", "examples/kcp_echo/", "benchmarks/kcp_validation/", "tests/unit/kcp/", "tests/contract/kcp/", "tests/integration/kcp/", "tests/fuzz/kcp/", "tests/cmake/kcp_install_consumer/")) or rel in {"tests/support/KcpSequence.h", "tests/ci/run_clang_tsan_gate.py", "tests/api/test_public_api_manifest.py", "tests/cmake/test_migration_status_contract.py"}:
                         continue
                 if kind == "deferred high-level module" and match.group(0) == "UdpSocket":
-                    if rel.startswith(("src/udp/", "include/gamenet/udp/", "tests/unit/udp/", "tests/contract/udp/", "tests/integration/udp/", "tests/cmake/udp_install_consumer/", "examples/udp_echo/", "benchmarks/kcp_validation/")) or rel in {"tests/support/RawUdp.h", "tests/api/test_public_api_manifest.py", "tests/cmake/test_migration_status_contract.py"}:
+                    if rel.startswith((
+                        "src/udp/", "include/gamenet/udp/", "tests/unit/udp/",
+                        "tests/contract/udp/", "tests/integration/udp/",
+                        "tests/cmake/udp_install_consumer/", "examples/udp_echo/",
+                        "benchmarks/kcp_validation/",
+                    )) or rel in {
+                        "tests/support/RawUdp.h",
+                        "tests/integration/kcp/test_kcp_game_layers.cpp",  # C3 ACK relay
+                        "tests/api/test_public_api_manifest.py",
+                        "tests/cmake/test_migration_status_contract.py",
+                    }:
                         continue
                 if kind == "deferred high-level module" and match.group(0).startswith("WebSocket"):
                     if rel.startswith(("src/websocket/", "include/gamenet/websocket/", "tests/unit/websocket/", "tests/contract/websocket/", "tests/integration/websocket/", "tests/fuzz/websocket/", "tests/cmake/websocket_install_consumer/", "examples/websocket_echo/", "src/websocket_tls/", "include/gamenet/websocket_tls/", "tests/contract/websocket_tls/", "tests/integration/websocket_tls/", "tests/cmake/websocket_tls_install_consumer/", "examples/websocket_tls_echo/")) or rel in {"tests/support/WebSocketWire.h", "tests/support/WebSocketCodecOracle.h", "tests/support/WebSocketTlsFixture.h"}:

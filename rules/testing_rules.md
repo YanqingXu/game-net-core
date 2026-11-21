@@ -22,6 +22,12 @@ zero state; sleeps and fake endpoints cannot establish the C3 boundary. Include
 the test in all five KCP lanes and the complete Clang TSan gate, updating exact
 inventories and rejection contracts while retaining existing fuzz/interop gates.
 
+The same C3 executable runs the churn case in IPv4 and IPv6 in ordinary CTest.
+Its opt-in Release soak repeats the same case in alternating families for at
+least 1800 seconds in one process. Require observed repeated ACK drops, stale
+task revocation and healthy remote receive before release of each barrier.
+Verify send terminals and drain real native I/O before checking owner residue.
+
 ## KCP-C2
 
 tests/contract/kcp/test_kcp_transport_endpoint.cpp verifies actual endpoint sends,

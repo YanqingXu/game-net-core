@@ -236,6 +236,10 @@ def main() -> None:
     assert_violation(repo_root, "src/udp/BadTls.cc", '#include "gamenet/tls/TlsStream.h"\n', "disallowed component")
     check_prestudy_boundaries(repo_root)
     assert_clean(repo_root, "src/kcp/Engine.cc", '#include "gamenet/udp/UdpPeer.h"\nnamespace gamenet::kcp {class KcpSession {}; }\n')
+    udp_socket_reference = '#include "gamenet/udp/UdpSocket.h"\nusing gamenet::udp::UdpSocket;\n'
+    assert_clean(repo_root, "tests/integration/kcp/test_kcp_game_layers.cpp", udp_socket_reference)
+    assert_violation(repo_root, "tests/integration/kcp/OtherFixture.cpp",
+                     udp_socket_reference, "deferred high-level module")
     for layer in ("core", "udp", "transport", "tls", "rpc", "protocol"):
         assert_violation(repo_root, f"src/{layer}/BadKcp.cc", '#include "gamenet/kcp/KcpTransport.h"\n', "disallowed component")
     for component in ("tls", "transport", "udp_transport", "rpc", "websocket"):

@@ -7,18 +7,23 @@
 #include "gamenet/game_logic/LogicLoop.h"
 #include "gamenet/game_session/SessionManager.h"
 #include "gamenet/kcp_transport/KcpTransportEndpoint.h"
+#include "../../../src/core/net/detail/EventLoopActiveBatchHarness.h"
+#include "support/RawUdp.h"
 #include "support/TestAssert.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <functional>
 #include <future>
+#include <initializer_list>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
-#include <set>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -35,7 +40,7 @@ template <class F> void eventually(F predicate) {
     const auto deadline = std::chrono::steady_clock::now() + 15s;
     while (!predicate()) {
         GAMENET_TEST_ASSERT(std::chrono::steady_clock::now() < deadline);
-        std::this_thread::yield();
+        std::this_thread::sleep_for(1ms);
     }
 }
 
@@ -111,21 +116,40 @@ class Park : public Barrier {
     }
 };
 
+void settledSocket(const udp::UdpSnapshot &s) {
+    GAMENET_TEST_ASSERT(s.phase == udp::UdpPhase::Stopped && !s.callbackExceptions);
+    test::verifyUdpLedger(s);
+}
+
 void settled(const kcp::KcpSnapshot &s) {
     GAMENET_TEST_ASSERT(s.phase == udp::UdpPhase::Stopped && s.opened == s.closed);
     GAMENET_TEST_ASSERT(s.accepted == s.acknowledged + s.cancelled + s.failed);
     GAMENET_TEST_ASSERT(!s.sessions && !s.pendingMessages && !s.pendingBytes && !s.protocolBytes &&
-                        !s.scheduledPosts && !s.callbackExceptions && !s.udp.peers &&
-                        !s.udp.pendingDatagrams && !s.udp.pendingBytes && !s.udp.scheduledPosts &&
-                        !s.udp.socket.nativeOperations && !s.udp.socket.receiveStorageBytes);
+                        !s.scheduledPosts && !s.callbackExceptions);
+    GAMENET_TEST_ASSERT(s.udp.phase == udp::UdpPhase::Stopped && s.udp.opened == s.udp.closed &&
+                        !s.udp.peers && !s.udp.pendingDatagrams && !s.udp.pendingBytes &&
+                        !s.udp.scheduledPosts && !s.udp.callbackExceptions);
+    GAMENET_TEST_ASSERT(s.udp.acceptedDatagrams ==
+                        s.udp.sentDatagrams + s.udp.cancelledDatagrams + s.udp.failedDatagrams);
+    GAMENET_TEST_ASSERT(s.udp.acceptedBytes ==
+                        s.udp.sentBytes + s.udp.cancelledBytes + s.udp.failedBytes);
+    settledSocket(s.udp.socket);
 }
+
+struct Receipt {
+    std::size_t bytes;
+    kcp::KcpSendStatus status;
+    std::uint64_t id{};
+};
+
 struct Side {
     Owner &owner;
     std::shared_ptr<kcp::KcpTransport> service;
     std::shared_ptr<kcp::KcpSession> session;
     std::shared_ptr<transport::TransportEndpoint> endpoint;
     std::vector<std::string> received;
-    std::set<std::uint64_t> receipts;
+    std::map<std::uint64_t, kcp::KcpSendCompletion> receipts;
+    std::optional<kcp::KcpCloseReason> closeReason;
     std::function<void(std::string)> input;
     std::promise<kcp::KcpSnapshot> stopped;
     explicit Side(Owner &o) : owner(o) {}
@@ -140,6 +164,7 @@ struct Side {
                 {.message =
                      [this](auto, std::string_view bytes) {
                          GAMENET_TEST_ASSERT(owner.executor.isInOwnerThread());
+                         GAMENET_TEST_ASSERT(received.size() < 16);
                          received.emplace_back(bytes);
                          if (input)
                              input(std::string(bytes));
@@ -148,12 +173,14 @@ struct Side {
                      [this](auto identity, auto receipt) {
                          GAMENET_TEST_ASSERT(owner.executor.isInOwnerThread());
                          GAMENET_TEST_ASSERT(identity == session->identity());
-                         GAMENET_TEST_ASSERT(receipts.insert(receipt.id).second);
+                         GAMENET_TEST_ASSERT(receipt.id && receipts.size() < 16);
+                         GAMENET_TEST_ASSERT(receipts.emplace(receipt.id, receipt).second);
                      },
                  .closed =
-                     [this](auto identity, auto) {
+                     [this](auto identity, auto reason) {
                          GAMENET_TEST_ASSERT(owner.executor.isInOwnerThread());
-                         GAMENET_TEST_ASSERT(identity == session->identity());
+                         GAMENET_TEST_ASSERT(identity == session->identity() && !closeReason);
+                         closeReason = reason;
                      },
                  .stopped =
                      [this](auto s) {
@@ -168,31 +195,116 @@ struct Side {
     kcp::KcpSnapshot snapshot() {
         return owner.call([&] { return service->snapshot(); });
     }
+    std::uint64_t send(std::string_view bytes) {
+        return owner.call([&, bytes] {
+            const auto admission = session->send(bytes);
+            GAMENET_TEST_ASSERT(admission.result == kcp::KcpResult::Accepted && admission.id);
+            return admission.id;
+        });
+    }
+    void expectReceipts(std::initializer_list<Receipt> expected) {
+        owner.call([&] {
+            GAMENET_TEST_ASSERT(receipts.size() == expected.size());
+            // Each broadcast payload on this side has a distinct length.
+            // Direct KcpSession sends also expose their exact admission id.
+            for (const auto &entry : expected) {
+                const auto matches = std::ranges::count_if(receipts, [&](const auto &pair) {
+                    const auto &terminal = pair.second;
+                    return terminal.bytes == entry.bytes && terminal.status == entry.status &&
+                           (!entry.id || terminal.id == entry.id);
+                });
+                GAMENET_TEST_ASSERT(matches == 1);
+            }
+        });
+    }
 };
+
+class AckDropRelay {
+    Owner &owner_;
+    std::shared_ptr<udp::UdpSocket> socket_;
+    std::atomic<std::size_t> drops_{};
+    std::promise<udp::UdpSnapshot> stopped_;
+
+  public:
+    explicit AckDropRelay(Owner &owner) : owner_(owner) {}
+
+    net::InetAddress start(bool v6, net::InetAddress sender, net::InetAddress receiver) {
+        GAMENET_TEST_ASSERT(sender.port() != receiver.port());
+        return owner_.call([this, v6, sender, receiver] {
+            const net::InetAddress local(v6 ? "::1" : "127.0.0.1", 0);
+            udp::UdpOptions options;
+            options.maxPendingDatagrams = 4;
+            options.maxPendingBytes = 4 * options.maxDatagramBytes;
+            socket_ = udp::UdpSocket::create(
+                owner_.loop, local,
+                {.datagram = [this, sender, receiver](const auto &from, auto bytes, bool truncated) {
+                     GAMENET_TEST_ASSERT(owner_.executor.isInOwnerThread() && !truncated);
+                     GAMENET_TEST_ASSERT(from.family() == sender.family());
+                     if (from.port() == sender.port()) {
+                         GAMENET_TEST_ASSERT(socket_->sendTo(receiver, bytes).result ==
+                                             udp::UdpResult::Accepted);
+                         return;
+                     }
+                     GAMENET_TEST_ASSERT(from.port() == receiver.port());
+                     // The impaired link carries application data in one direction.
+                     // Its return datagrams must contain only standard KCP ACK segments.
+                     constexpr std::size_t headerBytes = 24;
+                     constexpr unsigned char ack = 82;
+                     GAMENET_TEST_ASSERT(!bytes.empty() && bytes.size() % headerBytes == 0);
+                     for (std::size_t i = 0; i < bytes.size(); i += headerBytes) {
+                         GAMENET_TEST_ASSERT(static_cast<unsigned char>(bytes[i + 4]) == ack);
+                         GAMENET_TEST_ASSERT(bytes.substr(i + 20, 4) ==
+                                             std::string_view("\0\0\0\0", 4));
+                     }
+                     drops_.fetch_add(1, std::memory_order_relaxed);
+                 },
+                 .stopped = [this](auto s) { stopped_.set_value(s); }},
+                options);
+            GAMENET_TEST_ASSERT(socket_->start() == udp::UdpResult::Accepted);
+            return socket_->localAddress();
+        });
+    }
+    std::size_t drops() const { return drops_.load(std::memory_order_relaxed); }
+    void stop() {
+        auto future = stopped_.get_future();
+        GAMENET_TEST_ASSERT(socket_->stop() == udp::UdpResult::Accepted);
+        const auto snapshot = ready(future);
+        settledSocket(snapshot);
+        GAMENET_TEST_ASSERT(!snapshot.failedDatagrams && snapshot.sentDatagrams >= 3);
+        owner_.call([&] { socket_.reset(); });
+    }
+};
+
 struct Link {
     Side server, client;
-    Link(Owner &network, Owner &remote, bool v6, std::uint32_t conv)
+    Link(Owner &network, Owner &remote, bool v6, std::uint32_t conv,
+         AckDropRelay *relay = nullptr)
         : server(network), client(remote) {
         server.create(v6);
         client.create(v6);
-        const auto a = network.call([&] { return server.service->localAddress(); });
-        const auto b = remote.call([&] { return client.service->localAddress(); });
+        auto a = network.call([&] { return server.service->localAddress(); });
+        auto b = remote.call([&] { return client.service->localAddress(); });
+        if (relay)
+            a = b = relay->start(v6, a, b);
         network.call([&] {
-            server.session = server.service->openSession(b, conv).session;
-            GAMENET_TEST_ASSERT(server.session);
+            auto opened = server.service->openSession(b, conv);
+            GAMENET_TEST_ASSERT(opened.result == kcp::KcpResult::Accepted && opened.session);
+            server.session = std::move(opened.session);
             server.endpoint = std::make_shared<kcp_transport::KcpTransportEndpoint>(server.session);
         });
         remote.call([&] {
-            client.session = client.service->openSession(a, conv).session;
-            GAMENET_TEST_ASSERT(client.session);
+            auto opened = client.service->openSession(a, conv);
+            GAMENET_TEST_ASSERT(opened.result == kcp::KcpResult::Accepted && opened.session);
+            client.session = std::move(opened.session);
         });
     }
-    void stop() {
+    std::array<kcp::KcpSnapshot, 2> stop() {
         auto a = server.stopped.get_future(), b = client.stopped.get_future();
         (void)server.service->stop();
         (void)client.service->stop();
-        settled(ready(a));
-        settled(ready(b));
+        std::array snapshots{ready(a), ready(b)};
+        for (auto &snapshot : snapshots)
+            settled(snapshot);
         server.owner.call([&] {
             server.input = {};
             server.service.reset();
@@ -201,11 +313,10 @@ struct Link {
             client.input = {};
             client.service.reset();
         });
+        return snapshots;
     }
-    void send(std::string bytes) {
-        client.owner.call([&, bytes = std::move(bytes)] {
-            GAMENET_TEST_ASSERT(client.session->send(bytes).result == kcp::KcpResult::Accepted);
-        });
+    std::uint64_t send(std::string_view bytes) {
+        return client.send(bytes);
     }
 };
 game_logic::GameCommand command(game_session::SessionBinding b, std::string payload) {
@@ -231,6 +342,18 @@ void empty(const broadcast::BroadcastDispatcher &d) {
         GAMENET_TEST_ASSERT(!o.tasks && !o.bytes);
 }
 
+using Status = game_session::AuthenticateStatus;
+game_session::SessionBinding authenticateOn(
+    Owner &management, game_session::SessionManager &manager, const char *player,
+    const std::shared_ptr<transport::TransportEndpoint> &endpoint, Status expected) {
+    return management.call([&] {
+        auto r = manager.authenticate(player, endpoint);
+        GAMENET_TEST_ASSERT(r.status == expected && r.session);
+        GAMENET_TEST_ASSERT(manager.findByTransport(endpoint->id()) == r.session);
+        return r.session->binding();
+    });
+}
+
 void run(bool v6) {
     Owner management, logicOwner, networkA, networkB, remoteA, remoteB;
     Link old(networkA, remoteA, v6, 101), replacement(networkB, remoteB, v6, 102),
@@ -246,14 +369,8 @@ void run(bool v6) {
         router = std::make_unique<broadcast::BroadcastRouter>(management.loop);
     });
     const auto authenticate = [&](const char *player, auto endpoint, auto expected) {
-        return management.call([&] {
-            auto r = manager->authenticate(player, endpoint);
-            GAMENET_TEST_ASSERT(r.status == expected && r.session);
-            GAMENET_TEST_ASSERT(manager->findByTransport(endpoint->id()) == r.session);
-            return r.session->binding();
-        });
+        return authenticateOn(management, *manager, player, endpoint, expected);
     };
-    using Status = game_session::AuthenticateStatus;
     auto binding = authenticate("player", old.server.endpoint, Status::Created);
     auto healthyBinding = authenticate("healthy", healthy.server.endpoint, Status::Created);
     const auto route = [&](auto endpoint, auto b, std::string bytes) {
@@ -506,8 +623,303 @@ void run(bool v6) {
               << " pending_refusal=1 task_refusal=1 byte_refusal=2 queue_refusal=1"
               << " pending_cancel=1 healthy_progress=1 zero_residue=1\n";
 }
+
+struct ChurnOwners {
+    Owner management, logic, impaired, replacement, healthy, remote;
+
+    void checkDrained() {
+        for (auto *owner : {&management, &logic, &impaired, &replacement, &healthy, &remote}) {
+            owner->call([&] {
+                auto &loop = *owner->loop;
+                GAMENET_TEST_ASSERT(!loop.pendingFunctorCount() && !loop.pendingControlSourceCount() &&
+                                    !loop.pendingLifecycleNodeCount() && !loop.attachedLifecycleNodeCount() &&
+                                    !loop.callbackExceptionCount());
+                // The owners survive the round. A retired timer must leave no entry
+                // even if its callback would now be a no-op on a revoked lifetime.
+                loop.setEventLoopMetricCallback([](const auto &metric) {
+                    GAMENET_TEST_ASSERT(metric.event != net::EventLoopMetricEvent::TimersDrained);
+                });
+                net::detail::EventLoopActiveBatchHarness::runExpiredTimers(loop, base::now() + 1h);
+                loop.setEventLoopMetricCallback({});
+            });
+        }
+    }
+};
+
+struct ChurnStats {
+    std::size_t ackDrops{}, staleBroadcast{}, staleLogic{}, healthyReceived{};
+    std::uint64_t accepted{}, acknowledged{}, cancelled{}, failed{};
+};
+
+ChurnStats churnRound(ChurnOwners &owners, bool v6, std::uint32_t &conv) {
+    using Reason = broadcast::BroadcastReason;
+    using Send = kcp::KcpSendStatus;
+    using Close = kcp::KcpCloseReason;
+    using Binding = game_session::SessionBinding;
+    auto &management = owners.management;
+    auto &logicOwner = owners.logic;
+    AckDropRelay relay(owners.remote);
+    Link old(owners.impaired, owners.remote, v6, ++conv, &relay),
+        replacement(owners.replacement, owners.remote, v6, ++conv),
+        healthy(owners.healthy, owners.remote, v6, ++conv);
+    GAMENET_TEST_ASSERT(owners.impaired.executor.id() != owners.replacement.executor.id());
+    GAMENET_TEST_ASSERT(owners.healthy.executor.id() != owners.replacement.executor.id());
+    GAMENET_TEST_ASSERT(owners.healthy.executor.id() != owners.impaired.executor.id());
+
+    auto [manager, router] = management.call([&] {
+        return std::pair{std::make_unique<game_session::SessionManager>(management.loop),
+                         std::make_unique<broadcast::BroadcastRouter>(management.loop)};
+    });
+    broadcast::BroadcastDispatcher dispatcher;
+    auto binding = authenticateOn(management, *manager, "churn", old.server.endpoint,
+                                  Status::Created);
+    const auto healthyBinding =
+        authenticateOn(management, *manager, "healthy", healthy.server.endpoint, Status::Created);
+    const std::string unacknowledged(96, 'u');
+    const auto unacknowledgedId = old.server.send(unacknowledged);
+    eventually([&] { return relay.drops() >= 1; });
+    const auto expectPending = [&] {
+        const auto s = old.server.snapshot();
+        GAMENET_TEST_ASSERT(s.accepted == 1 && s.pendingMessages == 1 &&
+                            s.pendingBytes == unacknowledged.size() &&
+                            !s.acknowledged && !s.cancelled && !s.failed);
+    };
+    expectPending();
+
+    const std::string livePayload(12000, 'r');
+    std::size_t handled{}, outputs{}; // Read or updated only on the logic owner.
+    std::promise<broadcast::DispatchSummary> liveOutput;
+    auto output = liveOutput.get_future();
+    auto logic = logicOwner.call([&] {
+        auto loop = std::make_unique<game_logic::LogicLoop>(
+            logicOwner.loop,
+            game_logic::LogicLoopOptions{.tickInterval = 1ms, .maxCommandsPerTick = 1,
+                                         .queueLimits = {.maxCommands = 2,
+                                                         .maxQueuedBytes = 16384,
+                                                         .maxPayloadBytes = 16384}});
+        loop->setHandler([&](auto c) -> std::optional<game_logic::GameCommand> {
+            GAMENET_TEST_ASSERT(logicOwner.executor.isInOwnerThread());
+            GAMENET_TEST_ASSERT(c.binding.isCurrent() && c.payload == livePayload);
+            ++handled;
+            return c;
+        });
+        loop->setOutputCallback([&](auto c) {
+            GAMENET_TEST_ASSERT(logicOwner.executor.isInOwnerThread());
+            ++outputs;
+            GAMENET_TEST_ASSERT(management.executor.post([&, c = std::move(c)] {
+                auto current = manager->findByTransport(c.transportId);
+                GAMENET_TEST_ASSERT(current && c.binding.isCurrent());
+                GAMENET_TEST_ASSERT(current->endpoint() == replacement.server.endpoint);
+                const std::array targets{broadcast::BroadcastTarget(current->endpoint(), c.binding)};
+                liveOutput.set_value(dispatcher.dispatch(
+                    router->route(std::make_shared<const std::string>(c.payload), targets)));
+            }) == net::PostResult::Accepted);
+        });
+        loop->start();
+        return loop;
+    });
+
+    ChurnStats stats;
+    std::vector<std::string> healthyPayloads;
+    const auto revokeQueued = [&](Side &side, Binding before, auto transition) {
+        Park blockedLogic(logicOwner);
+        // Submit owned data from the affected network owner without sending any
+        // reverse application packets carrying the impaired peer's cumulative ACK.
+        side.owner.call([&] {
+            GAMENET_TEST_ASSERT(logic->submit(command(before, "stale-command")) ==
+                                game_logic::SubmitResult::Accepted);
+        });
+        GAMENET_TEST_ASSERT(logic->queueSnapshot().depth == 1);
+        Park blockedNetwork(side.owner);
+        healthyPayloads.emplace_back(48 + healthyPayloads.size(), 'h');
+        auto plan = management.call([&] {
+            const std::array targets{broadcast::BroadcastTarget(side.endpoint, before),
+                                     broadcast::BroadcastTarget(healthy.server.endpoint,
+                                                                healthyBinding)};
+            return router->route(std::make_shared<const std::string>(healthyPayloads.back()), targets);
+        });
+        auto queued = dispatcher.dispatch(std::move(plan));
+        GAMENET_TEST_ASSERT(queued.scheduledTasks == 2 && queued.scheduledEndpoints == 2);
+        transition();
+        GAMENET_TEST_ASSERT(!before.isCurrent() && healthyBinding.isCurrent());
+
+        // The healthy leg must complete independently while the stale leg and
+        // the old logic command have no opportunity to execute.
+        eventually([&] { return healthy.server.snapshot().acknowledged == healthyPayloads.size(); });
+        eventually([&] {
+            return owners.remote.call([&] { return healthy.client.received == healthyPayloads; });
+        });
+        const auto progress = queued.progress->snapshot();
+        GAMENET_TEST_ASSERT(progress.acceptedEndpoints == 1 && !progress.droppedEndpoints &&
+                            progress.outstandingTasks == 1 && !progress.complete);
+        GAMENET_TEST_ASSERT(logic->queueSnapshot().depth == 1);
+
+        blockedNetwork.open();
+        complete(queued, 1, Reason::OfflineSession);
+        ++stats.staleBroadcast;
+        blockedLogic.open();
+        eventually([&] { return logic->queueSnapshot().droppedStale == stats.staleBroadcast; });
+        empty(dispatcher);
+    };
+    const auto refresh = [&](Side &side, Status expected) {
+        auto next = authenticateOn(management, *manager, "churn", side.endpoint, expected);
+        GAMENET_TEST_ASSERT(next.isCurrent() && next.sessionId() == binding.sessionId() &&
+                            next.generation() > binding.generation());
+        binding = next;
+    };
+    for (unsigned attempt = 0; attempt < 2; ++attempt) {
+        revokeQueued(old.server, binding, [&] {
+            refresh(old.server, Status::Existing);
+            GAMENET_TEST_ASSERT(old.server.endpoint->isOpen());
+        });
+        const auto dropsBefore = relay.drops();
+        eventually([&] { return relay.drops() > dropsBefore; });
+        expectPending();
+    }
+    const auto oldBinding = binding;
+    revokeQueued(old.server, oldBinding, [&] {
+        refresh(replacement.server, Status::Rebound);
+        GAMENET_TEST_ASSERT(binding.transportId() != oldBinding.transportId());
+        GAMENET_TEST_ASSERT(!old.server.endpoint->isOpen() && replacement.server.endpoint->isOpen());
+    });
+    eventually([&] {
+        const auto s = old.server.snapshot();
+        return s.closed == 1 && s.cancelled == 1;
+    });
+    std::promise<void> lateOffline;
+    auto offline = lateOffline.get_future();
+    owners.impaired.call([&] {
+        const auto refused = old.server.session->send("old-generation");
+        GAMENET_TEST_ASSERT(refused.result == kcp::KcpResult::Stopped && !refused.id);
+        GAMENET_TEST_ASSERT(old.server.closeReason == Close::GoingAway);
+        GAMENET_TEST_ASSERT(manager->postOffline(oldBinding.transportId(), [&](auto result) {
+            GAMENET_TEST_ASSERT(management.executor.isInOwnerThread());
+            GAMENET_TEST_ASSERT(result == DispatchResult::PolicyRejected);
+            auto current = manager->findByTransport(binding.transportId());
+            GAMENET_TEST_ASSERT(current && current->binding().generation() == binding.generation());
+            GAMENET_TEST_ASSERT(!manager->findByTransport(oldBinding.transportId()));
+            lateOffline.set_value();
+        }) == DispatchResult::Accepted);
+    });
+    ready(offline);
+
+    owners.replacement.call([&, liveBinding = binding] {
+        replacement.server.input = [&, liveBinding](std::string bytes) {
+            GAMENET_TEST_ASSERT(logic->submit(command(liveBinding, std::move(bytes))) ==
+                                game_logic::SubmitResult::Accepted);
+        };
+    });
+    const auto inputId = replacement.send(livePayload);
+    complete(ready(output), 1);
+    eventually([&] { return replacement.server.snapshot().acknowledged == 1; });
+    eventually([&] { return replacement.client.snapshot().acknowledged == 1; });
+    eventually([&] {
+        return owners.remote.call([&] {
+            return replacement.client.received == std::vector<std::string>{livePayload};
+        });
+    });
+
+    revokeQueued(replacement.server, binding, [&] {
+        management.call([&] {
+            GAMENET_TEST_ASSERT(manager->offline(binding.transportId()));
+            GAMENET_TEST_ASSERT(!manager->findByPlayer("churn") && manager->size() == 1);
+            GAMENET_TEST_ASSERT(replacement.server.endpoint->requestClose(transport::CloseReason::Normal) ==
+                                DispatchResult::Accepted);
+        });
+        GAMENET_TEST_ASSERT(!replacement.server.endpoint->isOpen());
+    });
+    eventually([&] { return replacement.server.snapshot().closed == 1; });
+    owners.replacement.call([&] {
+        GAMENET_TEST_ASSERT(replacement.server.closeReason == Close::Normal);
+        GAMENET_TEST_ASSERT(replacement.server.received == std::vector<std::string>{livePayload});
+        replacement.server.input = {};
+    });
+
+    logicOwner.call([&] {
+        const auto dropped = logic->stop();
+        const auto s = logic->queueSnapshot();
+        GAMENET_TEST_ASSERT(handled == 1 && outputs == 1 && s.accepted == 5 &&
+                            !dropped.droppedCommands && !dropped.droppedBytes &&
+                            !s.depth && !s.queuedBytes && !s.accepting &&
+                            s.droppedStale == 4 && !s.droppedOnStop);
+        stats.staleLogic = s.droppedStale;
+        logic.reset();
+    });
+    dispatcher.shutdown();
+    empty(dispatcher);
+    management.call([&] {
+        manager->shutdown();
+        GAMENET_TEST_ASSERT(!manager->size() && !manager->findByTransport(healthyBinding.transportId()));
+        manager.reset();
+        router.reset();
+    });
+    GAMENET_TEST_ASSERT(!healthyBinding.isCurrent());
+
+    for (const auto &link : {old.stop(), replacement.stop(), healthy.stop()}) {
+        for (const auto &s : link) {
+            stats.accepted += s.accepted;
+            stats.acknowledged += s.acknowledged;
+            stats.cancelled += s.cancelled;
+            stats.failed += s.failed;
+        }
+    }
+    relay.stop();
+    old.server.expectReceipts({{unacknowledged.size(), Send::Cancelled, unacknowledgedId}});
+    old.client.expectReceipts({});
+    replacement.client.expectReceipts({{livePayload.size(), Send::Acknowledged, inputId}});
+    replacement.server.expectReceipts({{livePayload.size(), Send::Acknowledged}});
+    healthy.server.expectReceipts({{healthyPayloads[0].size(), Send::Acknowledged},
+                                  {healthyPayloads[1].size(), Send::Acknowledged},
+                                  {healthyPayloads[2].size(), Send::Acknowledged},
+                                  {healthyPayloads[3].size(), Send::Acknowledged}});
+    healthy.client.expectReceipts({});
+    owners.remote.call([&] {
+        GAMENET_TEST_ASSERT(old.client.received == std::vector<std::string>{unacknowledged});
+        GAMENET_TEST_ASSERT(replacement.client.received == std::vector<std::string>{livePayload});
+        GAMENET_TEST_ASSERT(healthy.client.received == healthyPayloads);
+        stats.healthyReceived = healthy.client.received.size();
+    });
+    stats.ackDrops = relay.drops();
+    GAMENET_TEST_ASSERT(stats.ackDrops >= 3 && stats.staleBroadcast == 4 &&
+                        stats.healthyReceived == 4 && stats.accepted == 7 &&
+                        stats.acknowledged == 6 && stats.cancelled == 1 && !stats.failed);
+    owners.checkDrained();
+    return stats;
+}
+
+void runChurn(std::chrono::seconds minimumDuration) {
+    ChurnOwners owners;
+    std::uint32_t conv = 1000;
+    std::size_t rounds = 0;
+    const auto start = base::now();
+    do {
+        const bool v6 = rounds % 2 != 0;
+        const auto s = churnRound(owners, v6, conv);
+        ++rounds;
+        std::cout << "KCP_C3_CHURN round=" << rounds << " family=" << (v6 ? 6 : 4)
+                  << " ack_drops=" << s.ackDrops << " stale_broadcast=" << s.staleBroadcast
+                  << " stale_logic=" << s.staleLogic << " healthy_received=" << s.healthyReceived
+                  << " accepted=" << s.accepted << " acknowledged=" << s.acknowledged
+                  << " cancelled=" << s.cancelled << " failed=" << s.failed
+                  << " residual=0" << std::endl;
+    } while (rounds < 2 || base::now() - start < minimumDuration);
+    if (minimumDuration > 0s) {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(base::now() - start);
+        std::cout << "KCP_C3_SOAK elapsed_ms=" << elapsed.count() << " rounds=" << rounds << std::endl;
+    }
+}
 } // namespace
-int main() {
-    run(false);
-    run(true);
+int main(int argc, char **argv) {
+    if (argc == 1) {
+        runChurn(0s);
+        run(false);
+        run(true);
+        return 0;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--churn-soak") {
+        runChurn(30min);
+        return 0;
+    }
+    std::cerr << "usage: " << argv[0] << " [--churn-soak]\n";
+    return 2;
 }

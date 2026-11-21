@@ -44,6 +44,14 @@ local ACK semantics and release/performance boundaries remain unchanged.
 
 tests/integration/kcp/test_kcp_game_layers.cpp verifies these contracts over real
 IPv4/IPv6 sockets and distinct owner loops with deterministic execution barriers.
+The repeated churn case keeps the same owners alive across rounds. A bounded
+loopback relay forwards the impaired peer's data and drops its real return
+ACKs through same-endpoint refresh and cross-owner replacement. Before each
+refresh, replacement or explicit close, the coordinator holds both a routed
+broadcast task and a logic command. A healthy peer on another owner receives
+the same broadcast while the stale target is still parked. Each round checks
+the old close and late offline, fresh-generation delivery, local send terminals,
+and empty queues, timers and native storage before reusing the owners.
 It joins all five native platform/sanitizer lanes and full Clang TSan inventory;
 existing independent interoperability, both 20k fuzz campaigns and ON/OFF
 consumers stay required. Update exact inventories and reject missing/skipped
