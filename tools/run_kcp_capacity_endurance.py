@@ -133,6 +133,8 @@ def verify_output(output):
     demand(d.get('schema') == SCHEMA and d.get('status') == 'passed', 'incomplete C4 evidence')
     demand(d.get('promotion') is False and d.get('evidence_class') == 'development', 'promotion/class')
     demand(d.get('profile') in ('release', 'asan', 'tsan'), 'sanitizer profile')
+    demand(d.get('mode') in ('smoke', 'soak'), 'mode')
+    demand(d['mode'] != 'soak' or d['profile'] == 'release', 'soak requires the Release profile')
     demand(re.fullmatch('[0-9a-f]{40}', d.get('commit_sha', '')), 'source commit')
     demand((output/'commit.log').read_text(encoding='utf-8').strip() == d['commit_sha'], 'raw source commit drift')
     demand((output/'worktree.log').read_text(encoding='utf-8') == d.get('working_tree'), 'raw worktree drift')
@@ -148,8 +150,7 @@ def verify_output(output):
     demand(source and all(re.fullmatch('[0-9a-f]{64}', v) for v in source.values()), 'source inventory')
     demand(all(source.get(p) == sha for p, sha in d['source_inputs'].items()), 'source binding')
     demand(d.get('binary_sha256') == digest(output/'native-tool.bin'), 'binary identity')
-    expected = [(n, f) for n in (1, 8, 32) for f in (4, 6)] if d.get('mode') == 'smoke' else [(32, 0)]
-    demand(d.get('mode') in ('smoke', 'soak'), 'mode')
+    expected = [(n, f) for n in (1, 8, 32) for f in (4, 6)] if d['mode'] == 'smoke' else [(32, 0)]
     duration = 2 if d['mode'] == 'smoke' else 1800
     samples = d.get('samples', [])
     demand(len(samples) == len(expected), 'missing/restarted sample')
@@ -190,6 +191,15 @@ def verify_output(output):
         err = (output/sample['stderr']).read_text(encoding='utf-8', errors='replace')
         demand(not re.search(r'ERROR: (AddressSanitizer|ThreadSanitizer)|WARNING: ThreadSanitizer|runtime error:', err), 'sanitizer report')
     cache = (output/'CMakeCache.txt').read_text(encoding='utf-8')
+    if d['mode'] == 'soak':
+        build_types = re.findall(r'^CMAKE_BUILD_TYPE:[^=\n]+=(.*)$', cache, re.MULTILINE)
+        demand(build_types == ['Release'], 'soak requires a Release CMake build type')
+        # Multi-config generators select the actual configuration at build time.
+        command = json.loads((output/'build-command.json').read_text(encoding='utf-8'))
+        demand(isinstance(command, list) and command[1:2] == ['--build'] and command.count('--config') == 1,
+               'invalid soak build command')
+        config_index = command.index('--config') + 1
+        demand(command[config_index:config_index+1] == ['Release'], 'soak requires a Release build command')
     for flag in ('GAMENET_ENABLE_UDP', 'GAMENET_ENABLE_KCP', 'GAMENET_BUILD_KCP_VALIDATION'):
         demand(flag+':BOOL=ON' in cache, 'build flag '+flag)
     for flag, on in [('GAMENET_ENABLE_ASAN_UBSAN', d['profile'] == 'asan'), ('GAMENET_ENABLE_TSAN', d['profile'] == 'tsan')]:

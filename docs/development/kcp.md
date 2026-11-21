@@ -23,6 +23,14 @@ N=32 process for at least 1800 seconds, alternating complete IPv4/IPv6 cycles;
 the current cycle finishes before final settlement. Run soak on both Windows
 and Linux. Sanitizer smoke does not count as a 30-minute development run.
 
+To run both native Release samples on GitHub Actions, select **Optional bounded
+standard KCP** under Actions, choose the branch, and enable `c4_soak`. With
+GitHub CLI, use `gh workflow run kcp.yml --ref <branch> -f c4_soak=true`.
+Both jobs check out the dispatch commit and run for at least 1800 seconds.
+Each uploads its raw evidence after a separate reader invocation. Download an
+artifact and run `python tools/run_kcp_capacity_endurance.py --verify-output <extracted-directory>`
+to repeat the check.
+
 Every cycle observes full pending pressure, refuses excess sessions/messages,
 drops actual data and ACK datagrams, requires healthy-peer progress during a
 blackhole, restores ordered empty/fragmented messages, times out an unreachable

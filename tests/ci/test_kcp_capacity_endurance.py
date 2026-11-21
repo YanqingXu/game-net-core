@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from pathlib import Path
 
@@ -75,12 +76,14 @@ class Evidence(unittest.TestCase):
     def test_release_rss_limit(self):
         data=events();data[1]['peak_rss_bytes']=600*1048576;self.rejected(data)
     def test_sanitizer_rss_is_diagnostic(self):
-        data=events();data[1]['peak_rss_bytes']=600*1048576
+        data=events(8,4,2);data[1]['peak_rss_bytes']=600*1048576
         data[2]['peak_rss_bytes']=600*1048576;data[-1]['peak_rss_bytes']=600*1048576
-        c4.validate_events(data,8,0,1800,123,sanitized=True)
+        c4.validate_events(data,8,4,2,123,sanitized=True)
 
 
-class PortableEvidence(unittest.TestCase):
+class PortableEvidenceFixture(unittest.TestCase):
+    mode = 'smoke'
+
     def setUp(self):
         # Synthetic local evidence must not inherit the host workflow identity.
         # Keep PATH/runtime settings for the real malformed-child process test.
@@ -91,7 +94,7 @@ class PortableEvidence(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.out=Path(self.temp.name)
         self.d=dict(schema=c4.SCHEMA,status='passed',evidence_class='development',promotion=False,
-                    profile='release',mode='smoke',platform='Linux',commit_sha='a'*40,
+                    profile='release',mode=self.mode,platform='Linux',commit_sha='a'*40,
                     workflow_sha=None,run_id=None,run_attempt=None,working_tree='local',samples=[])
         source={}
         for name in c4.INPUTS:
@@ -103,35 +106,85 @@ class PortableEvidence(unittest.TestCase):
         self.d['binary_sha256']=c4.digest(self.out/'native-tool.bin')
         (self.out/'commit.log').write_text('a'*40+'\n')
         (self.out/'worktree.log').write_text('local')
-        (self.out/'CMakeCache.txt').write_text('\n'.join([
-            'GAMENET_ENABLE_UDP:BOOL=ON','GAMENET_ENABLE_KCP:BOOL=ON',
-            'GAMENET_BUILD_KCP_VALIDATION:BOOL=ON','GAMENET_ENABLE_ASAN_UBSAN:BOOL=OFF',
-            'GAMENET_ENABLE_TSAN:BOOL=OFF']))
-        (self.out/'compilation.json').write_text('[]')
+        self.configure_build('release')
         (self.out/'compiler.cmake').write_text('set(CMAKE_CXX_COMPILER_ID "GNU")\nset(CMAKE_CXX_COMPILER_VERSION "13.3.0")\n')
         self.d.update(compiler_id='GNU',compiler_version='13.3.0')
-        for n in [1,8,32]:
-            for family in [4,6]:
-                stem=f'{n}-{family}'
-                rows=events(n,family,2)
-                sample=dict(sessions=n,family=family,duration_seconds=2,pid=123,returncode=0,
-                    deadline_expired=False,events=stem+'.jsonl',stderr=stem+'.stderr',rss=stem+'.rss',
-                    command=stem+'.command',wall_seconds=2.1,
-                    started_utc='2026-11-17T00:00:00+00:00',finished_utc='2026-11-17T00:00:02.100+00:00',
-                    proof=c4.validate_events(rows,n,family,2,123))
-                (self.out/sample['events']).write_text(''.join(json.dumps(r)+'\n' for r in rows))
-                (self.out/sample['stderr']).write_text('')
-                (self.out/sample['rss']).write_text(''.join(json.dumps(dict(pid=123,elapsed_seconds=t,rss_bytes=1000000,peak_rss_bytes=2000000))+'\n' for t in [0.1,2.0]))
-                (self.out/sample['command']).write_text(json.dumps(['tool','--sessions',str(n),'--family',str(family),'--duration-seconds','2','--conv-base','1000']))
-                self.d['samples'].append(sample)
+        profiles = [(32, 0, 1800)] if self.mode == 'soak' else [
+            (n, family, 2) for n in (1, 8, 32) for family in (4, 6)]
+        start = datetime(2026, 11, 17, tzinfo=timezone.utc)
+        for n, family, duration in profiles:
+            stem=f'{n}-{family}'
+            rows=events(n,family,duration)
+            wall_seconds = duration + 0.1
+            sample=dict(sessions=n,family=family,duration_seconds=duration,pid=123,returncode=0,
+                deadline_expired=False,events=stem+'.jsonl',stderr=stem+'.stderr',rss=stem+'.rss',
+                command=stem+'.command',wall_seconds=wall_seconds,started_utc=start.isoformat(),
+                finished_utc=(start + timedelta(seconds=wall_seconds)).isoformat(),
+                proof=c4.validate_events(rows,n,family,duration,123))
+            (self.out/sample['events']).write_text(''.join(json.dumps(r)+'\n' for r in rows))
+            (self.out/sample['stderr']).write_text('')
+            (self.out/sample['rss']).write_text(''.join(json.dumps(dict(pid=123,elapsed_seconds=t,rss_bytes=1000000,peak_rss_bytes=2000000))+'\n' for t in [0.1,duration]))
+            (self.out/sample['command']).write_text(json.dumps(['tool','--sessions',str(n),'--family',str(family),'--duration-seconds',str(duration),'--conv-base','1000']))
+            self.d['samples'].append(sample)
         self.seal()
+
+    def configure_build(self, profile):
+        self.d['profile'] = profile
+        config = 'Release' if profile == 'release' else 'Debug'
+        (self.out/'build-command.json').write_text(json.dumps(['cmake', '--build', 'build', '--config', config,
+                                                              '--target', 'gamenet_kcp_validation']))
+        (self.out/'CMakeCache.txt').write_text('\n'.join([
+            'CMAKE_BUILD_TYPE:STRING='+config, 'GAMENET_ENABLE_UDP:BOOL=ON', 'GAMENET_ENABLE_KCP:BOOL=ON',
+            'GAMENET_BUILD_KCP_VALIDATION:BOOL=ON', 'GAMENET_ENABLE_ASAN_UBSAN:BOOL='+('ON' if profile == 'asan' else 'OFF'),
+            'GAMENET_ENABLE_TSAN:BOOL='+('ON' if profile == 'tsan' else 'OFF')]))
+        flags = {'release': '-O3', 'asan': '-fsanitize=address,undefined', 'tsan': '-fsanitize=thread'}
+        (self.out/'compilation.json').write_text(json.dumps([{'command': 'c++ '+flags[profile]}]))
+
     def seal(self):
         self.d['files']=c4.hashes(self.out)
         (self.out/'manifest.json').write_text(json.dumps(self.d))
+
+
+class SoakReadback(PortableEvidenceFixture):
+    mode = 'soak'
+
+    def test_release_soak(self):
+        c4.verify_output(self.out)
+
+    def test_sanitizer_soak_rejected(self):
+        for profile in ('asan', 'tsan'):
+            with self.subTest(profile=profile):
+                self.configure_build(profile)
+                self.seal()
+                with self.assertRaisesRegex(ValueError, 'soak requires the Release profile'):
+                    c4.verify_output(self.out)
+
+    def test_soak_with_debug_cache_rejected(self):
+        cache = self.out/'CMakeCache.txt'
+        cache.write_text(cache.read_text().replace('=Release', '=Debug'))
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'soak requires a Release CMake build type'):
+            c4.verify_output(self.out)
+
+    def test_soak_with_debug_build_command_rejected(self):
+        command = self.out/'build-command.json'
+        command.write_text(command.read_text().replace('"Release"', '"Debug"'))
+        self.seal()
+        with self.assertRaisesRegex(ValueError, 'soak requires a Release build command'):
+            c4.verify_output(self.out)
+
+
+class PortableEvidence(PortableEvidenceFixture):
     def reject(self,reseal=True):
         if reseal:self.seal()
         with self.assertRaises((ValueError,FileNotFoundError)):c4.verify_output(self.out)
     def test_valid_portable_readback(self):c4.verify_output(self.out)
+    def test_sanitizer_smoke(self):
+        for profile in ('asan', 'tsan'):
+            with self.subTest(profile=profile):
+                self.configure_build(profile)
+                self.seal()
+                c4.verify_output(self.out)
     def ci_fixture(self):
         self.d.update(workflow_sha='a'*40,run_id='101',run_attempt='2',working_tree='')
         (self.out/'worktree.log').write_text('')
