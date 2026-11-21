@@ -58,6 +58,24 @@ consumers stay required. Update exact inventories and reject missing/skipped
 records. Development evidence records dirty source honestly and cannot promote
 HP0, production readiness or a release.
 
+## Installed-consumer gateway replay
+
+The authorized development benchmark under benchmarks/kcp_gateway_replay
+replays the pinned gateway Q3 pressure and Q5 replacement cadence through the
+installed KCP adapter and broadcast components. Its bounded profile configures
+two server owners, one affected recipient and a separate client loop with a
+bounded native UDP relay. A management loop owns the indexes and routing.
+Only the coordinator waits for owner replies. Endpoints and owned messages
+cross owners through existing executors. Retirement waits for terminal
+callbacks and native cleanup before destroying the fixtures.
+
+tools/run_kcp_gateway_replay.py preserves publication, KCP admission,
+terminal, remote delivery and fault records. Readback derives healthy P99,
+typed refusal and recovery from the raw rows, including the actual receipt of
+the replacement generation. The standalone benchmark uses a Release package
+and has a short installed-package run in each Release lane. Its measurements
+describe the pinned consumer replay on the recorded hosts.
+
 ## Authorization and invariants
 
 The user authorized KCP-C2 on 2026-11-16. Add the separate optional

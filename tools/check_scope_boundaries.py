@@ -279,7 +279,11 @@ def check_text(root: Path, path: Path) -> list[Violation]:
         for kind, pattern in TEXT_PATTERNS:
             for match in pattern.finditer(line):
                 if kind == "deferred high-level module" and match.group(0).startswith("Kcp"):
-                    if rel.startswith(("src/kcp/", "include/gamenet/kcp/", "src/kcp_transport/", "include/gamenet/kcp_transport/", "examples/kcp_echo/", "benchmarks/kcp_validation/", "tests/unit/kcp/", "tests/contract/kcp/", "tests/integration/kcp/", "tests/fuzz/kcp/", "tests/cmake/kcp_install_consumer/")) or rel in {"tests/support/KcpSequence.h", "tests/ci/run_clang_tsan_gate.py", "tests/api/test_public_api_manifest.py", "tests/cmake/test_migration_status_contract.py"}:
+                    if rel.startswith(("src/kcp/", "include/gamenet/kcp/", "src/kcp_transport/", "include/gamenet/kcp_transport/", "examples/kcp_echo/", "benchmarks/kcp_validation/", "tests/unit/kcp/", "tests/contract/kcp/", "tests/integration/kcp/", "tests/fuzz/kcp/", "tests/cmake/kcp_install_consumer/")) or rel in {
+                        "benchmarks/kcp_gateway_replay/replay.cpp",
+                        "tests/support/KcpSequence.h", "tests/ci/run_clang_tsan_gate.py",
+                        "tests/api/test_public_api_manifest.py", "tests/cmake/test_migration_status_contract.py",
+                    }:
                         continue
                 if kind == "deferred high-level module" and match.group(0) == "UdpSocket":
                     if rel.startswith((
@@ -290,6 +294,7 @@ def check_text(root: Path, path: Path) -> list[Violation]:
                     )) or rel in {
                         "tests/support/RawUdp.h",
                         "tests/integration/kcp/test_kcp_game_layers.cpp",  # C3 ACK relay
+                        "benchmarks/kcp_gateway_replay/replay.cpp",  # Gateway replay loss relay
                         "tests/api/test_public_api_manifest.py",
                         "tests/cmake/test_migration_status_contract.py",
                     }:

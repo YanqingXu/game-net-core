@@ -1,0 +1,30 @@
+// Copyright 2026 Yanqing Xu
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+namespace gateway_replay {
+inline constexpr std::string_view profileSha256 = "@profile_sha256@";
+inline constexpr std::int64_t epochUs = @epoch_us@;
+inline constexpr std::int64_t broadcastIntervalUs = @broadcast_interval_us@;
+inline constexpr std::int64_t firstBroadcastUs = @first_broadcast_us@;
+inline constexpr int warmupBroadcasts = @warmup_broadcasts@;
+inline constexpr int broadcastRecipients = @broadcast_recipients@;
+inline constexpr int slowRecipients = @slow_recipients@;
+inline constexpr int routerFanoutLimit = @router_fanout_limit@;
+inline constexpr int dispatchTaskBytes = @dispatch_task_bytes@;
+inline constexpr int oversizeBodyBytes = @oversize_body_bytes@;
+inline constexpr std::int64_t oversizeAtUs = @oversize_at_us@;
+inline constexpr std::int64_t faultBeginUs = @fault_begin_us@;
+inline constexpr std::int64_t pressureAtUs = @pressure_at_us@;
+inline constexpr int pressureMessages = @pressure_messages@;
+inline constexpr int pressureBodyBytes = @pressure_body_bytes@;
+inline constexpr std::int64_t faultRestoreUs = @fault_restore_us@;
+inline constexpr int smokeEpochs = @smoke_epochs@;
+inline constexpr int measureEpochs = @measure_epochs@;
+inline constexpr std::string_view warmupBody = "@warmup_body@";
+inline constexpr std::string_view broadcastBody = "@broadcast_body@";
+inline constexpr std::string_view recoveryBody = "@recovery_body@";
+} // namespace gateway_replay
