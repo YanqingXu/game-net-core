@@ -1,0 +1,39 @@
+{
+  "schema": "gamenet.kcp_gateway_profile.v1",
+  "provenance": {
+    "consumer": "gamenet-game-gateway",
+    "consumer_commit": "4e2457e81f0ba2154b6aca2e6cd945daf793fbba",
+    "evidence_commit": "0a8fe1e43cb11ac32daa8f9266d3b84924736e67",
+    "replay_cycles": 3743,
+    "replay_elapsed_us": 3600015000,
+    "source_sha256": {
+      "tests/fixtures/q5_gateway_replay_v1.trace": "04c37ebf03b013a8a9f1f29c77b411ed50c4a7b38b74187237caa9067d019798",
+      "tests/integration/test_queued_event_output_shutdown.cpp": "1d0a84fb1247d09ba171a5ef792f52d93d240bd05ca12c98ba7fbf782cb0e2e1",
+      "tests/integration/test_gateway_replay_fault_endurance.cpp": "0f465e5f0569186fcdbdf16ed32108281aec9deccbf03546d6442cc8847a73c4",
+      "src/queued_event_gateway.cpp": "c3a0c94fdcb9525b3f9e864cd38faec7deeba5a562674316e1f6484b88baf039"
+    }
+  },
+  "workload": {
+    "epoch_us": 961799,
+    "broadcast_interval_us": 50000,
+    "first_broadcast_us": 25000,
+    "warmup_broadcasts": 20,
+    "broadcast_recipients": 2,
+    "slow_recipients": 1,
+    "router_fanout_limit": 8,
+    "dispatch_task_bytes": 64,
+    "oversize_body_bytes": 128,
+    "oversize_at_us": 75000,
+    "fault_begin_us": 100000,
+    "pressure_at_us": 150000,
+    "pressure_messages": 256,
+    "pressure_body_bytes": 3900,
+    "fault_restore_us": 600000,
+    "smoke_epochs": 3,
+    "measure_epochs": 64,
+    "measure_repetitions": 3,
+    "warmup_body": "fanout",
+    "broadcast_body": "replay-broadcast:scene:0",
+    "recovery_body": "ok:RECOVER"
+  }
+}

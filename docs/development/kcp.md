@@ -88,6 +88,13 @@ enabled inventory is 143; focused UDP/KCP sanitizer inventory is ten; default is
 133. The gate verifies C3 is TSan-instrumented as well as the allocation-fault
 contract. No new installed signature or production/performance claim is added.
 
+The game gateway replay runs the pinned Q3/Q5 workload against a Release install
+on Windows or Linux. Its
+archived profile and raw ledgers support independent readback of healthy P99,
+per-class refusal and recovery to the first new-generation application receive.
+Both KCP Release lanes verify the installed-package smoke sample.
+[Game gateway replay instructions](../../benchmarks/kcp_gateway_replay/README.md)
+
 `GameNet::kcp` is a provisional message transport over explicit UDP peers. Build
 with both `-DGAMENET_ENABLE_KCP=ON -DGAMENET_ENABLE_UDP=ON`; both default OFF.
 There is no OpenSSL, custom wire header or TransportEndpoint dependency.

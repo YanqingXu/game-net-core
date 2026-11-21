@@ -53,7 +53,9 @@ def tracked_and_untracked_files(repo_root: Path) -> list[Path]:
 
 
 def comment_prefix(path: Path) -> str | None:
-    if path.suffix.lower() in CPP_SUFFIXES:
+    if path.suffix.lower() in CPP_SUFFIXES or (
+        path.suffix.lower() == ".in" and Path(path.stem).suffix.lower() in CPP_SUFFIXES
+    ):
         return "//"
     if path.name == "CMakeLists.txt" or path.suffix.lower() in HASH_SUFFIXES:
         return "#"
