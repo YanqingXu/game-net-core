@@ -238,6 +238,10 @@ def main() -> None:
     assert_clean(repo_root, "src/kcp/Engine.cc", '#include "gamenet/udp/UdpPeer.h"\nnamespace gamenet::kcp {class KcpSession {}; }\n')
     udp_socket_reference = '#include "gamenet/udp/UdpSocket.h"\nusing gamenet::udp::UdpSocket;\n'
     assert_clean(repo_root, "tests/integration/kcp/test_kcp_game_layers.cpp", udp_socket_reference)
+    replay_references = udp_socket_reference + 'using gamenet::kcp::KcpSession;\n'
+    assert_clean(repo_root, "benchmarks/kcp_gateway_replay/replay.cpp", replay_references)
+    assert_violation(repo_root, "benchmarks/kcp_gateway_replay/other.cpp", replay_references,
+                     "deferred high-level module")
     assert_violation(repo_root, "tests/integration/kcp/OtherFixture.cpp",
                      udp_socket_reference, "deferred high-level module")
     for layer in ("core", "udp", "transport", "tls", "rpc", "protocol"):

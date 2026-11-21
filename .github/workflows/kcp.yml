@@ -10,10 +10,10 @@ on:
         default: false
   push:
     branches: [main]
-    paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','benchmarks/kcp_validation/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','intents/usecases/kcp_capacity_endurance.intent.md','rules/**','.github/workflows/kcp.yml']
+    paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','benchmarks/kcp_validation/**','benchmarks/kcp_gateway_replay/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','intents/usecases/kcp_capacity_endurance.intent.md','rules/**','.github/workflows/kcp.yml']
   pull_request:
     branches: [main]
-    paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','benchmarks/kcp_validation/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','intents/usecases/kcp_capacity_endurance.intent.md','rules/**','.github/workflows/kcp.yml']
+    paths: ['src/**','include/**','tests/**','third_party/kcp/**','cmake/**','tools/**','benchmarks/kcp_validation/**','benchmarks/kcp_gateway_replay/**','api/public_api_manifest.json','CMakeLists.txt','intents/modules/kcp_transport.intent.md','intents/usecases/kcp_capacity_endurance.intent.md','rules/**','.github/workflows/kcp.yml']
 permissions:
   contents: read
 concurrency:
@@ -167,6 +167,11 @@ jobs:
           python tests/ci/run_kcp_contracts.py --profile '${{ matrix.profile }}' --build-dir build-kcp --output out/kcp-evidence
       - name: Read back evidence
         run: python tests/ci/run_kcp_contracts.py --verify-output out/kcp-evidence
+      - name: Verify installed gateway replay smoke
+        if: matrix.profile == 'release'
+        run: |
+          python tools/run_kcp_gateway_replay.py --package-prefix build-kcp/prefix --build-dir build-kcp-gateway --output out/kcp-gateway-replay --mode smoke
+          python tools/run_kcp_gateway_replay.py --verify-output out/kcp-gateway-replay
       - name: Run C4 capacity, fault recovery and zero-residual smoke
         run: |
           python tools/run_kcp_capacity_endurance.py --profile '${{ matrix.profile }}' --build-dir build-kcp --output out/kcp-c4-evidence
@@ -189,6 +194,14 @@ jobs:
         with:
           name: kcp-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: out/kcp-evidence/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain gateway replay evidence
+        if: always() && matrix.profile == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcp-gateway-replay-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/kcp-gateway-replay/
           if-no-files-found: error
           retention-days: 14
   fuzz:

@@ -32,6 +32,21 @@ def verify_manual_soak(workflow):
     assert f'path: {evidence}/' in upload and 'if-no-files-found: error' in upload
 
 
+def verify_gateway_replay(workflow):
+    assert workflow.count("'benchmarks/kcp_gateway_replay/**'") == 2
+    kcp = job_block(workflow, 'kcp')
+    smoke = step_block(kcp, 'Verify installed gateway replay smoke')
+    assert "if: matrix.profile == 'release'" in smoke
+    command = 'python tools/run_kcp_gateway_replay.py'
+    evidence = 'out/kcp-gateway-replay'
+    assert f'{command} --package-prefix build-kcp/prefix --build-dir build-kcp-gateway --output {evidence} --mode smoke' in smoke
+    assert f'{command} --verify-output {evidence}' in smoke
+    upload = step_block(kcp, 'Retain gateway replay evidence')
+    assert "if: always() && matrix.profile == 'release'" in upload
+    assert 'name: kcp-gateway-replay-${{ matrix.lane }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}' in upload
+    assert f'path: {evidence}/' in upload and 'if-no-files-found: error' in upload
+
+
 def rejects(f,v):
     try:f(v)
     except ValueError:return
@@ -72,6 +87,7 @@ def main():
         bad=copy.deepcopy(INTEROP);bad[key]=value;rejects(verify_interop,bad)
     repo=Path(__file__).resolve().parents[2];workflow=(repo/'.github/workflows/kcp.yml').read_text(encoding='utf-8')
     verify_manual_soak(workflow)
+    verify_gateway_replay(workflow)
     for token in ['linux-release','linux-asan-ubsan','linux-tsan','windows-release','windows-asan','--with-kcp','run_kcp_contracts.py','--verify-output','if: always()','if-no-files-found: error',
                   'clang-tsan-full:','clang++-18','libclang-rt-18-dev','run_clang_tsan_gate.py','test_clang_tsan_gate.py','--verify-output out/clang-tsan-evidence','include-hidden-files: true']:
         assert token in workflow,token
