@@ -28,6 +28,22 @@ jobs:
           ref: ${{ env.PACKAGE_REVISION }}
           path: package-source
           persist-credentials: false
+      - name: Detect the isolated Send-flush experiment
+        id: experiment
+        shell: bash
+        run: |
+          if [[ -f attribution-source/benchmarks/io_uring/installed_acceptance/callback-send-coalescing.patch ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check out a separate candidate package
+        if: steps.experiment.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PACKAGE_REVISION }}
+          path: variant-source
+          persist-credentials: false
       - name: Provision native CPU and syscall observers
         timeout-minutes: 5
         shell: bash
@@ -37,7 +53,8 @@ jobs:
           mkdir -p "$logs"
           packages=()
           command -v strace >/dev/null || packages+=(strace)
-          if ! perf version >/dev/null 2>&1 && ! compgen -G '/usr/lib/linux-tools/*/perf' >/dev/null; then
+          if [[ "${{ steps.experiment.outputs.enabled }}" == false ]] \
+            && ! perf version >/dev/null 2>&1 && ! compgen -G '/usr/lib/linux-tools/*/perf' >/dev/null; then
             packages+=(linux-tools-generic)
           fi
           {
@@ -66,6 +83,7 @@ jobs:
             -DGameNetCore_DIR="$prefix/lib/cmake/GameNetCore" 2>&1 | tee "$logs/consumer-configure.log"
           cmake --build "$RUNNER_TEMP/consumer-build" --parallel 2 --verbose 2>&1 | tee "$logs/consumer-build.log"
       - name: Run the longer baseline and owner-thread profiling
+        if: steps.experiment.outputs.enabled == 'false'
         shell: bash
         run: |
           set -euo pipefail
@@ -75,8 +93,62 @@ jobs:
             --package-build "$RUNNER_TEMP/package-build" --consumer-build "$RUNNER_TEMP/consumer-build" \
             --prefix "$RUNNER_TEMP/package-prefix" --output "$RUNNER_TEMP/io-uring-cpu"
       - name: Replay the raw evidence independently
+        if: steps.experiment.outputs.enabled == 'false'
         run: |
           python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_attribution.py \
+            --verify-output "$RUNNER_TEMP/io-uring-cpu"
+      - name: Build and test the isolated candidate
+        if: steps.experiment.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/io-uring-cpu/variant/build"
+          build="$RUNNER_TEMP/variant-package-build"
+          prefix="$RUNNER_TEMP/variant-prefix"
+          mkdir -p "$logs"
+          patch="$GITHUB_WORKSPACE/attribution-source/benchmarks/io_uring/installed_acceptance/callback-send-coalescing.patch"
+          git -C variant-source apply --check "$patch"
+          git -C variant-source apply "$patch"
+          git -C variant-source diff --check
+          cmake -S variant-source -B "$build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DGAMENET_ENABLE_EXPERIMENTAL=ON \
+            -DGAMENET_BUILD_TESTING=OFF -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_INSTALL_PREFIX="$prefix" 2>&1 | tee "$logs/package-configure.log"
+          cmake --build "$build" --parallel 2 2>&1 | tee "$logs/package-build.log"
+          cmake --install "$build" 2>&1 | tee "$logs/package-install.log"
+          cmake -S attribution-source/benchmarks/io_uring/installed_acceptance \
+            -B "$RUNNER_TEMP/variant-consumer-build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGameNetCore_DIR="$prefix/lib/cmake/GameNetCore" 2>&1 | tee "$logs/consumer-configure.log"
+          cmake --build "$RUNNER_TEMP/variant-consumer-build" --parallel 2 --verbose \
+            2>&1 | tee "$logs/consumer-build.log"
+          cmake -S variant-source -B "$build" -DGAMENET_BUILD_TESTING=ON 2>&1 | tee "$logs/contracts-configure.log"
+          cmake --build "$build" --target gamenet_io_uring_contracts --parallel 2 2>&1 | tee "$logs/contracts-build.log"
+          ctest --test-dir "$build" -C Release --no-tests=error --output-on-failure \
+            --output-junit "$logs/io-uring-contracts.xml" \
+            -R '^contract\.io_engine\.test_(io_uring_|cross_backend_tcp_semantics$)' \
+            2>&1 | tee "$logs/io-uring-contracts.log"
+          cmp "$build/src/core/libgamenet_core.a" "$prefix/lib/libgamenet_core.a"
+          cmp "$build/src/experimental/io_uring/libgamenet_experimental_io_uring.a" \
+            "$prefix/lib/libgamenet_experimental_io_uring.a"
+          cmake -S variant-source -B "$build" -DGAMENET_BUILD_TESTING=OFF \
+            2>&1 | tee "$logs/package-configure-after-test.log"
+      - name: Measure same-host immediate and coalesced submissions
+        if: steps.experiment.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py \
+            --source package-source --expected-source "$PACKAGE_REVISION" \
+            --package-build "$RUNNER_TEMP/package-build" --consumer-build "$RUNNER_TEMP/consumer-build" \
+            --prefix "$RUNNER_TEMP/package-prefix" --output "$RUNNER_TEMP/io-uring-cpu" \
+            --variant-source variant-source --variant-prefix "$RUNNER_TEMP/variant-prefix" \
+            --variant-package-build "$RUNNER_TEMP/variant-package-build" \
+            --variant-consumer-build "$RUNNER_TEMP/variant-consumer-build"
+      - name: Replay the paired experiment evidence independently
+        if: steps.experiment.outputs.enabled == 'true'
+        run: |
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py \
             --verify-output "$RUNNER_TEMP/io-uring-cpu"
       - name: Retain metrics, raw profiles, and diagnostics
         uses: actions/upload-artifact@v4

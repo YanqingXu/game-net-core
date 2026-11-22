@@ -1,0 +1,53 @@
+--- a/src/experimental/io_uring/IoUringEventLoopPump.cc
++++ b/src/experimental/io_uring/IoUringEventLoopPump.cc
+@@ -140,13 +140,23 @@
+         ownerLoop_->assertInLoopThread();
+         synchronizeLoopPhase();
+         auto outcome = engine_.enqueueSend(socket, payload, std::move(lease));
+-        flushAccepted(outcome);
++        // Stage at most one Send during owner completion dispatch. A following
++        // Recv re-arm can flush both SQEs via the existing admission path.
++        if (outcome.result == IoUringSubmissionResult::Accepted &&
++            phase_ == Phase::Running && consumerDepth_ != 0 &&
++            options_.engine.entries > 1 && !sendFlushDeferred_) {
++            sendFlushDeferred_ = true;
++        } else {
++            flushAccepted(outcome);
++        }
+         return outcome;
+     }
+ 
+     IoUringCancelResult cancel(IoUringOperationIdentity identity) {
+         ownerLoop_->assertInLoopThread();
+         synchronizeLoopPhase();
++        // The cancellation contract applies to a physically submitted identity.
++        if (sendFlushDeferred_) flushOrFailClosed();
+         const auto result = engine_.cancel(identity);
+         if (result == IoUringCancelResult::Accepted) {
+             flushOrFailClosed();
+@@ -205,6 +215,7 @@
+     }
+ 
+     void flushOrFailClosed() {
++        sendFlushDeferred_ = false;
+         try {
+             const auto flushed = engine_.flush();
+             if (flushed.nativeError != 0) {
+@@ -287,6 +298,9 @@
+             ++metrics_.consumerFailures;
+         }
+         --consumerDepth_;
++        // A callback that pauses reads or has no next operation still commits
++        // its admitted Send in this dispatch, including the exceptional path.
++        if (sendFlushDeferred_) flushOrFailClosed();
+     }
+ 
+     void requestContinuation() noexcept {
+@@ -371,6 +385,7 @@
+     bool lifecycleAttached_{false};
+     bool channelRegistered_{false};
+     bool driving_{false};
++    bool sendFlushDeferred_{false};
+     bool continuationRequested_{false};
+     bool destroyed_{false};
+ };

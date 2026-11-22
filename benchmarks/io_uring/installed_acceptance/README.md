@@ -36,3 +36,28 @@ and can run on Windows or Linux.
 ```sh
 python3 benchmarks/io_uring/installed_acceptance/run_acceptance.py --verify-output /path/to/extracted-artifact
 ```
+
+## Steady-state CPU attribution
+
+`cpu_attribution.py` keeps the 64-connection workload, extends the scored
+steady trials to 4,096 rounds, and runs five interleaved Linux Release pairs.
+Dedicated observation trials use 8,192 rounds for `perf` CPU-clock call stacks
+and 512 rounds for `strace`. The profiler selects the server thread and the
+steady window from raw timestamps. The syscall trace follows the server thread
+between its two phase markers. Timing from those observation trials stays out
+of the scored baseline. Stack groups count inclusive samples and can overlap.
+
+The isolated candidate applies `callback-send-coalescing.patch` to a second
+checkout of the same package commit. The owner can stage one Send while
+dispatching a completion. The next accepted operation flushes the staged Send
+with its own SQE. Cancellation and the end of dispatch also flush a staged Send.
+The experiment compares both installed packages and an epoll reference in
+rotating order on one host, then runs five slow-close pairs. The recorded Linux
+Release io_uring contracts exercise the same archives as the candidate package.
+
+Replay the profile and paired experiment artifacts separately.
+
+```sh
+python3 -B benchmarks/io_uring/installed_acceptance/cpu_attribution.py --verify-output /path/to/profile-evidence
+python3 -B benchmarks/io_uring/installed_acceptance/cpu_variant.py --verify-output /path/to/experiment-evidence
+```
