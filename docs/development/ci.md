@@ -415,6 +415,37 @@ targets appear, or if an installed layer references a component outside the
 allowed one-way dependency matrix. Promoting a component must update active
 scope, intent metadata, dependency rules, tests, and migration status together.
 
+## Linux Core build limits and diagnostics
+
+The four Linux producers cap direct Core, io_uring, package-consumer and
+PacketFramer fuzz builds at two simultaneous build jobs. The build driver
+passes the numerical limit to CMake. The Release gate also uses two jobs
+when building the extracted and upgrade consumers.
+
+Before configuration, each producer uploads a checkpoint with its toolchain
+and `linux-build/preflight.json`. The artifact name starts with
+`ci-linux-build-preflight-` and includes the producer, checkout SHA, run ID
+and attempt. It records CPU affinity, available memory, swap, disk space and,
+where exposed, cgroup limits and OOM counters. This checkpoint remains
+available if the runner stops uploading during a build.
+
+The driver streams compiler output to the job log and
+`ci-evidence/linux-build/<build-directory>.log`. It samples resources every
+15 seconds and records the command, generator, elapsed time and exit code.
+Each direct build gets a ten-minute deadline and up to ten seconds for
+process termination. A build error or timeout fails the step. The final
+evidence upload runs on failure and includes the diagnostic logs already
+written. The Linux Debug job exercises the driver with a successful build,
+a command failure and a short timeout that requires child-process cleanup.
+
+The first PR #40 Release run and the first post-merge main ASan/UBSan run
+reached their 30- and 45-minute job limits during `Build`. Both reached
+configuration successfully and stopped before evidence upload. Same-commit
+retries finished the build steps in 2m16s and 2m37s, respectively. The first
+attempts supplied timeout annotations and no per-build resource or compiler
+records. [Release job](https://github.com/YanqingXu/game-net-core/actions/runs/44923122862/job/136903256823)
+[ASan/UBSan job](https://github.com/YanqingXu/game-net-core/actions/runs/44944077189/job/136967400250)
+
 ## Remote Evidence Boundary
 
 Record immutable validation evidence instead of a self-referential current HEAD:
@@ -457,7 +488,7 @@ The ASan/UBSan job uses:
 ```bash
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON
 python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 133 --output ci-evidence/ctest-inventory.json
-cmake --build build-asan --parallel
+cmake --build build-asan --parallel 2
 ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit "$PWD/ci-evidence/ctest-junit.xml" --output-log "$PWD/ci-evidence/ctest.log"
 ```
 
@@ -487,7 +518,7 @@ worker-owned active-write `TcpServer::stop()` contracts, worker-callback
 ```bash
 cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
 python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 133 --expect-label threading=105 --output ci-evidence/ctest-inventory.json
-cmake --build build-tsan --parallel
+cmake --build build-tsan --parallel 2
 ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit "$PWD/ci-evidence/ctest-junit.xml" --output-log "$PWD/ci-evidence/ctest.log"
 ```
 
@@ -496,7 +527,7 @@ The Linux Release job uses:
 ```bash
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
 python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 133 --output ci-evidence/ctest-inventory.json
-cmake --build build-release --parallel
+cmake --build build-release --parallel 2
 ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit "$PWD/ci-evidence/ctest-junit.xml" --output-log "$PWD/ci-evidence/ctest.log"
 ```
 
@@ -913,7 +944,7 @@ cmake -S tests/cmake/install_consumer -B build-install-consumer \
   -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_PREFIX_PATH="$PWD/build/_install"
 python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json
-cmake --build build-install-consumer --parallel
+cmake --build build-install-consumer --parallel 2
 ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit "$PWD/ci-evidence/install-consumer-junit.xml" --output-log "$PWD/ci-evidence/install-consumer-ctest.log"
 ```
 
@@ -960,17 +991,17 @@ When a CMake toolchain is available locally, use:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON
 python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 133 --output build/ctest-inventory.json
-cmake --build build --parallel
+cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure --timeout 60 --output-junit "$PWD/build/ctest-junit.xml" --output-log "$PWD/build/ctest.log"
 
 cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON
 python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 133 --expect-label threading=105 --output build-tsan/ctest-inventory.json
-cmake --build build-tsan --parallel
+cmake --build build-tsan --parallel 2
 ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit "$PWD/build-tsan/ctest-junit.xml" --output-log "$PWD/build-tsan/ctest.log"
 
 cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON
 python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 133 --output build-release/ctest-inventory.json
-cmake --build build-release --parallel
+cmake --build build-release --parallel 2
 ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit "$PWD/build-release/ctest-junit.xml" --output-log "$PWD/build-release/ctest.log"
 ```
 

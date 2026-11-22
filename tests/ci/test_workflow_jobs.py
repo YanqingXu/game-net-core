@@ -28,6 +28,11 @@ ARTIFACT_NAME = (
 AGGREGATE_ARTIFACT_NAME = (
     "ci-evidence-set-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
 )
+LINUX_BUILD = "python3 tools/run_linux_ci_build.py build"
+LINUX_PREFLIGHT_NAME = (
+    "ci-linux-build-preflight-${{ github.job }}-${{ github.sha }}-"
+    "${{ github.run_id }}-${{ github.run_attempt }}"
+)
 
 
 @dataclass(frozen=True)
@@ -708,6 +713,22 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
     manifest = step_block(job, "Write CI evidence manifest")
     upload = step_block(job, "Upload CI evidence")
     report = step_block(job, "Report CI evidence upload")
+    if contract.interpreter == "python3":
+        require(toolchain, "python3 tools/run_linux_ci_build.py preflight")
+        preflight = step_block(job, "Retain Linux build preflight")
+        require(preflight, f"name: {LINUX_PREFLIGHT_NAME}")
+        require(preflight, "ci-evidence/toolchain.txt")
+        require(preflight, "ci-evidence/linux-build/preflight.json")
+        require(preflight, "uses: actions/upload-artifact@v4")
+        require(preflight, "if-no-files-found: error")
+        require(preflight, "retention-days: 7")
+        require(preflight, "continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}")
+        assert job.index(toolchain) < job.index(preflight) < job.index(configure)
+        require(build, f"run: {LINUX_BUILD} {contract.test_dir}")
+        require(manifest, f"--command '{LINUX_BUILD} {contract.test_dir}'")
+        assert "cmake --build" not in job, f"{job_name} bypasses the bounded build driver"
+        if job_name == "linux-cmake":
+            require(job, "python3 tests/ci/test_linux_ci_build.py")
 
     require(inventory, f"{contract.interpreter} tools/verify_ctest_inventory.py")
     require(inventory, f"--test-dir {contract.test_dir}")
@@ -787,7 +808,8 @@ def verify_job_evidence_contract(job_name: str, job: str, contract: JobContract)
         require(package, "--output-junit")
         require(package, "--output-log")
         require(package, "--timeout 60")
-        assert package.index("tools/verify_ctest_inventory.py") < package.index("cmake --build")
+        build_command = LINUX_BUILD if contract.interpreter == "python3" else "cmake --build"
+        assert package.index("tools/verify_ctest_inventory.py") < package.index(build_command)
         assert job.index(test) < job.index(package) < job.index(manifest)
     if contract.fuzz:
         fuzz = step_block(job, "Run PacketFramer libFuzzer smoke")
@@ -1057,7 +1079,7 @@ def main() -> None:
     )
     require(linux_io_uring_consumer, "build-default-experimental-component-probe")
     require(linux_io_uring_consumer, "default package unexpectedly exposed")
-    build_package = "cmake --build build-io-uring-experimental --parallel"
+    build_package = f"{LINUX_BUILD} build-io-uring-experimental"
     require(linux_io_uring_consumer, build_package)
     for target in (
         "gamenet_core", "gamenet_protocol", "gamenet_rpc", "gamenet_transport", "gamenet_game_session",
@@ -1243,11 +1265,15 @@ def main() -> None:
     assert workflow.count("- name: Write CI evidence manifest") == len(JOB_CONTRACTS)
     assert workflow.count("- name: Upload CI evidence") == len(JOB_CONTRACTS)
     assert workflow.count("- name: Report CI evidence upload") == len(JOB_CONTRACTS)
-    assert workflow.count("uses: actions/upload-artifact@v4") == len(JOB_CONTRACTS) + 1
+    preflight_count = sum(contract.interpreter == "python3" for contract in JOB_CONTRACTS.values())
+    upload_count = len(JOB_CONTRACTS) + preflight_count + 1
+    assert workflow.count("- name: Retain Linux build preflight") == preflight_count
+    assert workflow.count(f"name: {LINUX_PREFLIGHT_NAME}") == preflight_count
+    assert workflow.count("uses: actions/upload-artifact@v4") == upload_count
     assert workflow.count("uses: actions/download-artifact@v4") == 1
     assert workflow.count(
         "continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}"
-    ) == len(JOB_CONTRACTS) + 2
+    ) == upload_count + 1
     assert workflow.count("--artifact-name") == len(JOB_CONTRACTS)
     assert workflow.count("--require-canonical-artifact-name") == len(JOB_CONTRACTS)
     for line in workflow.splitlines():
@@ -1257,12 +1283,12 @@ def main() -> None:
                 "write_ci_evidence invocation"
             )
     assert workflow.count(f"name: {ARTIFACT_NAME}") == len(JOB_CONTRACTS)
-    assert workflow.count("retention-days: 7") == len(JOB_CONTRACTS) + 1
+    assert workflow.count("retention-days: 7") == upload_count
     assert workflow.count(f"--expected-total {EXPECTED_CTEST_TOTAL}") == 2 * len(JOB_CONTRACTS)
     assert len(re.findall(r"--expected-total 2(?=\s|['\"])", workflow)) == 6
     assert workflow.count(f"--expect-label threading={EXPECTED_THREADING_TOTAL}") == 2
     assert workflow.count("path: ci-evidence/") == len(JOB_CONTRACTS)
-    assert workflow.count("if-no-files-found: error") == len(JOB_CONTRACTS) + 1
+    assert workflow.count("if-no-files-found: error") == upload_count
     verify_manifest_writer(repo_root)
     verify_evidence_set_verifier(repo_root)
 
@@ -1299,7 +1325,7 @@ def main() -> None:
     windows_debug = job_block(workflow, "windows-msvc")
     windows_release = job_block(workflow, "windows-msvc-release")
 
-    require(linux_debug, "cmake --build build-install-consumer --parallel")
+    require(linux_debug, f"{LINUX_BUILD} build-install-consumer")
     require(linux_debug, "ctest --test-dir build-install-consumer --output-on-failure")
     asan_runner = step_block(
         linux_asan_ubsan,
