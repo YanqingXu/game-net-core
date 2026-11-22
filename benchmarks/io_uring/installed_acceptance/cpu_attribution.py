@@ -30,7 +30,7 @@ SYSCALLS = (
 )
 PERF_HEADER = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s+(\d+)\.(\d{1,9}):\s+cpu-clock:")
 PERF_FRAME = re.compile(r"^\s*[\da-f]+\s+(.+?)\s+\(([^)]*)\)\s*$")
-SYSCALL_LINE = re.compile(r"^\d+\.\d+\s+(\w+)\((.*)\)\s+=\s+(-?\d+|\?)")
+SYSCALL_LINE = re.compile(r"^\d+\.\d+\s+(\w+)\((.*)\)\s+=\s+(0x[\da-f]+|-?\d+|\?)")
 FRAME_GROUPS = {
     "ring_submission": r"\bio_uring_enter\b|__\w*sys_io_uring_enter|::flushOnce\b",
     "io_uring_pump": r"IoUringEventLoopPumpImpl::(?:driveOneTurn|dispatchNotice)",
@@ -60,7 +60,8 @@ def command_logged(command, stdout, stderr=None, *, env=None, timeout=180):
         result.check_returncode()
 
 
-def trial(binary, backend, scenario, directory, rounds=None, *, mode=None, tool=None):
+def trial(binary, backend, scenario, directory, rounds=None, *, mode=None, tool=None,
+          env=None, trace_syscalls=SYSCALLS):
     directory.mkdir(parents=True)
     target = [binary, backend, scenario, directory]
     if rounds is not None:
@@ -75,11 +76,13 @@ def trial(binary, backend, scenario, directory, rounds=None, *, mode=None, tool=
                        directory / "script.log")
         subprocess.run(["sudo", "-n", "chmod", "a+r", data], check=True)
     elif mode == "syscalls":
-        command_logged([tool, "-qq", "-ttt", "-s", "32", "-e", f"trace={SYSCALLS}",
+        filter_args = ["-e", f"trace={trace_syscalls}"] if trace_syscalls else []
+        trace_env = {**(os.environ if env is None else env), "GAMENET_TRACE_STEADY": "1"}
+        command_logged([tool, "-qq", "-ttt", "-s", "32", *filter_args,
                         "-o", directory / "syscalls.txt", "--", *target],
-                       directory / "trial.log", env={**os.environ, "GAMENET_TRACE_STEADY": "1"})
+                       directory / "trial.log", env=trace_env)
     else:
-        command_logged(target, directory / "trial.log", timeout=60)
+        command_logged(target, directory / "trial.log", env=env, timeout=60)
 
 
 def resolve_perf():
@@ -161,7 +164,7 @@ def profile_syscalls(directory, backend):
             match = SYSCALL_LINE.match(line)
             if not match:
                 if triggered and not ended:
-                    acceptance.require(not line.strip() or line.split(maxsplit=1)[1].startswith("---"),
+                    acceptance.require(not line.strip() or re.match(r"^\d+\.\d+\s+---", line),
                                        f"cannot parse syscall trace row: {line[:160]!r}")
                 continue
             name, arguments, status = match.groups()

@@ -63,3 +63,31 @@ Replay the profile and paired experiment artifacts separately.
 python3 -B benchmarks/io_uring/installed_acceptance/cpu_attribution.py --verify-output /path/to/profile-evidence
 python3 -B benchmarks/io_uring/installed_acceptance/cpu_variant.py --verify-output /path/to/experiment-evidence
 ```
+
+## Completion dispatch budget
+
+The native job restores the exact two coalesced Release archives from Actions
+run 45000725413 after recreating the installed layout from the pinned sources.
+Every child links the same consumer binary and uses the same pair of pinned
+CPUs. The three settings only vary the installed Server's
+`IoUringEventLoopPumpOptions::maxNoticesPerTurn`.
+
+- The steady comparison has one warmup block and six scored blocks that
+  cover all six orders of 16, 32 and 64. Every trial measures 4,096 echo rounds.
+  Reported Pump counters cover the full trial through physical drain and are
+  normalized by its successful echoes, including 16 warmup rounds.
+- Dedicated syscall traces follow the owner thread through 512 echo rounds.
+  The trace includes the full syscall set between the two steady markers.
+- Dedicated timer trials run 2,048 echo rounds with a 1 ms owner-loop probe
+  on absolute deadlines. The replay independently verifies cadence and
+  counts missed deadlines in the workload window. The loop stays live after
+  explicitly cancelling the probe to check timer retirement.
+- Slow-close trials verify the 8 MiB burst after a 250 ms read hold. Every
+  trial checks byte order, one delivery per accepted frame, native operation
+  retirement, graceful close, and zero residual resources.
+
+Replay the archive after extraction with the Python standard library.
+
+```sh
+python3 -B benchmarks/io_uring/installed_acceptance/dispatch_budget.py --verify-output /path/to/dispatch-budget-evidence
+```

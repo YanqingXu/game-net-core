@@ -1,0 +1,95 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: io_uring dispatch budget
+
+on:
+  push:
+    branches: [codex/io-uring-dispatch-budget]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  native-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the installed consumer
+        uses: actions/checkout@v4
+        with:
+          path: budget-source
+          persist-credentials: false
+      - name: Check out the pinned package sources
+        uses: actions/checkout@v4
+        with:
+          ref: 63fe9f16733c8bcdd52b23fe401466f78d28c03d
+          path: variant-source
+          persist-credentials: false
+      - name: Record the native syscall observer
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/io-uring-dispatch-budget/build"
+          mkdir -p "$logs"
+          {
+            uname -a
+            if ! command -v strace >/dev/null; then
+              sudo -n apt-get update -qq
+              sudo -n apt-get install -y --no-install-recommends strace
+            fi
+            strace --version
+          } 2>&1 | tee "$logs/observer-preflight.log"
+      - name: Retrieve the previously tested coalesced Release archives
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 45000725413
+          name: io-uring-cpu-attribution-45000725413-1
+          path: ${{ runner.temp }}/coalesced-evidence
+      - name: Restore the installed package and link one Release consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          harness="$GITHUB_WORKSPACE/budget-source/benchmarks/io_uring/installed_acceptance"
+          result="$RUNNER_TEMP/io-uring-dispatch-budget"
+          logs="$result/build"
+          prefix="$RUNNER_TEMP/variant-prefix"
+          package="$RUNNER_TEMP/variant-package-build"
+          consumer="$RUNNER_TEMP/consumer-build"
+          git -C variant-source apply --check "$harness/callback-send-coalescing.patch"
+          git -C variant-source apply "$harness/callback-send-coalescing.patch"
+          git -C variant-source diff --check
+          cmake -S variant-source -B "$package" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DGAMENET_ENABLE_EXPERIMENTAL=ON \
+            -DGAMENET_BUILD_TESTING=OFF -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_INSTALL_PREFIX="$prefix" 2>&1 | tee "$logs/package-configure.log"
+          cmake --build "$package" --parallel 2 2>&1 | tee "$logs/package-build.log"
+          cmake --install "$package" 2>&1 | tee "$logs/package-install.log"
+          python3 -B "$harness/dispatch_budget.py" \
+            --restore-prior "$RUNNER_TEMP/coalesced-evidence" --prefix "$prefix" \
+            --source variant-source --output "$result" 2>&1 | tee "$logs/archive-reuse.log"
+          cmake -S "$harness" -B "$consumer" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGameNetCore_DIR="$prefix/lib/cmake/GameNetCore" 2>&1 | tee "$logs/consumer-configure.log"
+          cmake --build "$consumer" --parallel 2 --verbose 2>&1 | tee "$logs/consumer-build.log"
+      - name: Run the native 16, 32, and 64 dispatch-budget trials
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 -B budget-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
+            --package-build "$RUNNER_TEMP/variant-package-build" --consumer-build "$RUNNER_TEMP/consumer-build" \
+            --prefix "$RUNNER_TEMP/variant-prefix" --output "$RUNNER_TEMP/io-uring-dispatch-budget"
+      - name: Independently replay package, timer, syscall, and cleanup evidence
+        run: |
+          python3 -B budget-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
+            --verify-output "$RUNNER_TEMP/io-uring-dispatch-budget"
+      - name: Retain raw Release evidence and logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: io-uring-dispatch-budget-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/io-uring-dispatch-budget
+          if-no-files-found: error
+          retention-days: 30

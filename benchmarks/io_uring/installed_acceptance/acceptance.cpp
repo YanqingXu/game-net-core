@@ -57,6 +57,8 @@ constexpr unsigned defaultEchoRounds = 256;
 constexpr unsigned maxEchoRounds = 8192;
 constexpr unsigned burstFrames = 2048;
 constexpr auto slowHold = 250ms;
+constexpr auto timerPeriod = 1ms;
+constexpr std::size_t maxTimerTicks = 60'000;
 constexpr std::size_t hardLimit = burstFrames * frameBytes;
 constexpr std::size_t lowWater = 32U * 1024U;
 constexpr std::size_t highWater = 64U * 1024U;
@@ -69,9 +71,13 @@ void require(bool condition, const char* message) {
     }
 }
 
-Count now() {
+Count timestampNs(Clock::time_point time) {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        Clock::now().time_since_epoch()).count();
+        time.time_since_epoch()).count();
+}
+
+Count now() {
+    return timestampNs(Clock::now());
 }
 
 Count cpu(clockid_t clock) {
@@ -237,6 +243,63 @@ struct Close {
     int nativeError;
 };
 
+struct TimerLedger {
+    struct Tick {
+        Count deadlineNs;
+        Count callbackNs;
+    };
+
+    Count startedNs{};
+    Count firstDeadlineNs{};
+    Count cancelledNs{};
+    Count cancelledDeadlineNs{};
+    std::vector<Tick> ticks;
+};
+
+class TimerProbe {
+public:
+    TimerProbe(net::EventLoop& loop, TimerLedger& ledger) : loop_(loop), ledger_(ledger) {}
+
+    void start() {
+        require(loop_.isInLoopThread() && !timer_.valid(), "start timer probe on owner");
+        ledger_.ticks.reserve(maxTimerTicks);
+        const auto start = Clock::now();
+        deadline_ = start + timerPeriod;
+        ledger_.startedNs = timestampNs(start);
+        ledger_.firstDeadlineNs = timestampNs(deadline_);
+        arm();
+    }
+
+    void cancel() {
+        require(loop_.isInLoopThread() && timer_.valid(), "cancel timer probe on owner");
+        ledger_.cancelledDeadlineNs = timestampNs(deadline_);
+        ledger_.cancelledNs = now();
+        require(loop_.tryCancel(timer_) == net::PostResult::Accepted, "timer cancellation rejected");
+        timer_ = {};
+    }
+
+private:
+    void arm() {
+        timer_ = loop_.runAt(deadline_, [this] {
+            const auto fired = Clock::now();
+            require(loop_.isInLoopThread() && timer_.valid() && fired >= deadline_,
+                    "early, cancelled or foreign timer callback");
+            require(ledger_.ticks.size() < maxTimerTicks, "timer evidence limit");
+            ledger_.ticks.push_back({timestampNs(deadline_), timestampNs(fired)});
+            // Keep the original cadence. A delayed callback records one tick
+            // and rearms the first deadline in the future.
+            deadline_ += timerPeriod * (1 + (fired - deadline_) / timerPeriod);
+            arm();
+        });
+        require(timer_.valid(), "timer admission rejected");
+    }
+
+    net::EventLoop& loop_;
+    TimerLedger& ledger_;
+    net::TimerId timer_;
+    Clock::time_point deadline_;
+};
+
 struct Result {
     std::map<std::string, Count> metrics;
     std::vector<Send> sent;
@@ -244,6 +307,7 @@ struct Result {
     std::vector<Close> closed;
     std::array<Count, peers> eof{};
     std::array<std::shared_future<ring::IoUringTcpConnectionAdapterStopSummary>, peers> native;
+    TimerLedger timer;
 };
 
 template<bool uring>
@@ -258,7 +322,7 @@ class Consumer {
     };
 
 public:
-    Consumer(net::EventLoop& loop, Result& result) : loop_(loop), result_(result) {
+    Consumer(net::EventLoop& loop, Result& result, unsigned budget) : loop_(loop), result_(result) {
         if constexpr (uring) {
             ring::IoUringTcpServerOptions options;
             options.reusePort = false;
@@ -268,6 +332,7 @@ public:
             options.hub.maxPendingSendSegmentsPerConnection = burstFrames;
             options.hub.maxReceiveBytes = options.hub.maxSendBytesPerOperation = frameBytes;
             options.hub.pump.engine.entries = options.hub.pump.engine.maxOperations = 256;
+            options.hub.pump.maxNoticesPerTurn = budget;
             options.connection.lowWaterMarkBytes = lowWater;
             options.connection.highWaterMarkBytes = highWater;
             options.connection.hardLimitBytes = hardLimit;
@@ -352,6 +417,7 @@ public:
             m["native_notices_dispatched"] = hub.pump.pump.noticesDispatched;
             m["native_pump_turns"] = hub.pump.pump.turns;
             m["native_pump_continuations"] = hub.pump.pump.continuationSignals;
+            m["native_max_consumer_depth"] = hub.pump.pump.maxConsumerDepth;
             m["native_stale_cqes"] = engine.staleCqes;
             m["native_fallbacks"] = engine.crossDomainFallbacks;
             m["native_timeouts"] = engine.shutdownTimeouts;
@@ -462,11 +528,13 @@ void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsig
 }
 
 template<bool uring>
-void run(bool slow, int peerCpu, unsigned rounds, bool trace, Result& result) {
+void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
+         bool measureTimer, Result& result) {
     clockid_t ownerClock{};
     require(::pthread_getcpuclockid(::pthread_self(), &ownerClock) == 0, "owner CPU clock");
     net::EventLoop loop;
-    auto consumer = std::make_unique<Consumer<uring>>(loop, result);
+    TimerProbe timer(loop, result.timer);
+    auto consumer = std::make_unique<Consumer<uring>>(loop, result, budget);
     const unsigned port = consumer->start();
     require(port != 0, "server did not publish a bound port");
     result.metrics["owner_cpu"] = pinnedCpu();
@@ -482,6 +550,7 @@ void run(bool slow, int peerCpu, unsigned rounds, bool trace, Result& result) {
         echoes(sockets, result, 'W', warmRounds);
         recordRss(m, "before_measure");
         if (trace) onOwner(loop, [] { traceMarker("GAMENET_TRACE_BEGIN\n"); });
+        if (measureTimer) onOwner(loop, [&] { timer.start(); });
         const auto ownerStart = cpu(ownerClock);
         const auto processStart = cpu(CLOCK_PROCESS_CPUTIME_ID);
         m["measure_begin_ns"] = now();
@@ -491,6 +560,11 @@ void run(bool slow, int peerCpu, unsigned rounds, bool trace, Result& result) {
             m["owner_cpu_ns"] = cpu(ownerClock) - ownerStart;
             m["process_cpu_ns"] = cpu(CLOCK_PROCESS_CPUTIME_ID) - processStart;
             if (trace) onOwner(loop, [] { traceMarker("GAMENET_TRACE_END\n"); });
+            if (measureTimer) {
+                onOwner(loop, [&] { timer.cancel(); });
+                // Keep the loop live past the cancelled deadline.
+                std::this_thread::sleep_for(3 * timerPeriod);
+            }
             recordRss(m, "measure_end");
         }
         auto [stopRequested, done] = onOwner(loop, [&] {
@@ -553,6 +627,18 @@ void save(const std::filesystem::path& output, Result& result, bool uring) {
     for (const auto& c : result.closed)
         closed << c.peer << ',' << result.eof[c.peer] << ',' << c.closedNs << ',' << c.pending << ','
                << c.reason << ',' << c.nativeError << '\n';
+    const auto& timer = result.timer;
+    if (timer.startedNs != 0) {
+        metrics << "timer_period_ns," << std::chrono::nanoseconds(timerPeriod).count() << '\n'
+                << "timer_started_ns," << timer.startedNs << '\n'
+                << "timer_first_deadline_ns," << timer.firstDeadlineNs << '\n'
+                << "timer_cancelled_ns," << timer.cancelledNs << '\n'
+                << "timer_cancelled_deadline_ns," << timer.cancelledDeadlineNs << '\n';
+        std::ofstream ticks(output / "timer.csv");
+        ticks.exceptions(std::ios::badbit | std::ios::failbit);
+        ticks << "deadline_ns,callback_ns\n";
+        for (const auto& tick : timer.ticks) ticks << tick.deadlineNs << ',' << tick.callbackNs << '\n';
+    }
     for (const auto& [key, value] : result.metrics) metrics << key << ',' << value << '\n';
     if (uring) {
         std::ofstream native(output / "native-connections.csv");
@@ -586,8 +672,18 @@ int main(int argc, char* argv[]) {
     require(backend == "epoll" || backend == "io_uring", "invalid backend");
     require(scenario == "steady" || scenario == "slow-close", "invalid scenario");
     const bool slow = scenario == "slow-close";
+    const bool uring = backend == "io_uring";
     const bool trace = std::getenv("GAMENET_TRACE_STEADY") != nullptr;
+    const bool measureTimer = std::getenv("GAMENET_PROBE_TIMER") != nullptr;
     require(!slow || (argc == 4 && !trace), "round and trace controls are for steady trials");
+    require(!measureTimer || (uring && !slow && !trace), "timer requires a dedicated io_uring steady trial");
+    unsigned budget = 16;
+    if (const char* configured = std::getenv("GAMENET_PUMP_NOTICE_BUDGET")) {
+        const char* end = configured + std::strlen(configured);
+        const auto parsed = std::from_chars(configured, end, budget);
+        require(uring && parsed.ec == std::errc{} && parsed.ptr == end &&
+                    (budget == 16 || budget == 32 || budget == 64), "invalid io_uring notice budget");
+    }
     unsigned rounds = defaultEchoRounds;
     if (argc == 5) {
         const std::string_view value(argv[4]);
@@ -605,6 +701,7 @@ int main(int argc, char* argv[]) {
     Result result;
     result.metrics["owner_tid"] = ::getpid();
     result.metrics["steady_rounds"] = slow ? 0 : rounds;
+    if (uring) result.metrics["native_pump_notice_budget"] = budget;
     result.metrics["fd_before"] = descriptorCount();
     result.metrics["slow_pending_at_stop_bytes"] = 0;
     result.metrics["slow_read_released_ns"] = 0;
@@ -612,9 +709,8 @@ int main(int argc, char* argv[]) {
     result.sent.reserve(peers * warmRounds + (slow ? burstFrames : peers * rounds));
     result.received.reserve(result.sent.capacity());
     result.closed.reserve(peers);
-    const bool uring = backend == "io_uring";
-    if (uring) run<true>(slow, cores[1], rounds, trace, result);
-    else run<false>(slow, cores[1], rounds, trace, result);
+    if (uring) run<true>(slow, cores[1], rounds, budget, trace, measureTimer, result);
+    else run<false>(slow, cores[1], rounds, budget, trace, measureTimer, result);
     result.metrics["fd_after"] = descriptorCount();
     result.metrics["threads_after"] = statusValue("Threads:");
     recordRss(result.metrics, "final");
