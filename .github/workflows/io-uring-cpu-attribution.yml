@@ -127,7 +127,8 @@ jobs:
             --output-junit "$logs/io-uring-contracts.xml" \
             -R '^contract\.io_engine\.test_(io_uring_|cross_backend_tcp_semantics$)' \
             2>&1 | tee "$logs/io-uring-contracts.log"
-          cmp "$build/src/core/libgamenet_core.a" "$prefix/lib/libgamenet_core.a"
+          # Core enables internal hooks for tests. The experimental archive
+          # tested here must match the one linked by the installed consumer.
           cmp "$build/src/experimental/io_uring/libgamenet_experimental_io_uring.a" \
             "$prefix/lib/libgamenet_experimental_io_uring.a"
           cmake -S variant-source -B "$build" -DGAMENET_BUILD_TESTING=OFF \

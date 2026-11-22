@@ -53,7 +53,9 @@ dispatching a completion. The next accepted operation flushes the staged Send
 with its own SQE. Cancellation and the end of dispatch also flush a staged Send.
 The experiment compares both installed packages and an epoll reference in
 rotating order on one host, then runs five slow-close pairs. The recorded Linux
-Release io_uring contracts exercise the same archives as the candidate package.
+Release contracts exercise the same experimental archive as the candidate
+package with Core's usual test hooks. The timed trials use installed packages
+built with testing disabled.
 
 Replay the profile and paired experiment artifacts separately.
 
