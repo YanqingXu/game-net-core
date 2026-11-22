@@ -18,7 +18,10 @@ one install prefix. It runs both on the same host and CPU pair.
 - One trial per backend and scenario warms the host. Five scored pairs
   alternate backend order. CPU time covers the timed phase and comes from
   process and EventLoop thread clocks. CPU percentage uses one core as 100%.
-  Peak RSS comes from the Linux process high-water mark and includes both threads.
+  Observed peak RSS is the maximum of the process `VmRSS` and `VmHWM` readings
+  after warmup, at the end of the measurement and after teardown. It includes
+  both threads. Keeping the readings also captures peaks when a later `VmHWM`
+  is lower than an earlier `VmRSS`.
 
 The replay joins each accepted frame to one delivery and each peer to one
 graceful close, checks submission and terminal counts for native accept,

@@ -86,6 +86,12 @@ Count statusValue(std::string_view key) {
     throw std::runtime_error("missing /proc/self/status field: " + std::string(key));
 }
 
+void recordRss(std::map<std::string, Count>& metrics, std::string_view phase) {
+    const auto key = "rss_" + std::string(phase);
+    metrics[key + "_kib"] = statusValue("VmRSS:");
+    metrics[key + "_hwm_kib"] = statusValue("VmHWM:");
+}
+
 Count descriptorCount() {
     return std::distance(std::filesystem::directory_iterator("/proc/self/fd"),
                          std::filesystem::directory_iterator());
@@ -465,7 +471,7 @@ void run(bool slow, int peerCpu, Result& result) {
         sockets.reserve(peers);
         for (unsigned i = 0; i < peers; ++i) sockets.push_back(connectPeer(port));
         echoes(sockets, result, 'W', warmRounds);
-        m["rss_before_measure_kib"] = statusValue("VmRSS:");
+        recordRss(m, "before_measure");
         const auto ownerStart = cpu(ownerClock);
         const auto processStart = cpu(CLOCK_PROCESS_CPUTIME_ID);
         m["measure_begin_ns"] = now();
@@ -474,6 +480,7 @@ void run(bool slow, int peerCpu, Result& result) {
             m["measure_end_ns"] = now();
             m["owner_cpu_ns"] = cpu(ownerClock) - ownerStart;
             m["process_cpu_ns"] = cpu(CLOCK_PROCESS_CPUTIME_ID) - processStart;
+            recordRss(m, "measure_end");
         }
         auto [stopRequested, done] = onOwner(loop, [&] {
             if (slow) consumer->burst();
@@ -497,8 +504,8 @@ void run(bool slow, int peerCpu, Result& result) {
             m["measure_end_ns"] = m["stop_completed_ns"];
             m["owner_cpu_ns"] = cpu(ownerClock) - ownerStart;
             m["process_cpu_ns"] = cpu(CLOCK_PROCESS_CPUTIME_ID) - processStart;
+            recordRss(m, "measure_end");
         }
-        m["rss_after_drain_kib"] = statusValue("VmRSS:");
         sockets.clear();
         onOwner(loop, [&] {
             consumer->summarize(done.get());
@@ -587,8 +594,7 @@ int main(int argc, char* argv[]) {
     else run<false>(slow, cores[1], result);
     result.metrics["fd_after"] = descriptorCount();
     result.metrics["threads_after"] = statusValue("Threads:");
-    result.metrics["rss_final_kib"] = statusValue("VmRSS:");
-    result.metrics["rss_peak_kib"] = statusValue("VmHWM:");
+    recordRss(result.metrics, "final");
     require(result.metrics["fd_after"] == result.metrics["fd_before"] &&
                 result.metrics["threads_after"] == 1, "descriptor or thread residue");
     save(argv[3], result, uring);

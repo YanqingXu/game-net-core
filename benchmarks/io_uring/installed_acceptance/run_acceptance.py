@@ -207,11 +207,11 @@ def sample(directory, backend, scenario, cpus):
             "fd, connection, output, or EventLoop residue")
     require(metrics["connections_accepted"] == metrics["connections_retired"] == peer_count,
             "connection counts disagree")
-    require(0 < metrics["owner_cpu_ns"] <= metrics["process_cpu_ns"]
-            and 0 < metrics["rss_before_measure_kib"] <= metrics["rss_peak_kib"]
-            and 0 < metrics["rss_after_drain_kib"] <= metrics["rss_peak_kib"]
-            and 0 < metrics["rss_final_kib"] <= metrics["rss_peak_kib"],
-            "invalid CPU time or RSS")
+    require(0 < metrics["owner_cpu_ns"] <= metrics["process_cpu_ns"], "invalid CPU time")
+    rss_readings = [metrics[f"rss_{phase}{suffix}_kib"]
+                    for phase in ("before_measure", "measure_end", "final")
+                    for suffix in ("", "_hwm")]
+    require(min(rss_readings) > 0, "invalid RSS sample")
     native_ops = 0
     if backend == "io_uring":
         native_ops = check_native(directory, metrics, per_peer, peer_count)
@@ -235,7 +235,7 @@ def sample(directory, backend, scenario, cpus):
         "cpu_ms": metrics["process_cpu_ns"] / 1e6,
         "cpu_pct_one_core": 100 * metrics["process_cpu_ns"] / elapsed,
         "owner_cpu_ms": metrics["owner_cpu_ns"] / 1e6,
-        "peak_rss_mib": metrics["rss_peak_kib"] / 1024,
+        "peak_rss_mib": max(rss_readings) / 1024,
         "stop_ms": (done - stop) / 1e6,
         "pending_at_stop_bytes": metrics["slow_pending_at_stop_bytes"],
     }
