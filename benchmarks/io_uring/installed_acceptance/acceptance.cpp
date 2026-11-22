@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -52,7 +53,8 @@ using Count = std::uint64_t;
 constexpr unsigned peers = 64;
 constexpr unsigned frameBytes = 4096;
 constexpr unsigned warmRounds = 16;
-constexpr unsigned echoRounds = 256;
+constexpr unsigned defaultEchoRounds = 256;
+constexpr unsigned maxEchoRounds = 8192;
 constexpr unsigned burstFrames = 2048;
 constexpr auto slowHold = 250ms;
 constexpr std::size_t hardLimit = burstFrames * frameBytes;
@@ -211,6 +213,11 @@ auto onOwner(net::EventLoop& loop, F function) {
     return future.get();
 }
 
+void traceMarker(std::string_view marker) {
+    require(::write(STDERR_FILENO, marker.data(), marker.size()) ==
+                static_cast<ssize_t>(marker.size()), "write syscall trace marker");
+}
+
 struct Send {
     Identity id;
     Count admittedNs;
@@ -343,6 +350,8 @@ public:
             m["native_operations_accepted"] = engine.operationsAccepted;
             m["native_terminal_notices"] = engine.terminalNotices;
             m["native_notices_dispatched"] = hub.pump.pump.noticesDispatched;
+            m["native_pump_turns"] = hub.pump.pump.turns;
+            m["native_pump_continuations"] = hub.pump.pump.continuationSignals;
             m["native_stale_cqes"] = engine.staleCqes;
             m["native_fallbacks"] = engine.crossDomainFallbacks;
             m["native_timeouts"] = engine.shutdownTimeouts;
@@ -453,7 +462,7 @@ void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsig
 }
 
 template<bool uring>
-void run(bool slow, int peerCpu, Result& result) {
+void run(bool slow, int peerCpu, unsigned rounds, bool trace, Result& result) {
     clockid_t ownerClock{};
     require(::pthread_getcpuclockid(::pthread_self(), &ownerClock) == 0, "owner CPU clock");
     net::EventLoop loop;
@@ -472,14 +481,16 @@ void run(bool slow, int peerCpu, Result& result) {
         for (unsigned i = 0; i < peers; ++i) sockets.push_back(connectPeer(port));
         echoes(sockets, result, 'W', warmRounds);
         recordRss(m, "before_measure");
+        if (trace) onOwner(loop, [] { traceMarker("GAMENET_TRACE_BEGIN\n"); });
         const auto ownerStart = cpu(ownerClock);
         const auto processStart = cpu(CLOCK_PROCESS_CPUTIME_ID);
         m["measure_begin_ns"] = now();
         if (!slow) {
-            echoes(sockets, result, 'E', echoRounds);
+            echoes(sockets, result, 'E', rounds);
             m["measure_end_ns"] = now();
             m["owner_cpu_ns"] = cpu(ownerClock) - ownerStart;
             m["process_cpu_ns"] = cpu(CLOCK_PROCESS_CPUTIME_ID) - processStart;
+            if (trace) onOwner(loop, [] { traceMarker("GAMENET_TRACE_END\n"); });
             recordRss(m, "measure_end");
         }
         auto [stopRequested, done] = onOwner(loop, [&] {
@@ -567,13 +578,24 @@ void save(const std::filesystem::path& output, Result& result, bool uring) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        std::cerr << "usage: installed_io_uring_acceptance epoll|io_uring steady|slow-close OUTPUT\n";
+    if (argc != 4 && argc != 5) {
+        std::cerr << "usage: installed_io_uring_acceptance epoll|io_uring steady|slow-close OUTPUT [ROUNDS]\n";
         return 2;
     }
     const std::string_view backend(argv[1]), scenario(argv[2]);
     require(backend == "epoll" || backend == "io_uring", "invalid backend");
     require(scenario == "steady" || scenario == "slow-close", "invalid scenario");
+    const bool slow = scenario == "slow-close";
+    const bool trace = std::getenv("GAMENET_TRACE_STEADY") != nullptr;
+    require(!slow || (argc == 4 && !trace), "round and trace controls are for steady trials");
+    unsigned rounds = defaultEchoRounds;
+    if (argc == 5) {
+        const std::string_view value(argv[4]);
+        const auto last = value.data() + value.size();
+        const auto parsed = std::from_chars(value.data(), last, rounds);
+        require(parsed.ec == std::errc{} && parsed.ptr == last && rounds > 0 &&
+                    rounds <= maxEchoRounds, "steady round count out of range");
+    }
     cpu_set_t mask{};
     require(::sched_getaffinity(0, sizeof(mask), &mask) == 0 && CPU_COUNT(&mask) == 2,
             "acceptance runner requires two CPUs in its affinity mask");
@@ -581,17 +603,18 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < CPU_SETSIZE; ++i) if (CPU_ISSET(i, &mask)) cores.push_back(i);
     pin(cores[0]);
     Result result;
+    result.metrics["owner_tid"] = ::getpid();
+    result.metrics["steady_rounds"] = slow ? 0 : rounds;
     result.metrics["fd_before"] = descriptorCount();
     result.metrics["slow_pending_at_stop_bytes"] = 0;
     result.metrics["slow_read_released_ns"] = 0;
     result.metrics["graceful_close_reason"] = static_cast<int>(net::TcpConnectionCloseReason::GracefulShutdown);
-    result.sent.reserve(peers * (warmRounds + echoRounds) + burstFrames);
+    result.sent.reserve(peers * warmRounds + (slow ? burstFrames : peers * rounds));
     result.received.reserve(result.sent.capacity());
     result.closed.reserve(peers);
-    const bool slow = scenario == "slow-close";
     const bool uring = backend == "io_uring";
-    if (uring) run<true>(slow, cores[1], result);
-    else run<false>(slow, cores[1], result);
+    if (uring) run<true>(slow, cores[1], rounds, trace, result);
+    else run<false>(slow, cores[1], rounds, trace, result);
     result.metrics["fd_after"] = descriptorCount();
     result.metrics["threads_after"] = statusValue("Threads:");
     recordRss(result.metrics, "final");

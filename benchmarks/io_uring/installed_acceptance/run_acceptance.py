@@ -142,18 +142,20 @@ def check_native(directory, metrics, frames_per_peer, peer_count):
     return net_ops
 
 
-def sample(directory, backend, scenario, cpus):
+def sample(directory, backend, scenario, cpus, steady_rounds=PROFILE["steady_rounds"]):
     metrics = {key: row[0] for key, row in
                unique_rows(directory / "metrics.csv", "", lambda row: (row[0], row[1:])).items()}
     require(all(value >= 0 for value in metrics.values()), "negative metric")
     peer_count = PROFILE["connections"]
     slow = scenario == "slow-close"
+    if "steady_rounds" in metrics:
+        require(metrics["steady_rounds"] == (0 if slow else steady_rounds), "unexpected round count")
     measure_kind = "B" if slow else "E"
     warm = {("W", peer, seq) for peer in range(peer_count)
             for seq in range(PROFILE["warm_rounds"])}
     measured = ({("B", 0, seq) for seq in range(PROFILE["burst_frames"])} if slow else
                 {("E", peer, seq) for peer in range(peer_count)
-                 for seq in range(PROFILE["steady_rounds"])})
+                 for seq in range(steady_rounds)})
     accepted = unique_rows(directory / "accepted.csv", "kind,peer,sequence,accepted_ns", frame_key)
     received = unique_rows(directory / "received.csv", "kind,peer,sequence,start_ns,received_ns", frame_key)
     closed = unique_rows(directory / "closed.csv",
@@ -392,17 +394,7 @@ def verify(root):
     return result
 
 
-def run(args):
-    root = args.output.resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    host = native_host(root)
-    core = revision(args.source.resolve())
-    consumer = revision(Path(__file__).resolve().parent)
-    require(core == args.expected_source and consumer == os.getenv("GITHUB_SHA", consumer),
-            "checkout is not the requested package or workflow revision")
-    package_build = args.package_build.resolve()
-    consumer_build = args.consumer_build.resolve()
-    prefix = args.prefix.resolve()
+def stage_build(root, package_build, consumer_build, prefix):
     binary = consumer_build / "installed_io_uring_acceptance"
     inputs = root / "inputs"
     inputs.mkdir(parents=True)
@@ -416,6 +408,19 @@ def run(args):
     for source, target in copies.items():
         shutil.copyfile(source, inputs / target)
     check_build(root, str(prefix))
+    return binary
+
+
+def run(args):
+    root = args.output.resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    host = native_host(root)
+    core = revision(args.source.resolve())
+    consumer = revision(Path(__file__).resolve().parent)
+    require(core == args.expected_source and consumer == os.getenv("GITHUB_SHA", consumer),
+            "checkout is not the requested package or workflow revision")
+    prefix = args.prefix.resolve()
+    binary = stage_build(root, args.package_build.resolve(), args.consumer_build.resolve(), prefix)
     os.sched_setaffinity(0, host["pinned_cpus"])
     for scenario, pair, backend in plan():
         directory = trial_path(root, scenario, pair, backend)
