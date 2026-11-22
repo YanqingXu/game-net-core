@@ -287,13 +287,30 @@ def revision(directory):
     return command("git", "rev-parse", "HEAD", cwd=directory)
 
 
-def native_host():
-    kernel = platform.release()
-    os_release = Path("/proc/sys/kernel/osrelease").read_text().strip()
-    version = Path("/proc/version").read_text().strip()
-    require(platform.system() == "Linux" and not re.search("microsoft|wsl", kernel + os_release + version, re.I)
-            and not any(key in os.environ for key in ("WSL_INTEROP", "WSL_DISTRO_NAME")),
-            "native Linux required; refusing WSL")
+def check_native_kernel(probe):
+    kernel = probe["kernel"]
+    require(probe["system"] == "Linux" and kernel == probe["proc_osrelease"]
+            and probe["proc_version"].startswith(f"Linux version {kernel} "),
+            "kernel identification disagrees")
+    require(not re.search(r"(?:^|[-.])(?:microsoft|wsl)(?=$|[-.0-9])", kernel, re.I)
+            and not probe["wsl_runtime_paths"] and not probe["wsl_environment"],
+            "native Linux required; WSL runtime or kernel identified")
+
+
+def native_host(root):
+    require(platform.system() == "Linux", "native Linux required")
+    probe = {
+        "system": platform.system(),
+        "kernel": platform.release(),
+        "proc_osrelease": Path("/proc/sys/kernel/osrelease").read_text().strip(),
+        "proc_version": Path("/proc/version").read_text().strip(),
+        "wsl_runtime_paths": [name for name in ("/run/WSL", "/proc/sys/fs/binfmt_misc/WSLInterop")
+                              if Path(name).exists()],
+        "wsl_environment": [key for key in ("WSL_INTEROP", "WSL_DISTRO_NAME") if key in os.environ],
+    }
+    write_json(root / "host-probe.json", probe)
+    print(f"Linux host probe: {json.dumps(probe, sort_keys=True)}", flush=True)
+    check_native_kernel(probe)
     allowed = sorted(os.sched_getaffinity(0))
     require(len(allowed) >= 2, "two CPUs required")
     topology = {}
@@ -305,10 +322,7 @@ def native_host():
     second = next((n for n in allowed[1:] if topology[n] != topology[first]), allowed[1])
 
     return {
-        "system": "Linux",
-        "kernel": kernel,
-        "proc_osrelease": os_release,
-        "proc_version": version,
+        **probe,
         "cpu_model": next(line.split(":", 1)[1].strip() for line in
                           Path("/proc/cpuinfo").read_text().splitlines() if line.startswith("model name")),
         "available_cpus": allowed,
@@ -361,8 +375,9 @@ def verify(root):
     require(all(re.fullmatch("[0-9a-f]{40}", info[key]) for key in ("core_revision", "consumer_revision")),
             "invalid checkout provenance")
     host = info["host"]
-    require(host["system"] == "Linux" and not any(re.search("microsoft|wsl", host[key], re.I)
-            for key in ("kernel", "proc_osrelease", "proc_version")), "evidence is not from native Linux")
+    probe = json.loads((root / "host-probe.json").read_text(encoding="utf-8"))
+    check_native_kernel(probe)
+    require(all(host[key] == value for key, value in probe.items()), "kernel manifest mismatch")
     cpus = host["pinned_cpus"]
     require(len(cpus) == 2 and cpus == sorted(set(cpus)) and set(cpus) <= set(host["available_cpus"]),
             "invalid CPU pairing")
@@ -379,7 +394,8 @@ def verify(root):
 
 def run(args):
     root = args.output.resolve()
-    host = native_host()
+    root.mkdir(parents=True, exist_ok=True)
+    host = native_host(root)
     core = revision(args.source.resolve())
     consumer = revision(Path(__file__).resolve().parent)
     require(core == args.expected_source and consumer == os.getenv("GITHUB_SHA", consumer),
