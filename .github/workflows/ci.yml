@@ -72,6 +72,18 @@ jobs:
             c++ --version
             python3 --version
           } 2>&1 | tee ci-evidence/toolchain.txt
+          python3 tools/run_linux_ci_build.py preflight
+
+      - name: Retain Linux build preflight
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-linux-build-preflight-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-evidence/toolchain.txt
+            ci-evidence/linux-build/preflight.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Check repository guards
         run: |
@@ -129,6 +141,7 @@ jobs:
           python3 tests/cmake/test_experimental_io_uring_install_contract.py
           python3 tests/cmake/test_release_safe_tests.py
           python3 tests/ci/test_workflow_jobs.py
+          python3 tests/ci/test_linux_ci_build.py
           python3 tests/ci/test_long_soak_workflow.py
           python3 tests/ci/test_core_benchmark_workflow.py
           python3 tests/ci/test_phase4_benchmark_workflow.py
@@ -150,7 +163,7 @@ jobs:
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
-        run: cmake --build build --parallel
+        run: python3 tools/run_linux_ci_build.py build build
 
       - name: Test
         run: >
@@ -171,8 +184,8 @@ jobs:
             --expected-total 143 \
             --expect-label experimental=11 \
             --output ci-evidence/io-uring-experimental-inventory.json
-          cmake --build build-io-uring-experimental \
-            --target gamenet_io_uring_contracts --parallel
+          python3 tools/run_linux_ci_build.py build build-io-uring-experimental \
+            --target gamenet_io_uring_contracts
           ctest --test-dir build-io-uring-experimental \
           -R '^contract.io_engine.(test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)|test_cross_backend_tcp_semantics)$' \
             --output-on-failure --timeout 10 \
@@ -189,7 +202,7 @@ jobs:
             --test-dir build-install-consumer \
             --expected-total 2 \
             --output ci-evidence/install-consumer-inventory.json
-          cmake --build build-install-consumer --parallel
+          python3 tools/run_linux_ci_build.py build build-install-consumer
           ctest --test-dir build-install-consumer --output-on-failure --timeout 60 \
             --output-junit "$PWD/ci-evidence/install-consumer-junit.xml" \
             --output-log "$PWD/ci-evidence/install-consumer-ctest.log"
@@ -203,7 +216,7 @@ jobs:
             echo "default package unexpectedly exposed experimental_io_uring" >&2
             exit 1
           fi
-          cmake --build build-io-uring-experimental --parallel \
+          python3 tools/run_linux_ci_build.py build build-io-uring-experimental \
             --target gamenet_core gamenet_protocol gamenet_rpc gamenet_transport \
             gamenet_game_session gamenet_game_logic gamenet_broadcast \
             gamenet_experimental_io_uring
@@ -217,7 +230,7 @@ jobs:
             --test-dir build-experimental-io-uring-install-consumer \
             --expected-total 1 \
             --output ci-evidence/experimental-io-uring-install-consumer-inventory.json
-          cmake --build build-experimental-io-uring-install-consumer --parallel
+          python3 tools/run_linux_ci_build.py build build-experimental-io-uring-install-consumer
           ctest --test-dir build-experimental-io-uring-install-consumer \
             --output-on-failure --timeout 60 \
             --output-junit "$PWD/ci-evidence/experimental-io-uring-install-consumer-junit.xml" \
@@ -239,23 +252,23 @@ jobs:
             --command 'python3 tools/compare_public_api_manifest.py --compatibility-baseline api/baselines/v0.3.0-perf-r1-reviewed.json --fail-on-compatibility-decision --fail-on-stable-surface-review --compatibility-output ci-evidence/public-api-compatibility-diff.json --output ci-evidence/public-api-diff.json' \
             --command 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build --expected-total 133 --output ci-evidence/ctest-inventory.json' \
-            --command 'cmake --build build --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build' \
             --command 'ctest --test-dir build --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-io-uring-experimental -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-experimental --expected-total 143 --expect-label experimental=11 --output ci-evidence/io-uring-experimental-inventory.json' \
-            --command 'cmake --build build-io-uring-experimental --target gamenet_io_uring_contracts --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-io-uring-experimental --target gamenet_io_uring_contracts' \
             --command 'ctest --test-dir build-io-uring-experimental -R ^contract.io_engine.(test_io_uring_|test_cross_backend_tcp_semantics) --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-experimental-junit.xml --output-log $PWD/ci-evidence/io-uring-experimental-ctest.log' \
             --command 'cmake --install build --prefix $PWD/build/_install' \
             --command 'cmake -S tests/cmake/install_consumer -B build-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-install-consumer --expected-total 2 --output ci-evidence/install-consumer-inventory.json' \
-            --command 'cmake --build build-install-consumer --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-install-consumer' \
             --command 'ctest --test-dir build-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/install-consumer-junit.xml --output-log $PWD/ci-evidence/install-consumer-ctest.log' \
             --command 'cmake -S tests/cmake/experimental_io_uring_install_consumer -B build-default-experimental-component-probe -DCMAKE_PREFIX_PATH=$PWD/build/_install' \
-            --command 'cmake --build build-io-uring-experimental --parallel --target gamenet_core gamenet_protocol gamenet_rpc gamenet_transport gamenet_game_session gamenet_game_logic gamenet_broadcast gamenet_experimental_io_uring' \
+            --command 'python3 tools/run_linux_ci_build.py build build-io-uring-experimental --target gamenet_core gamenet_protocol gamenet_rpc gamenet_transport gamenet_game_session gamenet_game_logic gamenet_broadcast gamenet_experimental_io_uring' \
             --command 'cmake --install build-io-uring-experimental --prefix $PWD/build-io-uring-experimental/_install' \
             --command 'cmake -S tests/cmake/experimental_io_uring_install_consumer -B build-experimental-io-uring-install-consumer -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$PWD/build-io-uring-experimental/_install' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-experimental-io-uring-install-consumer --expected-total 1 --output ci-evidence/experimental-io-uring-install-consumer-inventory.json' \
-            --command 'cmake --build build-experimental-io-uring-install-consumer --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-experimental-io-uring-install-consumer' \
             --command 'ctest --test-dir build-experimental-io-uring-install-consumer --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/experimental-io-uring-install-consumer-junit.xml --output-log $PWD/ci-evidence/experimental-io-uring-install-consumer-ctest.log'
 
       - name: Upload CI evidence
@@ -331,6 +344,18 @@ jobs:
             clang++ --version
             python3 --version
           } 2>&1 | tee ci-evidence/toolchain.txt
+          python3 tools/run_linux_ci_build.py preflight
+
+      - name: Retain Linux build preflight
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-linux-build-preflight-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-evidence/toolchain.txt
+            ci-evidence/linux-build/preflight.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Verify self-hosted ASan/UBSan runner environment
         if: >-
@@ -427,7 +452,7 @@ jobs:
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
-        run: cmake --build build-asan --parallel
+        run: python3 tools/run_linux_ci_build.py build build-asan
 
       - name: Test
         run: >
@@ -452,8 +477,8 @@ jobs:
             --expected-total 143 \
             --expect-label experimental=11 \
             --output ci-evidence/io-uring-asan-inventory.json
-          cmake --build build-io-uring-asan \
-            --target gamenet_io_uring_contracts --parallel
+          python3 tools/run_linux_ci_build.py build build-io-uring-asan \
+            --target gamenet_io_uring_contracts
           ctest --test-dir build-io-uring-asan \
           -R '^contract.io_engine.(test_io_uring_(completion_engine|event_loop_pump|tcp_connection_driver|tcp_connection_hub|tcp_connection_hub_capacity|tcp_listener|tcp_connection_adapter|tcp_server|tcp_multi_owner_server|tcp_client)|test_cross_backend_tcp_semantics)$' \
             --output-on-failure --timeout 10 \
@@ -474,7 +499,7 @@ jobs:
           -DGAMENET_ENABLE_EXPERIMENTAL=OFF
 
       - name: Build PacketFramer libFuzzer target
-        run: cmake --build build-fuzz --target gamenet_fuzz_packet_framer --parallel
+        run: python3 tools/run_linux_ci_build.py build build-fuzz --target gamenet_fuzz_packet_framer
 
       - name: Run PacketFramer libFuzzer smoke
         run: |
@@ -509,14 +534,14 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-asan --expected-total 133 --output ci-evidence/ctest-inventory.json' \
-            --command 'cmake --build build-asan --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-asan' \
             --command 'ctest --test-dir build-asan --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'cmake -S . -B build-io-uring-asan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_BUILD_BENCHMARKS=OFF -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=ON' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-io-uring-asan --expected-total 143 --expect-label experimental=11 --output ci-evidence/io-uring-asan-inventory.json' \
-            --command 'cmake --build build-io-uring-asan --target gamenet_io_uring_contracts --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-io-uring-asan --target gamenet_io_uring_contracts' \
             --command 'ctest --test-dir build-io-uring-asan -R ^contract.io_engine.(test_io_uring_|test_cross_backend_tcp_semantics) --output-on-failure --timeout 10 --output-junit $PWD/ci-evidence/io-uring-asan-junit.xml --output-log $PWD/ci-evidence/io-uring-asan-ctest.log' \
             --command 'cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=OFF -DGAMENET_BUILD_FUZZING=ON -DGAMENET_ENABLE_ASAN_UBSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
-            --command 'cmake --build build-fuzz --target gamenet_fuzz_packet_framer --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-fuzz --target gamenet_fuzz_packet_framer' \
             --command 'cmake -E make_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus ci-evidence/fuzz/artifacts' \
             --command 'cmake -E copy_directory tests/fuzz/corpus/packet_framer build-fuzz/corpus/packet_framer' \
             --command 'cmake -E copy_directory build-fuzz/corpus/packet_framer ci-evidence/fuzz/corpus' \
@@ -595,6 +620,18 @@ jobs:
             c++ --version
             python3 --version
           } 2>&1 | tee ci-evidence/toolchain.txt
+          python3 tools/run_linux_ci_build.py preflight
+
+      - name: Retain Linux build preflight
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-linux-build-preflight-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-evidence/toolchain.txt
+            ci-evidence/linux-build/preflight.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Check repository guards
         run: |
@@ -666,7 +703,7 @@ jobs:
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
-        run: cmake --build build-tsan --parallel
+        run: python3 tools/run_linux_ci_build.py build build-tsan
 
       - name: Test
         run: >
@@ -689,7 +726,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TSAN=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-tsan --expected-total 133 --expect-label threading=105 --output ci-evidence/ctest-inventory.json' \
-            --command 'cmake --build build-tsan --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-tsan' \
             --command 'ctest --test-dir build-tsan --output-on-failure -L threading --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log'
 
       - name: Upload CI evidence
@@ -764,6 +801,18 @@ jobs:
             c++ --version
             python3 --version
           } 2>&1 | tee ci-evidence/toolchain.txt
+          python3 tools/run_linux_ci_build.py preflight
+
+      - name: Retain Linux build preflight
+        continue-on-error: ${{ env.GAMENET_CI_ARTIFACT_POLICY == 'best-effort' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-linux-build-preflight-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-evidence/toolchain.txt
+            ci-evidence/linux-build/preflight.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Check repository guards
         run: |
@@ -833,7 +882,7 @@ jobs:
             --output ci-evidence/ctest-inventory.json
 
       - name: Build
-        run: cmake --build build-release --parallel
+        run: python3 tools/run_linux_ci_build.py build build-release
 
       - name: Test
         run: >
@@ -878,7 +927,7 @@ jobs:
             --require-canonical-artifact-name \
             --command 'cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DGAMENET_BUILD_TESTING=ON -DGAMENET_ENABLE_TLS=OFF -DGAMENET_ENABLE_EXPERIMENTAL=OFF' \
             --command 'python3 tools/verify_ctest_inventory.py --test-dir build-release --expected-total 133 --output ci-evidence/ctest-inventory.json' \
-            --command 'cmake --build build-release --parallel' \
+            --command 'python3 tools/run_linux_ci_build.py build build-release' \
             --command 'ctest --test-dir build-release --output-on-failure --timeout 60 --output-junit $PWD/ci-evidence/ctest-junit.xml --output-log $PWD/ci-evidence/ctest.log' \
             --command 'curl --fail --location --retry 3 --output build-release/v02-download/game-net-core-v0.2.0-phase4-preview.tar.gz https://github.com/YanqingXu/game-net-core/releases/download/v0.2.0-phase4-preview/game-net-core-v0.2.0-phase4-preview.tar.gz' \
             --command 'cmake --install build-release --prefix $PWD/build-release/_install' \

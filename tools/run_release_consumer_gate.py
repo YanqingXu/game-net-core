@@ -181,7 +181,7 @@ def _configure_build_install_v02(
     )
     recorder.run(
         "v02-build",
-        [args.cmake, "--build", str(build), "--config", args.configuration, "--parallel"],
+        [args.cmake, "--build", str(build), "--config", args.configuration, "--parallel", "2"],
         args.repo_root,
     )
     recorder.run(
@@ -242,7 +242,7 @@ def _run_consumer(
     )
     recorder.run(
         f"{name}-build",
-        [args.cmake, "--build", str(build), "--config", args.configuration, "--parallel"],
+        [args.cmake, "--build", str(build), "--config", args.configuration, "--parallel", "2"],
         args.repo_root,
     )
     junit_path = args.evidence_dir / f"{name}-junit.xml"
