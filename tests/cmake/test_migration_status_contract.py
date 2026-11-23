@@ -898,7 +898,11 @@ def main() -> None:
     require(status_text, "105 threading and 110 lifecycle labels", migration_status)
     require(plan_text, "# game-net-core 执行计划：HP0–HP8、callback RPC 与可选 TLS", plan)
     require(plan_text, "长期方向：`goal.md`", plan)
-    require(plan_text, "性能设计输入：`high-performance.md`、`high-performance2.md`", plan)
+    require(
+        plan_text,
+        "性能设计输入：`docs/high-performance.md`、`docs/high-performance2.md`",
+        plan,
+    )
     require(plan_text, hp0_governance_baseline, plan)
     require(plan_text, "M1–M11、IOE-X1–X15 均已关闭", plan)
     require(plan_text, "stable v0.3 Core 保持源兼容", plan)

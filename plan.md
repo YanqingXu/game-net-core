@@ -264,7 +264,7 @@ HP0 本机 Windows 与 WSL Ubuntu 24.04 执行仍以 DEFER 收束；预研 weekl
 
 长期方向：`goal.md`
 
-性能设计输入：`high-performance.md`、`high-performance2.md`
+性能设计输入：`docs/high-performance.md`、`docs/high-performance2.md`
 
 当前治理基线：`202bf9f993575d144c4c440a3972dd80733da0a7`
 
