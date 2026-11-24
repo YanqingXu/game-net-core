@@ -21,5 +21,14 @@ target_compile_features(installed_io_uring_acceptance PRIVATE cxx_std_23)
 set_target_properties(installed_io_uring_acceptance PROPERTIES CXX_EXTENSIONS OFF)
 target_link_libraries(installed_io_uring_acceptance PRIVATE
     GameNet::core GameNet::experimental_io_uring)
+option(GAMENET_COST_DIAGNOSTICS "Unscored allocation/copy call-site observer" OFF)
+if(GAMENET_COST_DIAGNOSTICS)
+    target_sources(installed_io_uring_acceptance PRIVATE ../cost_ledger/observer.cpp)
+    target_compile_definitions(installed_io_uring_acceptance PRIVATE GAMENET_COST_DIAGNOSTICS)
+    target_compile_options(installed_io_uring_acceptance PRIVATE -g -fno-pie
+        -fno-builtin-memcpy -fno-builtin-memmove -fno-builtin-memset)
+    target_link_options(installed_io_uring_acceptance PRIVATE -no-pie
+        -Wl,--wrap=memcpy,--wrap=memmove,--wrap=memset)
+endif()
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/installed-archives.txt"
     CONTENT "$<TARGET_FILE:GameNet::core>\n$<TARGET_FILE:GameNet::experimental_io_uring>\n")

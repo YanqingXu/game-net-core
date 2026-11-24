@@ -1,0 +1,65 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+name: io_uring per-frame cost ledger
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        type: choice
+        options: [diagnose, compare]
+        default: diagnose
+permissions:
+  contents: read
+jobs:
+  native-cost-ledger:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: baseline-source
+          ref: 6004293e0492819e062326032a5391eda6e83229
+          persist-credentials: false
+      - name: Test observer boundaries
+        run: |
+          python3 -B candidate-source/benchmarks/io_uring/cost_ledger/test_cost_ledger.py
+          python3 -B candidate-source/benchmarks/io_uring/installed_acceptance/test_evidence.py
+      - name: Provision native observers
+        run: |
+          set -euo pipefail
+          packages=()
+          command -v strace >/dev/null || packages+=(strace)
+          if ! perf version >/dev/null 2>&1 && ! compgen -G '/usr/lib/linux-tools/*/perf' >/dev/null; then
+            packages+=(linux-tools-generic)
+          fi
+          if (( ${#packages[@]} )); then
+            sudo -n apt-get update -qq
+            sudo -n apt-get install -y --no-install-recommends "${packages[@]}"
+          fi
+      - name: Collect isolated scores and diagnostics
+        env:
+          STAGE: ${{ inputs.stage }}
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 -B candidate-source/benchmarks/io_uring/cost_ledger/cost_ledger.py \
+            --stage "$STAGE" --baseline baseline-source --candidate candidate-source \
+            --expected-candidate "$GITHUB_SHA" --work "$RUNNER_TEMP/cost-builds" --output "$RUNNER_TEMP/cost-evidence"
+      - name: Independently replay raw evidence
+        run: |
+          python3 -B candidate-source/benchmarks/io_uring/cost_ledger/cost_ledger.py \
+            --verify-output "$RUNNER_TEMP/cost-evidence" --expected-candidate "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: io-uring-cost-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cost-evidence
+          if-no-files-found: error
+          retention-days: 30

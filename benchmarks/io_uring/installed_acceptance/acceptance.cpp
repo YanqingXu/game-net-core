@@ -9,6 +9,9 @@
 #ifdef GAMENET_TIMER_DIAGNOSTICS
 #include "../timer_tail/observer.h"
 #endif
+#ifdef GAMENET_COST_DIAGNOSTICS
+#include "../cost_ledger/observer.h"
+#endif
 
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -518,8 +521,8 @@ private:
     std::array<Connection*, peers> byPeer_{};
 };
 
-void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsigned rounds,
-            unsigned paceUs = 0) {
+unsigned echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsigned rounds,
+                unsigned paceUs = 0, Count untilNs = 0) {
     std::array<Count, peers> start{};
     for (unsigned seq = 0; seq < rounds; ++seq) {
         for (unsigned peer = 0; peer < peers; ++peer) {
@@ -532,7 +535,10 @@ void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsig
             result.received.push_back({id, start[peer], receiveFrame(sockets[peer].fd(), id)});
         }
         if (paceUs) std::this_thread::sleep_for(std::chrono::microseconds(paceUs));
+        if (untilNs && now() >= untilNs) return seq + 1;
     }
+    require(!untilNs || now() >= untilNs, "fixed-time frame capacity exhausted");
+    return rounds;
 }
 
 template<bool uring>
@@ -562,6 +568,9 @@ void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
         recordRss(m, "before_measure");
         if (trace) onOwner(loop, [] { traceMarker("GAMENET_TRACE_BEGIN\n"); });
         if (measureTimer) onOwner(loop, [&] { timer.start(); });
+#ifdef GAMENET_COST_DIAGNOSTICS
+        onOwner(loop, [] { cost_ledger::begin(); });
+#endif
         const auto ownerStart = cpu(ownerClock);
         const auto processStart = cpu(CLOCK_PROCESS_CPUTIME_ID);
         m["measure_begin_ns"] = now();
@@ -572,10 +581,16 @@ void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
                 paceUs = 1000;
             }
             m["timer_pace_us"] = paceUs;
-            echoes(sockets, result, 'E', rounds, paceUs);
+            const bool fixedTime = std::getenv("GAMENET_FIXED_TIME_MS") != nullptr;
+            m["fixed_time_ns"] = fixedTime ? 2'000'000'000ULL : 0;
+            m["steady_rounds"] = echoes(sockets, result, 'E', rounds, paceUs,
+                fixedTime ? m["measure_begin_ns"] + m["fixed_time_ns"] : 0);
             m["measure_end_ns"] = now();
             m["owner_cpu_ns"] = cpu(ownerClock) - ownerStart;
             m["process_cpu_ns"] = cpu(CLOCK_PROCESS_CPUTIME_ID) - processStart;
+#ifdef GAMENET_COST_DIAGNOSTICS
+            onOwner(loop, [] { cost_ledger::end(); });
+#endif
             if (trace) onOwner(loop, [] { traceMarker("GAMENET_TRACE_END\n"); });
             if (measureTimer) {
                 onOwner(loop, [&] { timer.cancel(); });
@@ -617,6 +632,9 @@ void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
     });
     loop.loop();
     client.join();
+#ifdef GAMENET_COST_DIAGNOSTICS
+    cost_ledger::save(std::getenv("GAMENET_COST_OUTPUT"));
+#endif
     require(loop.phase() == net::EventLoopPhase::Shutdown, "owner loop did not settle");
     result.metrics["final_loop_functors"] = loop.pendingFunctorCount();
     result.metrics["final_loop_controls"] = loop.pendingControlSourceCount();
@@ -697,6 +715,9 @@ int main(int argc, char* argv[]) {
     const bool uring = backend == "io_uring";
     const bool trace = std::getenv("GAMENET_TRACE_STEADY") != nullptr;
     const bool measureTimer = std::getenv("GAMENET_PROBE_TIMER") != nullptr;
+    const char* fixedTime = std::getenv("GAMENET_FIXED_TIME_MS");
+    require(!fixedTime || (!slow && measureTimer && !trace && argc == 4 &&
+                std::string_view(fixedTime) == "2000"), "invalid fixed-time observer");
     require(!slow || (argc == 4 && !trace), "round and trace controls are for steady trials");
     require(!measureTimer || (!slow && !trace), "timer requires a dedicated steady trial");
     unsigned budget = 16;
@@ -707,6 +728,7 @@ int main(int argc, char* argv[]) {
                     (budget == 16 || budget == 32 || budget == 64), "invalid io_uring notice budget");
     }
     unsigned rounds = defaultEchoRounds;
+    if (fixedTime) rounds = 32768; // Preallocated, bounded evidence capacity; never silently truncate.
     if (argc == 5) {
         const std::string_view value(argv[4]);
         const auto last = value.data() + value.size();

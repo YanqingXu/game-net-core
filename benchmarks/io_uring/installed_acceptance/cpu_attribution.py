@@ -184,7 +184,8 @@ def profile_syscalls(directory, backend):
     if backend == "io_uring":
         acceptance.require(calls["io_uring_enter"] > 0 and sqes_submitted > 0, "missing native SQE submissions")
     else:
-        acceptance.require(not calls["io_uring_enter"] and calls["epoll_wait"] > 0,
+        acceptance.require(not calls["io_uring_enter"] and
+                           sum(calls[name] for name in ("epoll_wait", "epoll_pwait", "epoll_pwait2")) > 0,
                            "unexpected epoll syscall trace")
     echoes = TRACE_ROUNDS * acceptance.PROFILE["connections"]
     return {
