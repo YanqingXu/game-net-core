@@ -9,9 +9,9 @@ import cost_ledger as c
 
 class CostTests(unittest.TestCase):
     def test_disjoint_nearest_module_not_inclusive_caller(self):
-        self.assertEqual(c.leaf_context([("gamenet::experimental::IoUringCompletionEngineImpl::enqueue", "exe"),
-            ("gamenet::experimental::IoUringTcpConnectionHubImpl::send", "exe"),
-            ("gamenet::experimental::IoUringEventLoopPumpImpl::driveOneTurn", "exe")]), ("user", "engine"))
+        self.assertEqual(c.leaf_context([("gamenet::experimental::io_uring::IoUringCompletionEngineImpl::enqueue", "exe"),
+            ("gamenet::experimental::io_uring::IoUringTcpConnectionHubImpl::send", "exe"),
+            ("gamenet::experimental::io_uring::IoUringEventLoopPumpImpl::driveOneTurn", "exe")]), ("user", "engine"))
 
     def test_kernel_not_counted_as_user_pump(self):
         self.assertEqual(c.leaf_context([("tcp_sendmsg_locked", "[kernel.kallsyms]"),

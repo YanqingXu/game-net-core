@@ -67,4 +67,7 @@ jobs:
           name: io-uring-cost-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/cost-evidence
           if-no-files-found: error
+          # The source archive intentionally includes the two workflow inputs.
+          # This path is generated evidence only; it contains no .git/credentials.
+          include-hidden-files: true
           retention-days: 30
