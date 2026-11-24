@@ -232,6 +232,13 @@ jobs:
           ref: e391c2f59e1cd0dc9d5cc8a1cbab215b058c488d
           path: baseline-source
           persist-credentials: false
+      - name: Check out the immutable intent provenance source
+        uses: actions/checkout@v4
+        with:
+          repository: YanqingXu/mini_trantor
+          ref: 3eba368475a68f677aae920d4f299b155db23d57
+          path: candidate-source/mini_trantor
+          persist-credentials: false
       - name: Validate scope and replay boundaries
         working-directory: candidate-source
         shell: bash
