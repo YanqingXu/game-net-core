@@ -1,0 +1,83 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: Installed io_uring acceptance
+
+on:
+  push:
+    branches: [main]
+    paths: ['benchmarks/io_uring/installed_acceptance/**', '.github/workflows/io-uring-*.yml']
+  pull_request:
+    branches: [main]
+    paths: ['benchmarks/io_uring/installed_acceptance/**', '.github/workflows/io-uring-*.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PACKAGE_REVISION: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out the standalone consumer
+        uses: actions/checkout@v4
+        with:
+          path: acceptance-source
+          persist-credentials: false
+      - name: Test evidence validators
+        run: python3 -B acceptance-source/benchmarks/io_uring/installed_acceptance/test_evidence.py
+      - name: Check out the package at the same immutable revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PACKAGE_REVISION }}
+          path: package-source
+          persist-credentials: false
+      - name: Build and install the Release package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/installed-acceptance/build"
+          logs="$RUNNER_TEMP/installed-acceptance/build"
+          cmake -S package-source -B "$RUNNER_TEMP/package-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DGAMENET_ENABLE_EXPERIMENTAL=ON \
+            -DGAMENET_BUILD_TESTING=OFF -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/installed-prefix" 2>&1 | tee "$logs/package-configure.log"
+          cmake --build "$RUNNER_TEMP/package-build" --parallel 2 2>&1 | tee "$logs/package-build.log"
+          cmake --install "$RUNNER_TEMP/package-build" 2>&1 | tee "$logs/package-install.log"
+      - name: Build a separate consumer of the installed targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/installed-acceptance/build"
+          cmake -S acceptance-source/benchmarks/io_uring/installed_acceptance \
+            -B "$RUNNER_TEMP/consumer-build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGameNetCore_DIR="$RUNNER_TEMP/installed-prefix/lib/cmake/GameNetCore" \
+            2>&1 | tee "$logs/consumer-configure.log"
+          cmake --build "$RUNNER_TEMP/consumer-build" --parallel 2 --verbose 2>&1 | tee "$logs/consumer-build.log"
+      - name: Run paired native Linux trials
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 acceptance-source/benchmarks/io_uring/installed_acceptance/run_acceptance.py \
+            --source package-source --expected-source "$PACKAGE_REVISION" \
+            --package-build "$RUNNER_TEMP/package-build" --consumer-build "$RUNNER_TEMP/consumer-build" \
+            --prefix "$RUNNER_TEMP/installed-prefix" --output "$RUNNER_TEMP/installed-acceptance"
+      - name: Independently replay the saved evidence
+        shell: bash
+        run: |
+          python3 acceptance-source/benchmarks/io_uring/installed_acceptance/run_acceptance.py \
+            --verify-output "$RUNNER_TEMP/installed-acceptance" \
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+      - name: Save raw Release evidence and build diagnostics
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installed-io-uring-native-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/installed-acceptance
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,212 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: io_uring CPU attribution
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [variant, profile]
+        default: variant
+        description: Paired Send-flush experiment or perf CPU profiling
+      dispatch_budget:
+        type: boolean
+        default: false
+        description: Sweep dispatch budgets after the paired variant experiment
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        default: variant
+      dispatch_budget:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  native-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PACKAGE_REVISION: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out the standalone profiler and consumer
+        uses: actions/checkout@v4
+        with:
+          path: attribution-source
+          persist-credentials: false
+      - name: Check out the package source at the main revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PACKAGE_REVISION }}
+          path: package-source
+          persist-credentials: false
+      - name: Select the explicitly requested experiment
+        id: experiment
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          DISPATCH_BUDGET: ${{ inputs.dispatch_budget }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            variant) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+            profile)
+              [[ "$DISPATCH_BUDGET" != true ]] || { echo 'Dispatch requires variant mode'; exit 1; }
+              echo 'enabled=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'Unknown experiment mode'; exit 1 ;;
+          esac
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/test_evidence.py
+      - name: Check out a separate candidate package
+        if: steps.experiment.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PACKAGE_REVISION }}
+          path: variant-source
+          persist-credentials: false
+      - name: Provision native CPU and syscall observers
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/io-uring-cpu/build"
+          mkdir -p "$logs"
+          packages=()
+          command -v strace >/dev/null || packages+=(strace)
+          if [[ "${{ steps.experiment.outputs.enabled }}" == false ]] \
+            && ! perf version >/dev/null 2>&1 && ! compgen -G '/usr/lib/linux-tools/*/perf' >/dev/null; then
+            packages+=(linux-tools-generic)
+          fi
+          {
+            uname -a
+            if (( ${#packages[@]} )); then
+              sudo -n apt-get update -qq
+              sudo -n apt-get install -y --no-install-recommends "${packages[@]}"
+            fi
+            strace --version
+            cat /proc/sys/kernel/perf_event_paranoid
+          } 2>&1 | tee "$logs/observer-preflight.log"
+      - name: Build the Release package and installed consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/io-uring-cpu/build"
+          prefix="$RUNNER_TEMP/package-prefix"
+          cmake -S package-source -B "$RUNNER_TEMP/package-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DGAMENET_ENABLE_EXPERIMENTAL=ON \
+            -DGAMENET_BUILD_TESTING=OFF -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_INSTALL_PREFIX="$prefix" 2>&1 | tee "$logs/package-configure.log"
+          cmake --build "$RUNNER_TEMP/package-build" --parallel 2 2>&1 | tee "$logs/package-build.log"
+          cmake --install "$RUNNER_TEMP/package-build" 2>&1 | tee "$logs/package-install.log"
+          cmake -S attribution-source/benchmarks/io_uring/installed_acceptance \
+            -B "$RUNNER_TEMP/consumer-build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGameNetCore_DIR="$prefix/lib/cmake/GameNetCore" 2>&1 | tee "$logs/consumer-configure.log"
+          cmake --build "$RUNNER_TEMP/consumer-build" --parallel 2 --verbose 2>&1 | tee "$logs/consumer-build.log"
+      - name: Run the longer baseline and owner-thread profiling
+        if: steps.experiment.outputs.enabled == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_attribution.py \
+            --source package-source --expected-source "$PACKAGE_REVISION" \
+            --package-build "$RUNNER_TEMP/package-build" --consumer-build "$RUNNER_TEMP/consumer-build" \
+            --prefix "$RUNNER_TEMP/package-prefix" --output "$RUNNER_TEMP/io-uring-cpu"
+      - name: Replay the raw evidence independently
+        if: steps.experiment.outputs.enabled == 'false'
+        run: |
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_attribution.py \
+            --verify-output "$RUNNER_TEMP/io-uring-cpu" \
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+      - name: Build and test the isolated candidate
+        if: steps.experiment.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="$RUNNER_TEMP/io-uring-cpu/variant/build"
+          build="$RUNNER_TEMP/variant-package-build"
+          prefix="$RUNNER_TEMP/variant-prefix"
+          mkdir -p "$logs"
+          patch="$GITHUB_WORKSPACE/attribution-source/benchmarks/io_uring/installed_acceptance/callback-send-coalescing.patch"
+          git -C variant-source apply --check "$patch"
+          git -C variant-source apply "$patch"
+          git -C variant-source diff --check
+          cmake -S variant-source -B "$build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DGAMENET_ENABLE_EXPERIMENTAL=ON \
+            -DGAMENET_BUILD_TESTING=OFF -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_INSTALL_PREFIX="$prefix" 2>&1 | tee "$logs/package-configure.log"
+          cmake --build "$build" --parallel 2 2>&1 | tee "$logs/package-build.log"
+          cmake --install "$build" 2>&1 | tee "$logs/package-install.log"
+          cmake -S attribution-source/benchmarks/io_uring/installed_acceptance \
+            -B "$RUNNER_TEMP/variant-consumer-build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DGameNetCore_DIR="$prefix/lib/cmake/GameNetCore" 2>&1 | tee "$logs/consumer-configure.log"
+          cmake --build "$RUNNER_TEMP/variant-consumer-build" --parallel 2 --verbose \
+            2>&1 | tee "$logs/consumer-build.log"
+          cmake -S variant-source -B "$build" -DGAMENET_BUILD_TESTING=ON 2>&1 | tee "$logs/contracts-configure.log"
+          cmake --build "$build" --target gamenet_io_uring_contracts --parallel 2 2>&1 | tee "$logs/contracts-build.log"
+          ctest --test-dir "$build" -C Release --no-tests=error --output-on-failure \
+            --output-junit "$logs/io-uring-contracts.xml" \
+            -R '^contract\.io_engine\.test_(io_uring_|cross_backend_tcp_semantics$)' \
+            2>&1 | tee "$logs/io-uring-contracts.log"
+          # Core enables internal hooks for tests. The experimental archive
+          # tested here must match the one linked by the installed consumer.
+          cmp "$build/src/experimental/io_uring/libgamenet_experimental_io_uring.a" \
+            "$prefix/lib/libgamenet_experimental_io_uring.a"
+          cmake -S variant-source -B "$build" -DGAMENET_BUILD_TESTING=OFF \
+            2>&1 | tee "$logs/package-configure-after-test.log"
+      - name: Measure same-host immediate and coalesced submissions
+        if: steps.experiment.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py \
+            --source package-source --expected-source "$PACKAGE_REVISION" \
+            --package-build "$RUNNER_TEMP/package-build" --consumer-build "$RUNNER_TEMP/consumer-build" \
+            --prefix "$RUNNER_TEMP/package-prefix" --output "$RUNNER_TEMP/io-uring-cpu" \
+            --variant-source variant-source --variant-prefix "$RUNNER_TEMP/variant-prefix" \
+            --variant-package-build "$RUNNER_TEMP/variant-package-build" \
+            --variant-consumer-build "$RUNNER_TEMP/variant-consumer-build"
+      - name: Replay the paired experiment evidence independently
+        if: steps.experiment.outputs.enabled == 'true'
+        run: |
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py \
+            --verify-output "$RUNNER_TEMP/io-uring-cpu" \
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+      - name: Sweep budgets using this run's verified installed variant
+        if: inputs.dispatch_budget && steps.experiment.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          result="$RUNNER_TEMP/io-uring-dispatch-budget"
+          mkdir -p "$result"
+          cp -r "$RUNNER_TEMP/io-uring-cpu/variant/build" "$result/build"
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
+            --fresh-variant "$RUNNER_TEMP/io-uring-cpu" --expected-source "$PACKAGE_REVISION" \
+            --package-build "$RUNNER_TEMP/variant-package-build" \
+            --consumer-build "$RUNNER_TEMP/variant-consumer-build" \
+            --prefix "$RUNNER_TEMP/variant-prefix" --output "$result"
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
+            --verify-output "$result" --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+      - name: Retain fresh dispatch-budget evidence
+        uses: actions/upload-artifact@v4
+        if: always() && inputs.dispatch_budget
+        with:
+          name: io-uring-dispatch-budget-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/io-uring-dispatch-budget
+          if-no-files-found: error
+          retention-days: 30
+      - name: Retain metrics, raw profiles, and diagnostics
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: io-uring-cpu-attribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/io-uring-cpu
+          if-no-files-found: error
+          retention-days: 30

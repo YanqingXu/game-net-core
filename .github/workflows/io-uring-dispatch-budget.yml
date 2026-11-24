@@ -1,0 +1,23 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: io_uring dispatch budget
+
+on:
+  push:
+    branches: [main]
+    paths: ['benchmarks/io_uring/installed_acceptance/**', '.github/workflows/io-uring-*.yml']
+  pull_request:
+    branches: [main]
+    paths: ['benchmarks/io_uring/installed_acceptance/**', '.github/workflows/io-uring-*.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-release:
+    uses: ./.github/workflows/io-uring-cpu-attribution.yml
+    with:
+      mode: variant
+      dispatch_budget: true
