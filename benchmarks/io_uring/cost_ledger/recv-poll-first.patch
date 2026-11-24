@@ -1,0 +1,11 @@
+diff --git a/src/experimental/io_uring/IoUringCompletionEngine.cc b/src/experimental/io_uring/IoUringCompletionEngine.cc
+--- a/src/experimental/io_uring/IoUringCompletionEngine.cc
++++ b/src/experimental/io_uring/IoUringCompletionEngine.cc
+@@ -579,6 +579,7 @@
+             sqe->addr = reinterpret_cast<std::uint64_t>(slot.storage.data());
+             sqe->len = static_cast<std::uint32_t>(slot.storage.size());
+             sqe->msg_flags = 0;
++            sqe->ioprio = IORING_RECVSEND_POLL_FIRST;
+             break;
+         case IoUringOperationKind::Send:
+             sqe->opcode = IORING_OP_SEND;

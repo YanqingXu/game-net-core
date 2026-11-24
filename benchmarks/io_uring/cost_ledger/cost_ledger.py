@@ -21,8 +21,11 @@ import hot_path_compare as hot
 import dispatch_budget as dispatch
 
 BASELINE = "6004293e0492819e062326032a5391eda6e83229"
-SCHEMA = "gamenet.io-uring-cost-ledger.v1"
+SCHEMA = "gamenet.io-uring-cost-ledger.v2"
 ENGINE = "src/experimental/io_uring/IoUringCompletionEngine.cc"
+EXPERIMENT = "one-shot-recv-poll-first"
+ANCHOR = "            sqe->msg_flags = 0;\n            break;\n        case IoUringOperationKind::Send:"
+REPLACEMENT = ANCHOR.replace("            break;", "            sqe->ioprio = IORING_RECVSEND_POLL_FIRST;\n            break;")
 INPUTS = ("src", "include", "cmake", "api", "CMakeLists.txt", "CMakePresets.json",
           "benchmarks/io_uring", ".github/workflows/io-uring-cost-ledger.yml", ".github/workflows/io-uring-cpu-attribution.yml")
 PROFILE = dict(blocks=5, rounds=4096, profile_rounds=8192, trace_rounds=512,
@@ -106,12 +109,15 @@ def leaf_context(frames):
     if re.search(r"malloc|operator new|(?:^|\W)free|memcpy|memmove|memset", frames[0][0]):
         return "user", "allocation_copy_leaf"
     for symbol, _ in frames:
-        for term, category in (("IoUringCompletionEngine", "engine"), ("IoUringTcpConnectionAdapter", "adapter"),
-                               ("AdapterSend", "adapter"), ("AdapterCommands", "adapter"), ("CommandInLoop", "adapter"),
-                               ("IoUringTcpConnectionHub", "hub"), ("IoUringEventLoopPump", "pump")):
-            if term in symbol: return "user", category
+        # Parameter types are not the executing module (Consumer::message takes
+        # an Adapter reference). Match class scope / helper function names.
+        if re.match(r"(?:\(anonymous namespace\)::)?Consumer<", symbol): return "user", "workload"
+        for term, category in ((r"IoUringCompletionEngine(?:Impl)?::", "engine"),
+                               (r"IoUringTcpConnectionAdapter(?:Impl)?::|::(?:admitAdapterSend|drainAdapterCommands|sendCommandInLoop)\(", "adapter"),
+                               (r"IoUringTcpConnectionHub(?:Impl)?::", "hub"),
+                               (r"IoUringEventLoopPump(?:Impl)?::", "pump")):
+            if re.search(term, symbol): return "user", category
         if "gamenet::net::" in symbol: return "user", "core"
-        if "Consumer<" in symbol: return "user", "workload"
     return "user", "user_other"
 
 def disjoint_stacks(path):
@@ -210,7 +216,12 @@ def verify(root, expected):
     a.require(m["files"] == a.file_manifest(root), "manifest hash mismatch")
     before, after = source_verify(root, "baseline"), source_verify(root, "candidate")
     delta = {p for p in set(before)|set(after) if runtime(p) and before.get(p) != after.get(p)}
-    a.require(delta == (set() if m["stage"] == "diagnose" else {ENGINE}), "runtime delta mismatch")
+    a.require(not delta, "committed runtime must remain unchanged")
+    a.require(m["experiment"] == (None if m["stage"] == "diagnose" else EXPERIMENT), "experiment identity")
+    if m["stage"] == "compare":
+        original = (root / "sources/baseline" / ENGINE).read_text()
+        a.require(original.count(ANCHOR) == 1 and (root / "experiment/IoUringCompletionEngine.cc").read_text() ==
+                  original.replace(ANCHOR, REPLACEMENT), "experiment exceeds one SQE hint")
     a.check_native_kernel(cpu.read_json(root / "host-probe.json"))
     host = cpu.read_json(root / "host.json")
     a.require(len(set(map(tuple, host["cpu_topology"]))) == 2, "physical CPUs not distinct")
@@ -221,6 +232,7 @@ def verify(root, expected):
         a.require(cache["GAMENET_COST_DIAGNOSTICS"] == ("ON" if label.endswith("-cost") else "OFF"), "observer contaminates score")
         if not label.endswith("-cost"): hot.contracts(root / label / "build/contracts.xml")
     if m["stage"] == "compare":
+        hot.contracts(root / "sanitizers/build/contracts.xml")
         for name in ("libgamenet_core.a",):
             a.require((root / "before/inputs" / name).read_bytes() == (root / "after/inputs" / name).read_bytes(), "epoll runtime changed")
         for filename in ("package-cache.txt", "consumer-cache.txt"):
@@ -237,21 +249,38 @@ def collect(args):
     before, after = args.baseline.resolve(), args.candidate.resolve()
     a.require(a.revision(before) == BASELINE and a.revision(after) == args.expected_candidate, "checkout identity")
     paths = a.command("git", "diff", "--name-only", BASELINE, "HEAD", cwd=after).splitlines()
-    a.require({p for p in paths if runtime(p)} == (set() if args.stage == "diagnose" else {ENGINE}), "runtime scope")
+    a.require(not {p for p in paths if runtime(p)}, "committed runtime must remain unchanged")
     host = a.native_host(root); a.write_json(root / "host.json", host)
     a.require(len(set(map(tuple, host["cpu_topology"]))) == 2, "physical CPUs not distinct")
     source_archive(before, root, "baseline"); source_archive(after, root, "candidate")
+    variant = work / "poll-first-source"
+    if args.stage == "compare":
+        version = re.match(r"(\d+)\.(\d+)", host["kernel"])
+        a.require(version and tuple(map(int, version.groups())) >= (5, 19), "poll-first experiment requires Linux >=5.19")
+        # Ephemeral derived source, never a change to either checked-out branch.
+        a.command("git", "clone", "--no-hardlinks", "--shared", str(after), str(variant))
+        patch = after / "benchmarks/io_uring/cost_ledger/recv-poll-first.patch"
+        a.command("git", "apply", "--check", str(patch), cwd=variant)
+        a.command("git", "apply", str(patch), cwd=variant)
+        original = (before / ENGINE).read_text()
+        a.require(original.count(ANCHOR) == 1 and (variant / ENGINE).read_text() == original.replace(ANCHOR, REPLACEMENT), "experiment scope")
+        (root / "experiment").mkdir()
+        shutil.copyfile(variant / ENGINE, root / "experiment/IoUringCompletionEngine.cc")
+        (root / "experiment/runtime.diff").write_text(a.command("git", "diff", "--", ENGINE, cwd=variant))
     consumer = after / "benchmarks/io_uring/installed_acceptance"
     flags = f"-g -ffile-prefix-map={before}=/gamenet-source -ffile-prefix-map={after}=/gamenet-source"
+    flags += f" -ffile-prefix-map={variant}=/gamenet-source"
     for label in ("before", "after", "before-cost", "after-cost"):
         for kind in ("build", "consumer"):
             flags += f" -ffile-prefix-map={work}/{label}-{kind}=/gamenet-{kind}"
     binaries, prefixes = {}, {}
     for label in labels(args.stage):
-        source = before if label == "before" else after
+        source = before if label == "before" else variant
         for diag in (False, True):
             key = label + ("-cost" if diag else "")
             binaries[key], prefixes[key] = build(source, consumer, work, root, key, flags, diag)
+    if args.stage == "compare":
+        hot.build(variant, consumer, work, root, "sanitizers", flags, sanitized=True)
     os.sched_setaffinity(0, host["pinned_cpus"])
     env = {k: v for k, v in os.environ.items() if k not in ENV_KEYS}
     for row in plan(args.stage):
@@ -277,7 +306,8 @@ def collect(args):
                     a.write_json(path / "symbols.json", symbols)
     a.write_json(root / "summary.json", summarize(root, args.stage, host["pinned_cpus"]))
     a.write_json(root / "manifest.json", dict(schema=SCHEMA, profile=PROFILE, stage=args.stage,
-        baseline=BASELINE, candidate=args.expected_candidate, prefixes=prefixes, files=a.file_manifest(root)))
+        baseline=BASELINE, candidate=args.expected_candidate, experiment=EXPERIMENT if args.stage == "compare" else None,
+        prefixes=prefixes, files=a.file_manifest(root)))
     verify(root, args.expected_candidate)
 
 def main():

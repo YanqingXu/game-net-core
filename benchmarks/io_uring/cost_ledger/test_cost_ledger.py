@@ -17,6 +17,9 @@ class CostTests(unittest.TestCase):
         self.assertEqual(c.leaf_context([("tcp_sendmsg_locked", "[kernel.kallsyms]"),
             ("IoUringEventLoopPumpImpl::driveOneTurn", "exe")]), ("kernel", "kernel_tcp_ip"))
 
+    def test_parameter_type_does_not_own_cpu_sample(self):
+        self.assertEqual(c.leaf_context([("(anonymous namespace)::Consumer<true>::message(gamenet::experimental::io_uring::IoUringTcpConnectionAdapter&, std::string_view)", "exe")]), ("user", "workload"))
+
     def test_unknown_and_allocator_remain_explicit(self):
         self.assertEqual(c.leaf_context([("[unknown]", "exe"), ("IoUringCompletionEngine::enqueue", "exe")]), ("unknown", "unknown"))
         self.assertEqual(c.leaf_context([("__memcpy_avx2", "libc"), ("IoUringCompletionEngine::enqueue", "exe")]), ("user", "allocation_copy_leaf"))
@@ -55,6 +58,10 @@ class CostTests(unittest.TestCase):
         for name in ("include/gamenet/a.h", "src/core/a.cc", "cmake/a.cmake", "api/x.json", "CMakeLists.txt"):
             self.assertTrue(c.runtime(name))
         self.assertFalse(c.runtime("benchmarks/io_uring/cost_ledger/observer.cpp"))
+
+    def test_experiment_is_one_sqe_hint_not_a_budget_or_ownership_edit(self):
+        self.assertEqual(c.REPLACEMENT.replace("            sqe->ioprio = IORING_RECVSEND_POLL_FIRST;\n", ""), c.ANCHOR)
+        self.assertEqual(c.REPLACEMENT.count("IORING_RECVSEND_POLL_FIRST"), 1)
 
     def test_perf_window_and_owner_filter(self):
         with tempfile.TemporaryDirectory() as directory:

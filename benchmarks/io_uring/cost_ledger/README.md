@@ -2,7 +2,12 @@
 
 This is a bounded diagnostic, not a 24h/72h promotion gate. Frozen runtime baseline:
 `6004293e0492819e062326032a5391eda6e83229`. Diagnose before changing runtime;
-compare allows only a single-factor CompletionEngine experiment. Never merge main.
+compare applies the retained single-line `recv-poll-first.patch` ONLY to a
+temporary local clone used to build the `after` package (Linux >=5.19 required).
+Both committed runtime trees must equal the baseline. Archive and verify the
+derived Engine source against that exact one-line transformation. This tests the
+official recv poll-first hint without imposing a new kernel requirement on the
+library or quietly shipping a benchmark hypothesis. Never merge main.
 
 Invariants: owner affinity; one target terminal per accepted operation; cancellation
 CQEs are bookkeeping; notice consumption precedes slot reuse; independently owned
