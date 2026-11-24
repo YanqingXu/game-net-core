@@ -101,8 +101,10 @@ Installed acceptance and the combined CPU-variant/dispatch sweep run for changes
 to this harness on PRs to `main` and pushes to `main`. All three workflows also
 support manual dispatch. CPU attribution exposes `variant` (default) and
 `profile` (perf stack samples) modes; a dispatch sweep requires `variant`.
-Consumer and package checkouts use the same immutable `github.sha`, including
-the PR merge commit when validating a PR. No production source is patched.
+In `profile` mode, consumer and package checkouts use the same immutable
+`github.sha`, including the PR merge commit when validating a PR. Historical
+`variant` mode now pins both checkouts as described below. No production source
+is patched by either attribution mode.
 
 For an external replay, get the run's checkout SHA independently from Actions
 and pass both `--expected-source SHA --expected-consumer SHA`. Replay both CPU

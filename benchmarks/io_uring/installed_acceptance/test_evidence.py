@@ -93,6 +93,14 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(hot_path.PROFILE["timer_pairs"], 3)
         self.assertEqual(hot_path.CHANGED, {submission.ENGINE, "src/experimental/io_uring/IoUringTcpConnectionHub.cc"})
 
+    def test_historical_workflow_does_not_claim_current_source_identity(self):
+        path = Path(__file__).resolve().parents[3] / ".github/workflows/io-uring-cpu-attribution.yml"
+        text = path.read_text()
+        self.assertIn('test "$(git -C attribution-source rev-parse HEAD)" = "$PACKAGE_REVISION"', text)
+        self.assertIn('test "$(git -C package-source rev-parse HEAD)" = "$PACKAGE_REVISION"', text)
+        self.assertIn('env -u GITHUB_SHA python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py', text)
+        self.assertIn('--expected-source "$PACKAGE_REVISION" --expected-consumer "$PACKAGE_REVISION"', text)
+
     def test_hot_path_runtime_delta_is_narrow_and_consumer_unchanged(self):
         changed = hot_path.CHANGED | {"tests/contract/io_engine/test_io_uring_completion_engine.cpp"}
         hot_path.check_source_delta(changed)
