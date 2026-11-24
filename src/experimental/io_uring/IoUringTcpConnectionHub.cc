@@ -1176,6 +1176,7 @@ private:
         const bool preservingGracefulReason =
             route.phase == RoutePhase::GracefulDraining;
         route.phase = RoutePhase::Closing;
+        ++closingRoutes_;
         if (!preservingGracefulReason) route.closeReason = reason;
         route.closeNativeError = nativeError;
         route.readDesired = false;
@@ -1839,7 +1840,7 @@ private:
 
     void finalizeReadyRoutes() {
         if (consumerDepth_ != 0 || finalizing_ ||
-            phase_ != IoUringTcpHubPhase::Running) {
+            phase_ != IoUringTcpHubPhase::Running || closingRoutes_ == 0) {
             return;
         }
         finalizing_ = true;
@@ -1864,6 +1865,9 @@ private:
     void finalizeRoute(std::size_t index) {
         auto route = std::move(slots_[index].route);
         if (!route) return;
+        // Retire before callbacks: they may reuse this slot and close a new
+        // generation (or a neighboring route) while finalizing_ is still set.
+        --closingRoutes_;
         discardAllSendSegments(*route);
         route->socket.close();
         ++metrics_.socketCloseCount;
@@ -2064,6 +2068,7 @@ private:
     std::size_t activeReceives_{};
     std::size_t activeSends_{};
     std::size_t pendingSendBytes_{};
+    std::size_t closingRoutes_{};
     std::size_t consumerDepth_{};
     bool maintenanceAttached_{false};
     bool finalizing_{false};

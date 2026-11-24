@@ -13,6 +13,7 @@ from unittest.mock import patch
 import cpu_attribution as profiling
 import cpu_variant as variant
 import dispatch_budget as dispatch
+import hot_path_compare as hot_path
 import run_acceptance as acceptance
 
 SHA = "a" * 40
@@ -24,6 +25,55 @@ class EvidenceTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_hot_path_requires_fixed_baseline_and_exact_candidate(self):
+        evidence = dict(baseline_revision=hot_path.BASELINE, candidate_revision=SHA, consumer_revision=SHA)
+        hot_path.check_identity(evidence, SHA)
+        for field in evidence:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                hot_path.check_identity({**evidence, field: OTHER}, SHA)
+
+    def test_hot_path_runtime_delta_is_narrow_and_consumer_unchanged(self):
+        changed = hot_path.CHANGED | {"tests/contract/io_engine/test_io_uring_completion_engine.cpp"}
+        hot_path.check_source_delta(changed)
+        for path in ("src/core/net/TcpConnection.cc", "include/gamenet/experimental/io_uring/IoUringCompletionEngine.h",
+                     "CMakeLists.txt", "cmake/Sanitizers.cmake", "api/experimental_io_uring.json",
+                     "benchmarks/io_uring/installed_acceptance/acceptance.cpp",
+                     "benchmarks/io_uring/installed_acceptance/CMakeLists.txt"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                hot_path.check_source_delta(changed | {path})
+        with self.assertRaises(ValueError):
+            hot_path.check_source_delta(set())
+
+    def test_hot_path_balanced_pairs_and_fixed_limits(self):
+        rows = list(hot_path.plan())
+        self.assertEqual(len(rows), 54)  # 39 steady (including warmup), 9 slow, 6 timer.
+        for pair in range(hot_path.PAIRS + 1):
+            self.assertEqual({arm for case, block, arm in rows if case == "steady" and block == pair},
+                             set(hot_path.ARMS))
+        firsts = [next(arm for case, block, arm in rows if case == "steady" and block == pair)
+                  for pair in range(1, hot_path.PAIRS + 1)]
+        self.assertTrue(all(firsts.count(arm) == 4 for arm in hot_path.ARMS))
+        self.assertEqual(hot_path.PROFILE["notice_budget"], 16)
+        self.assertEqual(hot_path.PROFILE["output_high_water_bytes"], 65536)
+
+    def test_hot_path_paired_interval_rejects_missing_pair(self):
+        with self.assertRaises(ValueError):
+            hot_path.paired_interval([5.0] * 11)
+        result = hot_path.paired_interval([5.0] * 12)
+        self.assertEqual(result["paired_median_percent"], 5.0)
+        self.assertEqual(result["bootstrap_95_percent"], [5.0, 5.0])
+
+    def test_hot_path_contracts_reject_skips_and_duplicates(self):
+        self.contracts(variant.CONTRACTS)
+        path = self.root / "variant/build/io-uring-contracts.xml"
+        self.assertEqual(len(hot_path.contracts(path)), 11)
+        self.contracts(variant.CONTRACTS, failure="skipped")
+        with self.assertRaises(ValueError):
+            hot_path.contracts(path)
+        self.contracts([*variant.CONTRACTS, next(iter(variant.CONTRACTS))])
+        with self.assertRaises(ValueError):
+            hot_path.contracts(path)
 
     def probe(self, kernel="6.8.0-azure"):
         return dict(system="Linux", kernel=kernel, proc_osrelease=kernel,

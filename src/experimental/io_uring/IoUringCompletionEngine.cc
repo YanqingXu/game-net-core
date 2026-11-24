@@ -93,6 +93,7 @@ class IoUringCompletionEngineImpl {
 public:
     struct OperationSlot {
         std::uint32_t generation{};
+        std::uint32_t nextFree{};
         bool active{};
         bool noticePending{};
         bool submitted{};
@@ -117,6 +118,11 @@ public:
         : ownerLoop_(ownerLoop),
           options_(validatedOptions(ownerLoop, options)),
           slots_(options_.maxOperations) {
+        // A fixed owner-only chain; terminal notices keep their slots until
+        // takeNextNotice(), not merely until the native CQE is decoded.
+        for (std::size_t index = 0; index < slots_.size(); ++index) {
+            slots_[index].nextFree = static_cast<std::uint32_t>(index + 1);
+        }
         try {
             setupRing();
             probeRequiredOperations();
@@ -305,6 +311,8 @@ public:
         }
         ownedBytes_ -= notice.reservedBytes_;
         notice.reservedBytes_ = 0;
+        slots_[identity.slot].nextFree = freeSlotHead_;
+        freeSlotHead_ = identity.slot;
         return notice;
     }
 
@@ -546,6 +554,7 @@ private:
             ++sqFullRejections_;
             return {.result = IoUringSubmissionResult::SubmissionQueueFull};
         }
+        freeSlotHead_ = slot.nextFree;
         sqe->fd = socket;
         sqe->user_data = encodeIdentity(identity, false);
         switch (kind) {
@@ -767,11 +776,7 @@ private:
     }
 
     std::optional<std::size_t> findFreeSlot() const noexcept {
-        for (std::size_t index = 0; index < slots_.size(); ++index) {
-            if (!slots_[index].active && !slots_[index].noticePending) {
-                return index;
-            }
-        }
+        if (freeSlotHead_ < slots_.size()) return freeSlotHead_;
         return std::nullopt;
     }
 
@@ -796,6 +801,7 @@ private:
     gamenet::net::EventLoop* ownerLoop_;
     IoUringCompletionEngineOptions options_;
     std::vector<OperationSlot> slots_;
+    std::uint32_t freeSlotHead_{};
     std::deque<PendingSubmission> pendingSubmissions_;
     std::deque<IoUringCompletionNotice> readyNotices_;
     IoUringPhase phase_{IoUringPhase::Running};

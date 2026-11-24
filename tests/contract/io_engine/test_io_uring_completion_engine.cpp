@@ -405,6 +405,68 @@ void testTerminalNoticeRetainsOperationSlotGeneration() {
     GAMENET_TEST_ASSERT(engine.metrics().ownedBytes == 0);
 }
 
+void testFullTableReuseRetainsTakenNoticePayloadAndLease() {
+    gamenet::net::EventLoop loop;
+    uring::IoUringCompletionEngine engine(&loop, {
+        .entries = 8, .maxOperations = 4, .maxCompletionsPerWait = 8,
+        .maxBytesPerOperation = 1, .maxOwnedBytes = 4,
+    });
+    std::array<int, 2> pair{};
+    GAMENET_TEST_ASSERT(
+        ::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair.data()) == 0);
+    OwnedFd reader(pair[0]);
+    OwnedFd writer(pair[1]);
+    std::array<uring::IoUringOperationIdentity, 4> previous{};
+    std::vector<uring::IoUringCompletionNotice> retained;
+    std::vector<std::weak_ptr<int>> leases;
+
+    for (int round = 0; round < 16; ++round) {
+        std::array<uring::IoUringOperationIdentity, 4> current{};
+        for (std::size_t index = 0; index < current.size(); ++index) {
+            auto lease = std::make_shared<int>(round);
+            leases.push_back(lease);
+            const auto submitted = engine.enqueueRecv(reader.get(), 1, lease);
+            GAMENET_TEST_ASSERT(submitted.result == uring::IoUringSubmissionResult::Accepted);
+            current[index] = submitted.identity;
+            for (std::size_t earlier = 0; earlier < index; ++earlier) {
+                GAMENET_TEST_ASSERT(current[earlier].slot != current[index].slot);
+            }
+        }
+        for (const auto old : previous) {
+            if (old.valid()) {
+                GAMENET_TEST_ASSERT(engine.cancel(old) == uring::IoUringCancelResult::RejectedInvalid);
+            }
+        }
+        GAMENET_TEST_ASSERT(engine.flush().nativeError == 0);
+        GAMENET_TEST_ASSERT(::send(writer.get(), "qqqq", 4, MSG_NOSIGNAL) == 4);
+        const auto deadline = std::chrono::steady_clock::now() + 2s;
+        while (engine.metrics().readyNotices != 4 &&
+               std::chrono::steady_clock::now() < deadline) {
+            (void)engine.wait(50ms);
+        }
+        GAMENET_TEST_ASSERT(engine.metrics().readyNotices == 4);
+        GAMENET_TEST_ASSERT(engine.metrics().activeOperations == 0);
+        // Decoding alone must not put any of these four slots on the free chain.
+        GAMENET_TEST_ASSERT(engine.enqueueRecv(reader.get(), 1).result ==
+                            uring::IoUringSubmissionResult::OperationLimit);
+        for (std::size_t index = 0; index < current.size(); ++index) {
+            auto notice = engine.takeNextNotice();
+            GAMENET_TEST_ASSERT(notice.has_value());
+            retained.push_back(std::move(*notice));
+        }
+        GAMENET_TEST_ASSERT(!engine.takeNextNotice());
+        previous = current;
+    }
+    GAMENET_TEST_ASSERT(engine.shutdown(0ms) == uring::IoUringShutdownResult::Drained);
+    GAMENET_TEST_ASSERT(engine.metrics().ownedBytes == 0);
+    for (std::size_t index = 0; index < retained.size(); ++index) {
+        GAMENET_TEST_ASSERT(retained[index].payload() == "q");
+        GAMENET_TEST_ASSERT(!leases[index].expired());
+    }
+    retained.clear();
+    for (const auto& lease : leases) GAMENET_TEST_ASSERT(lease.expired());
+}
+
 void testCancelLeaseAndFinalDrain() {
     gamenet::net::EventLoop loop;
     uring::IoUringCompletionEngine engine(
@@ -466,6 +528,7 @@ int main() {
     testOneShotConnectCopiesAddressAndRetainsLease();
     testSlotGenerationRejectsStaleCancel();
     testTerminalNoticeRetainsOperationSlotGeneration();
+    testFullTableReuseRetainsTakenNoticePayloadAndLease();
     testCancelLeaseAndFinalDrain();
     return 0;
 }

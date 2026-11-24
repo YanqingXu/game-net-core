@@ -327,6 +327,55 @@ void testSharedPumpIsolationGenerationAndReentrantReuse() {
     GAMENET_TEST_ASSERT(summary.pump.engine.ownedBytes == 0);
 }
 
+void testReentrantCloseAfterLastClosingRouteRetires() {
+    gamenet::net::EventLoop loop;
+    auto pairA = makeTcpPair();
+    auto pairB = makeTcpPair();
+    auto pairC = makeTcpPair();
+    uring::IoUringTcpConnectionIdentity identityB{};
+    std::shared_future<uring::IoUringTcpConnectionHubConnectionStopSummary> futureC;
+    std::size_t closes = 0;
+    bool timedOut = false;
+    uring::IoUringTcpConnectionHub hub(&loop, hubOptions(), [&](const auto& summary) {
+        GAMENET_TEST_ASSERT(summary.allConnectionsStopped);
+        GAMENET_TEST_ASSERT(summary.hub.invariantFailures == 0);
+        loop.quit();
+    });
+    auto countClosed = [&] {
+        if (++closes == 3) GAMENET_TEST_ASSERT(hub.stop());
+    };
+    auto onClosed = [&](auto, auto) { countClosed(); };
+    const auto a = hub.addConnection(pairA.hub.release(),
+        [&](auto identity, auto) { GAMENET_TEST_ASSERT(hub.closeConnection(identity)); },
+        [&](auto, auto) {
+            // The sole Closing route has just retired. Re-enter with both a
+            // neighboring route and a replacement generation in the freed slot.
+            GAMENET_TEST_ASSERT(hub.closeConnection(identityB));
+            const auto c = hub.addConnection(pairC.hub.release(), [](auto, auto) {}, onClosed);
+            GAMENET_TEST_ASSERT(c.result == uring::IoUringTcpHubAddResult::Accepted);
+            futureC = c.stopFuture;
+            GAMENET_TEST_ASSERT(hub.closeConnection(c.identity));
+            GAMENET_TEST_ASSERT(!hub.closeConnection(c.identity));
+            countClosed();
+        });
+    GAMENET_TEST_ASSERT(a.result == uring::IoUringTcpHubAddResult::Accepted);
+    const auto b = hub.addConnection(pairB.hub.release(), [](auto, auto) {}, onClosed);
+    GAMENET_TEST_ASSERT(b.result == uring::IoUringTcpHubAddResult::Accepted);
+    identityB = b.identity;
+    sendByte(pairA.peer.get(), 'a');
+    loop.runAfter(2s, [&] { timedOut = true; (void)hub.stop(); loop.quit(); });
+    loop.loop();
+    GAMENET_TEST_ASSERT(!timedOut && closes == 3);
+    GAMENET_TEST_ASSERT(a.stopFuture.get().socketClosed);
+    GAMENET_TEST_ASSERT(b.stopFuture.get().socketClosed);
+    GAMENET_TEST_ASSERT(futureC.get().socketClosed);
+    const auto summary = hub.stopFuture().get();
+    GAMENET_TEST_ASSERT(summary.hub.connectionsRetired == 3);
+    GAMENET_TEST_ASSERT(summary.hub.pendingSendBytes == 0);
+    GAMENET_TEST_ASSERT(summary.pump.engine.ownedBytes == 0);
+    GAMENET_TEST_ASSERT(summary.pump.engine.activeOperations == 0);
+}
+
 void testCapacityForeignMutationAndAggregateEventLoopQuit() {
     gamenet::net::EventLoop loop;
     auto pairA = makeTcpPair();
@@ -438,6 +487,7 @@ void testCapacityForeignMutationAndAggregateEventLoopQuit() {
 
 int main() {
     testSharedPumpIsolationGenerationAndReentrantReuse();
+    testReentrantCloseAfterLastClosingRouteRetires();
     testCapacityForeignMutationAndAggregateEventLoopQuit();
     return 0;
 }

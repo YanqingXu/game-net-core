@@ -71,6 +71,26 @@ automatic io_uring choice is introduced.
 
 ## 5. Verification
 
+### Owner-local hot-path bookkeeping
+
+The installed experimental implementation may use a fixed intrusive free-slot
+chain instead of scanning the operation table. Only taking the exact terminal
+notice returns its slot to that chain; CQE decoding, cancel-request completion,
+and failed admission never free a notice-pending or active generation. Payload
+and lease ownership still move with the terminal notice through consumer return.
+
+The Hub may skip its close-retirement scan when no route is Closing. The owner
+increments that count only on the first Closing transition and decrements before
+publishing a retired route's callbacks. Reentrant close, generation reuse and
+aggregate quit retain the existing scan order and physical-drain boundary.
+
+Direct contracts: `test_io_uring_completion_engine.cpp` (full-table exhaustion,
+terminal-notice retention and repeated generation reuse) and
+`test_io_uring_tcp_connection_hub.cpp` (reentrant close/reuse and zero residue).
+Same-host before/after measurements retain the unchanged epoll reference,
+workload, affinity, budgets, installed consumer and raw replay. These changes
+remain experimental; no default backend or HP0/HP8 promotion is implied.
+
 - `tests/cmake/test_experimental_io_uring_install_contract.py`
 - `tests/api/test_experimental_io_uring_api_manifest.py`
 

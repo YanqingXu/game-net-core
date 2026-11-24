@@ -115,3 +115,37 @@ replay is needed (Actions retention is 30 days).
 portable verifier checks. It does not replace native Linux execution, the
 11 exact io_uring contracts, sanitizers, or HP0 promotion requirements. These
 experiments remain observational, default-OFF, and do not authorize promotion.
+
+## Bounded hot-path before/after comparison
+
+CPU attribution's manual `mode=hot-path` compares the fixed pre-optimization
+`e391c2f59e1cd0dc9d5cc8a1cbab215b058c488d` baseline with the dispatched candidate
+SHA. It permits runtime differences only in Engine slot bookkeeping and Hub
+close-retirement bookkeeping. It does not apply the Send-coalescing patch.
+
+Both packages use the same Release compiler flags, with identical file-prefix
+maps for reproducible diagnostic paths. The consumer sources and installed Core
+archive must be byte-identical. Each package passes all eleven Release contracts;
+the candidate additionally passes all eleven Debug ASan/UBSan contracts. The
+tested experimental archives must match the installed ones used for timing.
+
+One excluded warmup block and twelve scored blocks rotate epoll/before/after on
+the same two pinned CPUs (64 connections, 4 KiB frames, 4,096 rounds). Three
+slow-close blocks per arm retain the 250 ms hold and 8 MiB burst. Separate
+1 ms timer probes, perf stacks and syscall traces are never scored as throughput
+trials. Notice budget 16, output high-water 64 KiB, per-operation ownership and
+physical drain remain unchanged. Paired median percent changes and deterministic
+bootstrap intervals describe this one hosted runner, not independent hosts or a
+production acceptance decision.
+
+```sh
+gh workflow run io-uring-cpu-attribution.yml --ref CANDIDATE_BRANCH -f mode=hot-path -f dispatch_budget=false
+python3 -B benchmarks/io_uring/installed_acceptance/hot_path_compare.py \
+  --verify-output /path/to/hot-path-evidence --expected-candidate ACTIONS_HEAD_SHA
+```
+
+The replay rejects missing/extra trials, wrong identities, changed control builds,
+incomplete contracts, WSL host evidence, raw-ledger discrepancies and file-hash
+changes. Obtain `ACTIONS_HEAD_SHA` independently from Actions. Performance is
+reported even if unchanged or worse; no threshold is weakened and no default
+backend, HP0/HP8 status or 24h/72h gate is changed by this experiment.
