@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import random
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -41,6 +42,8 @@ PROFILE = {**acceptance.PROFILE, "steady_rounds": cpu.STEADY_ROUNDS,
            "pairs": PAIRS, "slow_pairs": 3, "timer_pairs": TIMER_PAIRS,
            "notice_budget": 16, "timer_period_ns": 1_000_000,
            "trace_rounds": cpu.TRACE_ROUNDS, "profile_rounds": cpu.PROFILE_ROUNDS}
+OLD_TIMER_GUARD = 'require(!measureTimer || (uring && !slow && !trace), "timer requires a dedicated io_uring steady trial");'
+NEW_TIMER_GUARD = 'require(!measureTimer || (!slow && !trace), "timer requires a dedicated steady trial");'
 
 
 def check_identity(manifest, expected):
@@ -55,8 +58,16 @@ def check_source_delta(paths):
     runtime = {path for path in paths if path.startswith(("src/", "include/", "cmake/", "api/"))
                or path in ("CMakeLists.txt", "CMakePresets.json")}
     acceptance.require(runtime == CHANGED, "submission experiment changed unrelated runtime/API/build policy")
-    acceptance.require(not any(f"benchmarks/io_uring/installed_acceptance/{name}" in paths
-                               for name in previous.CONSUMER_FILES), "installed consumer changed")
+    acceptance.require("benchmarks/io_uring/installed_acceptance/CMakeLists.txt" not in paths,
+                       "installed consumer build policy changed")
+
+
+def check_consumer_delta(before, after):
+    # Apply the SAME observer to every installed package, including epoll. No
+    # workload, clock, timer cadence, cancellation or scheduling limit changes.
+    acceptance.require(before.count(OLD_TIMER_GUARD) == 1 and
+                       after == before.replace(OLD_TIMER_GUARD, NEW_TIMER_GUARD, 1),
+                       "consumer changed beyond enabling the epoll timer control")
 
 
 def plan():
@@ -91,6 +102,8 @@ def check_derivation(root):
 
 def check_builds(root, prefixes):
     check_derivation(root)
+    check_consumer_delta((root / "consumer-baseline.cpp").read_text(),
+                         (root / "candidate/inputs/acceptance.cpp").read_text())
     for label in LABELS:
         acceptance.check_build(root / label, prefixes[label])
         for filename in ("package-cache.txt", "consumer-cache.txt"):
@@ -217,11 +230,17 @@ def collect(args):
             acceptance.require(actual == blob, "source file does not match its Git blob")
             source_blobs[f"{label}/{path}"] = blob
     consumer = after / "benchmarks/io_uring/installed_acceptance"
+    original_consumer = before / "benchmarks/io_uring/installed_acceptance/acceptance.cpp"
+    check_consumer_delta(original_consumer.read_text(), (consumer / "acceptance.cpp").read_text())
+    shutil.copyfile(original_consumer, root / "consumer-baseline.cpp")
     flags = " ".join(f"-ffile-prefix-map={sources[label]}=/gamenet-source" for label in LABELS)
     binaries, prefixes = {}, {}
     for label in LABELS:
         print(f"Building and testing {label}", flush=True)
         binaries[label], prefixes[label] = previous.build(sources[label], consumer, work, root, label, flags)
+        # The historical build helper archives the package checkout's consumer
+        # file. All four binaries here actually compile the candidate observer.
+        shutil.copyfile(consumer / "acceptance.cpp", root / label / "inputs/acceptance.cpp")
     check_builds(root, prefixes)
     previous.build(after, consumer, work, root, "sanitizers", flags, sanitized=True)
     perf, host["perf_version"] = cpu.resolve_perf()

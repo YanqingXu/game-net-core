@@ -161,6 +161,11 @@ The single-factor sources are exact candidate checkouts with one runtime file
 restored from baseline; archived source bytes are bound to their Git blob IDs.
 All share an identical consumer, Core archive, compiler flags, CPU affinity,
 64 connections, 4 KiB frames, 4,096 rounds, budgets and backpressure limits.
+The observer is compiled from one shared candidate source for all arms: its only
+change from baseline is removing the io_uring-only restriction on the existing
+timer probe's CLI guard. Exact source comparison enforces that one-line change;
+the raw timer implementation, workload, sampling clocks and cancellation checks
+are unchanged. Historical consumers/verifiers retain their original evidence.
 
 Fifteen balanced scored blocks plus one excluded warmup cover five arms (epoll
 uses baseline Core). Three slow-close blocks cover every arm. Twenty-one separate

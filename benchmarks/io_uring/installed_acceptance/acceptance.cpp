@@ -676,7 +676,7 @@ int main(int argc, char* argv[]) {
     const bool trace = std::getenv("GAMENET_TRACE_STEADY") != nullptr;
     const bool measureTimer = std::getenv("GAMENET_PROBE_TIMER") != nullptr;
     require(!slow || (argc == 4 && !trace), "round and trace controls are for steady trials");
-    require(!measureTimer || (uring && !slow && !trace), "timer requires a dedicated io_uring steady trial");
+    require(!measureTimer || (!slow && !trace), "timer requires a dedicated steady trial");
     unsigned budget = 16;
     if (const char* configured = std::getenv("GAMENET_PUMP_NOTICE_BUDGET")) {
         const char* end = configured + std::strlen(configured);

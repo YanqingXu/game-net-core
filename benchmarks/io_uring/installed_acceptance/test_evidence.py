@@ -42,9 +42,18 @@ class EvidenceTests(unittest.TestCase):
                 submission.check_identity({**evidence, field: OTHER}, SHA)
         submission.check_source_delta(submission.CHANGED)
         for path in ("src/core/net/EventLoop.cc", "include/gamenet/experimental/io_uring/IoUringEventLoopPump.h",
-                     "benchmarks/io_uring/installed_acceptance/acceptance.cpp", "CMakeLists.txt"):
+                     "benchmarks/io_uring/installed_acceptance/CMakeLists.txt", "CMakeLists.txt"):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 submission.check_source_delta(submission.CHANGED | {path})
+
+    def test_submission_allows_only_shared_epoll_timer_guard_change(self):
+        original = "same workload\n" + submission.OLD_TIMER_GUARD + "\nsame timer cadence\n"
+        fixed = original.replace(submission.OLD_TIMER_GUARD, submission.NEW_TIMER_GUARD)
+        submission.check_consumer_delta(original, fixed)
+        for changed in (original, fixed + "extra change", fixed.replace("same workload", "different workload"),
+                        fixed.replace("!slow && !trace", "true")):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                submission.check_consumer_delta(original, changed)
 
     def test_submission_balanced_factorial_and_timer_control(self):
         rows = list(submission.plan())
