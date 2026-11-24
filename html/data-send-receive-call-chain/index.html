@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据收发调用链 · game-net-core</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #fbf8f0;
+      --cover: #f2eadc;
+      --panel: #fffcf6;
+      --ink: #27241f;
+      --muted: #5a5146;
+      --rule: #d5cbbb;
+      --quiet: #eae1d2;
+      --rust: #963b26;
+      --rust-wash: #f6e7db;
+      --blue: #1f5269;
+      --blue-wash: #e5eff1;
+      --display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+      --mono: "Cascadia Code", Consolas, Menlo, monospace;
+      --page-width: 84rem;
+      --gutter: clamp(1.125rem, 4vw, 3rem);
+      font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.73;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-padding-top: 1.2rem; }
+    body { margin: 0; color: var(--ink); background: var(--paper); }
+    a { color: var(--rust); text-decoration-thickness: 1px; text-underline-offset: .22em; }
+    a:hover { text-decoration-thickness: 2px; }
+    :is(a, button, summary):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+    button, summary { font: inherit; }
+    code { font-family: var(--mono); font-size: .88em; overflow-wrap: anywhere; }
+    pre {
+      padding: 1rem 1.12rem;
+      background: var(--quiet);
+      border-inline-start: 3px solid var(--rust);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.66;
+    }
+    h1, h2, h3, h4 { line-height: 1.29; text-wrap: balance; }
+    h1, main h2 { font-family: var(--display); font-weight: 900; }
+    h2 { margin: 0 0 .9rem; font-size: clamp(1.56rem, 3vw, 2.2rem); letter-spacing: -.022em; }
+    h3 { margin: 1.55rem 0 .65rem; font-size: 1.16rem; }
+    p, ol, ul { margin: .65rem 0 1rem; }
+    ol, ul { padding-inline-start: 1.5rem; }
+    li + li { margin-block-start: .48rem; }
+    th, td { overflow-wrap: anywhere; }
+    .skip {
+      position: absolute;
+      inset: .6rem auto auto .6rem;
+      padding: .45rem .8rem;
+      background: var(--panel);
+      translate: 0 -200%;
+    }
+    .skip:focus { translate: none; z-index: 3; }
+
+    .hero {
+      background: var(--cover);
+      border-top: 4px solid var(--rust);
+      border-bottom: 1px solid var(--rule);
+    }
+    .hero-inner, .layout {
+      max-width: var(--page-width);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+    .hero-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(12.5rem, 17.5rem);
+      align-items: center;
+      gap: 1.15rem 3rem;
+      padding-block: 1rem 1.55rem;
+    }
+    .hero-meta {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: .15rem 1rem;
+      padding-bottom: .7rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .project { margin: 0; color: var(--rust); font: 650 .87rem/1.52 var(--mono); }
+    .revision { margin: 0; color: var(--muted); font-size: .8rem; }
+    .hero h1 { margin: 0; font-size: clamp(2.3rem, 5.4vw, 4.15rem); letter-spacing: -.04em; }
+    .hero .summary { max-width: 42rem; margin: .56rem 0 0; color: var(--muted); font-size: 1.035rem; }
+    .hero-links { display: grid; border-top: 1px solid var(--ink); }
+    .hero-links a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .35rem;
+      padding: .45rem .12rem;
+      border-bottom: 1px solid var(--rule);
+      font-size: .87rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .hero-links a:nth-child(2) { color: var(--blue); }
+    .hero-links a:last-child { color: var(--ink); }
+    .hero-links a:hover { background: var(--panel); text-decoration: underline; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 11.45rem minmax(0, 1fr);
+      align-items: start;
+      gap: 3rem;
+      padding-block: 1.82rem 3rem;
+    }
+    .toc { position: sticky; top: 1.2rem; min-width: 0; z-index: 2; }
+    .toc-details { padding-top: .52rem; border-top: 2px solid var(--ink); }
+    .toc-details summary { margin-bottom: .48rem; color: var(--ink); cursor: pointer; font-size: .88rem; font-weight: 750; }
+    .toc-current { display: none; }
+    .toc-list { list-style: none; padding: 0; margin: 0; max-height: calc(100dvh - 5rem); overflow-y: auto; }
+    .toc-list li + li { margin-top: .15rem; }
+    .toc-list a {
+      display: block;
+      border-inline-start: 3px solid transparent;
+      padding: .35rem .57rem;
+      color: var(--muted);
+      font-size: .88rem;
+      text-decoration: none;
+    }
+    .toc-list a:focus-visible { outline-offset: -2px; }
+    .toc-list a:hover { color: var(--ink); text-decoration: underline; }
+    .toc-list a[aria-current="location"] {
+      border-inline-start-color: var(--rust);
+      color: var(--rust);
+      background: var(--rust-wash);
+      font-weight: 730;
+    }
+    main { min-width: 0; }
+    main > section { padding: 1.8rem 0 2rem; }
+    main > section:first-child { padding-top: 0; }
+    main > section + section { border-top: 1px solid var(--rule); }
+    main > section > :is(p, ol, ul, .callout) { max-width: 57rem; }
+    section > :last-child, .callout > :last-child, .diagram > :last-child { margin-bottom: 0; }
+    .section-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .58rem 1rem;
+      margin-bottom: .66rem;
+    }
+    .section-heading h2 { margin: 0; }
+    main > section > .section-intro { max-width: 49rem; color: var(--muted); }
+
+    .trace-switch:not([hidden]) { display: inline-flex; }
+    .trace-switch button {
+      min-width: 4rem;
+      padding: .36rem .72rem;
+      border: 0;
+      border-bottom: 2px solid var(--rule);
+      color: var(--muted);
+      background: transparent;
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .trace-switch button:hover { color: var(--rust); background: var(--panel); }
+    .trace-switch button[aria-pressed="true"] { border-bottom-color: var(--rust); color: var(--rust); background: var(--rust-wash); }
+    .trace-panel:not([hidden]) + .trace-panel { margin-top: 1.45rem; }
+    .trace-panel h3 { margin: 1.05rem 0 .65rem; font-size: 1.08rem; }
+    .trace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.125rem; }
+    .trace-lane {
+      --lane-accent: var(--rust);
+      --lane-wash: var(--rust-wash);
+      display: flex;
+      flex-direction: column;
+      border-top: 3px solid var(--lane-accent);
+      border-bottom: 1px solid var(--rule);
+      background: var(--panel);
+      overflow-wrap: anywhere;
+    }
+    .trace-lane[data-platform="windows"] { --lane-accent: var(--blue); --lane-wash: var(--blue-wash); }
+    .lane-heading { padding: .66rem 1rem .6rem; background: var(--lane-wash); }
+    .lane-heading h4 { margin: 0; color: var(--lane-accent); font-size: 1.13rem; }
+    .lane-heading p { margin: .18rem 0 0; color: var(--muted); font-size: .81rem; }
+    .trace-steps { list-style: none; margin: .94rem 1rem .05rem; padding: 0 0 0 1.15rem; font-size: .89rem; }
+    .trace-steps li { position: relative; padding: 0 0 .64rem; margin: 0; }
+    .trace-steps li::before {
+      content: "";
+      position: absolute;
+      top: .57rem;
+      left: -1.15rem;
+      width: .43rem;
+      height: .43rem;
+      background: var(--lane-accent);
+    }
+    .trace-steps li:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 1.2rem;
+      bottom: -.4rem;
+      left: -.97rem;
+      border-left: 1px solid var(--rule);
+    }
+    .trace-steps strong { font-weight: 730; }
+    .trace-steps span { display: block; color: var(--muted); line-height: 1.54; }
+    .lane-link { margin: auto 0 0; padding: .54rem 1rem .61rem; border-top: 1px solid var(--rule); font-size: .85rem; }
+    .lane-link a { color: var(--lane-accent); font-weight: 700; }
+    .overview-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.125rem; margin: 1rem 0; }
+    .overview-facts > div { padding: .63rem .82rem; background: var(--quiet); }
+    .overview-facts dt { font-weight: 740; }
+    .overview-facts dd { margin: .16rem 0 0; color: var(--muted); font-size: .88rem; }
+
+    .diagram { margin: 1rem 0; }
+    .diagram figcaption { margin: 0 0 .55rem; font-size: .9rem; font-weight: 650; color: var(--muted); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      column-gap: 1.5rem;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .flow li {
+      position: relative;
+      display: grid;
+      align-content: center;
+      margin: 0;
+      padding: .66rem .75rem;
+      border-block-start: 2px solid var(--blue);
+      background: var(--blue-wash);
+      overflow-wrap: anywhere;
+    }
+    .flow li + li::before {
+      content: "→";
+      position: absolute;
+      left: -1.23rem;
+      align-self: center;
+      color: var(--blue);
+      font-weight: 700;
+    }
+    .flow li strong { font-size: .91rem; }
+    .flow li span { color: var(--muted); font-size: .81rem; }
+    .steps > li { padding-inline-start: .2rem; margin-block-end: .68rem; }
+    .steps > li::marker { color: var(--rust); font-weight: 750; }
+    .callout { margin: 1rem 0; padding: .72rem .94rem; border-inline-start: 3px solid var(--rust); background: var(--rust-wash); }
+    .callout p { margin: .12rem 0 .62rem; }
+    .table-wrap { margin: .86rem 0 1rem; max-width: 100%; }
+    table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+    th, td { padding: .64rem .72rem; border-bottom: 1px solid var(--rule); vertical-align: top; text-align: left; }
+    thead th { border-top: 1px solid var(--ink); background: var(--quiet); }
+    tbody th { width: 25%; font-weight: 700; }
+    tbody tr:nth-child(even) { background: var(--panel); }
+    .source-line { color: var(--muted); font-size: .84rem; }
+    .source-line a + a { margin-inline-start: .55em; }
+    .source-map { margin: .9rem 0 1rem; border-top: 1px solid var(--rule); }
+    .source-entry {
+      display: grid;
+      grid-template-columns: minmax(9rem, 1fr) minmax(0, 3fr);
+      gap: .4rem 1rem;
+      padding: .7rem .15rem;
+      border-bottom: 1px solid var(--rule);
+      font-size: .93rem;
+      overflow-wrap: anywhere;
+    }
+    .source-entry dt { font-weight: 725; }
+    .source-entry dd { margin: 0; }
+
+    @media (max-width: 62rem) {
+      .hero-inner { gap: .95rem 1.65rem; }
+      .layout { grid-template-columns: 9.65rem minmax(0, 1fr); gap: 1.6rem; }
+      .trace-grid, .overview-facts { gap: .85rem; }
+      .flow { column-gap: 1.2rem; }
+      .flow li + li::before { left: -.99rem; }
+    }
+    @media (max-width: 48rem) {
+      .hero-inner { grid-template-columns: 1fr; gap: .85rem; padding-block: .83rem 1rem; }
+      .hero-meta { padding-bottom: .52rem; }
+      .project { font-size: .72rem; }
+      .revision { font-size: .7rem; }
+      .hero .summary { font-size: .92rem; }
+      .hero-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .hero-links a { padding: .46rem .08rem; font-size: .8rem; }
+      .hero-links a span { display: none; }
+      .layout { display: block; padding-top: .96rem; }
+      .toc { position: relative; margin-bottom: 1rem; }
+      .enhanced { scroll-padding-top: 4.3rem; }
+      .enhanced .toc { position: sticky; top: .42rem; }
+      .toc-details { padding: 0; border: 1px solid var(--rule); background: var(--panel); }
+      .toc-details summary { padding: .52rem .65rem; margin: 0; }
+      .toc-details summary:focus-visible { outline-offset: -3px; }
+      .enhanced .toc-current { display: inline; margin-inline-start: .6rem; color: var(--rust); font-weight: 650; }
+      .toc-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .1rem .26rem; padding: .36rem .45rem .48rem; }
+      .toc-list li + li { margin: 0; }
+      .enhanced .toc-list {
+        position: absolute;
+        inset: 100% 0 auto;
+        max-height: calc(100dvh - 5rem);
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        box-shadow: 0 9px 20px #27241f20;
+      }
+      main > section { padding-block: 1.35rem 1.45rem; }
+      .trace-switch button { min-width: 3.25rem; padding-inline: .5rem; }
+    }
+    @media (max-width: 40rem) {
+      .trace-grid, .overview-facts { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 35rem) {
+      .flow { grid-template-columns: 1fr; row-gap: 1.15rem; }
+      .flow li + li::before { content: "↓"; left: .72rem; top: -1.15rem; line-height: 1.15rem; }
+      th, td { padding: .5rem .4rem; }
+      .source-entry { grid-template-columns: 1fr; gap: .25rem; }
+    }
+    @media print {
+      :root { font-size: 10.5pt; }
+      body, .hero, .hero .summary, .revision, .project, .section-intro { color: #000; background: #fff; }
+      .hero-inner, .layout { display: block; padding: 0; }
+      .hero { border-top: 0; border-bottom: 1px solid #555; margin-bottom: .8rem; }
+      .hero-meta { margin-bottom: .5rem; }
+      .toc, .skip, .hero-links, .trace-switch:not([hidden]) { display: none; }
+      .trace-panel[hidden] { display: block; }
+      .trace-panel + .trace-panel { margin-top: 1.45rem; }
+      main > section { padding: .6rem 0; }
+      .trace-grid, .overview-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .flow li + li::before { content: "→"; top: auto; left: -.99rem; }
+      h2, h3 { break-after: avoid; }
+      tr, .diagram, .callout, .trace-lane, .source-entry { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">跳到正文</a>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-meta">
+        <p class="project">game-net-core / GameNet::core</p>
+        <p class="revision">源码基准 <code>7f55288</code></p>
+      </div>
+      <div>
+        <h1>数据收发调用链</h1>
+        <p class="summary">沿 TCP 连接追踪字节如何进出内核，查阅 Linux epoll、Windows IOCP、跨线程发送、反压与关闭的源码入口。</p>
+      </div>
+      <nav class="hero-links" aria-label="快捷入口">
+        <a href="#linux">Linux epoll <span aria-hidden="true">↘</span></a>
+        <a href="#windows">Windows IOCP <span aria-hidden="true">↘</span></a>
+        <a href="#debugging">排查与测试 <span aria-hidden="true">↘</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-labelledby="toc-title">
+      <details class="toc-details" open>
+        <summary><span id="toc-title">章节目录</span><span class="toc-current" aria-hidden="true"></span></summary>
+        <ul class="toc-list" role="list">
+          <li><a href="#overview">调用链总览</a></li>
+          <li><a href="#establish">建连与线程归属</a></li>
+          <li><a href="#admission">发送入口与准入</a></li>
+          <li><a href="#linux">Linux · epoll</a></li>
+          <li><a href="#windows">Windows · IOCP</a></li>
+          <li><a href="#buffers">缓冲区与反压</a></li>
+          <li><a href="#close">关闭与回调顺序</a></li>
+          <li><a href="#echo">走读 Echo 与拆帧</a></li>
+          <li><a href="#extensions">协议与其他传输</a></li>
+          <li><a href="#debugging">排查与测试</a></li>
+          <li><a href="#sources">源码阅读地图</a></li>
+        </ul>
+      </details>
+    </nav>
+
+    <main id="main" tabindex="-1">
+      <section id="overview" aria-labelledby="overview-title">
+        <div class="section-heading">
+          <h2 id="overview-title">调用链总览</h2>
+          <div class="trace-switch" role="group" aria-label="收发方向" hidden>
+            <button type="button" aria-controls="trace-receive" aria-pressed="true">接收</button>
+            <button type="button" aria-controls="trace-send" aria-pressed="false">发送</button>
+          </div>
+        </div>
+        <p class="section-intro"><code>game-net-core</code> 为游戏服务端提供 C++23 网络基础设施。客户端和服务端建连后都由 <code>TcpConnection</code> 收发数据，连接所属的 <code>EventLoop</code> 派发内核通知并执行应用回调。</p>
+
+        <div class="trace-panel" id="trace-receive">
+          <h3>接收 · 从内核到应用</h3>
+          <div class="trace-grid">
+            <div class="trace-lane" data-platform="linux">
+              <header class="lane-heading"><h4>Linux <code>epoll</code></h4><p>收到就绪事件后读取</p></header>
+              <ol class="trace-steps" role="list">
+                <li><strong><code>epoll_wait()</code> 返回读就绪</strong><span>端口校验当前注册代号。</span></li>
+                <li><strong><code>Channel</code> 派发读回调</strong><span>连接所属线程进入 <code>handleRead()</code>。</span></li>
+                <li><strong><code>readv()</code> 读取字节</strong><span>按剩余输入额度追加到 <code>inputBuffer_</code>。</span></li>
+                <li><strong><code>MessageCallback</code> 消费输入</strong><span>回调返回后复查未消费字节数。</span></li>
+              </ol>
+              <p class="lane-link"><a href="#linux-receive">查看 Linux 接收链 <span aria-hidden="true">↘</span></a></p>
+            </div>
+            <div class="trace-lane" data-platform="windows">
+              <header class="lane-heading"><h4>Windows <code>IOCP</code></h4><p>先提交操作，再消费完成通知</p></header>
+              <ol class="trace-steps" role="list">
+                <li><strong><code>startRead()</code> 提交 <code>WSARecv()</code></strong><span>为在途操作保留连接私有读区。</span></li>
+                <li><strong>所属线程收到完成通知</strong><span>按操作身份和观察者代号派发。</span></li>
+                <li><strong><code>completeRead()</code> 取出字节</strong><span>把本次完成字节追加到 <code>inputBuffer_</code>。</span></li>
+                <li><strong><code>MessageCallback</code> 消费输入</strong><span>返回后复查关闭、额度和读许可，再决定续投。</span></li>
+              </ol>
+              <p class="lane-link"><a href="#windows-receive">查看 Windows 接收链 <span aria-hidden="true">↘</span></a></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="trace-panel" id="trace-send">
+          <h3>发送 · 从应用到内核</h3>
+          <div class="trace-grid">
+            <div class="trace-lane" data-platform="linux">
+              <header class="lane-heading"><h4>Linux <code>epoll</code></h4><p>先尝试直写，可写后继续排空</p></header>
+              <ol class="trace-steps" role="list">
+                <li><strong><code>trySend()</code> 预留额度</strong><span>跨线程调用复制负载并投递到所属线程。</span></li>
+                <li><strong>符合直写条件时调用 <code>send()</code></strong><span>已有待写输出时，将新字节追加到队尾。</span></li>
+                <li><strong><code>EPOLLOUT</code> 触发缓冲续写</strong><span>未写完的字节保存在 <code>outputBuffer_</code>。</span></li>
+                <li><strong>结算已写字节</strong><span>按实际写入量释放额度，排空后关闭写兴趣。</span></li>
+              </ol>
+              <p class="lane-link"><a href="#linux-send">查看 Linux 发送链 <span aria-hidden="true">↘</span></a></p>
+            </div>
+            <div class="trace-lane" data-platform="windows">
+              <header class="lane-heading"><h4>Windows <code>IOCP</code></h4><p>字符串段入队，由完成通知推进</p></header>
+              <ol class="trace-steps" role="list">
+                <li><strong><code>trySend()</code> 预留额度</strong><span>跨线程调用复制负载并投递到所属线程。</span></li>
+                <li><strong><code>startWrite()</code> 提交 <code>WSASend()</code></strong><span>操作借用队首字符串段的当前偏移。</span></li>
+                <li><strong><code>completeWrite()</code> 推进偏移</strong><span>按完成量消耗段，整段消费后才能出队。</span></li>
+                <li><strong>结算或继续提交</strong><span>释放本次完成额度，剩余字节从新偏移续投。</span></li>
+              </ol>
+              <p class="lane-link"><a href="#windows-send">查看 Windows 发送链 <span aria-hidden="true">↘</span></a></p>
+            </div>
+          </div>
+        </div>
+
+        <dl class="overview-facts">
+          <div><dt>接收边界</dt><dd>TCP 交付有序字节流，业务包边界由上层协议或 <code>PacketFramer</code> 恢复。</dd></div>
+          <div><dt>发送边界</dt><dd><code>Accepted</code> 表示本地接收发送请求。业务确认以对端的协议 ACK 或响应为准。</dd></div>
+        </dl>
+        <p class="source-line">设计依据 <a href="../../intents/modules/tcp_connection.intent.md">TcpConnection 意图</a> <a href="../../intents/architecture/io_engine.intent.md">I/O Engine 意图</a> <a href="../../rules/thread_affinity_rules.md">线程规则</a> <a href="../../rules/ownership_rules.md">所有权规则</a></p>
+      </section>
+
+      <section id="establish" aria-labelledby="establish-title">
+        <h2 id="establish-title">建连与线程归属</h2>
+        <ol class="steps">
+          <li><strong>服务端启动。</strong> 应用创建 base loop 和 <code>TcpServer</code>，先配置连接与消息回调，再调用 <code>start()</code> 启动线程池并让 <code>Acceptor::listen()</code> 注册监听。监听就绪后，Linux 的 <code>Socket::accept()</code> 使用 <code>accept4()</code> 取得非阻塞 socket。Windows 通过预投递的 <code>AcceptEx</code> 完成通知交付新 socket。</li>
+          <li><strong>服务端分配所属线程。</strong> <code>TcpServer::newConnection()</code> 在 base loop 做准入、挑选连接的 I/O loop 并维护 <code>connections_</code>。零 worker 时用 base loop，有 worker 时按线程池策略选取。服务端把回调配置和建连任务投递到选定 loop，任务接受后由该线程调用 <code>connectEstablished()</code>。</li>
+          <li><strong>客户端主动连接。</strong> <code>TcpClient</code> 通过 <code>Connector</code> 发起连接。Linux 在连接中的 socket 可写时检查 <code>SO_ERROR</code>，Windows 消费 <code>ConnectEx</code> 完成并在交接中保留同一 loop 的 IOCP 关联。成功后 <code>TcpClient::newConnection()</code> 在自己的 loop 上构造、配置并建立 <code>TcpConnection</code>。</li>
+          <li><strong>激活连接。</strong> <code>connectEstablished()</code> 绑定 <code>Channel::tie()</code>、开启读兴趣、挂接 lifecycle 节点并设为 <code>kConnected</code>。Windows 在连接回调前提交首次 <code>WSARecv()</code>，Linux 随后在读就绪时取数据。成功进入这一阶段后，已连接回调可以在所属线程同步发出第一笔数据。</li>
+        </ol>
+        <div class="callout">
+          <p><strong>一条连接的状态、缓冲区和用户回调归属同一个 <code>EventLoop</code>。</strong> 监听和服务端连接表归 base loop，连接 I/O 归选定的 loop。<code>TcpConnection</code> 管理 socket 和 <code>Channel</code>，<code>Channel</code> 保存回调和事件兴趣，<code>EventLoop</code> 管理后端注册与派发。</p>
+          <p>正常轮次在已有 I/O 批次耗尽后等待新事件，按预算派发 I/O，再处理到期定时器、控制源、lifecycle 节点和普通任务。<code>maxActiveChannelsPerIteration</code> 限制单轮 I/O 派发，后端取事件的批大小由各自配置控制。</p>
+        </div>
+        <p class="source-line">源码入口 <a href="../../src/core/net/TcpServer.cc">TcpServer.cc <code>start / newConnection</code></a> <a href="../../src/core/net/Acceptor.cc">Acceptor.cc <code>listen / handleRead</code></a> <a href="../../src/core/net/Connector.cc">Connector.cc <code>connect / handleWrite</code></a> <a href="../../src/core/net/TcpClient.cc">TcpClient.cc <code>newConnection</code></a> <a href="../../src/core/net/EventLoop.cc">EventLoop.cc <code>loop</code></a></p>
+      </section>
+
+      <section id="admission" aria-labelledby="admission-title">
+        <h2 id="admission-title">发送入口与准入</h2>
+        <ol class="steps">
+          <li><strong>检查调用和连接状态。</strong> <code>send()</code> 调用 <code>trySend()</code> 并丢弃返回值。<code>trySend()</code> 先检查关闭封口，再判断连接状态。连接可发送时，零字节请求直接返回 <code>Accepted</code>，无需启动写操作或安排写完成回调。长度大于零的指针调用要求可读数据，空指针会触发参数异常。</li>
+          <li><strong>先预留输出额度。</strong> <code>tryReserveOutputBytes()</code> 依次尝试连接、所属 loop、服务端、可选共享全局预算。后一级拒绝时回滚之前的额度。服务端在建连时注入 loop 和 server 预算，连接本身始终执行单连接限制。</li>
+          <li><strong>在所属线程执行。</strong> 同线程直接进入 <code>sendReservedInLoop()</code>。Linux 直接写时可借用传入字节，需要缓冲时保存余量。Windows 创建拥有字节的字符串，随后移入段队列。</li>
+          <li><strong>跨线程复制后投递。</strong> 先复制字节，再用 <code>EventLoopExecutor::post()</code> 把字符串与 <code>TcpConnectionPtr</code> 一起移交给普通任务队列。成功入队会唤醒线程，Linux 通过 <code>eventfd</code>，Windows 通过唤醒完成包。队列拒绝以及任务执行前连接已经完全关闭时，都会回收额度。已经准入的任务可以在 <code>kDisconnecting</code> 期间继续写出。</li>
+        </ol>
+        <div class="table-wrap">
+          <table aria-label="TcpConnection 发送准入结果">
+            <thead><tr><th scope="col"><code>TcpSendResult</code></th><th scope="col">出现位置</th></tr></thead>
+            <tbody>
+              <tr><th scope="row"><code>Accepted</code></th><td>本地已接收请求，随后通过直接写、待写队列或关闭清理结算字节。</td></tr>
+              <tr><th scope="row"><code>Closed</code></th><td>连接当前无法发送，或关闭请求已封住新输出。</td></tr>
+              <tr><th scope="row"><code>Overloaded</code>、<code>LoopOverloaded</code>、<code>ServerOverloaded</code>、<code>GlobalOverloaded</code></th><td>相应的输出预算拒绝本次预留。</td></tr>
+              <tr><th scope="row"><code>SchedulingQueueFull</code>、<code>OwnerShutdown</code>、<code>OwnerUnavailable</code></th><td>跨线程投递被普通任务队列或执行器拒绝，分别对应 <code>QueueFull</code>、<code>Shutdown</code>、<code>OwnerUnavailable</code>。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="source-line">源码入口 <a href="../../src/core/net/TcpConnection.cc">TcpConnection.cc <code>trySend / tryReserveOutputBytes</code></a> <a href="../../include/gamenet/core/net/TcpConnectionOptions.h">TcpConnectionOptions.h <code>TcpSendResult</code></a> <a href="../../include/gamenet/core/net/EventLoopExecutor.h">EventLoopExecutor.h <code>post</code></a></p>
+      </section>
+
+      <section id="linux" aria-labelledby="linux-title">
+        <h2 id="linux-title">Linux · epoll 就绪路径</h2>
+        <p>默认生产 <code>EventLoop</code> 通过私有 <code>PollerIoEngineAdapter</code> 使用 <code>EpollReadinessPort</code>。端口拥有 epoll fd、唤醒 <code>eventfd</code>、注册和事件批次。内核事件携带注册代号，端口校验其与当前 fd 的绑定并丢弃过期事件。当前使用水平触发，只要 fd 仍就绪，就可以在后续轮次继续分配到读写处理。</p>
+        <h3 id="linux-receive">接收 · <code>EPOLLIN → readv → MessageCallback</code></h3>
+        <ol class="steps">
+          <li><code>EpollReadinessPort::wait()</code> 调用 <code>epoll_wait()</code>。端口把原生事件转换为就绪掩码，adapter 调用 <code>Channel::setRevents()</code> 记录返回事件，再把 <code>Channel</code> 加进本轮待派发列表。</li>
+          <li><code>EventLoop::dispatchActiveChannels()</code> 调用 <code>Channel::handleEvent()</code>。关联对象通过 <code>tie()</code> 临时保活，读事件沿构造时绑定的回调进入 <code>TcpConnection::handleRead()</code>。</li>
+          <li><code>handleRead()</code> 计算输入剩余额度，并调用 <code>inputBuffer_.readFd(fd, &amp;err, remaining)</code>。<code>Buffer::readFd()</code> 用一次 <code>readv()</code> 先填 <code>Buffer</code> 可写区，最多再填 64 KiB 栈临时区。返回后推进写索引，只有落在临时区的字节需要再追加到 <code>Buffer</code>。</li>
+          <li>有新字节且读处于启用态时，调用 <code>messageCallback_(shared_from_this(), &amp;inputBuffer_)</code>。回调看到此前尚未消费的字节与新字节，按协议推进读索引。回调返回后检查未消费输入是否达到上限。</li>
+          <li>读到 <code>0</code> 进入 <code>PeerEof</code> 关闭路径。<code>EAGAIN</code>、<code>EWOULDBLOCK</code> 或 <code>EINTR</code> 结束这次处理。致命读取错误进入 <code>handleError()</code>。</li>
+        </ol>
+        <p class="source-line">源码入口 <a href="../../src/core/net/detail/EpollReadinessPort.cc">EpollReadinessPort.cc <code>wait / appendNativeNotice</code></a> <a href="../../src/core/net/detail/PollerIoEngineAdapter.cc">PollerIoEngineAdapter.cc <code>waitForReadiness</code></a> <a href="../../src/core/net/Channel.cc">Channel.cc <code>handleEventWithGuard</code></a> <a href="../../src/core/net/Buffer.cc">Buffer.cc <code>readFd</code></a></p>
+
+        <h3 id="linux-send">发送 · 直接写与 <code>EPOLLOUT</code> 续写</h3>
+        <ol class="steps">
+          <li><code>sendReservedInLoop()</code> 在 <code>outputBuffer_</code> 为空且未关注写事件时，先走 <code>sockets::write()</code>，Linux 最终调用 <code>send(fd, data, len, MSG_NOSIGNAL)</code>。立即结算内核接受的字节。全部写完时尝试排入写完成通知。</li>
+          <li>遇到部分写、暂时不可写或中断时，将余量追加到 <code>outputBuffer_</code>。如果已有待写字节，则直接把新数据排在其后。检查读反压，随后开启 <code>Channel</code> 写兴趣，对应 epoll 的 <code>EPOLLOUT</code>。</li>
+          <li>可写后，<code>Channel</code> 把控制权交给 <code>TcpConnection::handleWrite()</code>。它通过 <code>outputBuffer_.writeFd()</code> 发送从 <code>peek()</code> 起的未消费字节，按实际写入量 <code>retrieve(n)</code>、释放输出额度并重新判断反压。内核暂时接收不了更多字节时，保留剩余数据和写兴趣。</li>
+          <li>缓冲区排空后关闭写兴趣。如果正在优雅关闭，先检查半关闭条件，再尝试排入写完成通知。致命写错误进入统一关闭，由关闭流程清理未发余量。</li>
+        </ol>
+        <div class="callout">
+          <p><strong>同一就绪事件可以包含多种信号。</strong> <code>EPOLLRDHUP</code> 与 <code>EPOLLHUP</code> 映射为关闭信号。<code>Channel::handleEventWithGuard()</code> 的顺序为关闭信号（没有同时置读位时）、错误、读、写。前一个回调如果移除了注册，代号会变化，当前分发会跳过其余回调。移除其他活动 <code>Channel</code> 时，<code>EventLoop</code> 也会让它在本批的位置失效。</p>
+        </div>
+        <p class="source-line">源码入口 <a href="../../src/core/net/TcpConnection.cc">TcpConnection.cc <code>sendReservedInLoop / handleWrite</code></a> <a href="../../src/core/net/Buffer.cc">Buffer.cc <code>writeFd</code></a> <a href="../../src/core/net/platform/SocketsOps_linux.cc">SocketsOps_linux.cc <code>write</code></a></p>
+      </section>
+
+      <section id="windows" aria-labelledby="windows-title">
+        <h2 id="windows-title">Windows · IOCP 完成路径</h2>
+        <p><code>IocpPoller</code> 将 socket 关联到所属 loop 的完成端口。<code>Channel</code> 提供连接观察者身份，<code>IocpTcpTransport</code> 提供稳定的 <code>OVERLAPPED</code>、读存储和写数据段。读写回调由有类型的完成通知直接触达 transport consumer。</p>
+        <figure class="diagram">
+          <figcaption>一次 overlapped 操作的生命周期</figcaption>
+          <ol class="flow">
+            <li><strong>准备操作</strong><span>标记代号与稳定存储</span></li>
+            <li><strong>系统接收提交</strong><span>保留操作存储</span></li>
+            <li><strong>取出完成包</strong><span>生成 <code>CompletionNotice</code></span></li>
+            <li><strong>消费终结结果</strong><span>校验观察者，再决定回调与续投</span></li>
+          </ol>
+        </figure>
+        <ol class="steps">
+          <li>调用 <code>WSARecv()</code> 或 <code>WSASend()</code> 前准备 <code>IocpOperation</code>。立即成功和 <code>WSA_IO_PENDING</code> 都提交完成义务，并让 poller 持有对应的 transport 存储。其他同步错误走拒绝与 <code>handleError()</code>，无需等待这一操作的完成包。</li>
+          <li><code>IocpPoller::waitNativeCompletionNotices()</code> 调用 <code>GetQueuedCompletionStatusEx()</code>，过滤唤醒包和无效操作，记录字节数/错误，终结内核操作代号并将存储租约转交给本批 <code>CompletionNotice</code>。短暂保留的 consumer 完成状态阻止同一操作在通知消费前复用。</li>
+          <li><code>EventLoop::dispatchActiveChannels()</code> 校验通知冻结的 fd、<code>Channel</code> 和注册代号。身份有效时在 <code>tie()</code> 保活下进入读写处理。身份已撤销时，私有 consumer 只推进关闭和终结结算。批次消费完后释放相应存储租约。</li>
+        </ol>
+
+        <h3 id="windows-receive">接收 · <code>startRead → WSARecv → completeRead</code></h3>
+        <p><code>connectEstablished()</code> 或前次读完成后调用 <code>startRead(remainingInputCapacity())</code>。同一连接最多一笔未消费的读操作，按需分配并复用连接私有读区，每次最多提交 <code>min(4 KiB, 剩余输入额度)</code>。完成进入 <code>handleRead()</code>，由 <code>completeRead()</code> 将有效字节追加到 <code>inputBuffer_</code>。随后按当前读状态交付 <code>MessageCallback</code>，再检查连接、关闭、输入额度与反压状态，决定是否续投。</p>
+        <p>暂停读取期间，已经提交的读仍可能完成，字节可暂存于 <code>inputBuffer_</code>。输出降至低水位时，<code>resumeWindowsReadAfterBackpressure()</code> 先交付已缓冲数据，回调返回后复查是否已关闭、是否仍允许读，再在需要时提交下一笔 <code>WSARecv()</code>。零字节完成进入 EOF 路径。</p>
+
+        <h3 id="windows-send">发送 · <code>enqueueWrite → WSASend → completeWrite</code></h3>
+        <ol class="steps">
+          <li><code>sendReservedInLoop()</code> 把持有字节的字符串移动到 <code>writeSegments</code> 队尾，更新缓冲计数并检查读反压。没有未完成的写时，<code>startWrite()</code> 让 <code>WSABUF</code> 指向队首字符串从 <code>offset</code> 起的一段内存，提交 <code>WSASend()</code>。</li>
+          <li>写完成通知进入 <code>handleWrite()</code>。<code>completeWrite()</code> 校验完成量并推进队首偏移及缓冲计数，完整消费的段才出队。连接按完成字节释放预留，部分完成时下一次从新的偏移续投。有效的非空提交若收到零字节写完成，按 <code>WSAECONNRESET</code> 进入错误处理。</li>
+          <li>反压恢复可能同步进入消息回调，回调可再次发送或关闭。因此外层 <code>handleWrite()</code> 复查关闭状态和在途写，随后启动下一笔写或在队列清空时关闭写状态、处理待定半关闭并安排写完成通知。</li>
+        </ol>
+        <p class="source-line">源码入口 <a href="../../src/core/net/platform/IocpTcpTransport_win.cc">IocpTcpTransport_win.cc <code>startRead / completeRead / startWrite / completeWrite</code></a> <a href="../../src/core/net/poller/IocpPoller.cc">IocpPoller.cc <code>waitNativeCompletionNotices / completionObserverCurrent</code></a> <a href="../../src/core/net/EventLoop.cc">EventLoop.cc <code>dispatchActiveChannels</code></a></p>
+      </section>
+      <section id="buffers" aria-labelledby="buffers-title">
+        <h2 id="buffers-title">缓冲区与反压</h2>
+        <div class="table-wrap">
+          <table aria-label="收发缓冲区与字节计数">
+            <thead><tr><th scope="col">位置</th><th scope="col">归属和用途</th></tr></thead>
+            <tbody>
+              <tr><th scope="row"><code>inputBuffer_</code></th><td>连接所属线程持有的未消费 TCP 字节。<code>peek()</code> 可查看，<code>retrieve(n)</code> 消费前缀，<code>retrieveAllAsString()</code> 复制并消费当前可读区。<code>Buffer*</code> 只在消息回调期间借用，应用需跨回调或跨线程使用时，先复制所需字节。</td></tr>
+              <tr><th scope="row">平台待写数据</th><td>Linux 的 <code>outputBuffer_</code> 保存未写出的连续字节。Windows 的 <code>writeSegments</code> 保存包括在途写在内的剩余字节，每段用独立偏移追踪进度。两边都只在所属线程推进数据。</td></tr>
+              <tr><th scope="row"><code>pendingOutputBytes()</code></th><td>可跨线程读取的预留字节快照，覆盖平台待写字节以及已通过预留但还留在跨线程投递中的字节。实际写出、排队拒绝、关闭丢弃都会按对应字节数回收。</td></tr>
+              <tr><th scope="row">内核 socket 缓冲区</th><td>操作系统管理。Linux 系统调用返回或 Windows 写操作完成时，连接可以结算相应的本地输出额度。远端收取和处理数据发生在独立的链路阶段。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>三种输出阈值各管一件事</h3>
+        <ul>
+          <li><strong>硬上限控制新发送。</strong> <code>hardLimitBytes</code> 用于连接额度预留，默认 16 MiB。因超额拒绝进入过载后，预留字节数降至低水位或以下时恢复。连接以上的 loop、server 和可选 global 预算也各自执行容量限制与恢复阈值。</li>
+          <li><strong>读反压由实际待写字节触发。</strong> 待写数据达到 <code>highWaterMarkBytes</code> 时暂停读，降到 <code>lowWaterMarkBytes</code> 或以下时恢复。默认高、低水位分别为 4 MiB、2 MiB。Linux 更新读兴趣，Windows 还需安排真正的读操作。</li>
+          <li><strong>高水位回调提供通知。</strong> <code>setHighWaterMarkCallback()</code> 设置独立阈值。待写字节从阈值下方跨至阈值时，连接尝试把该回调放进普通队列。<code>WriteCompleteCallback</code> 同样延后执行。可选通知入队失败时累计 <code>droppedNotificationCount()</code>，读反压和发送进度由各自的同步状态转换继续推进。</li>
+        </ul>
+        <div class="callout">
+          <p><strong>未消费输入有独立上限。</strong> <code>maxInputBufferBytes</code> 默认 2 MiB。每次读的提交量受剩余额度约束，有新输入时让应用先消费，达到上限且仍未消费掉足够字节时以 <code>InputLimit</code> 关闭。业务帧最大长度和积压策略需要与这一额度配合。</p>
+        </div>
+        <p class="source-line">实现与配置 <a href="../../include/gamenet/core/net/TcpConnectionOptions.h">TcpConnectionOptions.h</a> <a href="../../src/core/net/detail/ConnectionBackpressureController.cc">ConnectionBackpressureController.cc</a> <a href="../../src/core/net/TcpOutputMemoryBudget.cc">TcpOutputMemoryBudget.cc</a> <a href="../../src/core/net/TcpConnection.cc">TcpConnection.cc <code>applyBackpressureInLoop / closeOnInputLimitInLoop</code></a></p>
+      </section>
+
+      <section id="close" aria-labelledby="close-title">
+        <h2 id="close-title">关闭与回调顺序</h2>
+        <h3>优雅关闭先让本地输出结算</h3>
+        <ol class="steps">
+          <li><code>tryShutdown()</code> 封住新输出，发布 <code>GracefulShutdown</code>，让所属线程推进 <code>kDisconnecting</code>。跨线程请求通过建连时挂接的 lifecycle 节点唤醒处理，普通发送任务队列的容量与该通知路径独立。</li>
+          <li><code>shutdownInLoop()</code> 等待关闭请求有效、socket 仍开着、写兴趣已关闭且 <code>pendingOutputBytes() == 0</code>。此时调用 <code>Socket::shutdownWrite()</code>，Linux 对应 <code>SHUT_WR</code>，Windows 对应 <code>SD_SEND</code>。已经准入但尚未执行的发送仍占用预留，因此仅看到待写缓冲区为空还需要继续核对预留字节数。</li>
+          <li>最后一份预留释放时会唤醒 lifecycle 节点，覆盖直接写完成和生产线程投递回滚的情况。半关闭后仍可处理入站数据，连接最终在对端 EOF、错误或强制关闭路径结算。</li>
+        </ol>
+
+        <h3>强制关闭、EOF 和错误汇合</h3>
+        <ol class="steps">
+          <li><code>tryForceClose()</code> 请求立即关闭，<code>handleRead()</code> 的零值和 <code>handleError()</code> 也会进入统一清理。<code>closeInfo()</code> 保留首先发布的语义原因，后续 I/O 错误可以补上原先为零的 <code>nativeError</code>。典型原因包括 <code>PeerEof</code>、<code>Reset</code>、<code>InputLimit</code>、<code>ForcedShutdown</code> 和 <code>CallbackFailure</code>。</li>
+          <li><code>beginCloseInLoop()</code> 在所属线程撤销 <code>Channel</code> 注册后关闭 socket。Windows 若有未结算操作，先请求 <code>CancelIoEx()</code>，保存连接保活引用，并在 socket 关闭后以 <code>CompletionDraining</code> 状态等待终结通知。通知仍要由私有 consumer 结算，之后才可释放操作借用的读区或字符串。</li>
+          <li><code>finishClose()</code> 置 <code>kDisconnected</code>、清理待写数据并发布 <code>Closed</code> 阶段。正常回调顺序为断开状态的 <code>ConnectionCallback</code> → <code>CloseInfoCallback</code> → 内部 <code>CloseCallback</code>。服务端随后在 base loop 移除连接表记录并把 <code>connectDestroyed()</code> 投递回 I/O loop。客户端在自己的 loop 移除连接并直接调用 <code>connectDestroyed()</code>，再按请求与重试配置决定是否发起新连接。</li>
+        </ol>
+        <div class="callout">
+          <p><strong>回调里的重入会改变后续执行条件。</strong> 建连、消息、写完成和高水位回调可以调用发送或关闭。其异常被观测并使该连接进入关闭。断开、关闭观察回调的异常由框架记录，清理继续收敛。<code>EventLoop::quit()</code> 之后仍会排空已接受的任务和后端完成义务，经过 <code>Quiescing</code>、<code>FinalDraining</code> 后才发布 <code>Shutdown</code>。</p>
+        </div>
+        <p class="source-line">源码入口 <a href="../../src/core/net/TcpConnection.cc">TcpConnection.cc <code>tryShutdown / beginCloseInLoop / finishClose</code></a> <a href="../../include/gamenet/core/net/Callbacks.h">Callbacks.h</a> <a href="../../include/gamenet/core/net/TcpConnectionClose.h">TcpConnectionClose.h</a> <a href="../../src/core/net/EventLoop.cc">EventLoop.cc <code>quit / loop</code></a></p>
+      </section>
+
+      <section id="echo" aria-labelledby="echo-title">
+        <h2 id="echo-title">走读 Echo 与拆帧</h2>
+        <h3>跟踪一条 <code>ping</code> 的往返</h3>
+        <p>使用已构建的示例时，先启动 <code>echo_server 7000</code>，再在另一终端运行 <code>echo_client 127.0.0.1 7000 ping</code>。Windows 的程序文件名带 <code>.exe</code>。</p>
+        <ol class="steps">
+          <li>客户端建连回调调用 <code>trySend("ping")</code>。4 个字节通过本地准入，随后由客户端所属线程交给其平台写路径。</li>
+          <li>服务端所属线程把到达的字节追加到 <code>inputBuffer_</code>，触发 <code>setMessageCallback()</code> 注册的函数。该示例通过 <code>connection-&gt;trySend(buffer-&gt;retrieveAllAsString())</code> 消费并回送当前可读区，发送拒绝时强制关闭。</li>
+          <li>客户端消息回调消费可读区，比较收到的字符串，随后请求 <code>shutdown()</code>、<code>client.stop()</code> 和 <code>loop.quit()</code>。示例用一次小字符串往返演示 API。需要跨多次回调确认完整回复时，应在应用协议里定义边界。</li>
+        </ol>
+        <p>以一笔独立的 10 KiB 发送为例，假设第一笔本地写实际处理 6 KiB。Linux 直接释放 6 KiB 额度，并缓存 4 KiB 余量等待 <code>EPOLLOUT</code>。Windows 收到 6 KiB 写完成后释放相同额度，保持队首段并从 6 KiB 偏移续投。最终 4 KiB 完成后，待写回到零，两种路径都可尝试安排写完成回调。</p>
+        <p class="source-line">示例与集成用例 <a href="../../examples/echo_server/main.cpp">echo_server/main.cpp</a> <a href="../../examples/echo_client/main.cpp">echo_client/main.cpp</a> <a href="../../tests/integration/tcp/test_tcp_server_client_echo.cpp">test_tcp_server_client_echo.cpp</a></p>
+
+        <h3>长度前缀怎样恢复消息边界</h3>
+        <p><code>PacketFramer</code> 是独立的协议组件。<code>encode()</code> 写入 4 字节网络序载荷长度，后接载荷。<code>push()</code> 接受任意切分的 TCP 数据，内部保存半帧，返回拥有自身存储的完整帧。一次调用也可以产出多个帧。若达到当轮预算且还有完整帧，调用方在所属线程继续 <code>push({})</code>。</p>
+        <pre><code>编码后的帧   00 00 00 04  70 69 6e 67
+第一次 push 00 00                       → NeedMoreData
+第二次 push 00 04 70 69 6e 67           → FramesReady，载荷为 ping</code></pre>
+        <p>把拆帧器放在连接所属线程的 <code>context</code> 中，可以让该连接的每次回调沿用解析状态。独立业务线程需要处理完整帧时，通过有界队列传递拥有存储的帧或命令。</p>
+        <p class="source-line">源码与契约 <a href="../../src/protocol/PacketFramer.cc">PacketFramer.cc <code>push / encode</code></a> <a href="../../intents/modules/packet_framer.intent.md">PacketFramer 意图</a> <a href="../../tests/contract/protocol/test_packet_framer_contract.cpp">test_packet_framer_contract.cpp</a></p>
+      </section>
+
+      <section id="extensions" aria-labelledby="extensions-title">
+        <h2 id="extensions-title">协议与其他传输</h2>
+        <p>拆帧、加密、RPC 和业务调度可以各自接在收发边界上。TCP 应用从连接回调接入，再沿 <code>trySend()</code> 回到底层。UDP、KCP 和 io_uring 有各自的运行入口与完成语义。</p>
+        <div class="table-wrap">
+          <table aria-label="上层协议与其他传输的收发入口">
+            <thead><tr><th scope="col">组件</th><th scope="col">数据走向</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">TCP Endpoint 与游戏流水线</th><td>示例在 I/O loop 用 <code>PacketFramer</code> 恢复完整帧，通过管理线程处理会话，再由 <code>GameCommandQueue</code> 把命令交给 <code>LogicLoop</code>。响应经编码后投递到 <code>ownerExecutor()</code>，再由所属线程调用 <code>TcpTransportEndpoint::send()</code>，最终进入 <code>TcpConnection::trySend()</code>。<br><a href="../../examples/game_server_pipeline_demo/GameServerPipeline.cc">GameServerPipeline.cc</a> · <a href="../../src/transport/TcpTransportEndpoint.cc">TcpTransportEndpoint.cc</a></td></tr>
+              <tr><th scope="row">TLS</th><td>TCP 消息回调把密文交给 <code>TlsStream::onMessage()</code>，OpenSSL 产出的明文交给 TLS 应用回调。发送时 <code>TlsStream::trySend()</code> 受理明文，输出 BIO 产生的密文再经连接的 <code>trySend()</code> 提交。<br><a href="../../src/tls/TlsStream.cc">TlsStream.cc</a> · <a href="../../docs/development/openssl_tls.md">TLS 接入说明</a></td></tr>
+              <tr><th scope="row">WebSocket / RPC</th><td><code>WebSocketSession::onMessage()</code> 消费 HTTP Upgrade 和 WebSocket 帧，<code>RpcChannel::onMessage()</code> 消费 RPC 的请求/响应帧。两者的底层适配器向 TCP 或由组合组件装配的 TLS 路径提交编码后字节。<br><a href="../../src/websocket/WebSocketSession.cc">WebSocketSession.cc</a> · <a href="../../src/rpc/RpcChannel.cc">RpcChannel.cc</a> · <a href="../../docs/development/websocket_tls.md">WSS</a> · <a href="../../docs/development/callback_rpc_tls.md">RPC/TLS</a></td></tr>
+              <tr><th scope="row">UDP</th><td>Linux 收到就绪后 <code>receiveBatch()</code> 调用 <code>recvmsg()</code>，Windows 由 <code>WSARecvFrom()</code> 完成进入所属线程。回调携带对端地址、数据报与截断标志，零长度同样是有效数据报。<code>UdpSocket::sendTo()</code> 按报文数及字节做有界准入并发出 lifecycle 信号，所属线程执行 <code>sendto()</code> 或提交 <code>WSASendTo()</code>，最后回报本地发送结果。<br><a href="../../src/udp/UdpSocket.cc">UdpSocket.cc</a> · <a href="../../docs/development/udp.md">UDP 契约</a></td></tr>
+              <tr><th scope="row">KCP</th><td><code>UdpPeerServer</code> 把数据报交给已打开的对端会话，<code>KcpEngine::input()</code> 处理标准 KCP 数据，所属线程的 <code>pulse()</code> 尝试交付完整消息。<code>KcpSession::send()</code> 进入引擎分段队列，<code>update()</code> 驱动发送/重传，经 <code>UdpPeer::sendDatagram()</code> 发出。接收端协议 ACK 使该笔发送在本地结算为 <code>Acknowledged</code>。<br><a href="../../src/kcp/KcpTransport.cc">KcpTransport.cc</a> · <a href="../../src/kcp/KcpEngine.cc">KcpEngine.cc</a> · <a href="../../docs/development/kcp.md">KCP 会话说明</a></td></tr>
+              <tr><th scope="row">io_uring 实验组件</th><td>Linux 显式启用 <code>GAMENET_ENABLE_EXPERIMENTAL</code> 后，可通过 <code>IoUringTcpServer</code> 或 <code>IoUringTcpClient</code> 使用 Hub、Adapter 和 Pump 组合。Hub 为连接路由提交 <code>Recv</code> / <code>Send</code>，由 CQE 解码的完成通知推进字节、回调及续投。稳定 Core 的默认后端仍由前文的路径驱动。<br><a href="../../src/experimental/io_uring/IoUringTcpConnectionHub.cc">IoUringTcpConnectionHub.cc</a> · <a href="../../intents/modules/io_uring_experimental_package.intent.md">实验组件契约</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="debugging" aria-labelledby="debugging-title">
+        <h2 id="debugging-title">排查与测试</h2>
+        <div class="table-wrap">
+          <table aria-label="常见收发问题与源码入口">
+            <thead><tr><th scope="col">现象</th><th scope="col">跟踪入口</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">建连回调未触发</th><td>先核对 <code>Acceptor::handleRead()</code> / <code>Connector::handleWrite()</code>，再看 <code>newConnection()</code> 的准入、所属线程和 <code>connectEstablished()</code>。</td></tr>
+              <tr><th scope="row">已连接，消息回调无数据</th><td>看 <code>handleRead()</code> 的输入余量和读反压。Linux 核对 <code>Channel</code> 兴趣及 <code>readv()</code> 返回值。Windows 核对 <code>startRead()</code>、完成通知的观察者身份及 <code>completeRead()</code>。</td></tr>
+              <tr><th scope="row">发送被拒或积压</th><td>先读 <code>trySend()</code> 的具体结果、<code>outputMemorySnapshot()</code> 和 EventLoop 队列状态。Linux 跟 <code>EPOLLOUT</code> 和输出读索引，Windows 跟 <code>startWrite()</code>、已提交字节和队首 <code>offset</code>。</td></tr>
+              <tr><th scope="row">写出后没有通知</th><td>看是否配置 <code>WriteCompleteCallback</code>，再查 <code>queueWriteComplete()</code> 入队结果和 <code>droppedNotificationCount()</code>。应用交付问题继续从对端的协议解析或响应路径定位。</td></tr>
+              <tr><th scope="row">关闭一直未收敛</th><td>半关闭阶段先看 <code>pendingOutputBytes()</code>、是否尚有跨线程任务和写兴趣。Windows 再查 <code>closePhase()</code> 与待消费完成通知，区分已关闭 socket 与已清理连接。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>仓库中的契约用例</h3>
+        <div class="table-wrap">
+          <table aria-label="收发行为与现有测试文件">
+            <thead><tr><th scope="col">验证点</th><th scope="col">测试文件</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">真实 TCP 往返</th><td>回环连接、消息回调与回包。<br><a href="../../tests/integration/tcp/test_tcp_server_client_echo.cpp">test_tcp_server_client_echo.cpp</a></td></tr>
+              <tr><th scope="row">跨线程发送与队列饱和</th><td>验证负载归属、回调所在的线程、预算结算、普通任务队列满时的错误与可选通知丢弃。<br><a href="../../tests/contract/tcp_connection/test_tcp_connection_cross_thread_send.cpp">test_tcp_connection_cross_thread_send.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_queue_saturation.cpp">test_tcp_connection_queue_saturation.cpp</a></td></tr>
+              <tr><th scope="row">读反压、输入上限和写通知</th><td>观察高水位暂停、低水位恢复、输入上限关闭及写完成回调的延后顺序。<br><a href="../../tests/contract/tcp_connection/test_tcp_connection_high_water_mark.cpp">test_tcp_connection_high_water_mark.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_send_after_close.cpp">test_tcp_connection_send_after_close.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_write_complete_ordering.cpp">test_tcp_connection_write_complete_ordering.cpp</a></td></tr>
+              <tr><th scope="row">分层输出预算</th><td>连接跨线程发送和服务端预算注入、容量拒绝、恢复及停止后的零余额。<br><a href="../../tests/contract/tcp_connection/test_tcp_output_memory_budget.cpp">test_tcp_output_memory_budget.cpp</a> · <a href="../../tests/contract/tcp_server/test_tcp_server_output_memory.cpp">test_tcp_server_output_memory.cpp</a></td></tr>
+              <tr><th scope="row">优雅关闭与剩余输出</th><td>让已接受发送先到达对端，再观测 EOF，覆盖跨线程的发送与关闭排序。<br><a href="../../tests/contract/tcp_connection/test_tcp_connection_shutdown_pending_output.cpp">test_tcp_connection_shutdown_pending_output.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_cross_thread_shutdown.cpp">test_tcp_connection_cross_thread_shutdown.cpp</a></td></tr>
+              <tr><th scope="row">事件派发与关闭</th><td>验证回调内移除注册、使活动批次条目失效，以及 loop 退出时排空已提交 IOCP 操作。<br><a href="../../tests/contract/channel/test_channel_active_batch_lifetime.cpp">test_channel_active_batch_lifetime.cpp</a> · <a href="../../tests/integration/tcp/test_iocp_quit_completion_drain.cpp">test_iocp_quit_completion_drain.cpp</a></td></tr>
+              <tr><th scope="row">IOCP 读写与清理</th><td>核对私有读区生命周期、部分写续投、同步拒绝，以及关闭后终结通知的排空。<br><a href="../../tests/contract/tcp_connection/test_tcp_connection_iocp_read_storage.cpp">test_tcp_connection_iocp_read_storage.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_iocp_partial_write.cpp">test_tcp_connection_iocp_partial_write.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_iocp_sync_error.cpp">test_tcp_connection_iocp_sync_error.cpp</a> · <a href="../../tests/contract/tcp_connection/test_tcp_connection_completion_drain.cpp">test_tcp_connection_completion_drain.cpp</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="sources" aria-labelledby="sources-title">
+        <h2 id="sources-title">源码阅读地图</h2>
+        <p>先顺着示例找 <code>TcpConnection</code> 的入口，再沿 <code>EventLoop</code> 追到目标平台的后端。读懂一轮完整收发后，再沿输入索引、预留额度和关闭状态复核异常分支。</p>
+        <dl class="source-map">
+          <div class="source-entry">
+            <dt><code>intents/</code> · <code>rules/</code></dt>
+            <dd>记录连接、I/O Engine 的设计约束以及线程和生命周期边界。<br><a href="../../intents/modules/tcp_connection.intent.md">连接意图</a> · <a href="../../intents/modules/event_loop.intent.md">调度意图</a> · <a href="../../rules/ownership_rules.md">所有权规则</a></dd>
+          </div>
+          <div class="source-entry">
+            <dt><code>include/gamenet/core/net/</code><br><code>examples/</code></dt>
+            <dd>公开 API 描述了调用者拿到的连接、发送结果和回调。示例展示回调如何绑到服务端和客户端的启动流程。<br><a href="../../include/gamenet/core/net/TcpConnection.h">TcpConnection.h</a> · <a href="../../include/gamenet/core/net/Callbacks.h">Callbacks.h</a> · <a href="../../examples/echo_server/main.cpp">Echo 入口</a></dd>
+          </div>
+          <div class="source-entry">
+            <dt><code>src/core/net/</code><br>连接和调度</dt>
+            <dd><code>TcpConnection.cc</code> 把缓冲、状态和回调汇成连接语义，重点看 <code>trySend()</code>、<code>handleRead()</code>、<code>handleWrite()</code>、<code>finishClose()</code>。<code>EventLoop.cc</code> 决定任务与 I/O 何时派发，<code>Channel.cc</code> 按就绪事件调用绑定的处理函数。<br><a href="../../src/core/net/TcpConnection.cc">TcpConnection.cc</a> · <a href="../../src/core/net/EventLoop.cc">EventLoop.cc</a> · <a href="../../src/core/net/Channel.cc">Channel.cc</a></dd>
+          </div>
+          <div class="source-entry">
+            <dt><code>src/core/net/</code><br>数据与资源</dt>
+            <dd><code>Buffer.cc</code> 管理字节存储、读写索引和 fd I/O 辅助函数。<code>Socket.cc</code> 用 RAII 管理 socket，提供半关闭与显式关闭。<code>TcpOutputMemoryBudget.cc</code> 独立管理多个连接共享的原子额度与恢复阈值。<br><a href="../../src/core/net/Buffer.cc">Buffer.cc</a> · <a href="../../src/core/net/Socket.cc">Socket.cc</a> · <a href="../../src/core/net/TcpOutputMemoryBudget.cc">TcpOutputMemoryBudget.cc</a></dd>
+          </div>
+          <div class="source-entry">
+            <dt><code>src/core/net/detail/</code><br><code>src/core/net/poller/</code><br><code>src/core/net/platform/</code></dt>
+            <dd>私有 adapter 把调度接到平台模型。<code>EpollReadinessPort</code> 负责就绪注册和代号，<code>IocpPoller</code> 负责完成包与操作身份，<code>IocpTcpTransport</code> 管 Windows TCP 的读写提交及存储。<br><a href="../../src/core/net/detail/PollerIoEngineAdapter.cc">PollerIoEngineAdapter.cc</a> · <a href="../../src/core/net/detail/EpollReadinessPort.cc">EpollReadinessPort.cc</a> · <a href="../../src/core/net/poller/IocpPoller.cc">IocpPoller.cc</a> · <a href="../../src/core/net/platform/IocpTcpTransport_win.cc">IocpTcpTransport_win.cc</a></dd>
+          </div>
+          <div class="source-entry">
+            <dt><code>src/protocol/</code><br><code>src/transport/</code><br><code>tests/</code></dt>
+            <dd>协议层恢复业务消息，传输适配器让上层按统一接口投递输出。测试把跨线程、反压和关闭边界落实到可复现用例。<br><a href="../../src/protocol/PacketFramer.cc">PacketFramer.cc</a> · <a href="../../src/transport/TcpTransportEndpoint.cc">TcpTransportEndpoint.cc</a> · <a href="#debugging">收发测试索引</a></dd>
+          </div>
+        </dl>
+        <div class="callout">
+          <p><code>TcpConnection</code> 集中处理连接行为。定位 Linux 路径时重点看注册与缓冲索引，定位 Windows 路径时重点看操作存储与终结通知。修改回调或关闭路径时，优先复核所属线程、回调重入后的状态和额度释放时机。</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const traceSwitch = document.querySelector('.trace-switch');
+    const directionButtons = [...traceSwitch.querySelectorAll('button')];
+
+    function showDirection(selectedButton) {
+      for (const button of directionButtons) {
+        const selected = button === selectedButton;
+        button.setAttribute('aria-pressed', String(selected));
+        document.getElementById(button.getAttribute('aria-controls')).hidden = !selected;
+      }
+    }
+
+    for (const button of directionButtons) {
+      button.addEventListener('click', () => showDirection(button));
+    }
+    const initialDirection = directionButtons.find((button) => button.getAttribute('aria-controls') === location.hash.slice(1));
+    showDirection(initialDirection ?? directionButtons[0]);
+    traceSwitch.hidden = false;
+
+    const menu = document.querySelector('.toc-details');
+    const menuSummary = menu.querySelector('summary');
+    const currentLabel = menu.querySelector('.toc-current');
+    const mobile = matchMedia('(max-width: 48rem)');
+    const chapters = [...menu.querySelectorAll('a')].map((link) => ({
+      link,
+      section: document.getElementById(link.hash.slice(1))
+    }));
+    let activeChapter;
+    let queuedChapterUpdate = false;
+
+    function updateChapter() {
+      queuedChapterUpdate = false;
+      const readingLine = mobile.matches ? 96 : 64;
+      const pageBottom = scrollY + innerHeight >= document.documentElement.scrollHeight - 1;
+      let current = chapters[0];
+      if (pageBottom) {
+        current = chapters[chapters.length - 1];
+      } else {
+        for (const chapter of chapters) {
+          if (chapter.section.getBoundingClientRect().top > readingLine) break;
+          current = chapter;
+        }
+      }
+      if (current !== activeChapter) {
+        activeChapter?.link.removeAttribute('aria-current');
+        current.link.setAttribute('aria-current', 'location');
+        currentLabel.textContent = current.link.textContent;
+        activeChapter = current;
+      }
+    }
+
+    function queueChapterUpdate() {
+      if (queuedChapterUpdate) return;
+      queuedChapterUpdate = true;
+      requestAnimationFrame(updateChapter);
+    }
+
+    function fitMenu() {
+      menu.open = !mobile.matches;
+      queueChapterUpdate();
+    }
+
+    traceSwitch.addEventListener('click', queueChapterUpdate);
+    menu.addEventListener('click', (event) => {
+      if (mobile.matches && event.target.closest('a')) menu.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && mobile.matches && menu.open) {
+        menu.open = false;
+        menuSummary.focus({ preventScroll: true });
+      }
+    });
+    document.documentElement.classList.add('enhanced');
+    mobile.addEventListener('change', fitMenu);
+    addEventListener('scroll', queueChapterUpdate, { passive: true });
+    addEventListener('resize', queueChapterUpdate);
+    addEventListener('hashchange', queueChapterUpdate);
+    fitMenu();
+  </script>
+</body>
+</html>
