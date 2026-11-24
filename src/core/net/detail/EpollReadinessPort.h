@@ -39,6 +39,7 @@ public:
         ReadinessRegistrationIdentity identity,
         const Channel* target) const override;
     ReadinessWaitResult wait(int timeoutMs) override;
+    ReadinessWaitResult waitUntil(gamenet::base::Timestamp deadline);
     bool wakeup() noexcept override;
 
     std::size_t registrationCount() const;
@@ -62,6 +63,7 @@ private:
         std::uint64_t generation,
         std::uint32_t nativeEvents);
     void resetNoticeBatch() noexcept;
+    ReadinessWaitResult finishNativeWait(int count);
     ReadinessWaitResult currentResult(
         gamenet::base::Timestamp observedAt) const noexcept;
 
@@ -74,6 +76,7 @@ private:
     std::unordered_map<SocketFd, Registration> registrations_;
     std::uint32_t nextGeneration_{1};
     ReadinessWaitProgress progress_{};
+    bool preciseWaitAvailable_{true};
 
     friend class EpollReadinessPortHarness;
 };

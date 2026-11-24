@@ -60,6 +60,13 @@ target_include_directories(gamenet_core
 )
 
 target_compile_features(gamenet_core PUBLIC cxx_std_23)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    include(CheckCXXSymbolExists)
+    check_cxx_symbol_exists(epoll_pwait2 "sys/epoll.h" GAMENET_HAVE_EPOLL_PWAIT2)
+    if(GAMENET_HAVE_EPOLL_PWAIT2)
+        target_compile_definitions(gamenet_core PRIVATE GAMENET_HAVE_EPOLL_PWAIT2=1)
+    endif()
+endif()
 target_compile_options(gamenet_core
     PUBLIC
         $<$<CXX_COMPILER_ID:MSVC>:/utf-8>

@@ -10,6 +10,7 @@
 #ifndef _WIN32
 #include "../../../src/core/net/detail/EpollReadinessPort.h"
 #include "../../../src/core/net/detail/EpollReadinessPortHarness.h"
+#include "../../../src/core/net/detail/EpollWaitDeadline.h"
 #endif
 #include "support/TestAssert.h"
 
@@ -55,6 +56,59 @@ using gamenet::net::detail::EpollReadinessPortHarness;
 using gamenet::net::detail::NativeReadinessEvent;
 using gamenet::net::detail::ReadinessPortOptions;
 using gamenet::net::detail::ReadinessRegistrationRequest;
+
+void testPreciseDeadlineAndFallbackPolicy() {
+    using namespace std::chrono_literals;
+    using gamenet::net::detail::waitForEpollDeadline;
+    using gamenet::net::detail::ceilWaitMilliseconds;
+    const gamenet::base::Timestamp origin{};
+    auto current = origin;
+    bool available = true;
+    int preciseCalls = 0, legacyCalls = 0, legacyTimeout = -1;
+    timespec captured{};
+    int error = 0;
+    auto precise = [&](const timespec& timeout) {
+        ++preciseCalls;
+        captured = timeout;
+        if (error) { errno = error; current += 300us; return -1; }
+        return 0;
+    };
+    auto legacy = [&](int timeout) { ++legacyCalls; legacyTimeout = timeout; return 0; };
+    auto now = [&] { return current; };
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(origin + 250us, available, precise, legacy, now) == 0);
+    GAMENET_TEST_ASSERT(captured.tv_sec == 0 && captured.tv_nsec == 250000 && !legacyCalls);
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(origin + 1500ms + 1ns, available, precise, legacy, now) == 0);
+    GAMENET_TEST_ASSERT(captured.tv_sec == 1 && captured.tv_nsec == 500000001);
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(origin, available, precise, legacy, now) == 0);
+    GAMENET_TEST_ASSERT(preciseCalls == 2 && legacyCalls == 1 && legacyTimeout == 0);
+    error = EINTR;
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(origin + 1ms, available, precise, legacy, now) == -1);
+    GAMENET_TEST_ASSERT(errno == EINTR && available && legacyCalls == 1);
+    error = EPERM;
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(origin + 1ms, available, precise, legacy, now) == -1);
+    GAMENET_TEST_ASSERT(errno == EPERM && available && legacyCalls == 1);
+    current = origin;
+    error = ENOSYS;
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(origin + 250us, available, precise, legacy, now) == 0);
+    GAMENET_TEST_ASSERT(!available && legacyTimeout == 0);  // Probe consumed the deadline.
+    const int calls = preciseCalls;
+    GAMENET_TEST_ASSERT(waitForEpollDeadline(current + 1500us, available, precise, legacy, now) == 0);
+    GAMENET_TEST_ASSERT(preciseCalls == calls && legacyTimeout == 2);
+    GAMENET_TEST_ASSERT(ceilWaitMilliseconds(-1ns) == 0 && ceilWaitMilliseconds(1ns) == 1);
+    GAMENET_TEST_ASSERT(ceilWaitMilliseconds(1ms) == 1 && ceilWaitMilliseconds(1000000h) == std::numeric_limits<int>::max());
+
+    gamenet::net::EventLoop loop;
+    EpollReadinessPort port(&loop);
+    const auto due = gamenet::base::now() + 250us;
+    const auto batch = port.waitUntil(due);
+    GAMENET_TEST_ASSERT(batch.notices.empty() && batch.observedAt >= due);
+    bool rejected = false;
+    std::thread foreign([&] {
+        try { (void)port.waitUntil(due); } catch (const std::runtime_error&) { rejected = true; }
+    });
+    foreign.join();
+    GAMENET_TEST_ASSERT(rejected);
+}
 
 struct SocketPair {
     gamenet::net::SocketFd first{gamenet::net::kInvalidSocket};
@@ -305,6 +359,7 @@ void testLevelTriggeredNoticePreservesApplicationEagain() {
 int main() {
     testPlatformCapabilityAndInternalCapacity();
 #ifndef _WIN32
+    testPreciseDeadlineAndFallbackPolicy();
     testGenerationRejectsStaleRemoveAndMergesCurrentMask();
     testBoundedWaitContinuesAndBackendWakeupIsInternal();
     testLevelTriggeredNoticePreservesApplicationEagain();

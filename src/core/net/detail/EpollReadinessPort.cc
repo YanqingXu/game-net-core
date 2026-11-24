@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "EpollReadinessPort.h"
+#include "EpollWaitDeadline.h"
 
 #ifndef _WIN32
 
@@ -273,12 +274,39 @@ ReadinessWaitResult EpollReadinessPort::wait(int timeoutMs) {
         nativeEvents_.data(),
         static_cast<int>(nativeEvents_.size()),
         timeoutMs);
+    return finishNativeWait(count);
+}
+
+ReadinessWaitResult EpollReadinessPort::waitUntil(gamenet::base::Timestamp deadline) {
+    assertOwnerThread();
+    resetNoticeBatch();
+#ifdef GAMENET_HAVE_EPOLL_PWAIT2
+    const int count = waitForEpollDeadline(deadline, preciseWaitAvailable_,
+        [this](const timespec& timeout) {
+            return ::epoll_pwait2(epollfd_, nativeEvents_.data(),
+                static_cast<int>(nativeEvents_.size()), &timeout, nullptr);
+        },
+        [this](int timeoutMs) {
+            return ::epoll_wait(epollfd_, nativeEvents_.data(),
+                static_cast<int>(nativeEvents_.size()), timeoutMs);
+        }, [] { return gamenet::base::now(); });
+#else
+    const int count = ::epoll_wait(epollfd_, nativeEvents_.data(),
+        static_cast<int>(nativeEvents_.size()),
+        ceilWaitMilliseconds(deadline - gamenet::base::now()));
+#endif
+    return finishNativeWait(count);
+}
+
+ReadinessWaitResult EpollReadinessPort::finishNativeWait(int count) {
+    const int nativeError = errno;
     const auto observedAt = gamenet::base::now();
     if (count < 0) {
-        if (errno == EINTR) {
+        if (nativeError == EINTR) {
             return currentResult(observedAt);
         }
-        epollDie("epoll_wait");
+        errno = nativeError;
+        epollDie("epoll readiness wait");
     }
 
     progress_.nativeNotices = static_cast<std::size_t>(count);

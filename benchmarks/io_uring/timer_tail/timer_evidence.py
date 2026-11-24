@@ -9,6 +9,7 @@ import bisect
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import statistics
@@ -22,7 +23,13 @@ import hot_path_compare as hot
 import dispatch_budget as dispatch
 
 BASELINE = "66a106fe3c972d3642fcc15857b9daaab728e265"
-SCHEMA = "gamenet.timer-tail-attribution.v1"
+SCHEMA = "gamenet.timer-tail-attribution.v2"
+DIAGNOSIS = dict(run_id="45351361451", observer="e58d765f5d29f211d0dd45564072b9088c87c3c8",
+                 manifest_sha256="cf25cd9b1cfa1d864f345889875b3455ba033f2b9228cd6245c1148ad7e4a003")
+RUNTIME_DELTA = {"src/core/CMakeLists.txt", "src/core/net/EventLoop.cc",
+                 "src/core/net/detail/IoWaitTimeout.h", "src/core/net/detail/EpollWaitDeadline.h",
+                 "src/core/net/detail/IoEngine.h", "src/core/net/detail/PollerIoEngineAdapter.cc",
+                 "src/core/net/detail/EpollReadinessPort.h", "src/core/net/detail/EpollReadinessPort.cc"}
 PROFILE = dict(blocks=5, phase_ticks=2000, cadence_ticks=3000, phase_us=[100, 250, 500, 750, 900],
                saturated_rounds=4096, paced_rounds=1024, trace_rounds=1024, pace_us=1000,
                notice_budget=16, connections=64, frame_bytes=4096)
@@ -211,6 +218,100 @@ def verify_sources(root, label):
         a.require(hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest() == digest, "Git blob mismatch")
 
 
+def scheduler_spans(text, owner):
+    a.require(not re.search(r"(?:LOST\s+[1-9]|[1-9]\d*\s+(?:events?\s+)?lost)", text, re.I), "lost scheduler events")
+    events = []
+    for line in text.splitlines():
+        match = re.search(r"\[(\d+)\]\s+(\d+)\.(\d{9}):\s+sched:sched_(switch|wakeup):\s+(.*)$", line)
+        if match:
+            events.append((int(match[2]) * 1000000000 + int(match[3]), match[4], match[5]))
+    a.require(events, "no scheduler events")
+    blocked, runnable = [], []
+    off = ready = None
+    switches = 0
+    for at, event, payload in sorted(events):
+        if event == "switch":
+            match = re.fullmatch(r".*:(\d+) \[\d+\] (\S+) ==> .*:(\d+) \[\d+\]", payload)
+            a.require(match is not None, "unknown scheduler switch format")
+            previous, state, following = int(match[1]), match[2], int(match[3])
+            if previous == owner:
+                a.require(off is None, "missing owner switch-in")
+                off = at
+                ready = at if state.startswith("R") else None
+            if following == owner:
+                switches += 1
+                if off is not None:
+                    a.require(ready is not None, "missing owner wakeup event")
+                    if ready > off:
+                        blocked.append((off, ready))
+                    if at > ready:
+                        runnable.append((ready, at))
+                    off = ready = None
+        else:
+            match = re.fullmatch(r".*:(\d+) \[\d+\] CPU:\d+", payload)
+            a.require(match is not None, "unknown scheduler wakeup format")
+            if int(match[1]) == owner and off is not None and ready is None:
+                ready = at
+    a.require(switches > 0, "owner absent from scheduler trace")
+    return blocked, runnable, events[0][0], events[-1][0]
+
+
+def scheduler_result(path, backend, case, cpus):
+    raw = cpu.raw_metrics(path)
+    if backend == "idle":
+        correctness = idle_result(path, "cadence", True)
+        ticks = [(int(r[1]), int(r[2])) for r in a.get_rows(path / "timer.csv", "armed_ns,deadline_ns,callback_ns,delay_us")]
+    else:
+        correctness = a.sample(path, backend, "steady", cpus, PROFILE["trace_rounds"])
+        correctness.update(dispatch.read_timer(path, raw))
+        a.require(raw["timer_pace_us"] == (1000 if case == "paced" else 0), "scheduler pacing mismatch")
+        ticks = [tuple(map(int, r)) for r in a.get_rows(path / "timer.csv", "deadline_ns,callback_ns")]
+    timeline, waits, messages = parse_observer(path / "observer.csv")
+    text = (path / "events.txt").read_text()
+    blocked, runnable, first, last = scheduler_spans(text, raw["owner_tid"])
+    a.require(first <= ticks[0][0] <= ticks[-1][1] <= last, "scheduler clock/window mismatch")
+    worst = []
+    for due, fired in sorted(ticks, key=lambda t: t[1] - t[0], reverse=True)[:20]:
+        b, r = intersections(due, fired, blocked), intersections(due, fired, runnable)
+        a.require(b + r <= fired - due, "overlapping scheduler intervals")
+        worst.append(dict(deadline_ns=due, lag_ns=fired-due, blocked_ns=b, runnable_ns=r,
+                          scheduled_ns=fired-due-b-r, poll_ns=intersections(due, fired, waits),
+                          message_ns=intersections(due, fired, messages)))
+    return dict(correctness=correctness, worst=worst,
+                blocked_intervals=len(blocked), runnable_intervals=len(runnable),
+                explanation="blocked+runnable+scheduled partition lag; poll/message are overlapping contexts, not extra time")
+
+
+def collect_scheduler(root, probes, labels, cpus, env):
+    schedule = root / "scheduler"
+    schedule.mkdir()
+    results = []
+    for label in labels:
+        for case, backend in (("cadence", "idle"), ("saturated", "epoll"), ("saturated", "io_uring"),
+                              ("paced", "epoll"), ("paced", "io_uring")):
+            path = schedule / f"{label}-{backend}-{case}"
+            path.mkdir()
+            try:
+                perf, _ = cpu.resolve_perf()
+                if backend == "idle":
+                    target = [probes[label] / "timer_idle_trace", "cadence", path]
+                else:
+                    target = ["env", "GAMENET_PROBE_TIMER=1", f"GAMENET_TIMER_TRACE_DIR={path}"]
+                    if case == "paced": target.append("GAMENET_TIMER_PACE_US=1000")
+                    target.extend([probes[label] / "timer_network_trace", backend, "steady", path, str(PROFILE["trace_rounds"])])
+                cpu.command_logged(["sudo", "-n", perf, "record", "-a", "-C", ",".join(map(str, cpus)),
+                                    "--clockid", "mono", "-m", "16M", "-e", "sched:sched_switch", "-e", "sched:sched_wakeup",
+                                    "-o", path / "perf.data", "--", *target], path / "record.log", env=env, timeout=30)
+                cpu.command_logged(["sudo", "-n", perf, "script", "--ns", "-i", path / "perf.data"], path / "events.txt", path / "script.log")
+                subprocess.run(["sudo", "-n", "chmod", "-R", "a+rX", path], check=True)
+                value = scheduler_result(path, backend, case, cpus)
+                results.append(dict(package=label, case=case, backend=backend, status="verified", result=value))
+            except (subprocess.SubprocessError, ValueError, OSError) as error:
+                (path / "unavailable.txt").write_text(str(error), encoding="utf-8")
+                results.append(dict(package=label, case=case, backend=backend, status="unavailable", error=str(error)))
+    a.write_json(schedule / "summary.json", results)
+
+
 def collect(args):
     root, work = args.output.resolve(), args.work.resolve()
     root.mkdir(parents=True)
@@ -223,6 +324,8 @@ def collect(args):
     runtime = [p for p in paths if p.startswith(("src/", "include/", "cmake/", "api/")) or p in ("CMakeLists.txt", "CMakePresets.json")]
     if args.stage == "diagnose":
         a.require(not runtime, "diagnosis must precede runtime changes")
+    else:
+        a.require(set(runtime) == RUNTIME_DELTA, "runtime exceeds the precise-wait fix")
     (root / "runtime.diff").write_text(a.command("git", "diff", BASELINE, "HEAD", "--", *runtime, cwd=after) if runtime else "", encoding="utf-8")
     archive_sources(before, root, "baseline")
     archive_sources(after, root, "candidate")
@@ -267,27 +370,10 @@ def collect(args):
             cpu.trial(probes[label] / "timer_network_trace" if traced else binaries[label], backend,
                       "slow-close" if case == "slow-close" else "steady", path,
                       None if case == "slow-close" else rounds, env=trial_env)
-    # No global scheduler knob changes. Probe availability explicitly and keep
-    # the error as evidence rather than treating clock subtraction as sched data.
-    schedule = root / "scheduler"
-    schedule.mkdir()
-    try:
-        perf, _ = cpu.resolve_perf()
-        cpu.command_logged(["sudo", "-n", perf, "record", "-a", "-C", ",".join(map(str, host["pinned_cpus"])),
-                            "--clockid", "mono", "-e", "sched:sched_switch", "-e", "sched:sched_wakeup",
-                            "-o", schedule / "perf.data", "--", probes[labels[-1]] / "idle", "cadence", schedule],
-                           schedule / "record.log", timeout=30)
-        cpu.command_logged(["sudo", "-n", perf, "script", "--ns", "-i", schedule / "perf.data"],
-                           schedule / "events.txt", schedule / "script.log")
-        subprocess.run(["sudo", "-n", "chmod", "a+r", schedule / "perf.data"], check=True)
-        status = "captured-unscored-idle"
-    except (subprocess.SubprocessError, ValueError, OSError) as error:
-        status = "unavailable"
-        (schedule / "unavailable.txt").write_text(str(error), encoding="utf-8")
-    a.write_json(schedule / "status.json", dict(status=status))
+    collect_scheduler(root, probes, labels, host["pinned_cpus"], env)
     result = summarize(root, args.stage, host["pinned_cpus"])
     a.write_json(root / "summary.json", result)
-    a.write_json(root / "manifest.json", dict(schema=SCHEMA, stage=args.stage, profile=PROFILE,
+    a.write_json(root / "manifest.json", dict(schema=SCHEMA, stage=args.stage, profile=PROFILE, diagnosis=DIAGNOSIS,
                   baseline_revision=BASELINE, candidate_revision=args.expected_candidate,
                   consumer_revision=args.expected_candidate, install_prefixes=prefixes,
                   files=a.file_manifest(root)))
@@ -296,7 +382,7 @@ def collect(args):
 
 def verify(root, expected):
     manifest = cpu.read_json(root / "manifest.json")
-    a.require(manifest["schema"] == SCHEMA and manifest["profile"] == PROFILE and
+    a.require(manifest["schema"] == SCHEMA and manifest["profile"] == PROFILE and manifest["diagnosis"] == DIAGNOSIS and
               manifest["stage"] in ("diagnose", "compare") and manifest["baseline_revision"] == BASELINE and
               manifest["candidate_revision"] == manifest["consumer_revision"] == expected, "identity/profile mismatch")
     a.require(manifest["files"] == a.file_manifest(root), "file inventory/hash mismatch")
@@ -304,6 +390,10 @@ def verify(root, expected):
     host = cpu.read_json(root / "host.json")
     for label in ("baseline", "candidate"):
         verify_sources(root, label)
+    blobs = [cpu.read_json(root / f"{label}-git-blobs.json") for label in ("baseline", "candidate")]
+    changed = {p for p in set(blobs[0]) | set(blobs[1]) if blobs[0].get(p) != blobs[1].get(p)
+               and (p.startswith(("src/", "include/", "cmake/", "api/")) or p in ("CMakeLists.txt", "CMakePresets.json"))}
+    a.require(changed == (set() if manifest["stage"] == "diagnose" else RUNTIME_DELTA), "archived runtime scope mismatch")
     if manifest["stage"] == "diagnose":
         a.require((root / "runtime.diff").read_text() == "", "diagnosis modified runtime")
     for label, prefix in manifest["install_prefixes"].items():
@@ -314,6 +404,22 @@ def verify(root, expected):
         for name in hot.CONSUMER_FILES:
             a.require((root / label / "inputs" / name).read_bytes() ==
                       (root / "sources/candidate/benchmarks/io_uring/installed_acceptance" / name).read_bytes(), "consumer source mismatch")
+    if manifest["stage"] == "compare":
+        a.require(set(manifest["install_prefixes"]) == {"baseline", "candidate"}, "missing comparison arm")
+        before, after = root / "baseline/inputs", root / "candidate/inputs"
+        a.require((before / "libgamenet_experimental_io_uring.a").read_bytes() ==
+                  (after / "libgamenet_experimental_io_uring.a").read_bytes(), "experimental runtime changed")
+        for cache_name in ("package-cache.txt", "consumer-cache.txt", "timer-cache.txt"):
+            caches = [a.cmake_cache(path / cache_name) for path in (before, after)]
+            for key in ("CMAKE_CXX_COMPILER", "CMAKE_CXX_FLAGS", "CMAKE_CXX_FLAGS_RELEASE", "CMAKE_BUILD_TYPE"):
+                a.require(caches[0][key] == caches[1][key], "unequal comparison compiler/flags")
+        a.require(a.cmake_cache(after / "package-cache.txt")["GAMENET_HAVE_EPOLL_PWAIT2"] == "1", "native precise wait unavailable")
+    for row in cpu.read_json(root / "scheduler/summary.json"):
+        path = root / "scheduler" / f"{row['package']}-{row['backend']}-{row['case']}"
+        if row["status"] == "verified":
+            a.require(row["result"] == scheduler_result(path, row["backend"], row["case"], host["pinned_cpus"]), "scheduler replay mismatch")
+        else:
+            a.require(row["status"] == "unavailable" and (path / "unavailable.txt").read_text() == row["error"], "missing scheduler limitation")
     a.require(summarize(root, manifest["stage"], host["pinned_cpus"]) == cpu.read_json(root / "summary.json"), "summary replay differs")
     print("timer evidence verified", flush=True)
 

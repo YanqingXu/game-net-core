@@ -132,6 +132,18 @@ IOE-R2 gives Readiness its own source-private vocabulary and native owner:
 - `IoEngineOptions::maxReadinessNoticesPerWait` is backend capacity, independent
   of EventLoop's `maxActiveChannelsPerIteration` dispatch budget.
 
+The timer-tail precision slice keeps those boundaries unchanged. Linux's
+source-private `waitUntil` carries an absolute steady-clock deadline, capped by
+EventLoop's existing 10-second idle bound. A positive remainder uses
+`epoll_pwait2` when the build libc and running kernel support it. Expired
+deadlines and lifecycle/control continuations still use a nonblocking wait.
+Missing libc support or one `ENOSYS` falls back to ceiling milliseconds; the
+kernel result is cached per owner port and the remaining deadline is recomputed
+before fallback. `EINTR` returns to the scheduler, never restarts a full wait.
+Other errors retain fail-fast behavior. No busy polling, timerfd, signal-mask
+change, new owner, callback, phase, budget, public header or backend selector is
+introduced. Windows and the integer Poller compatibility path are unchanged.
+
 IOE-C1's operation-model slice gives Completion its native result vocabulary:
 
 - `CompletionOperationIdentity` is the operation address plus a nonzero

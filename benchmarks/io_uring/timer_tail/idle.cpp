@@ -6,6 +6,7 @@
 #endif
 #include <sched.h>
 #include <time.h>
+#include <unistd.h>
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -79,7 +80,7 @@ int main(int argc, char** argv) {
     for (const auto& r : rows)
         ticks << r.armed << ',' << r.due << ',' << r.fired << ',' << r.delay << '\n';
     metrics << "begin_ns," << begin << "\nend_ns," << end << "\nowner_cpu_ns," << elapsedCpu
-            << "\nowner_cpu," << first << "\nticks," << rows.size() << '\n';
+            << "\nowner_cpu," << first << "\nowner_tid," << ::getpid() << "\nticks," << rows.size() << '\n';
 #ifdef GAMENET_TIMER_DIAGNOSTICS
     observer.save(output);
 #endif

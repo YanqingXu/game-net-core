@@ -49,5 +49,18 @@ class EvidenceTests(unittest.TestCase):
         s = e.stats([0, 500000, 500001, 1000000, 1000001])
         self.assertEqual((s["over_500us"], s["over_1ms"], s["p99_us"]), (3, 1, 1000.001))
 
+    def test_scheduler_blocked_runnable_partition(self):
+        data = ("test 7 [000] 1.000000010: sched:sched_switch: test:7 [120] S ==> idle:0 [120]\n"
+                "idle 0 [000] 1.000000020: sched:sched_wakeup: test:7 [120] CPU:000\n"
+                "idle 0 [000] 1.000000030: sched:sched_switch: idle:0 [120] R ==> test:7 [120]\n"
+                "test 7 [000] 1.000000040: sched:sched_switch: test:7 [120] R+ ==> other:8 [120]\n"
+                "other 8 [000] 1.000000050: sched:sched_switch: other:8 [120] S ==> test:7 [120]\n")
+        blocked, runnable, *_ = e.scheduler_spans(data, 7)
+        self.assertEqual(blocked, [(1000000010, 1000000020)])
+        self.assertEqual(runnable, [(1000000020, 1000000030), (1000000040, 1000000050)])
+        for invalid in (data + 'LOST 1 events', data.replace('sched:sched_wakeup', 'ignored'), data):
+            with self.assertRaises(ValueError):
+                e.scheduler_spans(invalid, 99 if invalid == data else 7)
+
 if __name__ == "__main__":
     unittest.main()

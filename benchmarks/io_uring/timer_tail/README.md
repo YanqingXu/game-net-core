@@ -49,6 +49,15 @@ compiler flags, native host/affinity, contracts, raw ledgers and exact inventory
 hashes. A new schema prevents interpreting old timer ledgers as new evidence.
 Do not change old verifier semantics or compare numbers from different hosts.
 
+The initial v1 reproduction is Actions `45351361451` (observer `e58d765`,
+unchanged runtime `66a106f`). V2 adds separately recorded kernel scheduler
+traces for idle, saturated and paced cases on each package/backend. Its parser
+requires matched switch/wakeup events and partitions lag into blocked,
+runnable and scheduled intervals. Poll/message context overlaps that partition
+and must not be added to it. Scheduled time can include IRQ/steal time; it is
+not a substitute for thread CPU clocks. A captured trace with missing/lost
+events is explicitly unavailable, not usable attribution.
+
 Reference: Linux documents `epoll_wait`'s integer-millisecond timeout and
 possible rounding/scheduler overruns, and `epoll_pwait2`'s timespec timeout:
 <https://man7.org/linux/man-pages/man2/epoll_wait.2.html>.

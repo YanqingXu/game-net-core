@@ -142,6 +142,17 @@ public:
 #endif
     }
 
+#ifndef _WIN32
+    gamenet::base::Timestamp waitUntil(
+        gamenet::base::Timestamp deadline, IoNoticeBatch& notices) override {
+        assertOwnerThread();
+        if (phase_ == IoEnginePhase::Shutdown) {
+            throw std::logic_error("I/O Engine wait after shutdown");
+        }
+        return publishReadiness(readinessPort_.waitUntil(deadline), notices.readiness_);
+    }
+#endif
+
     std::size_t pendingCompletionNoticeCount() const noexcept override {
 #ifdef _WIN32
         return IocpPollerAccess::pendingCompletionNoticeCount(*this);
@@ -410,7 +421,12 @@ private:
     gamenet::base::Timestamp waitForReadiness(
         int timeoutMs,
         ChannelList* activeChannels) {
-        const auto batch = readinessPort_.wait(timeoutMs);
+        return publishReadiness(readinessPort_.wait(timeoutMs), activeChannels);
+    }
+
+    gamenet::base::Timestamp publishReadiness(
+        const ReadinessWaitResult& batch,
+        ChannelList* activeChannels) {
         lastWaitProgress_ = {
             .deliveredNotices = batch.progress.deliveredNotices,
             .staleNotices = batch.progress.staleNotices,
