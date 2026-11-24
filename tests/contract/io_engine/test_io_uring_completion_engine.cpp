@@ -467,6 +467,50 @@ void testFullTableReuseRetainsTakenNoticePayloadAndLease() {
     for (const auto& lease : leases) GAMENET_TEST_ASSERT(lease.expired());
 }
 
+void testSendSnapshotSurvivesCallerMutationAndSlotReuse() {
+    gamenet::net::EventLoop loop;
+    uring::IoUringCompletionEngine engine(&loop, {
+        .entries = 2, .maxOperations = 1, .maxCompletionsPerWait = 2,
+        .maxBytesPerOperation = 4096, .maxOwnedBytes = 4096,
+    });
+    std::array<int, 2> pair{};
+    GAMENET_TEST_ASSERT(::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair.data()) == 0);
+    OwnedFd sender(pair[0]);
+    OwnedFd receiver(pair[1]);
+    std::vector<uring::IoUringCompletionNotice> retained;
+    std::vector<std::weak_ptr<int>> leases;
+    for (const auto size : {1U, 31U, 4096U}) {
+        std::string expected(size, '\0');
+        for (std::size_t i = 0; i < size; ++i) expected[i] = static_cast<char>(i % 256);
+        auto caller = expected;
+        auto lease = std::make_shared<int>(1);
+        leases.push_back(lease);
+        const auto sent = engine.enqueueSend(sender.get(), caller, lease);
+        lease.reset();
+        GAMENET_TEST_ASSERT(sent.result == uring::IoUringSubmissionResult::Accepted);
+        caller.assign(size, 'x');
+        GAMENET_TEST_ASSERT(engine.flush().nativeError == 0);
+        auto notice = waitForNotice(engine, uring::IoUringOperationKind::Send);
+        GAMENET_TEST_ASSERT(notice.status() == uring::IoUringCompletionStatus::Succeeded);
+        GAMENET_TEST_ASSERT(notice.payload() == expected);
+        GAMENET_TEST_ASSERT(notice.bytesTransferred() == size);
+        std::string actual(size, '\0');
+        GAMENET_TEST_ASSERT(::recv(receiver.get(), actual.data(), size, MSG_WAITALL) == size);
+        GAMENET_TEST_ASSERT(actual == expected);
+        retained.push_back(std::move(notice));
+    }
+    GAMENET_TEST_ASSERT(engine.shutdown(0ms) == uring::IoUringShutdownResult::Drained);
+    for (std::size_t n = 0; n < retained.size(); ++n) {
+        GAMENET_TEST_ASSERT(!leases[n].expired());
+        for (std::size_t i = 0; i < retained[n].payload().size(); ++i) {
+            GAMENET_TEST_ASSERT(retained[n].payload()[i] == static_cast<char>(i % 256));
+        }
+    }
+    retained.clear();
+    for (const auto& lease : leases) GAMENET_TEST_ASSERT(lease.expired());
+    GAMENET_TEST_ASSERT(engine.metrics().ownedBytes == 0);
+}
+
 void testCancelLeaseAndFinalDrain() {
     gamenet::net::EventLoop loop;
     uring::IoUringCompletionEngine engine(
@@ -529,6 +573,7 @@ int main() {
     testSlotGenerationRejectsStaleCancel();
     testTerminalNoticeRetainsOperationSlotGeneration();
     testFullTableReuseRetainsTakenNoticePayloadAndLease();
+    testSendSnapshotSurvivesCallerMutationAndSlotReuse();
     testCancelLeaseAndFinalDrain();
     return 0;
 }

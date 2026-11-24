@@ -8,9 +8,9 @@ on:
     inputs:
       mode:
         type: choice
-        options: [variant, profile, hot-path]
+        options: [variant, profile, hot-path, submission]
         default: variant
-        description: Paired Send-flush, perf profiling, or bounded before/after bookkeeping comparison
+        description: Historical Send-flush, perf, bookkeeping, or factorial submission/copy comparison
       dispatch_budget:
         type: boolean
         default: false
@@ -29,16 +29,20 @@ permissions:
 
 jobs:
   native-release:
-    if: inputs.mode != 'hot-path'
+    if: inputs.mode != 'hot-path' && inputs.mode != 'submission'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       PACKAGE_REVISION: ${{ github.sha }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
+      - name: Pin the historical isolated patch experiment
+        if: inputs.mode == 'variant'
+        run: echo 'PACKAGE_REVISION=e391c2f59e1cd0dc9d5cc8a1cbab215b058c488d' >> "$GITHUB_ENV"
       - name: Check out the standalone profiler and consumer
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.PACKAGE_REVISION }}
           path: attribution-source
           persist-credentials: false
       - name: Check out the package source at the main revision
@@ -123,7 +127,7 @@ jobs:
         run: |
           python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_attribution.py \
             --verify-output "$RUNNER_TEMP/io-uring-cpu" \
-            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$PACKAGE_REVISION"
       - name: Build and test the isolated candidate
         if: steps.experiment.outputs.enabled == 'true'
         shell: bash
@@ -178,7 +182,7 @@ jobs:
         run: |
           python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py \
             --verify-output "$RUNNER_TEMP/io-uring-cpu" \
-            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$PACKAGE_REVISION"
       - name: Sweep budgets using this run's verified installed variant
         if: inputs.dispatch_budget && steps.experiment.outputs.enabled == 'true'
         shell: bash
@@ -194,7 +198,7 @@ jobs:
             --consumer-build "$RUNNER_TEMP/variant-consumer-build" \
             --prefix "$RUNNER_TEMP/variant-prefix" --output "$result"
           python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
-            --verify-output "$result" --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+            --verify-output "$result" --expected-source "$PACKAGE_REVISION" --expected-consumer "$PACKAGE_REVISION"
       - name: Retain fresh dispatch-budget evidence
         uses: actions/upload-artifact@v4
         if: always() && inputs.dispatch_budget
@@ -214,11 +218,12 @@ jobs:
           retention-days: 30
 
   hot-path-comparison:
-    if: inputs.mode == 'hot-path'
+    if: inputs.mode == 'hot-path' || inputs.mode == 'submission'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       PYTHONDONTWRITEBYTECODE: '1'
+      COMPARISON_SCRIPT: ${{ inputs.mode == 'submission' && 'submission_compare.py' || 'hot_path_compare.py' }}
     steps:
       - name: Check out the exact candidate and verifier
         uses: actions/checkout@v4
@@ -229,7 +234,7 @@ jobs:
       - name: Check out the fixed pre-optimization baseline
         uses: actions/checkout@v4
         with:
-          ref: e391c2f59e1cd0dc9d5cc8a1cbab215b058c488d
+          ref: ${{ inputs.mode == 'submission' && '7387c1135284847e8957867fbf13fe9f86618b6e' || 'e391c2f59e1cd0dc9d5cc8a1cbab215b058c488d' }}
           path: baseline-source
           persist-credentials: false
       - name: Check out the immutable intent provenance source
@@ -268,18 +273,18 @@ jobs:
         run: |
           set -euo pipefail
           ulimit -c 0
-          python3 -B candidate-source/benchmarks/io_uring/installed_acceptance/hot_path_compare.py \
+          python3 -B "candidate-source/benchmarks/io_uring/installed_acceptance/$COMPARISON_SCRIPT" \
             --baseline baseline-source --candidate candidate-source --expected-candidate "$GITHUB_SHA" \
             --work "$RUNNER_TEMP/hot-path-builds" --output "$RUNNER_TEMP/hot-path-evidence"
       - name: Independently replay all evidence
         run: |
-          python3 -B candidate-source/benchmarks/io_uring/installed_acceptance/hot_path_compare.py \
+          python3 -B "candidate-source/benchmarks/io_uring/installed_acceptance/$COMPARISON_SCRIPT" \
             --verify-output "$RUNNER_TEMP/hot-path-evidence" --expected-candidate "$GITHUB_SHA"
       - name: Retain raw before/after evidence including failed diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: io-uring-hot-path-${{ github.run_id }}-${{ github.run_attempt }}
+          name: io-uring-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/hot-path-evidence
           if-no-files-found: error
           retention-days: 30

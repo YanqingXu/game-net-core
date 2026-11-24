@@ -91,6 +91,35 @@ Same-host before/after measurements retain the unchanged epoll reference,
 workload, affinity, budgets, installed consumer and raw replay. These changes
 remain experimental; no default backend or HP0/HP8 promotion is implied.
 
+### Owner-callback Send commit and payload initialization
+
+The Pump may stage at most one successful Send during an already-running owner
+completion consumer, and only with an SQ capacity greater than one. The next
+successful operation flushes it together with that operation, or consumer exit
+(including exception exit) flushes it before returning to dispatch. Cancellation
+first flushes a staged Send so that the existing physically-submitted identity
+contract is unchanged. Outside a consumer, and on a one-entry SQ, Send commits
+immediately. No timer, cross-turn batch, extra queue, worker, or larger dispatch
+budget is introduced. Quiesce still owns every admitted target until its terminal
+CQE and notice consumer retire; cancel completion is not target retirement.
+
+An Engine Send may initialize its owned byte vector directly from the caller's
+range, avoiding a zero-fill followed by overwrite. It still takes an independent
+snapshot before returning Accepted; caller mutation, embedded NULs, partial
+completion, generation reuse and retained notices cannot alias that snapshot.
+Recv initialization, finite capacity accounting, Adapter mailbox credits, Hub
+FIFO ownership and the installed API remain unchanged. This is not zero-copy
+and removes no allocation. Removing mailbox/Hub copies requires a separate
+ownership design and is not authorized by this optimization.
+
+Direct contracts: `test_io_uring_event_loop_pump.cpp` checks callback-only commit,
+no-rearm and exceptional exit, multiple Send admission, cancellation, quiesce,
+one-entry SQ and immediate non-callback progress; `test_io_uring_completion_engine.cpp`
+checks byte-exact owned snapshots and lease/notice lifetime. A separate native
+factorial experiment compares unchanged baseline, batch-only, copy-only and
+combined packages, with fixed epoll control, dispatch budget 16, and at least 20
+timer repetitions per selected arm. Historical experiment verifiers stay fixed.
+
 - `tests/cmake/test_experimental_io_uring_install_contract.py`
 - `tests/api/test_experimental_io_uring_api_manifest.py`
 

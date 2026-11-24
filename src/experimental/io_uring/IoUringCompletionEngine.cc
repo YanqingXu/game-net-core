@@ -503,9 +503,14 @@ private:
         }
 
         std::vector<std::byte> storage;
-        if (bytes != 0) storage.resize(bytes);
         if (kind == IoUringOperationKind::Send) {
-            std::memcpy(storage.data(), sendPayload.data(), sendPayload.size());
+            // Snapshot once; resize followed by memcpy needlessly zeroed every
+            // byte first. Ownership, capacity accounting and notice lifetime
+            // remain identical to the receive storage path.
+            const auto* first = reinterpret_cast<const std::byte*>(sendPayload.data());
+            storage.assign(first, first + sendPayload.size());
+        } else if (bytes != 0) {
+            storage.resize(bytes);
         }
         const auto reservedBytes = storage.capacity();
         if (ownedBytes_ > options_.maxOwnedBytes ||

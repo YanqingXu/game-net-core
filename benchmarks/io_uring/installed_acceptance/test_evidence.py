@@ -14,6 +14,7 @@ import cpu_attribution as profiling
 import cpu_variant as variant
 import dispatch_budget as dispatch
 import hot_path_compare as hot_path
+import submission_compare as submission
 import run_acceptance as acceptance
 
 SHA = "a" * 40
@@ -32,6 +33,56 @@ class EvidenceTests(unittest.TestCase):
         for field in evidence:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 hot_path.check_identity({**evidence, field: OTHER}, SHA)
+
+    def test_submission_fixed_baseline_and_scope(self):
+        evidence = dict(baseline_revision=submission.BASELINE, candidate_revision=SHA, consumer_revision=SHA)
+        submission.check_identity(evidence, SHA)
+        for field in evidence:
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                submission.check_identity({**evidence, field: OTHER}, SHA)
+        submission.check_source_delta(submission.CHANGED)
+        for path in ("src/core/net/EventLoop.cc", "include/gamenet/experimental/io_uring/IoUringEventLoopPump.h",
+                     "benchmarks/io_uring/installed_acceptance/acceptance.cpp", "CMakeLists.txt"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                submission.check_source_delta(submission.CHANGED | {path})
+
+    def test_submission_balanced_factorial_and_timer_control(self):
+        rows = list(submission.plan())
+        self.assertEqual(len(rows), 158)
+        for case, count, arms in (("steady", 15, set(submission.ARMS)),
+                                  ("timer", 21, {"epoll", "before", "after"})):
+            firsts = []
+            for pair in range(1, count + 1):
+                found = [arm for kind, block, arm in rows if kind == case and block == pair]
+                self.assertEqual(set(found), arms)
+                self.assertEqual(len(found), len(arms))
+                firsts.append(found[0])
+            self.assertTrue(all(firsts.count(arm) == count // len(arms) for arm in arms))
+        self.assertEqual(submission.PROFILE["notice_budget"], 16)
+        self.assertEqual(submission.PROFILE["timer_period_ns"], 1_000_000)
+
+    def test_submission_single_factor_sources_cannot_be_mixed(self):
+        for label in submission.LABELS:
+            for path in submission.CHANGED:
+                source = "new" if label == "candidate" or (label == "batch" and path == submission.PUMP) \
+                    or (label == "copy" and path == submission.ENGINE) else "old"
+                file = self.root / label / "source" / path
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(source + path, encoding="ascii")
+        submission.check_derivation(self.root)
+        (self.root / "batch/source" / submission.ENGINE).write_text("uncontrolled change")
+        with self.assertRaises(ValueError):
+            submission.check_derivation(self.root)
+
+    def test_submission_requires_all_fifteen_pairs(self):
+        with self.assertRaises(ValueError):
+            submission.paired_interval([1.0] * 14)
+        self.assertEqual(submission.paired_interval([1.0] * 15)["bootstrap_95_percent"], [1.0, 1.0])
+
+    def test_submission_preserves_historical_verifiers(self):
+        self.assertNotEqual(submission.BASELINE, hot_path.BASELINE)
+        self.assertEqual(hot_path.PROFILE["timer_pairs"], 3)
+        self.assertEqual(hot_path.CHANGED, {submission.ENGINE, "src/experimental/io_uring/IoUringTcpConnectionHub.cc"})
 
     def test_hot_path_runtime_delta_is_narrow_and_consumer_unchanged(self):
         changed = hot_path.CHANGED | {"tests/contract/io_engine/test_io_uring_completion_engine.cpp"}

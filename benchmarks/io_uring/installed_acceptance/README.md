@@ -149,3 +149,39 @@ incomplete contracts, WSL host evidence, raw-ledger discrepancies and file-hash
 changes. Obtain `ACTIONS_HEAD_SHA` independently from Actions. Performance is
 reported even if unchanged or worse; no threshold is weakened and no default
 backend, HP0/HP8 status or 24h/72h gate is changed by this experiment.
+
+## Submission/copy factorial comparison and timer-tail retest
+
+Manual `mode=submission` fixes its baseline to
+`7387c1135284847e8957867fbf13fe9f86618b6e` (the verified bookkeeping changes).
+Only Engine Send initialization and Pump callback-local Send commit may differ.
+The independent `submission_compare.py` schema does not relax historical replay.
+It builds four installed packages: baseline, batch-only, copy-only and combined.
+The single-factor sources are exact candidate checkouts with one runtime file
+restored from baseline; archived source bytes are bound to their Git blob IDs.
+All share an identical consumer, Core archive, compiler flags, CPU affinity,
+64 connections, 4 KiB frames, 4,096 rounds, budgets and backpressure limits.
+
+Fifteen balanced scored blocks plus one excluded warmup cover five arms (epoll
+uses baseline Core). Three slow-close blocks cover every arm. Twenty-one separate
+1 ms timer blocks compare epoll, baseline io_uring and combined io_uring in
+balanced order, retaining every raw delay, cancellation ledger, skipped tick,
+per-trial maximum and pooled exceedance count. They are not throughput scores.
+Every package runs the eleven Release contracts; combined also runs Debug
+ASan/UBSan. Separate strace runs cover all four io_uring arms; perf stacks cover
+baseline/combined. Source files, builds, trials and profiles are hashed together.
+An interval crossing zero is not evidence of a gain; an unobserved timer spike
+does not establish that a tail-latency bug has been fixed.
+
+```sh
+gh workflow run io-uring-cpu-attribution.yml --ref CANDIDATE_BRANCH -f mode=submission -f dispatch_budget=false
+python3 -B benchmarks/io_uring/installed_acceptance/submission_compare.py \
+  --verify-output /path/to/submission-evidence --expected-candidate ACTIONS_HEAD_SHA
+```
+
+Since callback coalescing is now in the candidate, the old `variant` mode pins
+**both** package and consumer to `e391c2f...` before applying its unchanged
+historical patch. Its evidence is historical, not validation of current code.
+`profile` still uses the dispatched SHA. Replay the old bookkeeping experiment
+at its historical `467e96c...` workflow revision; its narrow verifier correctly
+rejects the additional Pump delta. No experiment authorizes merge or promotion.

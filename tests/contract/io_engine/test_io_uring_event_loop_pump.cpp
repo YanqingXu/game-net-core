@@ -20,6 +20,7 @@
 #include <future>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -131,11 +132,113 @@ void testRegistrationFailureRollsBackEngine() {
     GAMENET_TEST_ASSERT(loop.pendingLifecycleNodeCount() == 0);
 }
 
+enum class SendAction { OutsideConsumer, NoRearm, Throw, Rearm, Twice, Cancel, Quiesce };
+
+void testSendCommitBoundary(SendAction action, unsigned entries) {
+    gamenet::net::EventLoop loop;
+    auto pair = makeSocketPair();
+    uring::IoUringEventLoopPump* pointer = nullptr;
+    auto lease = std::make_shared<int>(9);
+    const std::weak_ptr<int> observed = lease;
+    const std::string expected("before\0after", 12);
+    const std::size_t expectedSends = action == SendAction::Twice ? 2 : 1;
+    std::size_t sends = 0;
+    std::size_t receivedBytes = 0;
+    bool timeout = false;
+    auto admitSend = [&] {
+        auto caller = expected;
+        const auto outcome = pointer->enqueueSend(pair.pump.get(), caller, lease);
+        GAMENET_TEST_ASSERT(outcome.result == uring::IoUringSubmissionResult::Accepted);
+        caller.assign(caller.size(), 'x');
+        return outcome.identity;
+    };
+    uring::IoUringEventLoopPump pump(&loop, {
+        .engine = {.entries = entries, .maxOperations = 2, .maxCompletionsPerWait = 2,
+                   .maxBytesPerOperation = 64, .maxOwnedBytes = 128},
+        .maxNoticesPerTurn = 1,
+    }, [&](uring::IoUringCompletionNotice& notice) {
+        if (notice.kind() == uring::IoUringOperationKind::Send) {
+            GAMENET_TEST_ASSERT(!observed.expired());
+            GAMENET_TEST_ASSERT(notice.status() == uring::IoUringCompletionStatus::Succeeded ||
+                                ((action == SendAction::Cancel || action == SendAction::Quiesce) &&
+                                 notice.status() == uring::IoUringCompletionStatus::Cancelled));
+            if (notice.status() == uring::IoUringCompletionStatus::Succeeded) {
+                GAMENET_TEST_ASSERT(notice.payload() == expected);
+                receivedBytes += notice.bytesTransferred();
+            }
+            if (++sends == expectedSends) loop.quit();
+            return;
+        }
+        if (notice.status() == uring::IoUringCompletionStatus::Cancelled) return;
+        GAMENET_TEST_ASSERT(notice.payload() == "a");
+        const auto identity = admitSend();
+        if (action == SendAction::Twice) {
+            (void)admitSend();
+            GAMENET_TEST_ASSERT(pointer->enqueueSend(pair.pump.get(), "overflow").result ==
+                                uring::IoUringSubmissionResult::OperationLimit);
+        }
+        lease.reset();
+        GAMENET_TEST_ASSERT(!observed.expired());
+        if (action == SendAction::Rearm) {
+            GAMENET_TEST_ASSERT(pointer->enqueueRecv(pair.pump.get(), 1).result ==
+                                uring::IoUringSubmissionResult::Accepted);
+        } else if (action == SendAction::Cancel) {
+            // Must not become RejectedNotSubmitted because Send was staged.
+            GAMENET_TEST_ASSERT(pointer->cancel(identity) == uring::IoUringCancelResult::Accepted);
+        } else if (action == SendAction::Quiesce) {
+            pointer->beginQuiesce();
+            loop.quit();
+        } else if (action == SendAction::Throw) {
+            throw std::runtime_error("Send must commit on exceptional consumer exit");
+        }
+    });
+    pointer = &pump;
+    if (action == SendAction::OutsideConsumer) {
+        (void)admitSend();
+        lease.reset();
+        timeval deadline{.tv_sec = 1, .tv_usec = 0};
+        GAMENET_TEST_ASSERT(::setsockopt(pair.peer.get(), SOL_SOCKET, SO_RCVTIMEO,
+                                       &deadline, sizeof(deadline)) == 0);
+        std::array<char, 12> response{};
+        // No EventLoop turn is required to commit non-callback Send.
+        GAMENET_TEST_ASSERT(::recv(pair.peer.get(), response.data(), response.size(), MSG_WAITALL) == 12);
+        GAMENET_TEST_ASSERT(std::string_view(response.data(), response.size()) == expected);
+    } else {
+        GAMENET_TEST_ASSERT(pump.enqueueRecv(pair.pump.get(), 1).result ==
+                            uring::IoUringSubmissionResult::Accepted);
+        GAMENET_TEST_ASSERT(::send(pair.peer.get(), "a", 1, MSG_NOSIGNAL) == 1);
+    }
+    loop.runAfter(2s, [&] { timeout = true; loop.quit(); });
+    loop.loop();
+    const auto result = pump.stopFuture().get();
+    GAMENET_TEST_ASSERT(!timeout && sends == expectedSends && observed.expired());
+    GAMENET_TEST_ASSERT(result.pump.maxConsumerDepth == 1 && result.pump.driveFailures == 0);
+    GAMENET_TEST_ASSERT(result.pump.consumerFailures == (action == SendAction::Throw ? 1 : 0));
+    GAMENET_TEST_ASSERT(result.engine.activeOperations == 0 && result.engine.readyNotices == 0 &&
+                        result.engine.pendingSubmissions == 0 && result.engine.pendingCancelCompletions == 0 &&
+                        result.engine.ownedBytes == 0 && result.engine.crossDomainFallbacks == 0);
+    if (action != SendAction::OutsideConsumer && receivedBytes != 0) {
+        std::array<char, 24> response{};
+        GAMENET_TEST_ASSERT(::recv(pair.peer.get(), response.data(), receivedBytes, MSG_DONTWAIT) ==
+                            static_cast<ssize_t>(receivedBytes));
+        for (std::size_t i = 0; i < receivedBytes; ++i) {
+            GAMENET_TEST_ASSERT(response[i] == expected[i % expected.size()]);
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
     testRegistrationFailureRollsBackEngine();
     testActiveDestructionFailsFastWithoutOwnerWait();
+    for (const auto action : {SendAction::OutsideConsumer, SendAction::NoRearm,
+                             SendAction::Throw, SendAction::Rearm, SendAction::Twice,
+                             SendAction::Cancel, SendAction::Quiesce}) {
+        testSendCommitBoundary(action, 2);
+    }
+    testSendCommitBoundary(SendAction::NoRearm, 1);
+    testSendCommitBoundary(SendAction::Cancel, 1);
     gamenet::net::EventLoop loop(gamenet::net::EventLoopOptions{
         .maxPendingFunctors = 8,
         .reservedPendingFunctors = 0,
