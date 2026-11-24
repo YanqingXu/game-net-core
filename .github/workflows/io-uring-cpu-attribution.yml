@@ -8,7 +8,7 @@ on:
     inputs:
       mode:
         type: choice
-        options: [variant, profile, hot-path, submission, timer-tail]
+        options: [variant, profile, hot-path, submission, timer-tail, cost-ledger]
         default: variant
         description: Historical Send-flush, perf, bookkeeping, or factorial submission/copy comparison
       dispatch_budget:
@@ -20,6 +20,11 @@ on:
         options: [diagnose, compare]
         default: diagnose
         description: Reproduce unchanged-runtime timer tails before comparing a fix
+      cost_stage:
+        type: choice
+        options: [diagnose, compare]
+        default: diagnose
+        description: Diagnose per-frame costs before a single-factor comparison
   workflow_call:
     inputs:
       mode:
@@ -31,13 +36,21 @@ on:
       timer_stage:
         type: string
         default: diagnose
+      cost_stage:
+        type: string
+        default: diagnose
 
 permissions:
   contents: read
 
 jobs:
+  cost-ledger:
+    if: inputs.mode == 'cost-ledger'
+    uses: ./.github/workflows/io-uring-cost-ledger.yml
+    with:
+      stage: ${{ inputs.cost_stage }}
   native-release:
-    if: inputs.mode != 'hot-path' && inputs.mode != 'submission' && inputs.mode != 'timer-tail'
+    if: inputs.mode != 'hot-path' && inputs.mode != 'submission' && inputs.mode != 'timer-tail' && inputs.mode != 'cost-ledger'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:

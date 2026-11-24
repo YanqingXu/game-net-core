@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 name: io_uring per-frame cost ledger
 on:
+  workflow_call:
+    inputs:
+      stage:
+        type: string
+        default: diagnose
   workflow_dispatch:
     inputs:
       stage:

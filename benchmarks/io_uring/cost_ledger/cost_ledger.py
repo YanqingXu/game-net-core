@@ -24,7 +24,7 @@ BASELINE = "6004293e0492819e062326032a5391eda6e83229"
 SCHEMA = "gamenet.io-uring-cost-ledger.v1"
 ENGINE = "src/experimental/io_uring/IoUringCompletionEngine.cc"
 INPUTS = ("src", "include", "cmake", "api", "CMakeLists.txt", "CMakePresets.json",
-          "benchmarks/io_uring", ".github/workflows/io-uring-cost-ledger.yml")
+          "benchmarks/io_uring", ".github/workflows/io-uring-cost-ledger.yml", ".github/workflows/io-uring-cpu-attribution.yml")
 PROFILE = dict(blocks=5, rounds=4096, profile_rounds=8192, trace_rounds=512,
                cost_rounds=1024, timer_ms=2000, timer_capacity=32768,
                notice_budget=16, connections=64, frame_bytes=4096)
