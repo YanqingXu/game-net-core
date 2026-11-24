@@ -295,8 +295,11 @@ def main():
     for name in ("output", "source", "package-build", "consumer-build", "prefix"):
         parser.add_argument(f"--{name}", type=Path)
     parser.add_argument("--expected-source")
+    parser.add_argument("--expected-consumer")
     args = parser.parse_args()
     if args.verify_output:
+        acceptance.check_revisions(read_json(args.verify_output / "manifest.json"),
+                                   args.expected_source, args.expected_consumer)
         summary = verify(args.verify_output.resolve())
         print("Independent replay passed for the frame ledgers, stack samples and syscall traces")
     else:

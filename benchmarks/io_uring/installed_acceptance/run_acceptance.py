@@ -63,6 +63,16 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def check_revisions(manifest, expected_source=None, expected_consumer=None):
+    """Bind replay to independently obtained Actions checkout identities when supplied."""
+    for key, expected in (("core_revision", expected_source),
+                          ("consumer_revision", expected_consumer)):
+        actual = manifest[key]
+        require(isinstance(actual, str) and re.fullmatch(r"[0-9a-f]{40}", actual),
+                f"invalid {key}")
+        require(expected is None or actual == expected, f"unexpected {key}")
+
+
 def file_manifest(root):
     files = {}
     for path in sorted(root.rglob("*")):
@@ -451,11 +461,14 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--source", type=Path)
     parser.add_argument("--expected-source")
+    parser.add_argument("--expected-consumer")
     parser.add_argument("--package-build", type=Path)
     parser.add_argument("--consumer-build", type=Path)
     parser.add_argument("--prefix", type=Path)
     args = parser.parse_args()
     if args.verify_output:
+        check_revisions(json.loads((args.verify_output / "manifest.json").read_text(encoding="utf-8")),
+                        args.expected_source, args.expected_consumer)
         result = verify(args.verify_output.resolve())
         print("Independent replay: all trial ledgers, package provenance, and cleanup verified")
     else:

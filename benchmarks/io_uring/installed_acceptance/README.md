@@ -66,8 +66,11 @@ python3 -B benchmarks/io_uring/installed_acceptance/cpu_variant.py --verify-outp
 
 ## Completion dispatch budget
 
-The native job restores the exact two coalesced Release archives from Actions
-run 45000725413 after recreating the installed layout from the pinned sources.
+The native job first builds and verifies a fresh paired variant on the same
+immutable workflow SHA, then uses its exact installed archives and consumer.
+The v2 dispatch manifest binds their bytes and the predecessor manifest SHA-256.
+The original v1 verifier and `--restore-prior` keep the historical run 45000725413
+pin unchanged for archived evidence; fresh runs do not need that expiring artifact.
 Every child links the same consumer binary and uses the same pair of pinned
 CPUs. The three settings only vary the installed Server's
 `IoUringEventLoopPumpOptions::maxNoticesPerTurn`.
@@ -91,3 +94,24 @@ Replay the archive after extraction with the Python standard library.
 ```sh
 python3 -B benchmarks/io_uring/installed_acceptance/dispatch_budget.py --verify-output /path/to/dispatch-budget-evidence
 ```
+
+## Re-running and identity checks
+
+Installed acceptance and the combined CPU-variant/dispatch sweep run for changes
+to this harness on PRs to `main` and pushes to `main`. All three workflows also
+support manual dispatch. CPU attribution exposes `variant` (default) and
+`profile` (perf stack samples) modes; a dispatch sweep requires `variant`.
+Consumer and package checkouts use the same immutable `github.sha`, including
+the PR merge commit when validating a PR. No production source is patched.
+
+For an external replay, get the run's checkout SHA independently from Actions
+and pass both `--expected-source SHA --expected-consumer SHA`. Replay both CPU
+and dispatch artifacts, then compare the CPU manifest's SHA-256 with dispatch's
+`predecessor.manifest_sha256`. A self-consistent manifest alone is not an
+external attestation of provenance. Preserve downloaded artifacts when long-term
+replay is needed (Actions retention is 30 days).
+
+`python3 -B benchmarks/io_uring/installed_acceptance/test_evidence.py` exercises
+portable verifier checks. It does not replace native Linux execution, the
+11 exact io_uring contracts, sanitizers, or HP0 promotion requirements. These
+experiments remain observational, default-OFF, and do not authorize promotion.

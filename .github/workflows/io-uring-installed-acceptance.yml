@@ -5,7 +5,11 @@ name: Installed io_uring acceptance
 
 on:
   push:
-    branches: [codex/io-uring-install-acceptance]
+    branches: [main]
+    paths: ['benchmarks/io_uring/installed_acceptance/**', '.github/workflows/io-uring-*.yml']
+  pull_request:
+    branches: [main]
+    paths: ['benchmarks/io_uring/installed_acceptance/**', '.github/workflows/io-uring-*.yml']
   workflow_dispatch:
 
 permissions:
@@ -16,14 +20,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
-      PACKAGE_REVISION: 63fe9f16733c8bcdd52b23fe401466f78d28c03d
+      PACKAGE_REVISION: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Check out the standalone consumer
         uses: actions/checkout@v4
         with:
           path: acceptance-source
           persist-credentials: false
-      - name: Check out the package source at the pinned main revision
+      - name: Test evidence validators
+        run: python3 -B acceptance-source/benchmarks/io_uring/installed_acceptance/test_evidence.py
+      - name: Check out the package at the same immutable revision
         uses: actions/checkout@v4
         with:
           ref: ${{ env.PACKAGE_REVISION }}
@@ -64,7 +71,8 @@ jobs:
         shell: bash
         run: |
           python3 acceptance-source/benchmarks/io_uring/installed_acceptance/run_acceptance.py \
-            --verify-output "$RUNNER_TEMP/installed-acceptance"
+            --verify-output "$RUNNER_TEMP/installed-acceptance" \
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
       - name: Save raw Release evidence and build diagnostics
         uses: actions/upload-artifact@v4
         if: always()

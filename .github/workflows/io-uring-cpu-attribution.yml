@@ -4,8 +4,25 @@
 name: io_uring CPU attribution
 
 on:
-  push:
-    branches: [codex/io-uring-cpu-attribution]
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [variant, profile]
+        default: variant
+        description: Paired Send-flush experiment or perf CPU profiling
+      dispatch_budget:
+        type: boolean
+        default: false
+        description: Sweep dispatch budgets after the paired variant experiment
+  workflow_call:
+    inputs:
+      mode:
+        type: string
+        default: variant
+      dispatch_budget:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -13,9 +30,10 @@ permissions:
 jobs:
   native-release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
-      PACKAGE_REVISION: 63fe9f16733c8bcdd52b23fe401466f78d28c03d
+      PACKAGE_REVISION: ${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Check out the standalone profiler and consumer
         uses: actions/checkout@v4
@@ -28,15 +46,22 @@ jobs:
           ref: ${{ env.PACKAGE_REVISION }}
           path: package-source
           persist-credentials: false
-      - name: Detect the isolated Send-flush experiment
+      - name: Select the explicitly requested experiment
         id: experiment
         shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          DISPATCH_BUDGET: ${{ inputs.dispatch_budget }}
         run: |
-          if [[ -f attribution-source/benchmarks/io_uring/installed_acceptance/callback-send-coalescing.patch ]]; then
-            echo 'enabled=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'enabled=false' >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          case "$MODE" in
+            variant) echo 'enabled=true' >> "$GITHUB_OUTPUT" ;;
+            profile)
+              [[ "$DISPATCH_BUDGET" != true ]] || { echo 'Dispatch requires variant mode'; exit 1; }
+              echo 'enabled=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'Unknown experiment mode'; exit 1 ;;
+          esac
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/test_evidence.py
       - name: Check out a separate candidate package
         if: steps.experiment.outputs.enabled == 'true'
         uses: actions/checkout@v4
@@ -96,7 +121,8 @@ jobs:
         if: steps.experiment.outputs.enabled == 'false'
         run: |
           python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_attribution.py \
-            --verify-output "$RUNNER_TEMP/io-uring-cpu"
+            --verify-output "$RUNNER_TEMP/io-uring-cpu" \
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
       - name: Build and test the isolated candidate
         if: steps.experiment.outputs.enabled == 'true'
         shell: bash
@@ -150,7 +176,32 @@ jobs:
         if: steps.experiment.outputs.enabled == 'true'
         run: |
           python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/cpu_variant.py \
-            --verify-output "$RUNNER_TEMP/io-uring-cpu"
+            --verify-output "$RUNNER_TEMP/io-uring-cpu" \
+            --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+      - name: Sweep budgets using this run's verified installed variant
+        if: inputs.dispatch_budget && steps.experiment.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          result="$RUNNER_TEMP/io-uring-dispatch-budget"
+          mkdir -p "$result"
+          cp -r "$RUNNER_TEMP/io-uring-cpu/variant/build" "$result/build"
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
+            --fresh-variant "$RUNNER_TEMP/io-uring-cpu" --expected-source "$PACKAGE_REVISION" \
+            --package-build "$RUNNER_TEMP/variant-package-build" \
+            --consumer-build "$RUNNER_TEMP/variant-consumer-build" \
+            --prefix "$RUNNER_TEMP/variant-prefix" --output "$result"
+          python3 -B attribution-source/benchmarks/io_uring/installed_acceptance/dispatch_budget.py \
+            --verify-output "$result" --expected-source "$PACKAGE_REVISION" --expected-consumer "$GITHUB_SHA"
+      - name: Retain fresh dispatch-budget evidence
+        uses: actions/upload-artifact@v4
+        if: always() && inputs.dispatch_budget
+        with:
+          name: io-uring-dispatch-budget-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/io-uring-dispatch-budget
+          if-no-files-found: error
+          retention-days: 30
       - name: Retain metrics, raw profiles, and diagnostics
         uses: actions/upload-artifact@v4
         if: always()

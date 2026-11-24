@@ -15,13 +15,16 @@ import shutil
 import statistics
 import subprocess
 import sys
+import re
 from pathlib import Path
 
 import cpu_attribution as profiling
+import cpu_variant as variant
 import run_acceptance as acceptance
 
 
 SCHEMA = "gamenet.installed-io-uring-dispatch-budget.v1"
+FRESH_SCHEMA = "gamenet.installed-io-uring-dispatch-budget.v2"
 PREDECESSOR = {
     "core_revision": "63fe9f16733c8bcdd52b23fe401466f78d28c03d",
     "consumer_revision": "afe540959f8e0d2a75842af5d935f381d0571f5b",
@@ -81,14 +84,44 @@ def restore_archives(original, prefix, source, root):
     print(f"Reused both installed Release archives from Actions {PREDECESSOR['run_id']}", flush=True)
 
 
-def check_install(root, prefix):
+def prepare_fresh_variant(original, root, expected_source, consumer):
+    """Use this run's fully replayed variant; never silently replace the historical v1 pin."""
+    variant.verify(original)
+    prior = profiling.read_json(original / "manifest.json")
+    acceptance.check_revisions(prior, expected_source, consumer)
+    acceptance.require(expected_source == consumer, "fresh experiment must use one SHA")
+    shutil.copyfile(original / "manifest.json", root / "predecessor-manifest.json")
+    shutil.copyfile(original / "variant/source.diff", root / "package-source.diff")
+    shutil.copyfile(original / "variant" / PATCH, root / PATCH)
+    return {"core_revision": prior["core_revision"], "consumer_revision": consumer,
+            "manifest_sha256": fingerprint(root / "predecessor-manifest.json")["sha256"]}
+
+
+def check_install(root, prefix, fresh_predecessor=None):
     acceptance.check_build(root, prefix)
-    prior = predecessor_manifest(root / "predecessor-manifest.json")
+    if fresh_predecessor is None:
+        prior = predecessor_manifest(root / "predecessor-manifest.json")
+    else:
+        path = root / "predecessor-manifest.json"
+        acceptance.require(fingerprint(path)["sha256"] == fresh_predecessor["manifest_sha256"],
+                           "fresh predecessor manifest hash mismatch")
+        prior = profiling.read_json(path)
+        acceptance.require(prior["schema"] == variant.SCHEMA, "unexpected predecessor schema")
+        acceptance.check_revisions(prior, fresh_predecessor["core_revision"],
+                                   fresh_predecessor["consumer_revision"])
+        acceptance.require(prior["core_revision"] == prior["consumer_revision"],
+                           "fresh predecessor mixes checkout identities")
+        acceptance.require(fingerprint(root / PATCH) == prior["files"][f"variant/{PATCH}"],
+                           "fresh patch hash mismatch")
     acceptance.require(fingerprint(root / "package-source.diff") == prior["files"]["variant/source.diff"],
                        "replayed package source delta differs from prior run")
     for name in acceptance.ARCHIVES:
         acceptance.require(fingerprint(root / "inputs" / name) == prior["files"][f"variant/inputs/{name}"],
                            f"linked archive {name} differs from the tested coalesced Release archive")
+    if fresh_predecessor is not None:
+        name = "installed_io_uring_acceptance"
+        acceptance.require(fingerprint(root / "inputs" / name) == prior["files"][f"variant/inputs/{name}"],
+                           "dispatch consumer differs from the tested variant consumer")
 
 
 def trial_plan():
@@ -226,13 +259,16 @@ def profile():
 
 def collect(args):
     root = args.output.resolve()
+    root.mkdir(parents=True, exist_ok=True)
     host = acceptance.native_host(root)
     host["strace_version"] = acceptance.command("strace", "--version").splitlines()[0]
     consumer = acceptance.revision(Path(__file__).resolve().parent)
     acceptance.require(consumer == os.getenv("GITHUB_SHA", consumer), "unexpected consumer revision")
+    fresh = (prepare_fresh_variant(args.fresh_variant.resolve(), root, args.expected_source, consumer)
+             if args.fresh_variant else None)
     prefix = args.prefix.resolve()
     binary = acceptance.stage_build(root, args.package_build.resolve(), args.consumer_build.resolve(), prefix)
-    check_install(root, str(prefix))
+    check_install(root, str(prefix), fresh)
     acceptance.write_json(root / "host.json", host)
     cpus = host["pinned_cpus"]
     os.sched_setaffinity(0, cpus)
@@ -250,7 +286,9 @@ def collect(args):
     summary = summarize(root, cpus)
     acceptance.write_json(root / "summary.json", summary)
     acceptance.write_json(root / "manifest.json", {
-        "schema": SCHEMA, "predecessor": PREDECESSOR, "consumer_revision": consumer,
+        "schema": FRESH_SCHEMA if fresh else SCHEMA, "predecessor": fresh or PREDECESSOR,
+        "core_revision": fresh["core_revision"] if fresh else PREDECESSOR["core_revision"],
+        "consumer_revision": consumer,
         "profile": profile(), "install_prefix": str(prefix), "files": acceptance.file_manifest(root),
     })
     return summary
@@ -258,8 +296,15 @@ def collect(args):
 
 def verify(root):
     manifest = profiling.read_json(root / "manifest.json")
-    acceptance.require(manifest["schema"] == SCHEMA and manifest["predecessor"] == PREDECESSOR
+    fresh = manifest["schema"] == FRESH_SCHEMA
+    acceptance.require((fresh or (manifest["schema"] == SCHEMA and manifest["predecessor"] == PREDECESSOR))
                        and manifest["profile"] == profile(), "evidence schema, input, or workload mismatch")
+    if fresh:
+        acceptance.check_revisions(manifest, manifest["predecessor"]["core_revision"],
+                                   manifest["predecessor"]["consumer_revision"])
+    else:
+        acceptance.require(re.fullmatch(r"[0-9a-f]{40}", manifest["consumer_revision"]),
+                           "invalid consumer revision")
     acceptance.require(manifest["files"] == acceptance.file_manifest(root), "evidence inventory or SHA-256 mismatch")
     probe = profiling.read_json(root / "host-probe.json")
     host = profiling.read_json(root / "host.json")
@@ -268,7 +313,7 @@ def verify(root):
     cpus = host["pinned_cpus"]
     acceptance.require(len(cpus) == 2 and cpus == sorted(set(cpus))
                        and set(cpus) <= set(host["available_cpus"]), "invalid CPU affinity")
-    check_install(root, manifest["install_prefix"])
+    check_install(root, manifest["install_prefix"], manifest["predecessor"] if fresh else None)
     summary = summarize(root, cpus)
     acceptance.require(summary == profiling.read_json(root / "summary.json"), "independent replay differs")
     return summary
@@ -278,10 +323,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify-output", type=Path)
     parser.add_argument("--restore-prior", type=Path)
+    parser.add_argument("--fresh-variant", type=Path)
+    parser.add_argument("--expected-source")
+    parser.add_argument("--expected-consumer")
     for name in ("output", "prefix", "source", "package-build", "consumer-build"):
         parser.add_argument(f"--{name}", type=Path)
     args = parser.parse_args()
     if args.verify_output:
+        manifest = profiling.read_json(args.verify_output / "manifest.json")
+        acceptance.check_revisions({"core_revision": manifest["predecessor"]["core_revision"],
+                                    "consumer_revision": manifest["consumer_revision"]},
+                                   args.expected_source, args.expected_consumer)
         summary = verify(args.verify_output.resolve())
         print("Independent replay passed for the restored package, frame ledgers, timers and syscall traces")
     elif args.restore_prior:
@@ -291,6 +343,8 @@ def main():
                          args.source.resolve(), args.output.resolve())
         return
     else:
+        if args.fresh_variant and not args.expected_source:
+            parser.error("a fresh variant requires --expected-source")
         if not all((args.output, args.prefix, args.package_build, args.consumer_build)):
             parser.error("collection needs output, prefix and both Release builds")
         summary = collect(args)

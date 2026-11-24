@@ -30,6 +30,13 @@ ARMS = {
 }
 SLOW_PAIRS = 5
 ECHOES = acceptance.PROFILE["connections"] * profiling.STEADY_ROUNDS
+CONTRACTS = frozenset(f"contract.io_engine.test_{name}" for name in (
+    "cross_backend_tcp_semantics", "io_uring_completion_engine", "io_uring_event_loop_pump",
+    "io_uring_tcp_connection_driver", "io_uring_tcp_connection_hub",
+    "io_uring_tcp_connection_hub_capacity", "io_uring_tcp_listener",
+    "io_uring_tcp_connection_adapter", "io_uring_tcp_server",
+    "io_uring_tcp_multi_owner_server", "io_uring_tcp_client",
+))
 
 
 def trial_plan():
@@ -71,10 +78,9 @@ def check_variant_build(root, main_prefix, variant_prefix):
 
 def validate_contracts(root):
     report = ET.parse(root / "variant/build/io-uring-contracts.xml").getroot()
-    names = {test.attrib["name"] for test in report.iter("testcase")}
-    acceptance.require(len(names) == 11
-                       and all(name.startswith("contract.io_engine.test_") for name in names)
-                       and "contract.io_engine.test_cross_backend_tcp_semantics" in names
+    cases = list(report.iter("testcase"))
+    names = {test.attrib["name"] for test in cases}
+    acceptance.require(names == CONTRACTS and len(cases) == len(CONTRACTS)
                        and all(not list(report.iter(tag)) for tag in ("failure", "error", "skipped")),
                        "candidate io_uring contracts did not all pass")
     return sorted(names)
@@ -201,8 +207,11 @@ def main():
     for name in arguments:
         parser.add_argument(f"--{name}", type=Path)
     parser.add_argument("--expected-source")
+    parser.add_argument("--expected-consumer")
     args = parser.parse_args()
     if args.verify_output:
+        acceptance.check_revisions(profiling.read_json(args.verify_output / "manifest.json"),
+                                   args.expected_source, args.expected_consumer)
         summary = verify(args.verify_output.resolve())
         print("Independent replay passed for the isolated variant, contracts, ledgers and syscall traces")
     else:
