@@ -6,6 +6,9 @@
 #include <gamenet/core/net/TcpConnection.h>
 #include <gamenet/core/net/TcpServer.h>
 #include <gamenet/experimental/io_uring/IoUringTcpServer.h>
+#ifdef GAMENET_TIMER_DIAGNOSTICS
+#include "../timer_tail/observer.h"
+#endif
 
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
@@ -467,6 +470,9 @@ private:
     }
 
     void message(Connection& c, std::string_view bytes) {
+#ifdef GAMENET_TIMER_DIAGNOSTICS
+        timer_diagnostics::CallbackSpan diagnosticSpan;
+#endif
         require(loop_.isInLoopThread(), "unexpected message owner");
         auto& state = state_.at(&c);
         while (!bytes.empty()) {
@@ -512,7 +518,8 @@ private:
     std::array<Connection*, peers> byPeer_{};
 };
 
-void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsigned rounds) {
+void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsigned rounds,
+            unsigned paceUs = 0) {
     std::array<Count, peers> start{};
     for (unsigned seq = 0; seq < rounds; ++seq) {
         for (unsigned peer = 0; peer < peers; ++peer) {
@@ -524,6 +531,7 @@ void echoes(const std::vector<Socket>& sockets, Result& result, char kind, unsig
             const Identity id{kind, peer, seq};
             result.received.push_back({id, start[peer], receiveFrame(sockets[peer].fd(), id)});
         }
+        if (paceUs) std::this_thread::sleep_for(std::chrono::microseconds(paceUs));
     }
 }
 
@@ -533,6 +541,9 @@ void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
     clockid_t ownerClock{};
     require(::pthread_getcpuclockid(::pthread_self(), &ownerClock) == 0, "owner CPU clock");
     net::EventLoop loop;
+#ifdef GAMENET_TIMER_DIAGNOSTICS
+    timer_diagnostics::Observer observer(loop);
+#endif
     TimerProbe timer(loop, result.timer);
     auto consumer = std::make_unique<Consumer<uring>>(loop, result, budget);
     const unsigned port = consumer->start();
@@ -555,7 +566,13 @@ void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
         const auto processStart = cpu(CLOCK_PROCESS_CPUTIME_ID);
         m["measure_begin_ns"] = now();
         if (!slow) {
-            echoes(sockets, result, 'E', rounds);
+            unsigned paceUs = 0;
+            if (const char* pace = std::getenv("GAMENET_TIMER_PACE_US")) {
+                require(measureTimer && std::string_view(pace) == "1000", "invalid timer pacing");
+                paceUs = 1000;
+            }
+            m["timer_pace_us"] = paceUs;
+            echoes(sockets, result, 'E', rounds, paceUs);
             m["measure_end_ns"] = now();
             m["owner_cpu_ns"] = cpu(ownerClock) - ownerStart;
             m["process_cpu_ns"] = cpu(CLOCK_PROCESS_CPUTIME_ID) - processStart;
@@ -606,6 +623,11 @@ void run(bool slow, int peerCpu, unsigned rounds, unsigned budget, bool trace,
     result.metrics["final_loop_lifecycle"] =
         loop.attachedLifecycleNodeCount() + loop.pendingLifecycleNodeCount();
     result.metrics["final_loop_callback_errors"] = loop.callbackExceptionCount();
+#ifdef GAMENET_TIMER_DIAGNOSTICS
+    const char* directory = std::getenv("GAMENET_TIMER_TRACE_DIR");
+    require(directory, "diagnostic output directory missing");
+    observer.save(directory);
+#endif
 }
 
 void save(const std::filesystem::path& output, Result& result, bool uring) {
