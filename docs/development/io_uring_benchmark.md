@@ -479,3 +479,9 @@ default-OFF; HP0/HP8 remain deferred, and no 24h/72h contract was shortened or
 run by this experiment. The remaining epoll gap, ownership-safe allocation
 strategy, controlled-host tail attribution and broader native capacity/endurance
 matrix remain separate work, not completed production readiness.
+
+The subsequent [native timer-tail audit](io_uring_timer_tail_audit.md) reproduces
+the wait-quantization cause before changing the runtime, verifies a source-private
+Linux precise-deadline fix, and separates blocked/runnable/owner-side delay.
+Its same-host comparisons and remaining millisecond outliers are reported
+separately; they do not retroactively change the observations above.

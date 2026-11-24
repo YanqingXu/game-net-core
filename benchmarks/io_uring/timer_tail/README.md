@@ -58,6 +58,12 @@ and must not be added to it. Scheduled time can include IRQ/steal time; it is
 not a substitute for thread CPU clocks. A captured trace with missing/lost
 events is explicitly unavailable, not usable attribution.
 
+The [completed native audit](../../../docs/development/io_uring_timer_tail_audit.md)
+records the reproducer, exact before/after identities, same-host results,
+scheduler decomposition, artifact hashes and replay commands. The verifier also
+requires the complete five-case scheduler inventory for each package; missing
+or duplicated cases cannot silently pass as a complete comparison.
+
 Reference: Linux documents `epoll_wait`'s integer-millisecond timeout and
 possible rounding/scheduler overruns, and `epoll_pwait2`'s timespec timeout:
 <https://man7.org/linux/man-pages/man2/epoll_wait.2.html>.

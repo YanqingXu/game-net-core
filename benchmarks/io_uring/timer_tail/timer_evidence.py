@@ -36,6 +36,8 @@ PROFILE = dict(blocks=5, phase_ticks=2000, cadence_ticks=3000, phase_us=[100, 25
 ENV_KEYS = (*hot.ENV_KEYS, "GAMENET_TIMER_PACE_US", "GAMENET_TIMER_TRACE_DIR")
 INPUTS = ("src", "include", "cmake", "CMakeLists.txt", "CMakePresets.json", "api",
           "benchmarks/io_uring/timer_tail", "benchmarks/io_uring/installed_acceptance")
+SCHEDULER_CASES = (("cadence", "idle"), ("saturated", "epoll"), ("saturated", "io_uring"),
+                   ("paced", "epoll"), ("paced", "io_uring"))
 
 
 def stats(values):
@@ -258,11 +260,16 @@ def scheduler_spans(text, owner):
 
 def scheduler_result(path, backend, case, cpus):
     raw = cpu.raw_metrics(path)
+    a.require(raw["owner_cpu"] == cpus[0], "scheduler owner affinity changed")
     if backend == "idle":
         correctness = idle_result(path, "cadence", True)
         ticks = [(int(r[1]), int(r[2])) for r in a.get_rows(path / "timer.csv", "armed_ns,deadline_ns,callback_ns,delay_us")]
     else:
         correctness = a.sample(path, backend, "steady", cpus, PROFILE["trace_rounds"])
+        if backend == "io_uring":
+            a.require(raw["native_pump_notice_budget"] == 16 and raw["native_max_consumer_depth"] == 1 and
+                      0 < raw["native_notices_dispatched"] <= raw["native_pump_turns"] * 16,
+                      "scheduler budget/reentry changed")
         correctness.update(dispatch.read_timer(path, raw))
         a.require(raw["timer_pace_us"] == (1000 if case == "paced" else 0), "scheduler pacing mismatch")
         ticks = [tuple(map(int, r)) for r in a.get_rows(path / "timer.csv", "deadline_ns,callback_ns")]
@@ -287,8 +294,7 @@ def collect_scheduler(root, probes, labels, cpus, env):
     schedule.mkdir()
     results = []
     for label in labels:
-        for case, backend in (("cadence", "idle"), ("saturated", "epoll"), ("saturated", "io_uring"),
-                              ("paced", "epoll"), ("paced", "io_uring")):
+        for case, backend in SCHEDULER_CASES:
             path = schedule / f"{label}-{backend}-{case}"
             path.mkdir()
             try:
@@ -310,6 +316,14 @@ def collect_scheduler(root, probes, labels, cpus, env):
                 (path / "unavailable.txt").write_text(str(error), encoding="utf-8")
                 results.append(dict(package=label, case=case, backend=backend, status="unavailable", error=str(error)))
     a.write_json(schedule / "summary.json", results)
+
+
+def scheduler_inventory(rows, stage):
+    labels = ("baseline",) if stage == "diagnose" else ("baseline", "candidate")
+    expected = {(label, case, backend) for label in labels for case, backend in SCHEDULER_CASES}
+    actual = {(r["package"], r["case"], r["backend"]) for r in rows}
+    a.require(len(rows) == len(expected) and actual == expected, "scheduler inventory changed")
+    return {f"{label}-{backend}-{case}" for label, case, backend in expected}
 
 
 def collect(args):
@@ -414,7 +428,11 @@ def verify(root, expected):
             for key in ("CMAKE_CXX_COMPILER", "CMAKE_CXX_FLAGS", "CMAKE_CXX_FLAGS_RELEASE", "CMAKE_BUILD_TYPE"):
                 a.require(caches[0][key] == caches[1][key], "unequal comparison compiler/flags")
         a.require(a.cmake_cache(after / "package-cache.txt")["GAMENET_HAVE_EPOLL_PWAIT2"] == "1", "native precise wait unavailable")
-    for row in cpu.read_json(root / "scheduler/summary.json"):
+    scheduler_rows = cpu.read_json(root / "scheduler/summary.json")
+    expected_scheduler = scheduler_inventory(scheduler_rows, manifest["stage"])
+    a.require({p.name for p in (root / "scheduler").iterdir() if p.is_dir()} == expected_scheduler,
+              "scheduler directory inventory changed")
+    for row in scheduler_rows:
         path = root / "scheduler" / f"{row['package']}-{row['backend']}-{row['case']}"
         if row["status"] == "verified":
             a.require(row["result"] == scheduler_result(path, row["backend"], row["case"], host["pinned_cpus"]), "scheduler replay mismatch")

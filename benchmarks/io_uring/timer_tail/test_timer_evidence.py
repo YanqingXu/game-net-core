@@ -62,5 +62,15 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 e.scheduler_spans(invalid, 99 if invalid == data else 7)
 
+    def test_scheduler_inventory_rejects_missing_duplicate_or_wrong_arm(self):
+        rows = [dict(package=label, case=case, backend=backend)
+                for label in ("baseline", "candidate") for case, backend in e.SCHEDULER_CASES]
+        self.assertEqual(len(e.scheduler_inventory(rows, "compare")), 10)
+        for invalid in ([], rows[:-1], rows[:-1] + [rows[0]],
+                        [{**row, "package": "other"} for row in rows]):
+            with self.subTest(rows=invalid), self.assertRaises(ValueError):
+                e.scheduler_inventory(invalid, "compare")
+        self.assertEqual(len(e.scheduler_inventory(rows[:5], "diagnose")), 5)
+
 if __name__ == "__main__":
     unittest.main()
