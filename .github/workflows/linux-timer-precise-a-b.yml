@@ -1,0 +1,57 @@
+# Copyright 2026 Yanqing Xu
+# SPDX-License-Identifier: Apache-2.0
+
+name: Linux timer precise wait A/B
+on:
+  push:
+    branches: [codex/linux-timer-native-validation]
+
+permissions:
+  contents: read
+
+jobs:
+  native-epoll:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out the evidence runner
+        uses: actions/checkout@v4
+        with:
+          path: evidence-source
+          persist-credentials: false
+      - name: Check out main baseline
+        uses: actions/checkout@v4
+        with:
+          ref: e391c2f59e1cd0dc9d5cc8a1cbab215b058c488d
+          path: baseline-source
+          persist-credentials: false
+      - name: Check out Core PR candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 16fa18ca55a58d763b02d571f3232a0bc6a5e53b
+          fetch-depth: 2
+          path: candidate-source
+          persist-credentials: false
+      - name: Check out the shared installed-package observer
+        uses: actions/checkout@v4
+        with:
+          ref: e7e33266bf285c20c74418bb564df35cafda1266
+          path: observer-source
+          persist-credentials: false
+      - name: Run and replay the paired measurement
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner=evidence-source/benchmarks/io_uring/timer_tail/main_recheck.py
+          python3 -B "$runner" observer-source baseline-source candidate-source \
+            "$RUNNER_TEMP/timer-builds" "$RUNNER_TEMP/timer-evidence"
+          python3 -B "$runner" observer-source baseline-source candidate-source \
+            "$RUNNER_TEMP/timer-builds" "$RUNNER_TEMP/timer-evidence" --verify
+      - name: Retain raw timing and build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-timer-precise-16fa18c-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/timer-evidence
+          if-no-files-found: error
+          retention-days: 30
