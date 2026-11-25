@@ -6,6 +6,7 @@
 #include "gamenet/core/base/Timestamp.h"
 #include "gamenet/core/net/SocketTypes.h"
 #include "CompletionPort.h"
+#include "IoWaitTimeout.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -119,6 +120,11 @@ public:
     virtual gamenet::base::Timestamp wait(
         int timeoutMs,
         IoNoticeBatch& notices) = 0;
+    virtual gamenet::base::Timestamp waitUntil(
+        gamenet::base::Timestamp deadline,
+        IoNoticeBatch& notices) {
+        return wait(ceilWaitMilliseconds(deadline - gamenet::base::now()), notices);
+    }
     // Retires storage leases owned by the last wait batch after every
     // observer in that batch has either dispatched or been revoked.
     virtual void retireWaitBatch() noexcept = 0;

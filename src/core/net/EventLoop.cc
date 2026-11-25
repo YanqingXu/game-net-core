@@ -500,8 +500,19 @@ void EventLoop::loop() {
                 ? 0
                 : timerQueue_->pollTimeoutMs(10000);
             detail::IoNoticeBatch notices(activeChannels_);
-            pollReturnTime_ =
-                ioEngine.wait(pollTimeout, notices);
+#ifndef _WIN32
+            // Preserve the frozen TimerQueue header: EventLoop already owns
+            // this queue and is its friend. Borrow only the earliest key;
+            // expiration, cancellation and dispatch remain TimerQueue-owned.
+            if (pollTimeout > 0 && !timerQueue_->timers_.empty()) {
+                const auto deadline = std::min(timerQueue_->timers_.begin()->first.first,
+                    gamenet::base::now() + std::chrono::seconds(10));
+                pollReturnTime_ = ioEngine.waitUntil(deadline, notices);
+            } else
+#endif
+            {
+                pollReturnTime_ = ioEngine.wait(pollTimeout, notices);
+            }
             emitIocpCompletionMetric();
         }
         dispatchActiveChannels();

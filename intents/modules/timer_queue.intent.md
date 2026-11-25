@@ -90,7 +90,11 @@ one owner-loop timer or an explicit owner-loop sweep.
 
 ## 5. Collaboration
 - owned by EventLoop
-- EventLoop calls pollTimeoutMs(defaultTimeoutMs) before Poller::poll()
+- Before blocking, EventLoop derives its bounded wait from the earliest timer.
+  Windows and the legacy millisecond path retain `pollTimeoutMs`. Linux passes
+  the precise absolute deadline through the source-private Engine; it reads
+  only the earliest TimerKey using its existing TimerQueue friendship, without
+  mutating timer metadata or changing the frozen installed header.
 - EventLoop calls handleExpired(now, maxCount) after active I/O dispatch
 - relies on EventLoop runInLoop / queueInLoop for cross-thread add/cancel
 - may later provide scheduling substrate for connection idle timeout or delayed shutdown features
@@ -191,7 +195,8 @@ only EventLoop so no standalone queue can claim Accepted without being polled.
 
 ## 11. Review Checklist
 - Is timer state still fully owner-loop-owned?
-- Does EventLoop still call pollTimeoutMs() before blocking in Poller?
+- Does EventLoop still bound every blocking wait by the earliest timer, keeping
+  precise Linux deadlines and the millisecond compatibility fallback explicit?
 - Can cancel race with callback execution without double-fire?
 - Do timer callbacks still obey EventLoop thread-affinity rules?
 - Does this design compose with future async timeout APIs without bypassing EventLoop?
